@@ -113,11 +113,19 @@ describe('bounded map zooming', () => {
     expect(nextCenter[0]).toBeGreaterThan(180)
   })
 
-  it('uses immediate setZoomAndCenter calls for toolbar zoom steps', () => {
+  it('animates toolbar zoom steps with eased intermediate frames', () => {
+    vi.useFakeTimers()
+    let zoom = 5
+    let center: [number, number] = [120, 30]
+    const zooms: number[] = []
     const map = {
-      getZoom: vi.fn(() => 5),
-      getCenter: vi.fn(() => lngLat([120, 30])),
-      setZoomAndCenter: vi.fn(),
+      getZoom: vi.fn(() => zoom),
+      getCenter: vi.fn(() => lngLat(center)),
+      setZoomAndCenter: vi.fn((nextZoom: number, nextCenter: [number, number]) => {
+        zoom = nextZoom
+        center = nextCenter
+        zooms.push(nextZoom)
+      }),
     }
     const container = document.createElement('div')
     Object.defineProperties(container, {
@@ -126,8 +134,49 @@ describe('bounded map zooming', () => {
     })
 
     zoomByStep(map, container, renderBounds, 1)
+    vi.runAllTimers()
 
-    expect(map.setZoomAndCenter).toHaveBeenCalledWith(5.5, expect.any(Array), true)
+    expect(zooms.length).toBeGreaterThan(4)
+    expect(zooms[0]).toBeGreaterThan(5)
+    expect(zooms[0]).toBeLessThan(5.5)
+    expect(zooms.at(-1)).toBeCloseTo(5.5)
+    expect(zooms[1] - zooms[0]).toBeGreaterThan(zooms.at(-1)! - zooms.at(-2)!)
+
+    vi.useRealTimers()
+  })
+
+  it('cancels stale toolbar zoom animations when clicking repeatedly', () => {
+    vi.useFakeTimers()
+    let zoom = 5
+    let center: [number, number] = [104, 35]
+    const zooms: number[] = []
+    const map = {
+      getZoom: () => zoom,
+      getCenter: () => lngLat(center),
+      setZoomAndCenter: (nextZoom: number, nextCenter: [number, number]) => {
+        zoom = nextZoom
+        center = nextCenter
+        zooms.push(nextZoom)
+      },
+    }
+    const container = document.createElement('div')
+    Object.defineProperties(container, {
+      clientWidth: { value: 1432 },
+      clientHeight: { value: 815 },
+    })
+
+    zoomByStep(map, container, renderBounds, 1)
+    vi.advanceTimersByTime(32)
+    const zoomAfterFirstClick = zoom
+    zoomByStep(map, container, renderBounds, 1)
+    vi.runAllTimers()
+
+    expect(zoomAfterFirstClick).toBeGreaterThan(5)
+    expect(zooms).toEqual([...zooms].sort((a, b) => a - b))
+    expect(zooms.at(-1)).toBeGreaterThan(5.5)
+    expect(zooms.at(-1)).toBeLessThanOrEqual(zoomAfterFirstClick + 0.5)
+
+    vi.useRealTimers()
   })
 
   it('locks the center to the vertical render midpoint at minimum AMap zoom', () => {

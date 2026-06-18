@@ -54,9 +54,11 @@ const WHEEL_ZOOM_SENSITIVITY = 0.004
 const WHEEL_ZOOM_MIN_STEP = 0.12
 const WHEEL_ZOOM_MAX_STEP = 0.72
 const TOOLBAR_ZOOM_STEP = 0.5
-const ZOOM_ANIMATION_DURATION_MS = 180
+const WHEEL_ZOOM_ANIMATION_DURATION_MS = 180
+const TOOLBAR_ZOOM_ANIMATION_DURATION_MS = 260
 const ZOOM_ANIMATION_FRAME_MS = 16
 const MINIMUM_CENTER_BLEND_ZOOM_RANGE = 1
+const zoomAnimationTimers = new WeakMap<BoundedZoomMap, number>()
 
 export function calculateBoundedZoomCenter({
   center,
@@ -148,8 +150,6 @@ export function installBoundedMapZoom(
     keyboardEnable: false,
   })
 
-  let animationTimer: number | null = null
-
   function onWheel(event: WheelEvent) {
     if (!event.cancelable) return
 
@@ -173,17 +173,14 @@ export function installBoundedMapZoom(
         x: event.clientX - rect.left,
         y: event.clientY - rect.top,
       },
-      onTimer: (timer) => {
-        if (animationTimer !== null) window.clearTimeout(animationTimer)
-        animationTimer = timer
-      },
+      durationMs: WHEEL_ZOOM_ANIMATION_DURATION_MS,
     })
   }
 
   container.addEventListener('wheel', onWheel, { passive: false })
 
   return () => {
-    if (animationTimer !== null) window.clearTimeout(animationTimer)
+    cancelZoomAnimation(map)
     container.removeEventListener('wheel', onWheel)
   }
 }
@@ -219,7 +216,18 @@ export function zoomByStep(
 
   if (targetZoom === currentZoom && centersAreEqual(targetCenter, currentCenter)) return
 
-  map.setZoomAndCenter(targetZoom, targetCenter, true)
+  animateZoom({
+    map,
+    container,
+    bounds,
+    startZoom: currentZoom,
+    targetZoom,
+    focalPoint: {
+      x: container.clientWidth / 2,
+      y: container.clientHeight / 2,
+    },
+    durationMs: TOOLBAR_ZOOM_ANIMATION_DURATION_MS,
+  })
 }
 
 function animateZoom({
@@ -229,7 +237,7 @@ function animateZoom({
   startZoom,
   targetZoom,
   focalPoint,
-  onTimer,
+  durationMs,
 }: {
   map: BoundedZoomMap
   container: HTMLElement
@@ -237,14 +245,15 @@ function animateZoom({
   startZoom: number
   targetZoom: number
   focalPoint: ContainerPoint
-  onTimer: (timer: number) => void
+  durationMs: number
 }) {
+  cancelZoomAnimation(map)
   const startedAt = performance.now()
   const center = map.getCenter()
   const startCenter: [number, number] = [center.getLng(), center.getLat()]
 
   function tick() {
-    const progress = Math.min((performance.now() - startedAt) / ZOOM_ANIMATION_DURATION_MS, 1)
+    const progress = Math.min((performance.now() - startedAt) / durationMs, 1)
     const easedProgress = easeOutCubic(progress)
     const zoom = startZoom + (targetZoom - startZoom) * easedProgress
     const currentCenter = map.getCenter()
@@ -270,11 +279,22 @@ function animateZoom({
     }
 
     if (progress < 1) {
-      onTimer(window.setTimeout(tick, ZOOM_ANIMATION_FRAME_MS))
+      zoomAnimationTimers.set(map, window.setTimeout(tick, ZOOM_ANIMATION_FRAME_MS))
+    } else {
+      zoomAnimationTimers.delete(map)
     }
   }
 
   tick()
+}
+
+function cancelZoomAnimation(map: BoundedZoomMap) {
+  const timer = zoomAnimationTimers.get(map)
+
+  if (timer !== undefined) {
+    window.clearTimeout(timer)
+    zoomAnimationTimers.delete(map)
+  }
 }
 
 function calculateMinimumCenterProgress(zoom: number, viewportHeight: number) {
