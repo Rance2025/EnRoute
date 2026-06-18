@@ -25,6 +25,7 @@ dist-ssr
 # Local tooling output
 .playwright-mcp/
 .superpowers/
+.worktrees/
 
 # Local design/debug screenshots
 enroute-*.png
