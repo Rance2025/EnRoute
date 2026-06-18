@@ -22,13 +22,18 @@ describe('map chrome layout', () => {
 
   it('reserves a left data panel and keeps the map in the remaining workspace', () => {
     const appShellRule = cssRule('.app-shell')
-    const panelRule = cssRule('.data-panel')
+    const panelRule = cssRule('.time-context-panel')
+    const workspaceRule = cssRule('.main-workspace')
     const stageRule = cssRule('.map-stage')
 
     expect(appShellRule).toContain('position: relative')
     expect(panelRule).toContain('width: var(--data-panel-width, 0px)')
-    expect(panelRule).not.toContain('border-right')
-    expect(cssRule('.app-shell.has-data-panel .data-panel')).toContain('border-right')
+    expect(panelRule).toContain('overflow: hidden')
+    expect(cssRule('.app-shell:not(.has-data-panel) .time-context-panel')).toContain(
+      'display: none',
+    )
+    expect(workspaceRule).toContain('inset: 0 0 0 var(--data-panel-width)')
+    expect(workspaceRule).toContain('width: calc(100vw - var(--data-panel-width))')
     expect(stageRule).toContain('inset: 0 0 0 var(--data-panel-width)')
     expect(stageRule).toContain('width: calc(100vw - var(--data-panel-width))')
   })
