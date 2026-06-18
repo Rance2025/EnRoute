@@ -1,4 +1,9 @@
 import type { MapBounds } from './mapCamera'
+import {
+  calculateLatitudeMidpoint,
+  calculateMinimumZoomForWorldCoverage,
+  isAtMinimumWorldZoom,
+} from './mercator'
 
 export type ContainerPoint = {
   x: number
@@ -12,6 +17,7 @@ type LngLatPoint = {
 
 export type BoundedDragMap = {
   setStatus: (status: { dragEnable?: boolean }) => void
+  getZoom?: () => number
   getCenter: () => LngLatPoint
   setCenter: (center: [number, number], immediately?: boolean, duration?: number) => void
   lngLatToContainer: (lngLat: [number, number]) => ContainerPoint
@@ -51,8 +57,6 @@ type CalculateBoundedCenterForViewportOptions = {
 }
 
 const LATITUDE_EDGE_PADDING_DEGREES = 0.12
-const TILE_SIZE = 256
-
 type DragState = {
   pointerId: number
   lastPointer: ContainerPoint
@@ -60,6 +64,7 @@ type DragState = {
 
 type CalculateNextBoundedDragCenterOptions = {
   currentCenter: [number, number]
+  currentZoom?: number
   previousPointer: ContainerPoint
   currentPointer: ContainerPoint
   bounds: MapBounds
@@ -101,6 +106,7 @@ export function installBoundedMapDrag(
     const center = map.getCenter()
     const nextCenter = calculateNextBoundedDragCenter({
       currentCenter: [center.getLng(), center.getLat()],
+      currentZoom: typeof map.getZoom === 'function' ? map.getZoom() : undefined,
       previousPointer: dragState.lastPointer,
       currentPointer: nextPointer,
       bounds,
@@ -141,6 +147,7 @@ export function installBoundedMapDrag(
 
 export function calculateNextBoundedDragCenter({
   currentCenter,
+  currentZoom,
   previousPointer,
   currentPointer,
   bounds,
@@ -160,14 +167,19 @@ export function calculateNextBoundedDragCenter({
     containerToLngLat,
   })
 
+  const minLatitude = bounds.southWest[1] + viewportEdgeOffsets.south + LATITUDE_EDGE_PADDING_DEGREES
+  const maxLatitude = bounds.northEast[1] - viewportEdgeOffsets.north - LATITUDE_EDGE_PADDING_DEGREES
+  const lockedLatitude =
+    currentZoom !== undefined && isAtMinimumWorldZoom(currentZoom, viewportSize.height)
+      ? calculateLatitudeMidpoint(bounds)
+      : undefined
+
   return [
     targetLngLat[0],
-    clampToViewportRange(
-      targetLngLat[1],
-      currentCenter[1],
-      bounds.southWest[1] + viewportEdgeOffsets.south + LATITUDE_EDGE_PADDING_DEGREES,
-      bounds.northEast[1] - viewportEdgeOffsets.north - LATITUDE_EDGE_PADDING_DEGREES,
-    ),
+    lockedLatitude ??
+      (minLatitude > maxLatitude
+        ? calculateLatitudeMidpoint(bounds)
+        : clampToViewportRange(targetLngLat[1], currentCenter[1], minLatitude, maxLatitude)),
   ]
 }
 
@@ -219,7 +231,7 @@ export function calculateBoundedCenterForViewport({
 }
 
 export function calculateMinimumZoomForLatitudeCoverage(viewportHeight: number) {
-  return Math.log2(viewportHeight / TILE_SIZE)
+  return calculateMinimumZoomForWorldCoverage(viewportHeight)
 }
 
 function pointerFromEvent(event: PointerEvent): ContainerPoint {

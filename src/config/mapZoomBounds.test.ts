@@ -129,6 +129,26 @@ describe('bounded map zooming', () => {
     expect(map.setZoomAndCenter).toHaveBeenCalledWith(5.5, expect.any(Array), true)
   })
 
+  it('locks the center to the vertical render midpoint at minimum AMap zoom', () => {
+    const container = document.createElement('div')
+    Object.defineProperties(container, {
+      clientWidth: { value: 1432 },
+      clientHeight: { value: 815 },
+    })
+    const map = {
+      setStatus: vi.fn(),
+      getZoom: vi.fn(() => 2),
+      getCenter: vi.fn(() => lngLat([104, 35])),
+      setZoomAndCenter: vi.fn(),
+    }
+
+    zoomByStep(map, container, renderBounds, -1)
+
+    expect(map.setZoomAndCenter).toHaveBeenCalledWith(2, expect.any(Array), true)
+    expect(map.setZoomAndCenter.mock.calls[0][1][0]).toBeCloseTo(104)
+    expect(map.setZoomAndCenter.mock.calls[0][1][1]).toBeCloseTo(0)
+  })
+
   it('disables native wheel zoom and handles wheel zoom through a bounded listener', () => {
     vi.useFakeTimers()
     const container = document.createElement('div')

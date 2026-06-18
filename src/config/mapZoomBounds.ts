@@ -1,5 +1,11 @@
 import type { ContainerPoint } from './mapDragBounds'
 import type { MapBounds } from './mapCamera'
+import {
+  calculateMinimumZoomForWorldCoverage,
+  isAtMinimumWorldZoom,
+  projectLngLat,
+  unprojectWorldPoint,
+} from './mercator'
 
 type LngLatPoint = {
   getLng: () => number
@@ -30,8 +36,6 @@ type CalculateBoundedZoomCenterOptions = {
   bounds: MapBounds
 }
 
-const TILE_SIZE = 256
-const MAX_MERCATOR_LATITUDE = 85.05112878
 const WHEEL_ZOOM_SENSITIVITY = 0.0022
 const WHEEL_ZOOM_MIN_STEP = 0.08
 const WHEEL_ZOOM_MAX_STEP = 0.42
@@ -47,16 +51,22 @@ export function calculateBoundedZoomCenter({
   viewportSize,
   bounds,
 }: CalculateBoundedZoomCenterOptions): [number, number] {
+  const effectiveFocalPoint = isAtMinimumWorldZoom(targetZoom, viewportSize.height)
+    ? {
+        x: viewportSize.width / 2,
+        y: viewportSize.height / 2,
+      }
+    : focalPoint
   const focalLngLat = containerPointToLngLat({
-    point: focalPoint,
+    point: effectiveFocalPoint,
     center,
     zoom: currentZoom,
     viewportSize,
   })
   const worldAtTargetZoom = projectLngLat(focalLngLat, targetZoom)
   const targetCenterWorld = {
-    x: worldAtTargetZoom.x - (focalPoint.x - viewportSize.width / 2),
-    y: worldAtTargetZoom.y - (focalPoint.y - viewportSize.height / 2),
+    x: worldAtTargetZoom.x - (effectiveFocalPoint.x - viewportSize.width / 2),
+    y: worldAtTargetZoom.y - (effectiveFocalPoint.y - viewportSize.height / 2),
   }
   const boundedCenterWorld = clampWorldYToLatitudeBounds({
     centerWorld: targetCenterWorld,
@@ -93,8 +103,6 @@ export function installBoundedMapZoom(
       currentZoom + zoomStep,
       calculateMinimumZoomForViewport(container.clientHeight),
     )
-
-    if (targetZoom === currentZoom) return
 
     const rect = container.getBoundingClientRect()
     animateZoom({
@@ -134,11 +142,10 @@ export function zoomByStep(
     calculateMinimumZoomForViewport(container.clientHeight),
   )
 
-  if (targetZoom === currentZoom) return
-
   const center = map.getCenter()
+  const currentCenter: [number, number] = [center.getLng(), center.getLat()]
   const targetCenter = calculateBoundedZoomCenter({
-    center: [center.getLng(), center.getLat()],
+    center: currentCenter,
     currentZoom,
     targetZoom,
     focalPoint: {
@@ -151,6 +158,8 @@ export function zoomByStep(
     },
     bounds,
   })
+
+  if (targetZoom === currentZoom && centersAreEqual(targetCenter, currentCenter)) return
 
   map.setZoomAndCenter(targetZoom, targetCenter, true)
 }
@@ -191,7 +200,9 @@ function animateZoom({
       bounds,
     })
 
-    map.setZoomAndCenter(zoom, nextCenter, true)
+    if (zoom !== map.getZoom() || !centersAreEqual(nextCenter, [center.getLng(), center.getLat()])) {
+      map.setZoomAndCenter(zoom, nextCenter, true)
+    }
 
     if (progress < 1) {
       onTimer(window.setTimeout(tick, ZOOM_ANIMATION_FRAME_MS))
@@ -199,6 +210,10 @@ function animateZoom({
   }
 
   tick()
+}
+
+function centersAreEqual(a: [number, number], b: [number, number]) {
+  return Math.abs(a[0] - b[0]) < 0.000001 && Math.abs(a[1] - b[1]) < 0.000001
 }
 
 function calculateWheelZoomStep(deltaY: number) {
@@ -212,7 +227,7 @@ function calculateWheelZoomStep(deltaY: number) {
 }
 
 function calculateMinimumZoomForViewport(viewportHeight: number) {
-  return Math.log2(viewportHeight / TILE_SIZE)
+  return calculateMinimumZoomForWorldCoverage(viewportHeight)
 }
 
 function clampZoom(zoom: number, minZoom: number) {
@@ -232,6 +247,15 @@ function clampWorldYToLatitudeBounds({
 }) {
   const northEdgeWorld = projectLngLat([0, bounds.northEast[1]], zoom).y
   const southEdgeWorld = projectLngLat([0, bounds.southWest[1]], zoom).y
+  const midpointY = (northEdgeWorld + southEdgeWorld) / 2
+
+  if (isAtMinimumWorldZoom(zoom, viewportSize.height)) {
+    return {
+      x: centerWorld.x,
+      y: midpointY,
+    }
+  }
+
   const halfViewportHeight = viewportSize.height / 2
   const minCenterY = northEdgeWorld + halfViewportHeight
   const maxCenterY = southEdgeWorld - halfViewportHeight
@@ -266,25 +290,6 @@ function containerPointToLngLat({
     },
     zoom,
   )
-}
-
-function projectLngLat([lng, lat]: [number, number], zoom: number): ContainerPoint {
-  const scale = TILE_SIZE * 2 ** zoom
-  const clampedLat = Math.min(Math.max(lat, -MAX_MERCATOR_LATITUDE), MAX_MERCATOR_LATITUDE)
-  const sinLat = Math.sin((clampedLat * Math.PI) / 180)
-
-  return {
-    x: ((lng + 180) / 360) * scale,
-    y: (0.5 - Math.log((1 + sinLat) / (1 - sinLat)) / (4 * Math.PI)) * scale,
-  }
-}
-
-function unprojectWorldPoint(point: ContainerPoint, zoom: number): [number, number] {
-  const scale = TILE_SIZE * 2 ** zoom
-  const lng = (point.x / scale) * 360 - 180
-  const latRadians = Math.atan(Math.sinh(Math.PI * (1 - (2 * point.y) / scale)))
-
-  return [lng, (latRadians * 180) / Math.PI]
 }
 
 function easeOutCubic(value: number) {

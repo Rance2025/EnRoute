@@ -97,7 +97,8 @@ describe('bounded map dragging', () => {
       containerToLngLat: unprojectWithCenter(center),
     })
 
-    expect(nextCenter).toEqual([90, 30])
+    expect(nextCenter[0]).toBe(90)
+    expect(nextCenter[1]).toBeCloseTo(30.005039)
   })
 
   it('does not constrain longitude while clamping the latitude viewport', () => {
@@ -168,8 +169,31 @@ describe('bounded map dragging', () => {
   })
 
   it('calculates a minimum zoom that keeps the vertical world larger than the viewport', () => {
-    expect(calculateMinimumZoomForLatitudeCoverage(815)).toBeGreaterThan(1.67)
-    expect(calculateMinimumZoomForLatitudeCoverage(815)).toBeLessThan(1.8)
+    expect(calculateMinimumZoomForLatitudeCoverage(815)).toBe(2)
+  })
+
+  it('locks vertical dragging at the render center when the map cannot zoom out to fit the viewport height', () => {
+    const center: [number, number] = [104, 0]
+    const mercatorBounds: MapBounds = {
+      southWest: [-180, -85.05112878],
+      northEast: [180, 85.05112878],
+    }
+    const nextCenter = calculateNextBoundedDragCenter({
+      currentCenter: center,
+      currentZoom: 2,
+      previousPointer: { x: 100, y: 100 },
+      currentPointer: { x: 110, y: 140 },
+      bounds: mercatorBounds,
+      viewportSize,
+      lngLatToContainer: ([lng, lat]) => ({
+        x: viewportSize.width / 2 + (lng - center[0]),
+        y: viewportSize.height / 2 - lat * 0.5,
+      }),
+      containerToLngLat: ({ x, y }) => [center[0] + x - viewportSize.width / 2, 80 - y],
+    })
+
+    expect(nextCenter[0]).toBe(94)
+    expect(nextCenter[1]).toBeCloseTo(0)
   })
 
   it('disables native map dragging and handles bounded pointer dragging without rebound debt', () => {
