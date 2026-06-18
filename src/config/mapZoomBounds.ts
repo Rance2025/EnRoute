@@ -36,12 +36,27 @@ type CalculateBoundedZoomCenterOptions = {
   bounds: MapBounds
 }
 
+type CalculateIntermediateZoomCenterOptions = {
+  startCenter: [number, number]
+  currentCenter: [number, number]
+  currentZoom: number
+  startZoom: number
+  frameZoom: number
+  focalPoint: ContainerPoint
+  viewportSize: {
+    width: number
+    height: number
+  }
+  bounds: MapBounds
+}
+
 const WHEEL_ZOOM_SENSITIVITY = 0.0022
 const WHEEL_ZOOM_MIN_STEP = 0.08
 const WHEEL_ZOOM_MAX_STEP = 0.42
 const TOOLBAR_ZOOM_STEP = 0.5
 const ZOOM_ANIMATION_DURATION_MS = 180
 const ZOOM_ANIMATION_FRAME_MS = 16
+const MINIMUM_CENTER_BLEND_ZOOM_RANGE = 1
 
 export function calculateBoundedZoomCenter({
   center,
@@ -76,6 +91,49 @@ export function calculateBoundedZoomCenter({
   })
 
   return unprojectWorldPoint(boundedCenterWorld, targetZoom)
+}
+
+export function calculateIntermediateZoomCenter({
+  startCenter,
+  currentCenter,
+  currentZoom,
+  startZoom,
+  frameZoom,
+  focalPoint,
+  viewportSize,
+  bounds,
+}: CalculateIntermediateZoomCenterOptions): [number, number] {
+  const boundedCenter = calculateBoundedZoomCenter({
+    center: currentCenter,
+    currentZoom,
+    targetZoom: frameZoom,
+    focalPoint,
+    viewportSize,
+    bounds,
+  })
+
+  const minimumCenterProgress = calculateMinimumCenterProgress(frameZoom, viewportSize.height)
+
+  if (minimumCenterProgress === 0) {
+    return boundedCenter
+  }
+
+  const minimumCenter = calculateBoundedZoomCenter({
+    center: startCenter,
+    currentZoom: startZoom,
+    targetZoom: calculateMinimumZoomForViewport(viewportSize.height),
+    focalPoint: {
+      x: viewportSize.width / 2,
+      y: viewportSize.height / 2,
+    },
+    viewportSize,
+    bounds,
+  })
+
+  return [
+    boundedCenter[0],
+    boundedCenter[1] + (minimumCenter[1] - boundedCenter[1]) * minimumCenterProgress,
+  ]
 }
 
 export function installBoundedMapZoom(
@@ -182,16 +240,20 @@ function animateZoom({
   onTimer: (timer: number) => void
 }) {
   const startedAt = performance.now()
+  const center = map.getCenter()
+  const startCenter: [number, number] = [center.getLng(), center.getLat()]
 
   function tick() {
     const progress = Math.min((performance.now() - startedAt) / ZOOM_ANIMATION_DURATION_MS, 1)
     const easedProgress = easeOutCubic(progress)
     const zoom = startZoom + (targetZoom - startZoom) * easedProgress
-    const center = map.getCenter()
-    const nextCenter = calculateBoundedZoomCenter({
-      center: [center.getLng(), center.getLat()],
+    const currentCenter = map.getCenter()
+    const nextCenter = calculateIntermediateZoomCenter({
+      startCenter,
+      currentCenter: [currentCenter.getLng(), currentCenter.getLat()],
       currentZoom: map.getZoom(),
-      targetZoom: zoom,
+      startZoom,
+      frameZoom: zoom,
       focalPoint,
       viewportSize: {
         width: container.clientWidth,
@@ -200,7 +262,10 @@ function animateZoom({
       bounds,
     })
 
-    if (zoom !== map.getZoom() || !centersAreEqual(nextCenter, [center.getLng(), center.getLat()])) {
+    if (
+      zoom !== map.getZoom() ||
+      !centersAreEqual(nextCenter, [currentCenter.getLng(), currentCenter.getLat()])
+    ) {
       map.setZoomAndCenter(zoom, nextCenter, true)
     }
 
@@ -210,6 +275,15 @@ function animateZoom({
   }
 
   tick()
+}
+
+function calculateMinimumCenterProgress(zoom: number, viewportHeight: number) {
+  const minimumZoom = calculateMinimumZoomForViewport(viewportHeight)
+
+  return Math.min(
+    Math.max((minimumZoom + MINIMUM_CENTER_BLEND_ZOOM_RANGE - zoom) / MINIMUM_CENTER_BLEND_ZOOM_RANGE, 0),
+    1,
+  )
 }
 
 function centersAreEqual(a: [number, number], b: [number, number]) {

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import {
   calculateBoundedZoomCenter,
+  calculateIntermediateZoomCenter,
   installBoundedMapZoom,
   zoomByStep,
   type BoundedZoomMap,
@@ -147,6 +148,106 @@ describe('bounded map zooming', () => {
     expect(map.setZoomAndCenter).toHaveBeenCalledWith(2, expect.any(Array), true)
     expect(map.setZoomAndCenter.mock.calls[0][1][0]).toBeCloseTo(104)
     expect(map.setZoomAndCenter.mock.calls[0][1][1]).toBeCloseTo(0)
+  })
+
+  it('does not restart zoom animation when already locked at minimum zoom', () => {
+    vi.useFakeTimers()
+    const container = document.createElement('div')
+    Object.defineProperties(container, {
+      clientWidth: { value: 1432 },
+      clientHeight: { value: 815 },
+      getBoundingClientRect: {
+        value: () => ({ left: 0, top: 0, width: 1432, height: 815 }),
+      },
+    })
+    const map: BoundedZoomMap = {
+      setStatus: vi.fn(),
+      getZoom: () => 2,
+      getCenter: () => lngLat([104, 0]),
+      setZoomAndCenter: vi.fn(),
+    }
+
+    const dispose = installBoundedMapZoom(map, container, renderBounds)
+
+    container.dispatchEvent(
+      new WheelEvent('wheel', {
+        bubbles: true,
+        cancelable: true,
+        deltaY: 900,
+        clientX: 716,
+        clientY: 407.5,
+      }),
+    )
+    vi.runAllTimers()
+
+    expect(map.setZoomAndCenter).not.toHaveBeenCalled()
+
+    dispose()
+    vi.useRealTimers()
+  })
+
+  it('cancels stale wheel animations when a newer wheel event starts', () => {
+    vi.useFakeTimers()
+    let zoom = 4
+    let center: [number, number] = [104, 35]
+    const calls: number[] = []
+    const container = document.createElement('div')
+    Object.defineProperties(container, {
+      clientWidth: { value: 1432 },
+      clientHeight: { value: 815 },
+      getBoundingClientRect: {
+        value: () => ({ left: 0, top: 0, width: 1432, height: 815 }),
+      },
+    })
+    const map: BoundedZoomMap = {
+      setStatus: vi.fn(),
+      getZoom: () => zoom,
+      getCenter: () => lngLat(center),
+      setZoomAndCenter: (nextZoom, nextCenter) => {
+        zoom = nextZoom
+        center = nextCenter
+        calls.push(nextZoom)
+      },
+    }
+
+    const dispose = installBoundedMapZoom(map, container, renderBounds)
+    const wheelOut = () =>
+      container.dispatchEvent(
+        new WheelEvent('wheel', {
+          bubbles: true,
+          cancelable: true,
+          deltaY: 900,
+          clientX: 716,
+          clientY: 407.5,
+        }),
+      )
+
+    wheelOut()
+    vi.advanceTimersByTime(16)
+    wheelOut()
+    vi.runAllTimers()
+
+    expect(calls).toEqual([...calls].sort((a, b) => b - a))
+
+    dispose()
+    vi.useRealTimers()
+  })
+
+  it('moves toward the minimum zoom midpoint before the final zoom frame', () => {
+    const nextCenter = calculateIntermediateZoomCenter({
+      startCenter: [104, 35],
+      currentCenter: [104, 35],
+      currentZoom: 2.55,
+      startZoom: 2.55,
+      frameZoom: 2.1,
+      focalPoint: { x: 716, y: 407.5 },
+      viewportSize: { width: 1432, height: 815 },
+      bounds: renderBounds,
+    })
+
+    expect(nextCenter[0]).toBeCloseTo(104)
+    expect(nextCenter[1]).toBeLessThan(4)
+    expect(nextCenter[1]).toBeGreaterThan(1)
   })
 
   it('disables native wheel zoom and handles wheel zoom through a bounded listener', () => {
