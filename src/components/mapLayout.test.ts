@@ -51,6 +51,7 @@ describe('map chrome layout', () => {
     expect(amapCanvasSource).not.toContain('new AMap.ControlBar')
     expect(amapCanvasSource).not.toContain('setLimitBounds(')
     expect(amapCanvasSource).toContain('installBoundedMapDrag(map, mapNodeRef.current, config.renderBounds)')
+    expect(amapCanvasSource).toContain('installBoundedMapZoom(map, mapNodeRef.current, config.renderBounds)')
     expect(amapCanvasSource).toContain('clampMapCenterToLatitudeBounds(')
     expect(amapCanvasSource).toContain("map.on('zoomend'")
     expect(amapLoaderSource).not.toContain('AMap.ControlBar')
@@ -62,5 +63,16 @@ describe('map chrome layout', () => {
     expect(dragSource).toContain('setStatus({ dragEnable: false })')
     expect(dragSource).toContain('calculateNextBoundedDragCenter')
     expect(cssRule('.amap-surface')).toContain('touch-action: none')
+  })
+
+  it('uses custom hard-bound zooming instead of native AMap wheel zoom', () => {
+    const zoomSource = readFileSync('src/config/mapZoomBounds.ts', 'utf8')
+
+    expect(zoomSource).toContain('dragEnable: false')
+    expect(zoomSource).toContain('scrollWheel: false')
+    expect(zoomSource).toContain('doubleClickZoom: false')
+    expect(zoomSource).toContain('keyboardEnable: false')
+    expect(zoomSource).toContain("container.addEventListener('wheel'")
+    expect(zoomSource).toContain('calculateBoundedZoomCenter')
   })
 })

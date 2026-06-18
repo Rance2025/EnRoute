@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { DEFAULT_MAP_CAMERA, resetMapCamera, zoomByStep } from './mapCamera'
+import { DEFAULT_MAP_CAMERA, resetMapCamera } from './mapCamera'
 
 describe('map camera', () => {
   it('uses 2D mode and disables map rotation', () => {
@@ -26,38 +26,5 @@ describe('map camera', () => {
     expect(map.setPitch).toHaveBeenCalledWith(0, true)
     expect(map.setRotation).toHaveBeenCalledWith(0, true)
     expect(map.setBounds).toHaveBeenCalledWith(bounds, false, undefined, 900)
-  })
-
-  it('zooms in smaller animated steps', () => {
-    const map = {
-      getZoom: vi.fn(() => 5),
-      setZoom: vi.fn(),
-    }
-
-    zoomByStep(map, 1)
-
-    expect(map.setZoom).toHaveBeenCalledWith(5.5, false, 420)
-  })
-
-  it('zooms out smaller animated steps', () => {
-    const map = {
-      getZoom: vi.fn(() => 5),
-      setZoom: vi.fn(),
-    }
-
-    zoomByStep(map, -1)
-
-    expect(map.setZoom).toHaveBeenCalledWith(4.5, false, 420)
-  })
-
-  it('does not zoom out below the minimum zoom', () => {
-    const map = {
-      getZoom: vi.fn(() => 2),
-      setZoom: vi.fn(),
-    }
-
-    zoomByStep(map, -1, 1.8)
-
-    expect(map.setZoom).toHaveBeenCalledWith(1.8, false, 420)
   })
 })

@@ -14,9 +14,21 @@ declare namespace AMap {
     setMapStyle(style: string): void
     setPitch(pitch: number, immediately?: boolean): void
     setRotation(rotation: number, immediately?: boolean): void
-    setStatus(status: { dragEnable?: boolean; pitchEnable?: boolean; rotateEnable?: boolean }): void
+    setStatus(status: {
+      dragEnable?: boolean
+      pitchEnable?: boolean
+      rotateEnable?: boolean
+      scrollWheel?: boolean
+      doubleClickZoom?: boolean
+      keyboardEnable?: boolean
+    }): void
     setCenter(center: LngLatLike, immediately?: boolean, duration?: number): void
-    setZoomAndCenter(zoom: number, center: LngLatLike, immediately?: boolean): void
+    setZoomAndCenter(
+      zoom: number,
+      center: LngLatLike,
+      immediately?: boolean,
+      duration?: number,
+    ): void
     setZoom(zoom: number, immediately?: boolean, duration?: number): void
     setBounds(bounds: BoundsLike, immediately?: boolean, avoid?: number[], duration?: number): void
     setLimitBounds(bounds: Bounds): void

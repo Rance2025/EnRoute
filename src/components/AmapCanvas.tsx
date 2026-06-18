@@ -6,7 +6,8 @@ import {
   clampMapCenterToLatitudeBounds,
   installBoundedMapDrag,
 } from '../config/mapDragBounds'
-import { DEFAULT_MAP_CAMERA, resetMapCamera, zoomByStep, type MapBounds } from '../config/mapCamera'
+import { DEFAULT_MAP_CAMERA, resetMapCamera, type MapBounds } from '../config/mapCamera'
+import { installBoundedMapZoom, zoomByStep } from '../config/mapZoomBounds'
 import { loadAmap, type AMapNamespace } from '../services/amapLoader'
 import { MapControls } from './MapControls'
 
@@ -22,6 +23,7 @@ export function AmapCanvas({ config }: AmapCanvasProps) {
   const amapRef = useRef<AMapNamespace | null>(null)
   const geolocationRef = useRef<AMap.Geolocation | null>(null)
   const disposeDragRef = useRef<(() => void) | null>(null)
+  const disposeZoomRef = useRef<(() => void) | null>(null)
   const disposeZoomClampRef = useRef<(() => void) | null>(null)
   const [status, setStatus] = useState<MapStatus>(
     config.isConfigured ? 'loading' : 'missing-config',
@@ -77,6 +79,7 @@ export function AmapCanvas({ config }: AmapCanvasProps) {
 
         map.addControl(new AMap.Scale({ position: 'LB' }))
         disposeDragRef.current = installBoundedMapDrag(map, mapNodeRef.current, config.renderBounds)
+        disposeZoomRef.current = installBoundedMapZoom(map, mapNodeRef.current, config.renderBounds)
         const clampLatitudeBounds = () => {
           clampViewAfterZoom()
         }
@@ -116,6 +119,8 @@ export function AmapCanvas({ config }: AmapCanvasProps) {
       }
       disposeZoomClampRef.current?.()
       disposeZoomClampRef.current = null
+      disposeZoomRef.current?.()
+      disposeZoomRef.current = null
       disposeDragRef.current?.()
       disposeDragRef.current = null
       mapRef.current?.destroy()
@@ -131,12 +136,12 @@ export function AmapCanvas({ config }: AmapCanvasProps) {
 
   function zoomIn() {
     if (!mapRef.current || !mapNodeRef.current) return
-    zoomByStep(mapRef.current, 1)
+    zoomByStep(mapRef.current, mapNodeRef.current, config.renderBounds, 1)
   }
 
   function zoomOut() {
     if (!mapRef.current || !mapNodeRef.current) return
-    zoomByStep(mapRef.current, -1, calculateMinimumZoomForLatitudeCoverage(mapNodeRef.current.clientHeight))
+    zoomByStep(mapRef.current, mapNodeRef.current, config.renderBounds, -1)
   }
 
   function locate() {
