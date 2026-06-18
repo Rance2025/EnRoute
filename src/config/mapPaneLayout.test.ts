@@ -14,15 +14,15 @@ function lngLat([lng, lat]: [number, number]) {
 }
 
 describe('single-world map pane layout', () => {
-  it('moves surplus desktop width into the left panel', () => {
+  it('moves only the surplus desktop width into the left panel', () => {
     expect(
       calculateSingleWorldMapPaneLayout({
         viewportWidth: 1440,
         worldWidthPx: 1024,
       }),
     ).toEqual({
-      mapPaneWidth: 1023,
-      sidePanelWidth: 417,
+      mapPaneWidth: 1024,
+      sidePanelWidth: 416,
     })
   })
 
@@ -52,17 +52,22 @@ describe('single-world map pane layout', () => {
   })
 
   it('prefers AMap pixel measurements at the target zoom when available', () => {
+    const sampledLngs: number[] = []
     const worldWidth = measureAmapWorldPixelWidthAtZoom(
       {
         getZoom: () => 4,
         getCenter: () => lngLat([104, 35]),
-        lnglatToPixel: ([lng], zoom) => ({ x: lng * ((256 * 2 ** zoom) / 360), y: 0 }),
+        lnglatToPixel: ([lng], zoom) => {
+          sampledLngs.push(lng)
+          return { x: ((lng + 180) / 360) * 256 * 2 ** zoom, y: 0 }
+        },
         lngLatToContainer: () => ({ x: 0, y: 0 }),
       },
       2,
     )
 
     expect(worldWidth).toBeCloseTo(1024)
+    expect(sampledLngs).toEqual([-180, 180])
   })
 
   it('falls back to Web Mercator tile width when projection measurement is unavailable', () => {

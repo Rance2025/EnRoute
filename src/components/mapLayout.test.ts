@@ -33,6 +33,14 @@ describe('map chrome layout', () => {
     expect(stageRule).toContain('width: calc(100vw - var(--data-panel-width))')
   })
 
+  it('initializes the map at the single-world minimum zoom', () => {
+    expect(amapCanvasSource).toContain(
+      'const initialZoom = calculateMinimumZoomForLatitudeCoverage(mapNodeRef.current.clientHeight)',
+    )
+    expect(amapCanvasSource).toContain('zoom: initialZoom')
+    expect(amapCanvasSource).not.toContain('zoom: config.defaultZoom')
+  })
+
   it('enforces the current map zoom against the resized single-world minimum', () => {
     expect(amapCanvasSource).toContain('currentZoom < minimumZoom')
     expect(amapCanvasSource).toContain('setZoomAndCenter(')

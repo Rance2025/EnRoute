@@ -10,7 +10,7 @@ export type WorldPoint = {
 }
 
 export function calculateMinimumZoomForWorldCoverage(viewportHeight: number) {
-  return Math.max(Math.log2(viewportHeight / TILE_SIZE), AMAP_MIN_ZOOM)
+  return Math.max(roundZoomUpToAmapPrecision(Math.log2(viewportHeight / TILE_SIZE)), AMAP_MIN_ZOOM)
 }
 
 export function projectLngLat([lng, lat]: [number, number], zoom: number): WorldPoint {
@@ -47,4 +47,8 @@ export function calculateLatitudeMidpoint(bounds: MapBounds) {
 
 export function isAtMinimumWorldZoom(zoom: number, viewportHeight: number) {
   return zoom <= calculateMinimumZoomForWorldCoverage(viewportHeight) + 0.000001
+}
+
+function roundZoomUpToAmapPrecision(zoom: number) {
+  return Math.ceil(zoom * 100) / 100
 }

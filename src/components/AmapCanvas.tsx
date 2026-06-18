@@ -108,10 +108,11 @@ export function AmapCanvas({ config, onPanelWidthChange }: AmapCanvasProps) {
         if (disposed || !mapNodeRef.current) return
 
         amapRef.current = AMap
+        const initialZoom = calculateMinimumZoomForLatitudeCoverage(mapNodeRef.current.clientHeight)
         const map = new AMap.Map(mapNodeRef.current, {
           center: config.defaultCenter,
-          zoom: config.defaultZoom,
-          zooms: [calculateMinimumZoomForLatitudeCoverage(mapNodeRef.current.clientHeight), 20],
+          zoom: initialZoom,
+          zooms: [initialZoom, 20],
           mapStyle: mapTheme.style,
           features: config.features,
           viewMode: DEFAULT_MAP_CAMERA.viewMode,
