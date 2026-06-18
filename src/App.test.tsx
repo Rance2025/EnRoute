@@ -132,6 +132,8 @@ describe('App', () => {
     expect(screen.getByRole('main')).toHaveClass('app-shell--accounting')
     expect(document.body).toHaveClass('is-accounting-view')
     expect(document.body).not.toHaveClass('is-map-view')
+    expect(screen.getByLabelText('时间范围面板')).toBeInTheDocument()
+    expect(screen.getByLabelText('在途 EnRoute 主工作区')).toBeInTheDocument()
     expect(screen.getByText('总余额')).toBeInTheDocument()
   })
 

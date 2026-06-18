@@ -4,32 +4,78 @@ import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'r
 
 import { AccountingPage } from './components/AccountingPage'
 import { AmapCanvas } from './components/AmapCanvas'
+import { TimeContextPanel } from './components/TimeContextPanel'
 import { getAmapConfig, type AmapConfig } from './config/amap'
+import { calculateFallbackSingleWorldPaneLayout } from './config/mapPaneLayout'
 
 type AppProps = {
   amapConfig?: AmapConfig
 }
 
-type AppView = 'map' | 'accounting'
+export type AppView = 'overview' | 'map' | 'schedule' | 'accounting'
+
+type ViewOption = {
+  view: AppView
+  label: string
+  enabled: boolean
+}
+
+const viewOptions: ViewOption[] = [
+  { view: 'overview', label: '概览', enabled: false },
+  { view: 'map', label: '地图', enabled: true },
+  { view: 'schedule', label: '日程', enabled: false },
+  { view: 'accounting', label: '记账', enabled: true },
+]
+
+function getViewportSize() {
+  return {
+    width: window.innerWidth,
+    height: window.innerHeight,
+  }
+}
 
 function App({ amapConfig }: AppProps) {
   const resolvedAmapConfig = useMemo(() => amapConfig ?? getAmapConfig(), [amapConfig])
   const [view, setView] = useState<AppView>('map')
-  const [panelWidth, setPanelWidth] = useState(0)
+  const [mapPanelWidth, setMapPanelWidth] = useState(0)
+  const [viewportSize, setViewportSize] = useState(getViewportSize)
+  const fallbackLayout = useMemo(
+    () =>
+      calculateFallbackSingleWorldPaneLayout({
+        viewportWidth: viewportSize.width,
+        viewportHeight: viewportSize.height,
+      }),
+    [viewportSize.height, viewportSize.width],
+  )
   const handlePanelWidthChange = useCallback((width: number) => {
-    setPanelWidth(width)
+    setMapPanelWidth(width)
   }, [])
 
   useEffect(() => {
-    document.body.classList.toggle('is-map-view', view === 'map')
-    document.body.classList.toggle('is-accounting-view', view === 'accounting')
+    function updateViewportSize() {
+      setViewportSize(getViewportSize())
+    }
+
+    window.addEventListener('resize', updateViewportSize)
 
     return () => {
-      document.body.classList.remove('is-map-view', 'is-accounting-view')
+      window.removeEventListener('resize', updateViewportSize)
+    }
+  }, [])
+
+  useEffect(() => {
+    for (const option of viewOptions) {
+      document.body.classList.toggle(`is-${option.view}-view`, view === option.view)
+    }
+
+    return () => {
+      for (const option of viewOptions) {
+        document.body.classList.remove(`is-${option.view}-view`)
+      }
     }
   }, [view])
 
-  const dataPanelWidth = view === 'map' ? panelWidth : 0
+  const dataPanelWidth = Math.max(mapPanelWidth, fallbackLayout.sidePanelWidth)
 
   return (
     <main
@@ -42,29 +88,32 @@ function App({ amapConfig }: AppProps) {
           <span>EnRoute</span>
         </div>
         <div className="app-nav__tabs" role="group" aria-label="页面">
-          <button type="button" aria-pressed={view === 'map'} onClick={() => setView('map')}>
-            地图
-          </button>
-          <button
-            type="button"
-            aria-pressed={view === 'accounting'}
-            onClick={() => setView('accounting')}
-          >
-            记账
-          </button>
+          {viewOptions.map((option) => (
+            <button
+              type="button"
+              key={option.view}
+              aria-pressed={view === option.view}
+              disabled={!option.enabled}
+              onClick={() => {
+                if (option.enabled) {
+                  setView(option.view)
+                }
+              }}
+            >
+              {option.label}
+            </button>
+          ))}
         </div>
       </nav>
 
+      <TimeContextPanel view={view} />
+
       {view === 'map' ? (
-        <>
-          <aside className="data-panel" aria-label="在途 EnRoute 数据面板" />
-          <AmapCanvas
-            config={resolvedAmapConfig}
-            onPanelWidthChange={handlePanelWidthChange}
-          />
-        </>
+        <AmapCanvas config={resolvedAmapConfig} onPanelWidthChange={handlePanelWidthChange} />
       ) : (
-        <AccountingPage />
+        <section className="main-workspace" aria-label="在途 EnRoute 主工作区">
+          <AccountingPage />
+        </section>
       )}
     </main>
   )
