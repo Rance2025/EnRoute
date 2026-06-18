@@ -119,6 +119,8 @@ describe('App', () => {
       'true',
     )
     expect(screen.getByText('需要配置高德地图密钥')).toBeInTheDocument()
+    expect(screen.getByRole('main')).toHaveClass('app-shell--map')
+    expect(document.body).toHaveClass('is-map-view')
 
     fireEvent.click(screen.getByRole('button', { name: '记账' }))
 
@@ -127,6 +129,9 @@ describe('App', () => {
       'true',
     )
     expect(screen.getByRole('heading', { name: '记账' })).toBeInTheDocument()
+    expect(screen.getByRole('main')).toHaveClass('app-shell--accounting')
+    expect(document.body).toHaveClass('is-accounting-view')
+    expect(document.body).not.toHaveClass('is-map-view')
     expect(screen.getByText('总余额')).toBeInTheDocument()
   })
 

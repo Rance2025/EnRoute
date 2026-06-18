@@ -24,7 +24,16 @@ body,
 }
 
 body {
+  overflow-x: hidden;
+}
+
+body.is-map-view {
   overflow: hidden;
+}
+
+body.is-accounting-view {
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 button,

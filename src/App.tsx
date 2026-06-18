@@ -1,6 +1,6 @@
 import './App.css'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { getAmapConfig, type AmapConfig } from './config/amap'
 import { AmapCanvas } from './components/AmapCanvas'
@@ -15,8 +15,17 @@ type AppView = 'map' | 'accounting'
 function App({ amapConfig = getAmapConfig() }: AppProps) {
   const [view, setView] = useState<AppView>('map')
 
+  useEffect(() => {
+    document.body.classList.toggle('is-map-view', view === 'map')
+    document.body.classList.toggle('is-accounting-view', view === 'accounting')
+
+    return () => {
+      document.body.classList.remove('is-map-view', 'is-accounting-view')
+    }
+  }, [view])
+
   return (
-    <main className="app-shell">
+    <main className={`app-shell app-shell--${view}`}>
       <nav className="app-nav" aria-label="主导航">
         <div className="app-nav__brand" aria-label="在途 EnRoute">
           <span>在途</span>

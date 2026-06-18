@@ -1,8 +1,18 @@
 .app-shell {
   min-height: 100svh;
   width: 100vw;
-  overflow: hidden;
+  overflow: visible;
   background: #eef1f0;
+}
+
+.app-shell--map {
+  overflow: hidden;
+}
+
+.app-shell--accounting {
+  height: 100svh;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .app-nav {
@@ -120,7 +130,6 @@
 .accounting-page {
   min-height: 100svh;
   padding: 96px clamp(18px, 3vw, 42px) 30px;
-  overflow: auto;
   color: #17231f;
   background:
     linear-gradient(180deg, rgba(221, 231, 226, 0.9), rgba(241, 244, 241, 0.98) 320px),
