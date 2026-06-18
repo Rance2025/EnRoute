@@ -233,6 +233,45 @@ describe('bounded map zooming', () => {
     vi.useRealTimers()
   })
 
+  it('uses a stronger zoom step for standard mouse wheel deltas', () => {
+    vi.useFakeTimers()
+    const container = document.createElement('div')
+    Object.defineProperties(container, {
+      clientWidth: { value: 1432 },
+      clientHeight: { value: 815 },
+      getBoundingClientRect: {
+        value: () => ({ left: 0, top: 0, width: 1432, height: 815 }),
+      },
+    })
+    const calls: number[] = []
+    const map: BoundedZoomMap = {
+      setStatus: vi.fn(),
+      getZoom: () => 5,
+      getCenter: () => lngLat([104, 35]),
+      setZoomAndCenter: (nextZoom) => {
+        calls.push(nextZoom)
+      },
+    }
+
+    const dispose = installBoundedMapZoom(map, container, renderBounds)
+
+    container.dispatchEvent(
+      new WheelEvent('wheel', {
+        bubbles: true,
+        cancelable: true,
+        deltaY: -120,
+        clientX: 716,
+        clientY: 407.5,
+      }),
+    )
+    vi.runAllTimers()
+
+    expect(calls.at(-1)).toBeGreaterThanOrEqual(5.45)
+
+    dispose()
+    vi.useRealTimers()
+  })
+
   it('moves toward the minimum zoom midpoint before the final zoom frame', () => {
     const nextCenter = calculateIntermediateZoomCenter({
       startCenter: [104, 35],

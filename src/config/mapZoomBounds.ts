@@ -50,9 +50,9 @@ type CalculateIntermediateZoomCenterOptions = {
   bounds: MapBounds
 }
 
-const WHEEL_ZOOM_SENSITIVITY = 0.0022
-const WHEEL_ZOOM_MIN_STEP = 0.08
-const WHEEL_ZOOM_MAX_STEP = 0.42
+const WHEEL_ZOOM_SENSITIVITY = 0.004
+const WHEEL_ZOOM_MIN_STEP = 0.12
+const WHEEL_ZOOM_MAX_STEP = 0.72
 const TOOLBAR_ZOOM_STEP = 0.5
 const ZOOM_ANIMATION_DURATION_MS = 180
 const ZOOM_ANIMATION_FRAME_MS = 16
