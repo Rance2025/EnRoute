@@ -7,17 +7,22 @@ import {
   installBoundedMapDrag,
 } from '../config/mapDragBounds'
 import { DEFAULT_MAP_CAMERA, resetMapCamera, type MapBounds } from '../config/mapCamera'
-import { installBoundedMapZoom, zoomByStep } from '../config/mapZoomBounds'
+import {
+  calculateSingleWorldMapPaneLayout,
+  measureAmapWorldPixelWidthAtZoom,
+} from '../config/mapPaneLayout'
+import { calculateBoundedZoomCenter, installBoundedMapZoom, zoomByStep } from '../config/mapZoomBounds'
 import { loadAmap, type AMapNamespace } from '../services/amapLoader'
 import { MapControls } from './MapControls'
 
 type AmapCanvasProps = {
   config: AmapConfig
+  onPanelWidthChange?: (width: number) => void
 }
 
 type MapStatus = 'missing-config' | 'loading' | 'ready' | 'error'
 
-export function AmapCanvas({ config }: AmapCanvasProps) {
+export function AmapCanvas({ config, onPanelWidthChange }: AmapCanvasProps) {
   const mapNodeRef = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<AMap.Map | null>(null)
   const amapRef = useRef<AMapNamespace | null>(null)
@@ -44,9 +49,52 @@ export function AmapCanvas({ config }: AmapCanvasProps) {
     }, 720)
   }, [config.renderBounds])
 
+  const updatePaneLayout = useCallback(
+    (map: AMap.Map, container: HTMLElement) => {
+      const minimumZoom = calculateMinimumZoomForLatitudeCoverage(container.clientHeight)
+      const worldWidthPx = measureAmapWorldPixelWidthAtZoom(map, minimumZoom)
+      const layout = calculateSingleWorldMapPaneLayout({
+        viewportWidth: window.innerWidth,
+        worldWidthPx,
+      })
+
+      onPanelWidthChange?.(layout.sidePanelWidth)
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
+          map.resize()
+          const currentZoom = map.getZoom()
+          if (currentZoom < minimumZoom) {
+            const center = map.getCenter()
+            map.setZoomAndCenter(
+              minimumZoom,
+              calculateBoundedZoomCenter({
+                center: [center.getLng(), center.getLat()],
+                currentZoom,
+                targetZoom: minimumZoom,
+                focalPoint: {
+                  x: container.clientWidth / 2,
+                  y: container.clientHeight / 2,
+                },
+                viewportSize: {
+                  width: container.clientWidth,
+                  height: container.clientHeight,
+                },
+                bounds: config.renderBounds,
+              }),
+              true,
+            )
+          }
+          clampMapCenterToLatitudeBounds(map, container, config.renderBounds)
+        })
+      })
+    },
+    [config.renderBounds, onPanelWidthChange],
+  )
+
   useEffect(() => {
     if (!config.isConfigured || !mapNodeRef.current) {
       setStatus('missing-config')
+      onPanelWidthChange?.(0)
       return
     }
 
@@ -100,6 +148,7 @@ export function AmapCanvas({ config }: AmapCanvasProps) {
         })
 
         mapRef.current = map
+        updatePaneLayout(map, mapNodeRef.current)
         if (import.meta.env.DEV) {
           window.__ENROUTE_MAP__ = map
         }
@@ -127,7 +176,20 @@ export function AmapCanvas({ config }: AmapCanvasProps) {
       mapRef.current = null
       amapRef.current = null
     }
-  }, [clampViewAfterZoom, config, mapTheme.style])
+  }, [clampViewAfterZoom, config, mapTheme.style, onPanelWidthChange, updatePaneLayout])
+
+  useEffect(() => {
+    function updateLayoutAfterResize() {
+      if (!mapRef.current || !mapNodeRef.current) return
+      updatePaneLayout(mapRef.current, mapNodeRef.current)
+    }
+
+    window.addEventListener('resize', updateLayoutAfterResize)
+
+    return () => {
+      window.removeEventListener('resize', updateLayoutAfterResize)
+    }
+  }, [updatePaneLayout])
 
   function resetView() {
     if (!mapRef.current || !amapRef.current) return
@@ -149,7 +211,10 @@ export function AmapCanvas({ config }: AmapCanvasProps) {
   }
 
   return (
-    <section className="map-stage" aria-label="在途 EnRoute 地图">
+    <section
+      className="map-stage"
+      aria-label="在途 EnRoute 地图工作区"
+    >
       <div className="amap-surface" ref={mapNodeRef} />
 
       <header className="brand-header" aria-label="在途 EnRoute">

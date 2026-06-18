@@ -20,6 +20,25 @@ describe('map chrome layout', () => {
     expect(rule).not.toContain('translateX(-50%)')
   })
 
+  it('reserves a left data panel and keeps the map in the remaining workspace', () => {
+    const appShellRule = cssRule('.app-shell')
+    const panelRule = cssRule('.data-panel')
+    const stageRule = cssRule('.map-stage')
+
+    expect(appShellRule).toContain('position: relative')
+    expect(panelRule).toContain('width: var(--data-panel-width, 0px)')
+    expect(panelRule).not.toContain('border-right')
+    expect(cssRule('.app-shell.has-data-panel .data-panel')).toContain('border-right')
+    expect(stageRule).toContain('inset: 0 0 0 var(--data-panel-width)')
+    expect(stageRule).toContain('width: calc(100vw - var(--data-panel-width))')
+  })
+
+  it('enforces the current map zoom against the resized single-world minimum', () => {
+    expect(amapCanvasSource).toContain('currentZoom < minimumZoom')
+    expect(amapCanvasSource).toContain('setZoomAndCenter(')
+    expect(amapCanvasSource).toContain('calculateBoundedZoomCenter(')
+  })
+
   it('anchors the map toolbar to the lower-right', () => {
     const rule = cssRule('.map-toolbar')
     const stageRule = cssRule('.map-stage')
