@@ -1,17 +1,31 @@
 .app-shell {
+  position: relative;
   min-height: 100svh;
   width: 100vw;
   overflow: hidden;
   background: #eef1f0;
 }
 
+.data-panel {
+  position: absolute;
+  inset: 0 auto 0 0;
+  z-index: 1;
+  width: var(--data-panel-width, 0px);
+  background: rgba(247, 250, 249, 0.92);
+}
+
+.app-shell.has-data-panel .data-panel {
+  border-right: 1px solid rgba(23, 31, 29, 0.08);
+}
+
 .map-stage {
   --map-chrome-x: max(24px, env(safe-area-inset-right));
   --map-chrome-y: max(24px, env(safe-area-inset-bottom));
 
-  position: relative;
+  position: absolute;
+  inset: 0 0 0 var(--data-panel-width);
   min-height: 100svh;
-  width: 100vw;
+  width: calc(100vw - var(--data-panel-width));
   overflow: hidden;
   color: #18211f;
   background:
@@ -159,6 +173,11 @@
   .map-stage {
     --map-chrome-x: max(12px, env(safe-area-inset-right));
     --map-chrome-y: max(12px, env(safe-area-inset-bottom));
+    --data-panel-width: 0px !important;
+  }
+
+  .data-panel {
+    display: none;
   }
 
   .brand-header {

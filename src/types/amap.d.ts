@@ -9,6 +9,7 @@ declare namespace AMap {
     constructor(container: string | HTMLElement, options?: MapOptions)
     addControl(control: unknown): void
     destroy(): void
+    resize(): void
     on(eventName: string, callback: () => void): void
     off(eventName: string, callback: () => void): void
     setMapStyle(style: string): void
@@ -33,6 +34,7 @@ declare namespace AMap {
     setBounds(bounds: BoundsLike, immediately?: boolean, avoid?: number[], duration?: number): void
     setLimitBounds(bounds: Bounds): void
     getCenter(): { getLng: () => number; getLat: () => number }
+    lnglatToPixel(lngLat: LngLatLike, level: number): { x: number; y: number }
     lngLatToContainer(lngLat: LngLatLike): { x: number; y: number }
     containerToLngLat(point: { x: number; y: number }): { getLng: () => number; getLat: () => number }
     getPitch(): number
