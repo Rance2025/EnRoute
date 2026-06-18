@@ -1,4 +1,4 @@
-import { TILE_SIZE } from './mercator'
+import { calculateMinimumZoomForWorldCoverage, TILE_SIZE } from './mercator'
 
 type LngLatPoint = {
   getLng: () => number
@@ -17,6 +17,11 @@ type SingleWorldMapPaneLayoutOptions = {
   worldWidthPx: number
 }
 
+type FallbackSingleWorldPaneLayoutOptions = {
+  viewportWidth: number
+  viewportHeight: number
+}
+
 export function calculateSingleWorldMapPaneLayout({
   viewportWidth,
   worldWidthPx,
@@ -29,6 +34,18 @@ export function calculateSingleWorldMapPaneLayout({
     mapPaneWidth,
     sidePanelWidth: Math.max(normalizedViewportWidth - mapPaneWidth, 0),
   }
+}
+
+export function calculateFallbackSingleWorldPaneLayout({
+  viewportWidth,
+  viewportHeight,
+}: FallbackSingleWorldPaneLayoutOptions) {
+  return calculateSingleWorldMapPaneLayout({
+    viewportWidth,
+    worldWidthPx: calculateWorldPixelWidthAtZoom(
+      calculateMinimumZoomForWorldCoverage(viewportHeight),
+    ),
+  })
 }
 
 export function measureAmapWorldPixelWidthAtZoom(

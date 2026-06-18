@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  calculateFallbackSingleWorldPaneLayout,
   calculateSingleWorldMapPaneLayout,
   calculateWorldPixelWidthAtZoom,
   measureAmapWorldPixelWidthAtZoom,
@@ -35,6 +36,18 @@ describe('single-world map pane layout', () => {
     ).toEqual({
       mapPaneWidth: 820,
       sidePanelWidth: 0,
+    })
+  })
+
+  it('calculates a deterministic fallback layout for non-map detail pages', () => {
+    expect(
+      calculateFallbackSingleWorldPaneLayout({
+        viewportWidth: 1440,
+        viewportHeight: 800,
+      }),
+    ).toEqual({
+      mapPaneWidth: 1024,
+      sidePanelWidth: 416,
     })
   })
 
