@@ -1,0 +1,994 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>EnRoute Capsule Single World Architecture</title>
+    <style>
+      :root {
+        --sea: #dce8e8;
+        --sea-2: #eef4f0;
+        --land: #fbfcf8;
+        --land-2: #f4f7f1;
+        --green: #173e35;
+        --green-2: #2f5c50;
+        --red: #b8544c;
+        --red-soft: rgba(184, 84, 76, 0.12);
+        --blue: #4c7484;
+        --ink: #12201b;
+        --muted: rgba(18, 32, 27, 0.56);
+        --line: rgba(18, 32, 27, 0.08);
+        --panel: rgba(255, 255, 255, 0.76);
+        --shadow: 0 24px 70px rgba(29, 47, 42, 0.13);
+        --mock-width: min(1540px, calc(100vw - 48px));
+        --map-pane-width: min(100%, 1120px);
+        --shared-panel-width: max(0px, calc(100% - var(--map-pane-width)));
+        color: var(--ink);
+        background: var(--sea);
+        font-family:
+          -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI",
+          "PingFang SC", "Microsoft YaHei", sans-serif;
+        font-synthesis: none;
+        text-rendering: optimizeLegibility;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-width: 1280px;
+        background:
+          linear-gradient(rgba(23, 62, 53, 0.03) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(23, 62, 53, 0.03) 1px, transparent 1px),
+          radial-gradient(circle at 14% 4%, rgba(255, 255, 255, 0.9), transparent 30%),
+          linear-gradient(135deg, var(--sea), #eef4ef 48%, #d4e2df);
+        background-size: 42px 42px, 42px 42px, auto, auto;
+      }
+
+      .review {
+        width: var(--mock-width);
+        margin: 0 auto;
+        padding: 28px 0 54px;
+      }
+
+      .review-header {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 24px;
+        margin-bottom: 20px;
+      }
+
+      .review-header h1,
+      .review-header p {
+        margin: 0;
+      }
+
+      .review-header h1 {
+        font-size: 30px;
+        line-height: 1.15;
+        letter-spacing: 0;
+      }
+
+      .review-header p {
+        max-width: 860px;
+        margin-top: 8px;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.7;
+      }
+
+      .pill-row {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        min-height: 34px;
+        padding: 7px 11px;
+        border-radius: 999px;
+        color: rgba(18, 32, 27, 0.66);
+        background: rgba(255, 255, 255, 0.62);
+        box-shadow: inset 0 0 0 1px rgba(18, 32, 27, 0.07);
+        font-size: 12px;
+        font-weight: 760;
+        white-space: nowrap;
+      }
+
+      .pill.active {
+        color: #fbfffc;
+        background: var(--green);
+      }
+
+      .section {
+        overflow: hidden;
+        margin-top: 24px;
+        border-radius: 34px;
+        background: rgba(251, 252, 248, 0.72);
+        box-shadow:
+          var(--shadow),
+          inset 0 0 0 1px rgba(255, 255, 255, 0.74);
+      }
+
+      .section-head {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 18px;
+        padding: 16px 20px;
+        border-bottom: 1px solid rgba(18, 32, 27, 0.06);
+        background: rgba(255, 255, 255, 0.48);
+      }
+
+      .kicker {
+        color: var(--green-2);
+        font-size: 12px;
+        font-weight: 840;
+      }
+
+      .section h2,
+      .section p {
+        margin: 0;
+      }
+
+      .section h2 {
+        margin-top: 4px;
+        font-size: 22px;
+        line-height: 1.2;
+        letter-spacing: 0;
+      }
+
+      .section p {
+        max-width: 930px;
+        margin-top: 6px;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.65;
+      }
+
+      .note {
+        display: inline-flex;
+        align-items: center;
+        min-height: 34px;
+        padding: 8px 12px;
+        border-radius: 999px;
+        color: rgba(18, 32, 27, 0.66);
+        background: rgba(255, 255, 255, 0.72);
+        box-shadow: inset 0 0 0 1px rgba(18, 32, 27, 0.07);
+        font-size: 12px;
+        font-weight: 780;
+        white-space: nowrap;
+      }
+
+      .screen {
+        position: relative;
+        height: 800px;
+        min-height: 0;
+        overflow: hidden;
+        margin: 16px;
+        border-radius: 30px;
+        background: var(--sea);
+        box-shadow: inset 0 0 0 1px rgba(18, 32, 27, 0.06);
+      }
+
+      .capsule-nav {
+        position: absolute;
+        z-index: 20;
+        top: 18px;
+        left: 50%;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 48px;
+        padding: 6px;
+        border-radius: 999px;
+        border: 1px solid rgba(18, 32, 27, 0.08);
+        background: rgba(251, 252, 248, 0.78);
+        box-shadow:
+          0 16px 44px rgba(31, 46, 42, 0.14),
+          inset 0 1px 0 rgba(255, 255, 255, 0.72);
+        backdrop-filter: blur(22px) saturate(1.12);
+        transform: translateX(-50%);
+      }
+
+      .brand {
+        display: inline-flex;
+        align-items: baseline;
+        gap: 5px;
+        padding: 0 8px 0 10px;
+        font-size: 14px;
+        font-weight: 850;
+        white-space: nowrap;
+      }
+
+      .brand span:last-child {
+        color: rgba(18, 32, 27, 0.58);
+        font-weight: 780;
+      }
+
+      .nav-tabs {
+        display: flex;
+        gap: 3px;
+      }
+
+      .nav-tabs span {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        height: 34px;
+        padding: 0 13px;
+        border-radius: 999px;
+        color: rgba(18, 32, 27, 0.68);
+        font-size: 13px;
+        font-weight: 780;
+        white-space: nowrap;
+      }
+
+      .nav-tabs .active {
+        color: #fbfffc;
+        background: var(--green);
+        box-shadow: 0 8px 22px rgba(23, 62, 53, 0.2);
+      }
+
+      .shell {
+        display: grid;
+        grid-template-columns: var(--shared-panel-width) var(--map-pane-width);
+        height: 100%;
+        min-height: 0;
+      }
+
+      .shared-panel {
+        min-width: 0;
+        min-height: 0;
+        overflow: hidden;
+        padding: 92px 16px 16px;
+        background: rgba(251, 252, 248, 0.72);
+        box-shadow: inset -1px 0 0 rgba(18, 32, 27, 0.06);
+        backdrop-filter: blur(18px);
+      }
+
+      .shared-panel.is-empty {
+        padding: 0;
+      }
+
+      .panel-scroll,
+      .content-scroll {
+        height: 100%;
+        min-height: 0;
+        overflow: auto;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(23, 62, 53, 0.22) transparent;
+      }
+
+      .time-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+
+      .time-head small,
+      .muted {
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 730;
+      }
+
+      .time-head h3 {
+        margin: 4px 0 0;
+        font-size: 28px;
+        line-height: 1.05;
+        letter-spacing: 0;
+      }
+
+      .mini-calendar {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 5px;
+        margin-bottom: 16px;
+      }
+
+      .mini-calendar span {
+        display: grid;
+        height: 31px;
+        place-items: center;
+        border-radius: 11px;
+        color: rgba(18, 32, 27, 0.6);
+        background: rgba(23, 62, 53, 0.055);
+        font-size: 12px;
+        font-weight: 740;
+      }
+
+      .mini-calendar .today {
+        color: #fbfffc;
+        background: var(--green);
+      }
+
+      .scope-list {
+        display: grid;
+        gap: 8px;
+      }
+
+      .scope-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        min-height: 44px;
+        padding: 0 12px;
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.66);
+        color: rgba(18, 32, 27, 0.76);
+        font-size: 13px;
+        font-weight: 780;
+      }
+
+      .scope-row.active {
+        color: var(--green);
+        background: rgba(23, 62, 53, 0.1);
+      }
+
+      .life-line {
+        position: relative;
+        display: grid;
+        gap: 11px;
+        margin-top: 18px;
+        padding-left: 16px;
+      }
+
+      .life-line::before {
+        position: absolute;
+        top: 8px;
+        bottom: 8px;
+        left: 4px;
+        width: 2px;
+        border-radius: 999px;
+        background: rgba(184, 84, 76, 0.24);
+        content: "";
+      }
+
+      .life-item {
+        position: relative;
+        padding: 10px 11px;
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.62);
+      }
+
+      .life-item::before {
+        position: absolute;
+        top: 17px;
+        left: -15px;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--red);
+        content: "";
+      }
+
+      .life-item strong,
+      .life-item span {
+        display: block;
+      }
+
+      .life-item strong {
+        font-size: 13px;
+      }
+
+      .life-item span {
+        margin-top: 4px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .main-pane {
+        position: relative;
+        min-width: 0;
+        min-height: 0;
+        overflow: hidden;
+      }
+
+      .map-pane {
+        background:
+          radial-gradient(circle at 28% 30%, rgba(255, 255, 255, 0.92), transparent 22%),
+          radial-gradient(circle at 78% 45%, rgba(255, 255, 255, 0.72), transparent 22%),
+          linear-gradient(145deg, var(--sea), #eef5f0 58%, #d0dfdd);
+      }
+
+      .map-pane svg {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+      }
+
+      .map-pane path {
+        fill: none;
+        stroke: var(--red);
+        stroke-linecap: round;
+        stroke-width: 4;
+      }
+
+      .map-toolbar {
+        position: absolute;
+        right: 24px;
+        bottom: 24px;
+        display: flex;
+        gap: 3px;
+        padding: 7px;
+        border-radius: 999px;
+        background: rgba(251, 252, 248, 0.76);
+        box-shadow: 0 16px 40px rgba(31, 46, 42, 0.12);
+        backdrop-filter: blur(18px);
+      }
+
+      .map-toolbar span {
+        display: grid;
+        width: 38px;
+        height: 38px;
+        place-items: center;
+        border-radius: 999px;
+        color: var(--green);
+        background: rgba(23, 62, 53, 0.06);
+        font-weight: 850;
+      }
+
+      .work-pane {
+        padding: 92px 18px 18px;
+        background: var(--land-2);
+      }
+
+      .page-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        margin-bottom: 14px;
+      }
+
+      .page-title h3 {
+        margin: 0;
+        font-size: 30px;
+        line-height: 1;
+      }
+
+      .page-title span {
+        display: block;
+        margin-top: 6px;
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 720;
+      }
+
+      .segmented {
+        display: inline-flex;
+        flex: none;
+        padding: 4px;
+        border-radius: 999px;
+        background: rgba(18, 32, 27, 0.08);
+      }
+
+      .segmented span {
+        padding: 8px 12px;
+        border-radius: 999px;
+        color: rgba(18, 32, 27, 0.52);
+        font-size: 13px;
+        font-weight: 820;
+        white-space: nowrap;
+      }
+
+      .segmented .active {
+        color: #fbfffc;
+        background: var(--green);
+        box-shadow: 0 8px 18px rgba(23, 62, 53, 0.2);
+      }
+
+      .workspace-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 320px;
+        gap: 14px;
+        height: calc(100% - 64px);
+        min-height: 0;
+      }
+
+      .main-stack,
+      .side-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        min-height: 0;
+      }
+
+      .panel {
+        min-height: 0;
+        overflow: hidden;
+        border-radius: 24px;
+        background: rgba(255, 255, 255, 0.74);
+        box-shadow:
+          inset 0 0 0 1px rgba(18, 32, 27, 0.055),
+          0 14px 34px rgba(30, 50, 45, 0.055);
+      }
+
+      .panel-inner {
+        height: 100%;
+        min-height: 0;
+        overflow: auto;
+        padding: 16px;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(23, 62, 53, 0.22) transparent;
+      }
+
+      .stat-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+        flex: none;
+      }
+
+      .stat {
+        padding: 15px;
+        border-radius: 20px;
+        background: rgba(23, 62, 53, 0.07);
+      }
+
+      .stat small,
+      .field small {
+        display: block;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 740;
+      }
+
+      .stat b {
+        display: block;
+        margin-top: 7px;
+        font-size: 26px;
+        line-height: 1;
+      }
+
+      .ios-list {
+        overflow: hidden;
+        border-radius: 22px;
+        background: rgba(255, 255, 255, 0.62);
+        box-shadow: inset 0 0 0 1px rgba(18, 32, 27, 0.055);
+      }
+
+      .row {
+        display: grid;
+        grid-template-columns: 38px minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 12px;
+        min-height: 61px;
+        padding: 11px 13px;
+        border-bottom: 1px solid rgba(18, 32, 27, 0.06);
+      }
+
+      .row:last-child {
+        border-bottom: 0;
+      }
+
+      .row strong,
+      .row span {
+        display: block;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .row strong {
+        font-size: 14px;
+      }
+
+      .row span {
+        margin-top: 4px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .icon {
+        display: grid;
+        width: 38px;
+        height: 38px;
+        place-items: center;
+        border-radius: 14px;
+        color: var(--green);
+        background: rgba(23, 62, 53, 0.1);
+        font-size: 13px;
+        font-style: normal;
+        font-weight: 880;
+      }
+
+      .icon.red {
+        color: var(--red);
+        background: var(--red-soft);
+      }
+
+      .amount {
+        font-size: 14px;
+        font-weight: 850;
+        white-space: nowrap;
+      }
+
+      .income {
+        color: #24684c;
+      }
+
+      .expense {
+        color: var(--red);
+      }
+
+      .transfer {
+        color: var(--blue);
+      }
+
+      .field-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .field {
+        min-height: 58px;
+        padding: 11px 12px;
+        border-radius: 17px;
+        background: rgba(23, 62, 53, 0.07);
+      }
+
+      .field b {
+        display: block;
+        margin-top: 6px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 15px;
+      }
+
+      .summary-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr);
+        gap: 14px;
+        height: 100%;
+        min-height: 0;
+      }
+
+      .hero-strip {
+        min-height: 178px;
+        padding: 22px;
+        border-radius: 28px;
+        color: #fbfffc;
+        background:
+          radial-gradient(circle at 84% 18%, rgba(255, 255, 255, 0.2), transparent 28%),
+          linear-gradient(135deg, var(--green), #557765);
+        box-shadow: 0 20px 46px rgba(23, 62, 53, 0.2);
+      }
+
+      .hero-strip small {
+        color: rgba(255, 255, 255, 0.72);
+        font-size: 13px;
+        font-weight: 740;
+      }
+
+      .hero-strip h3 {
+        margin: 12px 0 0;
+        font-size: 38px;
+        line-height: 1.05;
+      }
+
+      .cross-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+        margin-top: 14px;
+      }
+
+      .cross-card {
+        min-height: 148px;
+        padding: 15px;
+        border-radius: 22px;
+        background: rgba(255, 255, 255, 0.7);
+      }
+
+      .cross-card h4 {
+        margin: 0;
+        font-size: 16px;
+      }
+
+      .cross-card p {
+        margin: 8px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.55;
+      }
+
+      .small-map {
+        position: relative;
+        height: 100%;
+        overflow: hidden;
+        border-radius: 24px;
+        background:
+          radial-gradient(circle at 26% 25%, rgba(255, 255, 255, 0.92), transparent 22%),
+          radial-gradient(circle at 76% 40%, rgba(255, 255, 255, 0.72), transparent 20%),
+          linear-gradient(145deg, var(--sea), #eef5f0 58%, #d0dfdd);
+      }
+
+      .small-map svg {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+      }
+
+      .small-map path {
+        fill: none;
+        stroke: var(--red);
+        stroke-linecap: round;
+        stroke-width: 4;
+      }
+
+      .measure {
+        display: grid;
+        grid-template-columns: var(--shared-panel-width) var(--map-pane-width);
+        height: 56px;
+        overflow: hidden;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.62);
+      }
+
+      .measure span {
+        display: grid;
+        place-items: center;
+        color: rgba(18, 32, 27, 0.62);
+        font-size: 12px;
+        font-weight: 780;
+        box-shadow: inset -1px 0 0 rgba(18, 32, 27, 0.08);
+      }
+
+      .measure span:last-child {
+        box-shadow: none;
+        background: rgba(23, 62, 53, 0.06);
+      }
+
+      @media (max-width: 1260px) {
+        :root {
+          --map-pane-width: 100%;
+          --shared-panel-width: 0px;
+        }
+
+        body {
+          min-width: 980px;
+        }
+
+        .shared-panel {
+          display: none;
+        }
+
+        .time-head h3 {
+          font-size: 24px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="review">
+      <header class="review-header">
+        <div>
+          <h1>胶囊导航 + 单世界地图同构方案</h1>
+          <p>
+            这版跟随最新地图页逻辑：左侧面板不是固定三七，而是只占用“视口宽度减去单世界地图宽度”的富余空间。
+            右侧主区域宽度保持为当前缩放下一整个世界地图的宽度；其它分页面沿用同一壳。
+          </p>
+        </div>
+        <div class="pill-row">
+          <span class="pill active">A 方向</span>
+          <span class="pill">顶部居中胶囊</span>
+          <span class="pill">动态左侧面板</span>
+          <span class="pill">单世界宽度</span>
+        </div>
+      </header>
+
+      <section class="section">
+        <header class="section-head">
+          <div>
+            <div class="kicker">真实比例原则</div>
+            <h2>左侧宽度 = 视口富余宽度；右侧宽度 = 单世界地图宽度</h2>
+            <p>
+              生产实现里由 `calculateSingleWorldMapPaneLayout()` 决定。宽屏时左侧出现时间面板；
+              窄屏或地图世界宽度已经占满视口时，左侧面板收起，地图全宽。
+            </p>
+          </div>
+          <span class="note">不是固定 30/70</span>
+        </header>
+        <div style="padding: 16px">
+          <div class="measure"><span>shared panel: viewport - world</span><span>main pane: single world map width</span></div>
+        </div>
+      </section>
+
+      <section class="section">
+        <header class="section-head">
+          <div>
+            <div class="kicker">A / 地图页</div>
+            <h2>顶部居中胶囊跨整屏，左侧承接统一时间面板</h2>
+            <p>
+              地图页右侧维持最新单世界地图布局。左侧不再只是空白，可逐步放入日历、时间范围、人生阶段和当前导入状态。
+            </p>
+          </div>
+          <span class="note">匹配当前截图结构</span>
+        </header>
+        <div class="screen">
+          <nav class="capsule-nav">
+            <div class="brand"><span>在途</span><span>EnRoute</span></div>
+            <div class="nav-tabs"><span>概览</span><span class="active">地图</span><span>日程</span><span>记账</span></div>
+          </nav>
+          <div class="shell">
+            <aside class="shared-panel">
+              <div class="panel-scroll">
+                <div class="time-head"><div><small>当前时间范围</small><h3>6月18日</h3></div><span class="pill">今天</span></div>
+                <div class="mini-calendar">
+                  <span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span>
+                  <span>10</span><span>11</span><span>12</span><span>13</span><span>14</span><span>15</span><span>16</span>
+                  <span>17</span><span class="today">18</span><span>19</span><span>20</span><span>21</span><span>22</span><span>23</span>
+                </div>
+                <div class="scope-list">
+                  <div class="scope-row active"><span>今天</span><b>位置 3</b></div>
+                  <div class="scope-row"><span>本月</span><b>足迹 42</b></div>
+                  <div class="scope-row"><span>大学阶段</span><b>1,284 天</b></div>
+                </div>
+                <div class="life-line">
+                  <div class="life-item"><strong>青岛之行</strong><span>位置 18 · 记账 4 · 日程 2</span></div>
+                  <div class="life-item"><strong>待导入</strong><span>位置数据仍以导入为主</span></div>
+                </div>
+              </div>
+            </aside>
+            <section class="main-pane map-pane">
+              <svg viewBox="0 0 1120 800" aria-hidden="true"><path d="M88 540 C220 380 346 502 512 350 S782 176 1004 286" /></svg>
+              <div class="map-toolbar"><span>⌖</span><span>◎</span><span>+</span><span>-</span></div>
+            </section>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <header class="section-head">
+          <div>
+            <div class="kicker">A / 记账页</div>
+            <h2>记账页也使用同一左侧动态面板，右侧是高密度账目工作区</h2>
+            <p>
+              右侧宽度沿用地图世界宽度，而不是任意铺满整屏。这样地图、日程、记账切换时主区域宽度稳定，
+              左侧时间上下文也稳定。
+            </p>
+          </div>
+          <span class="note">详细页高密度，整屏不滚</span>
+        </header>
+        <div class="screen">
+          <nav class="capsule-nav">
+            <div class="brand"><span>在途</span><span>EnRoute</span></div>
+            <div class="nav-tabs"><span>概览</span><span>地图</span><span>日程</span><span class="active">记账</span></div>
+          </nav>
+          <div class="shell">
+            <aside class="shared-panel">
+              <div class="panel-scroll">
+                <div class="time-head"><div><small>当前时间范围</small><h3>6月18日</h3></div><span class="pill">今天</span></div>
+                <div class="mini-calendar">
+                  <span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span>
+                  <span>10</span><span>11</span><span>12</span><span>13</span><span>14</span><span>15</span><span>16</span>
+                  <span>17</span><span class="today">18</span><span>19</span><span>20</span><span>21</span><span>22</span><span>23</span>
+                </div>
+                <div class="scope-list">
+                  <div class="scope-row active"><span>今天</span><b>支出 ¥51</b></div>
+                  <div class="scope-row"><span>本月</span><b>支出 ¥182</b></div>
+                  <div class="scope-row"><span>青岛之行</span><b>4 笔</b></div>
+                </div>
+                <div class="life-line">
+                  <div class="life-item"><strong>餐饮集中</strong><span>晚餐、饮料、其他</span></div>
+                  <div class="life-item"><strong>时间上下文</strong><span>按发生时间过滤流水</span></div>
+                </div>
+              </div>
+            </aside>
+            <section class="main-pane work-pane">
+              <div class="content-scroll">
+                <header class="page-head">
+                  <div class="page-title"><h3>记账</h3><span>左侧时间范围控制右侧流水和统计</span></div>
+                  <div class="segmented"><span>账户</span><span class="active">流水</span><span>统计</span></div>
+                </header>
+                <div class="workspace-grid">
+                  <main class="main-stack">
+                    <div class="stat-grid">
+                      <div class="stat"><small>总余额</small><b>¥5,628.65</b></div>
+                      <div class="stat"><small>收入</small><b class="income">¥5,172.41</b></div>
+                      <div class="stat"><small>支出</small><b class="expense">¥182.18</b></div>
+                    </div>
+                    <section class="panel" style="flex: 1">
+                      <div class="panel-inner">
+                        <div class="ios-list">
+                          <div class="row"><i class="icon">收</i><div><strong>秒思 5月实习</strong><span>收入 / 工资 · 微信 - 日常</span></div><b class="amount income">+¥5,172.41</b></div>
+                          <div class="row"><i class="icon red">支</i><div><strong>鲜嗨发牛肉火锅</strong><span>支出 / 餐饮 / 晚餐 · 青岛之行</span></div><b class="amount expense">-¥131.00</b></div>
+                          <div class="row"><i class="icon red">支</i><div><strong>NIBU酸奶</strong><span>支出 / 餐饮 / 饮料</span></div><b class="amount expense">-¥45.78</b></div>
+                          <div class="row"><i class="icon">转</i><div><strong>还款示例</strong><span>微信 - 日常 到 花呗</span></div><b class="amount transfer">¥200.00</b></div>
+                          <div class="row"><i class="icon red">支</i><div><strong>地铁</strong><span>交通 / 地铁 · 08:42</span></div><b class="amount expense">-¥5.40</b></div>
+                        </div>
+                      </div>
+                    </section>
+                  </main>
+                  <aside class="side-stack">
+                    <section class="panel">
+                      <div class="panel-inner">
+                        <div class="field-grid">
+                          <div class="field"><small>类型</small><b>支出</b></div>
+                          <div class="field"><small>金额</small><b>45.78</b></div>
+                          <div class="field"><small>账户</small><b>微信 - 日常</b></div>
+                          <div class="field"><small>分类</small><b>餐饮 / 晚餐</b></div>
+                        </div>
+                      </div>
+                    </section>
+                    <section class="panel" style="flex: 1">
+                      <div class="panel-inner">
+                        <div class="life-line">
+                          <div class="life-item"><strong>分类树</strong><span>支出 / 餐饮 / 晚餐</span></div>
+                          <div class="life-item"><strong>标签树</strong><span>旅行 / 青岛之行</span></div>
+                        </div>
+                      </div>
+                    </section>
+                  </aside>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <header class="section-head">
+          <div>
+            <div class="kicker">A / 汇总页</div>
+            <h2>汇总页同样保持动态左侧面板，但右侧做跨域概览</h2>
+            <p>
+              汇总页可以同构：左侧仍是时间范围，右侧是位置、时间、金钱的概览和跨域时间线。
+              如果后续觉得首页需要更强仪式感，可以让汇总页弱化左侧面板。
+            </p>
+          </div>
+          <span class="note">同构优先，可后续弱化</span>
+        </header>
+        <div class="screen">
+          <nav class="capsule-nav">
+            <div class="brand"><span>在途</span><span>EnRoute</span></div>
+            <div class="nav-tabs"><span class="active">概览</span><span>地图</span><span>日程</span><span>记账</span></div>
+          </nav>
+          <div class="shell">
+            <aside class="shared-panel">
+              <div class="panel-scroll">
+                <div class="time-head"><div><small>概览范围</small><h3>今天</h3></div><span class="pill">总览</span></div>
+                <div class="mini-calendar"><span>12</span><span>13</span><span>14</span><span>15</span><span>16</span><span>17</span><span class="today">18</span></div>
+                <div class="scope-list">
+                  <div class="scope-row active"><span>今日</span><b>概览</b></div>
+                  <div class="scope-row"><span>本月</span><b>趋势</b></div>
+                  <div class="scope-row"><span>全部人生</span><b>导入后</b></div>
+                </div>
+              </div>
+            </aside>
+            <section class="main-pane work-pane">
+              <div class="summary-grid">
+                <main>
+                  <section class="hero-strip"><small>2026年6月18日</small><h3>位置、时间、金钱在同一天相遇</h3></section>
+                  <div class="cross-grid">
+                    <article class="cross-card"><h4>位置</h4><p>今天 3 个地点，青岛之行仍是近期主要空间上下文。</p></article>
+                    <article class="cross-card"><h4>时间</h4><p>2 个日程节点，下午有一条待补充的人生事件。</p></article>
+                    <article class="cross-card"><h4>金钱</h4><p>支出 ¥51.18，主要来自餐饮和交通。</p></article>
+                  </div>
+                </main>
+                <aside class="small-map"><svg viewBox="0 0 520 760" aria-hidden="true"><path d="M72 570 C142 418 226 514 292 366 S410 218 462 296" /></svg></aside>
+              </div>
+            </section>
+          </div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
