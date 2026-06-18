@@ -49,4 +49,15 @@ describe('map camera', () => {
 
     expect(map.setZoom).toHaveBeenCalledWith(4.5, false, 420)
   })
+
+  it('does not zoom out below the minimum zoom', () => {
+    const map = {
+      getZoom: vi.fn(() => 2),
+      setZoom: vi.fn(),
+    }
+
+    zoomByStep(map, -1, 1.8)
+
+    expect(map.setZoom).toHaveBeenCalledWith(1.8, false, 420)
+  })
 })

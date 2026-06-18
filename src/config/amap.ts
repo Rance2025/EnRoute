@@ -20,6 +20,10 @@ export type AmapConfig = {
     southWest: [number, number]
     northEast: [number, number]
   }
+  renderBounds: {
+    southWest: [number, number]
+    northEast: [number, number]
+  }
   themes: AmapTheme[]
   features: Array<'bg' | 'point' | 'road' | 'building'>
   showLabel: boolean
@@ -34,6 +38,10 @@ export const DEFAULT_AMAP_ZOOM = 4.2
 export const DEFAULT_CHINA_BOUNDS: AmapConfig['defaultBounds'] = {
   southWest: [73.3, 17.8],
   northEast: [135.1, 53.7],
+}
+export const DEFAULT_RENDER_BOUNDS: AmapConfig['renderBounds'] = {
+  southWest: [-180, -85.05112878],
+  northEast: [180, 85.05112878],
 }
 export const DEFAULT_AMAP_FEATURES: AmapConfig['features'] = ['bg', 'road', 'building']
 
@@ -55,6 +63,7 @@ export function getAmapConfig(env: AmapEnv = import.meta.env as AmapEnv): AmapCo
     defaultCenter: DEFAULT_AMAP_CENTER,
     defaultZoom: DEFAULT_AMAP_ZOOM,
     defaultBounds: DEFAULT_CHINA_BOUNDS,
+    renderBounds: DEFAULT_RENDER_BOUNDS,
     themes: AMAP_THEMES,
     features: DEFAULT_AMAP_FEATURES,
     showLabel: false,

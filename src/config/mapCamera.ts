@@ -45,6 +45,10 @@ export function resetMapCamera(map: ResettableMap, bounds: AMap.Bounds) {
   map.setBounds(bounds, false, undefined, MAP_RESET_DURATION_MS)
 }
 
-export function zoomByStep(map: ZoomableMap, direction: 1 | -1) {
-  map.setZoom(map.getZoom() + MAP_ZOOM_STEP * direction, false, MAP_ZOOM_DURATION_MS)
+export function zoomByStep(map: ZoomableMap, direction: 1 | -1, minZoom = -Infinity) {
+  map.setZoom(
+    Math.max(map.getZoom() + MAP_ZOOM_STEP * direction, minZoom),
+    false,
+    MAP_ZOOM_DURATION_MS,
+  )
 }

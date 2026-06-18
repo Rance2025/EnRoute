@@ -9,14 +9,20 @@ declare namespace AMap {
     constructor(container: string | HTMLElement, options?: MapOptions)
     addControl(control: unknown): void
     destroy(): void
+    on(eventName: string, callback: () => void): void
+    off(eventName: string, callback: () => void): void
     setMapStyle(style: string): void
     setPitch(pitch: number, immediately?: boolean): void
     setRotation(rotation: number, immediately?: boolean): void
+    setStatus(status: { dragEnable?: boolean; pitchEnable?: boolean; rotateEnable?: boolean }): void
+    setCenter(center: LngLatLike, immediately?: boolean, duration?: number): void
     setZoomAndCenter(zoom: number, center: LngLatLike, immediately?: boolean): void
     setZoom(zoom: number, immediately?: boolean, duration?: number): void
     setBounds(bounds: BoundsLike, immediately?: boolean, avoid?: number[], duration?: number): void
     setLimitBounds(bounds: Bounds): void
     getCenter(): { getLng: () => number; getLat: () => number }
+    lngLatToContainer(lngLat: LngLatLike): { x: number; y: number }
+    containerToLngLat(point: { x: number; y: number }): { getLng: () => number; getLat: () => number }
     getPitch(): number
     getRotation(): number
     getZoom(): number
@@ -34,6 +40,7 @@ declare namespace AMap {
   type MapOptions = {
     center?: LngLatLike
     zoom?: number
+    zooms?: [number, number]
     mapStyle?: string
     features?: Array<'bg' | 'point' | 'road' | 'building'>
     viewMode?: '2D' | '3D'

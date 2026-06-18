@@ -49,7 +49,18 @@ describe('map chrome layout', () => {
   it('removes the AMap compass and limits map dragging to configured bounds', () => {
     expect(cssRule('.map-stage .amap-controlbar')).toBe('')
     expect(amapCanvasSource).not.toContain('new AMap.ControlBar')
-    expect(amapCanvasSource).toContain('map.setLimitBounds(')
+    expect(amapCanvasSource).not.toContain('setLimitBounds(')
+    expect(amapCanvasSource).toContain('installBoundedMapDrag(map, mapNodeRef.current, config.renderBounds)')
+    expect(amapCanvasSource).toContain('clampMapCenterToLatitudeBounds(')
+    expect(amapCanvasSource).toContain("map.on('zoomend'")
     expect(amapLoaderSource).not.toContain('AMap.ControlBar')
+  })
+
+  it('uses custom hard-bound dragging instead of native AMap drag rebound', () => {
+    const dragSource = readFileSync('src/config/mapDragBounds.ts', 'utf8')
+
+    expect(dragSource).toContain('setStatus({ dragEnable: false })')
+    expect(dragSource).toContain('calculateNextBoundedDragCenter')
+    expect(cssRule('.amap-surface')).toContain('touch-action: none')
   })
 })

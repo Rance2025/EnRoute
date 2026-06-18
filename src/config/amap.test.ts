@@ -31,6 +31,10 @@ describe('getAmapConfig', () => {
       southWest: [73.3, 17.8],
       northEast: [135.1, 53.7],
     })
+    expect(config.renderBounds).toEqual({
+      southWest: [-180, -85.05112878],
+      northEast: [180, 85.05112878],
+    })
     expect(config.themes).toEqual([
       { id: 'whitesmoke', name: '远山黛', style: 'amap://styles/whitesmoke' },
     ])

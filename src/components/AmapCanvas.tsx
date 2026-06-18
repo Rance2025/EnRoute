@@ -1,7 +1,12 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { AMAP_THEMES, type AmapConfig } from '../config/amap'
-import { DEFAULT_MAP_CAMERA, resetMapCamera, zoomByStep } from '../config/mapCamera'
+import {
+  calculateMinimumZoomForLatitudeCoverage,
+  clampMapCenterToLatitudeBounds,
+  installBoundedMapDrag,
+} from '../config/mapDragBounds'
+import { DEFAULT_MAP_CAMERA, resetMapCamera, zoomByStep, type MapBounds } from '../config/mapCamera'
 import { loadAmap, type AMapNamespace } from '../services/amapLoader'
 import { MapControls } from './MapControls'
 
@@ -16,6 +21,8 @@ export function AmapCanvas({ config }: AmapCanvasProps) {
   const mapRef = useRef<AMap.Map | null>(null)
   const amapRef = useRef<AMapNamespace | null>(null)
   const geolocationRef = useRef<AMap.Geolocation | null>(null)
+  const disposeDragRef = useRef<(() => void) | null>(null)
+  const disposeZoomClampRef = useRef<(() => void) | null>(null)
   const [status, setStatus] = useState<MapStatus>(
     config.isConfigured ? 'loading' : 'missing-config',
   )
@@ -23,6 +30,17 @@ export function AmapCanvas({ config }: AmapCanvasProps) {
 
   const themes = config.themes.length ? config.themes : AMAP_THEMES
   const mapTheme = themes[0]
+
+  const clampViewAfterZoom = useCallback(() => {
+    window.setTimeout(() => {
+      if (!mapRef.current || !mapNodeRef.current) return
+      clampMapCenterToLatitudeBounds(mapRef.current, mapNodeRef.current, config.renderBounds)
+    }, 450)
+    window.setTimeout(() => {
+      if (!mapRef.current || !mapNodeRef.current) return
+      clampMapCenterToLatitudeBounds(mapRef.current, mapNodeRef.current, config.renderBounds)
+    }, 720)
+  }, [config.renderBounds])
 
   useEffect(() => {
     if (!config.isConfigured || !mapNodeRef.current) {
@@ -43,6 +61,7 @@ export function AmapCanvas({ config }: AmapCanvasProps) {
         const map = new AMap.Map(mapNodeRef.current, {
           center: config.defaultCenter,
           zoom: config.defaultZoom,
+          zooms: [calculateMinimumZoomForLatitudeCoverage(mapNodeRef.current.clientHeight), 20],
           mapStyle: mapTheme.style,
           features: config.features,
           viewMode: DEFAULT_MAP_CAMERA.viewMode,
@@ -57,7 +76,12 @@ export function AmapCanvas({ config }: AmapCanvasProps) {
         })
 
         map.addControl(new AMap.Scale({ position: 'LB' }))
-        map.setLimitBounds(toAmapBounds(AMap, config.defaultBounds))
+        disposeDragRef.current = installBoundedMapDrag(map, mapNodeRef.current, config.renderBounds)
+        const clampLatitudeBounds = () => {
+          clampViewAfterZoom()
+        }
+        map.on('zoomend', clampLatitudeBounds)
+        disposeZoomClampRef.current = () => map.off('zoomend', clampLatitudeBounds)
 
         AMap.plugin('AMap.Geolocation', () => {
           if (disposed) return
@@ -90,11 +114,15 @@ export function AmapCanvas({ config }: AmapCanvasProps) {
       if (import.meta.env.DEV) {
         delete window.__ENROUTE_MAP__
       }
+      disposeZoomClampRef.current?.()
+      disposeZoomClampRef.current = null
+      disposeDragRef.current?.()
+      disposeDragRef.current = null
       mapRef.current?.destroy()
       mapRef.current = null
       amapRef.current = null
     }
-  }, [config, mapTheme.style])
+  }, [clampViewAfterZoom, config, mapTheme.style])
 
   function resetView() {
     if (!mapRef.current || !amapRef.current) return
@@ -102,13 +130,13 @@ export function AmapCanvas({ config }: AmapCanvasProps) {
   }
 
   function zoomIn() {
-    if (!mapRef.current) return
+    if (!mapRef.current || !mapNodeRef.current) return
     zoomByStep(mapRef.current, 1)
   }
 
   function zoomOut() {
-    if (!mapRef.current) return
-    zoomByStep(mapRef.current, -1)
+    if (!mapRef.current || !mapNodeRef.current) return
+    zoomByStep(mapRef.current, -1, calculateMinimumZoomForLatitudeCoverage(mapNodeRef.current.clientHeight))
   }
 
   function locate() {
@@ -152,6 +180,6 @@ export function AmapCanvas({ config }: AmapCanvasProps) {
   )
 }
 
-function toAmapBounds(AMap: AMapNamespace, bounds: AmapConfig['defaultBounds']) {
+function toAmapBounds(AMap: AMapNamespace, bounds: MapBounds) {
   return new AMap.Bounds(bounds.southWest, bounds.northEast)
 }
