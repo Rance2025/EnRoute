@@ -1,0 +1,175 @@
+.app-shell {
+  min-height: 100svh;
+  width: 100vw;
+  overflow: hidden;
+  background: #eef1f0;
+}
+
+.map-stage {
+  --map-chrome-x: max(24px, env(safe-area-inset-right));
+  --map-chrome-y: max(24px, env(safe-area-inset-bottom));
+
+  position: relative;
+  min-height: 100svh;
+  width: 100vw;
+  overflow: hidden;
+  color: #18211f;
+  background:
+    linear-gradient(135deg, rgba(44, 68, 64, 0.06), transparent 38%),
+    #eef1f0;
+}
+
+.amap-surface {
+  position: absolute;
+  inset: 0;
+  background: #eef1f0;
+}
+
+.brand-header,
+.map-toolbar,
+.map-message {
+  position: absolute;
+  z-index: 2;
+}
+
+.brand-header {
+  top: max(18px, env(safe-area-inset-top));
+  left: max(18px, env(safe-area-inset-left));
+  padding: 8px 12px 9px;
+  border: 1px solid rgba(23, 31, 29, 0.08);
+  border-radius: 999px;
+  background: rgba(250, 252, 251, 0.72);
+  box-shadow:
+    0 12px 34px rgba(31, 46, 42, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.76);
+  backdrop-filter: blur(20px) saturate(1.12);
+}
+
+.brand-header h1 {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 0;
+  color: #16211f;
+  font-size: clamp(15px, 1.35vw, 18px);
+  font-weight: 760;
+  line-height: 1;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.brand-header h1 span:first-child {
+  font-weight: 820;
+}
+
+.brand-header h1 span:last-child {
+  color: rgba(22, 33, 31, 0.66);
+  font-weight: 700;
+}
+
+.map-toolbar {
+  right: var(--map-chrome-x);
+  bottom: var(--map-chrome-y);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 7px 8px;
+  border: 1px solid rgba(23, 31, 29, 0.08);
+  border-radius: 999px;
+  background: rgba(250, 252, 251, 0.72);
+  box-shadow:
+    0 14px 40px rgba(31, 46, 42, 0.13),
+    inset 0 1px 0 rgba(255, 255, 255, 0.76);
+  backdrop-filter: blur(20px) saturate(1.12);
+}
+
+.map-toolbar button {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  color: #253936;
+  background: transparent;
+  cursor: pointer;
+  transition:
+    background 160ms ease,
+    color 160ms ease,
+    transform 160ms ease;
+}
+
+.map-toolbar button:hover {
+  color: #14211f;
+  background: rgba(25, 34, 32, 0.08);
+  transform: translateY(-1px);
+}
+
+.map-toolbar button:focus-visible {
+  outline: 2px solid rgba(38, 58, 54, 0.38);
+  outline-offset: 3px;
+}
+
+.map-message {
+  top: 50%;
+  left: 50%;
+  width: min(440px, calc(100vw - 40px));
+  padding: 22px;
+  border: 1px solid rgba(23, 31, 29, 0.1);
+  border-radius: 18px;
+  color: #18211f;
+  background: rgba(247, 249, 248, 0.88);
+  box-shadow: 0 24px 90px rgba(29, 43, 40, 0.14);
+  backdrop-filter: blur(20px);
+  transform: translate(-50%, -50%);
+}
+
+.map-message h2 {
+  margin: 0 0 10px;
+  color: #1d302c;
+  font-size: 22px;
+}
+
+.map-message p {
+  margin: 0;
+  color: rgba(38, 58, 54, 0.72);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.map-message pre {
+  margin: 16px 0 0;
+  padding: 14px;
+  overflow: auto;
+  border-radius: 12px;
+  color: #1d302c;
+  background: rgba(216, 224, 222, 0.5);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+@media (max-width: 720px) {
+  .map-stage {
+    --map-chrome-x: max(12px, env(safe-area-inset-right));
+    --map-chrome-y: max(12px, env(safe-area-inset-bottom));
+  }
+
+  .brand-header {
+    top: max(12px, env(safe-area-inset-top));
+    left: max(12px, env(safe-area-inset-left));
+    max-width: calc(100vw - 28px);
+  }
+
+  .brand-header h1 {
+    font-size: 16px;
+  }
+
+  .map-toolbar {
+    max-width: calc(100vw - 28px);
+    overflow-x: auto;
+  }
+
+  .map-toolbar button {
+    flex: 0 0 42px;
+  }
+}
