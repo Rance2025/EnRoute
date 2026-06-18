@@ -15,6 +15,7 @@ declare namespace AMap {
     setZoomAndCenter(zoom: number, center: LngLatLike, immediately?: boolean): void
     setZoom(zoom: number, immediately?: boolean, duration?: number): void
     setBounds(bounds: BoundsLike, immediately?: boolean, avoid?: number[], duration?: number): void
+    setLimitBounds(bounds: Bounds): void
     getCenter(): { getLng: () => number; getLat: () => number }
     getPitch(): number
     getRotation(): number
@@ -48,17 +49,6 @@ declare namespace AMap {
 
   class Scale {
     constructor(options?: { position?: string })
-  }
-
-  class ControlBar {
-    constructor(options?: {
-      position?: {
-        right?: string
-        bottom?: string
-      }
-      showZoomBar?: boolean
-      showControlButton?: boolean
-    })
   }
 
   class Geolocation {

@@ -24,6 +24,6 @@ export async function loadAmap(config: AmapConfig): Promise<AMapNamespace> {
   return AMapLoader.load({
     key: config.key,
     version: '2.0',
-    plugins: ['AMap.Geolocation', 'AMap.ControlBar', 'AMap.Scale'],
+    plugins: ['AMap.Geolocation', 'AMap.Scale'],
   }) as Promise<AMapNamespace>
 }

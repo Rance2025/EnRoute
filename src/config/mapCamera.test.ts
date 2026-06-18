@@ -3,13 +3,13 @@ import { describe, expect, it, vi } from 'vitest'
 import { DEFAULT_MAP_CAMERA, resetMapCamera, zoomByStep } from './mapCamera'
 
 describe('map camera', () => {
-  it('uses 3D mode while keeping the default view upright', () => {
+  it('uses 2D mode and disables map rotation', () => {
     expect(DEFAULT_MAP_CAMERA).toEqual({
-      viewMode: '3D',
+      viewMode: '2D',
       pitch: 0,
       rotation: 0,
-      pitchEnable: true,
-      rotateEnable: true,
+      pitchEnable: false,
+      rotateEnable: false,
     })
   })
 

@@ -57,16 +57,7 @@ export function AmapCanvas({ config }: AmapCanvasProps) {
         })
 
         map.addControl(new AMap.Scale({ position: 'LB' }))
-        map.addControl(
-          new AMap.ControlBar({
-            position: {
-              right: '24px',
-              bottom: '82px',
-            },
-            showZoomBar: false,
-            showControlButton: true,
-          }),
-        )
+        map.setLimitBounds(toAmapBounds(AMap, config.defaultBounds))
 
         AMap.plugin('AMap.Geolocation', () => {
           if (disposed) return

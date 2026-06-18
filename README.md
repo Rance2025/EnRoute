@@ -18,6 +18,8 @@ npm install
 npm run dev
 ```
 
-The first phase only renders the domestic AMap base surface and UI shell. Future
-track and point layers should use viewport loading, simplification, clustering,
-and AMap Loca/WebGL instead of React DOM markers.
+The first phase renders a 2D AMap base surface with the `远山黛` style, hidden
+labels, a compact custom toolbar, no AMap compass, and limited drag bounds to
+avoid exposing blank map edges. Future track and point layers should use
+viewport loading, simplification, clustering, and AMap Loca/WebGL instead of
+React DOM markers.

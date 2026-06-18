@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 
 const appCss = readFileSync('src/App.css', 'utf8')
 const amapCanvasSource = readFileSync('src/components/AmapCanvas.tsx', 'utf8')
+const amapLoaderSource = readFileSync('src/services/amapLoader.ts', 'utf8')
 
 function cssRule(selector: string) {
   const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -19,7 +20,7 @@ describe('map chrome layout', () => {
     expect(rule).not.toContain('translateX(-50%)')
   })
 
-  it('anchors the map toolbar to the lower-right under the compass', () => {
+  it('anchors the map toolbar to the lower-right', () => {
     const rule = cssRule('.map-toolbar')
     const stageRule = cssRule('.map-stage')
 
@@ -29,8 +30,6 @@ describe('map chrome layout', () => {
     expect(rule).toContain('bottom: var(--map-chrome-y)')
     expect(rule).not.toContain('left: 50%')
     expect(rule).not.toContain('translateX(-50%)')
-    expect(amapCanvasSource).toContain("right: '24px'")
-    expect(amapCanvasSource).toContain("bottom: '82px'")
   })
 
   it('keeps the floating wordmark compact', () => {
@@ -39,17 +38,18 @@ describe('map chrome layout', () => {
     expect(appCss).not.toMatch(/font-size:\s*clamp\(22px,\s*3\.6vw,\s*38px\)/)
   })
 
-  it('keeps the toolbar compact enough to sit beside the compass', () => {
+  it('keeps the 2D map toolbar compact', () => {
     const rule = cssRule('.map-toolbar button')
 
     expect(rule).toContain('width: 38px')
     expect(rule).toContain('height: 38px')
-    expect(amapCanvasSource).toContain("right: '24px'")
+    expect(amapCanvasSource).not.toContain('new AMap.ControlBar')
   })
 
-  it('visually ties the AMap compass to the lower-right toolbar', () => {
+  it('removes the AMap compass and limits map dragging to configured bounds', () => {
     expect(cssRule('.map-stage .amap-controlbar')).toBe('')
-    expect(amapCanvasSource).toContain("right: '24px'")
-    expect(amapCanvasSource).toContain("bottom: '82px'")
+    expect(amapCanvasSource).not.toContain('new AMap.ControlBar')
+    expect(amapCanvasSource).toContain('map.setLimitBounds(')
+    expect(amapLoaderSource).not.toContain('AMap.ControlBar')
   })
 })

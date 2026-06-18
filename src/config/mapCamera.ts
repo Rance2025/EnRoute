@@ -28,11 +28,11 @@ export type MapBounds = {
 }
 
 export const DEFAULT_MAP_CAMERA: MapCamera = {
-  viewMode: '3D',
+  viewMode: '2D',
   pitch: 0,
   rotation: 0,
-  pitchEnable: true,
-  rotateEnable: true,
+  pitchEnable: false,
+  rotateEnable: false,
 }
 
 export const MAP_RESET_DURATION_MS = 900
