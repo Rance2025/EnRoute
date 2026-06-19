@@ -1,15 +1,31 @@
-import { useState } from 'react'
-
 import type { AppView } from '../App'
+import {
+  createTodaySelection,
+  formatTimeRangeDate,
+  getCalendarLabel,
+  getTimeRangeDisplay,
+  getVisibleMonthDays,
+  getVisibleWeekDays,
+  getWeekOptions,
+  isSelectionActive,
+  moveTimeSelection,
+  selectDay,
+  selectMonth,
+  selectPresetRange,
+  selectWeek,
+  selectYear,
+  setCustomRangeBoundary,
+  type CalendarDisplayMode,
+  type TimeRangeMode,
+  type TimeRangeSelection,
+} from '../time/timeRange'
 
-export type TimeRangeKey = 'day' | 'week' | 'month' | 'year' | 'all' | 'custom'
+export type TimeRangeKey = TimeRangeMode
 
 type TimeModeOption = {
-  key: TimeRangeKey
+  key: TimeRangeMode
   label: string
 }
-
-type CalendarMode = 'week' | 'month'
 
 const timeModeOptions: TimeModeOption[] = [
   { key: 'day', label: '日' },
@@ -21,56 +37,8 @@ const timeModeOptions: TimeModeOption[] = [
 ]
 
 const weekdayLabels = ['一', '二', '三', '四', '五', '六', '日']
-const selectedDate = new Date(2026, 5, 19)
-const weekStart = new Date(2026, 5, 15)
-const weekDays = Array.from({ length: 7 }, (_, index) => {
-  const date = new Date(weekStart)
-  date.setDate(weekStart.getDate() + index)
-  return date
-})
-const monthCalendarDays = [
-  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
-  23, 24, 25, 26, 27, 28, 29, 30,
-]
-
-const modeHeadings: Record<TimeRangeKey, { title: string; detail: string }> = {
-  day: { title: '今天', detail: '2026年6月19日 · 发生时间' },
-  week: { title: '第25周', detail: '6月15日 - 6月21日 · 按周聚合' },
-  month: { title: '6月', detail: '2026年6月 · 按月聚合' },
-  year: { title: '2026年', detail: '年度聚合 · 1月-12月' },
-  all: { title: '全部', detail: '不限定发生时间 · 全量汇总' },
-  custom: { title: '自定义', detail: '2026年5月1日 - 2026年6月19日' },
-}
-
-const weekOptions = [
-  { label: '6月第3周', detail: '6.08 - 6.14 · 按周聚合', value: '1周前' },
-  { label: '6月第4周', detail: '6.15 - 6.21 · 按周聚合', value: '当前' },
-  { label: '6月第5周', detail: '6.22 - 6.28 · 按周聚合', value: '1周后' },
-]
-
-const monthOptions = [
-  { label: '1月', value: '聚合' },
-  { label: '2月', value: '聚合' },
-  { label: '3月', value: '聚合' },
-  { label: '4月', value: '聚合' },
-  { label: '5月', value: '聚合' },
-  { label: '6月', value: '当前' },
-  { label: '7月', value: '聚合' },
-  { label: '8月', value: '聚合' },
-  { label: '9月', value: '聚合' },
-  { label: '10月', value: '聚合' },
-  { label: '11月', value: '聚合' },
-  { label: '12月', value: '聚合' },
-]
-
-const yearOptions = [
-  { label: '2022', value: '年度' },
-  { label: '2023', value: '年度' },
-  { label: '2024', value: '年度' },
-  { label: '2025', value: '年度' },
-  { label: '2026', value: '当前' },
-  { label: '2027', value: '年度' },
-]
+const monthOptions = Array.from({ length: 12 }, (_, index) => index + 1)
+const yearOptions = [2022, 2023, 2024, 2025, 2026, 2027]
 
 const moduleSummaries: Record<
   AppView,
@@ -100,20 +68,33 @@ const moduleSummaries: Record<
 
 type TimeContextPanelProps = {
   view: AppView
-  selectedRange: TimeRangeKey
-  onRangeChange: (range: TimeRangeKey) => void
+  selection: TimeRangeSelection
+  calendarMode: CalendarDisplayMode
+  onCalendarModeChange: (mode: CalendarDisplayMode) => void
+  onSelectionChange: (selection: TimeRangeSelection) => void
 }
 
 export function TimeContextPanel({
   view,
-  selectedRange,
-  onRangeChange,
+  selection,
+  calendarMode,
+  onCalendarModeChange,
+  onSelectionChange,
 }: TimeContextPanelProps) {
-  const [calendarMode, setCalendarMode] = useState<CalendarMode>('week')
-  const heading = modeHeadings[selectedRange]
+  const heading = getTimeRangeDisplay(selection)
 
-  function handleModeChange(range: TimeRangeKey) {
-    onRangeChange(range)
+  function handleModeChange(range: TimeRangeMode) {
+    if (range === 'day') onSelectionChange(selectDay(selection.anchorDate))
+    if (range === 'week') onSelectionChange(selectWeek(selection.anchorDate))
+    if (range === 'month') {
+      const anchor = new Date(`${selection.anchorDate}T00:00:00`)
+      onSelectionChange(selectMonth(anchor.getFullYear(), anchor.getMonth() + 1))
+    }
+    if (range === 'year') {
+      onSelectionChange(selectYear(new Date(`${selection.anchorDate}T00:00:00`).getFullYear()))
+    }
+    if (range === 'all') onSelectionChange(selectPresetRange('all'))
+    if (range === 'custom') onSelectionChange(selectPresetRange('recent30'))
   }
 
   return (
@@ -130,7 +111,7 @@ export function TimeContextPanel({
               type="button"
               className="time-context-card__today"
               aria-label="回到今天"
-              onClick={() => handleModeChange('day')}
+              onClick={() => onSelectionChange(createTodaySelection())}
             >
               回到今天
             </button>
@@ -141,7 +122,7 @@ export function TimeContextPanel({
               <button
                 type="button"
                 key={option.key}
-                aria-pressed={selectedRange === option.key}
+                aria-pressed={selection.mode === option.key}
                 onClick={() => handleModeChange(option.key)}
               >
                 {option.label}
@@ -151,7 +132,12 @@ export function TimeContextPanel({
         </header>
 
         <div className="time-panel-content">
-          {renderModeContent(selectedRange, calendarMode, setCalendarMode)}
+          {renderModeContent(
+            selection,
+            calendarMode,
+            onCalendarModeChange,
+            onSelectionChange,
+          )}
         </div>
 
         <footer className="time-context-summary" aria-label="当前范围摘要">
@@ -168,11 +154,12 @@ export function TimeContextPanel({
 }
 
 function renderModeContent(
-  selectedRange: TimeRangeKey,
-  calendarMode: CalendarMode,
-  setCalendarMode: (mode: CalendarMode) => void,
+  selection: TimeRangeSelection,
+  calendarMode: CalendarDisplayMode,
+  setCalendarMode: (mode: CalendarDisplayMode) => void,
+  onSelectionChange: (selection: TimeRangeSelection) => void,
 ) {
-  if (selectedRange === 'day') {
+  if (selection.mode === 'day') {
     return (
       <section className="time-calendar-shell" aria-label="日历选择">
         <div className="time-mode-section-head">
@@ -199,20 +186,32 @@ function renderModeContent(
           </div>
         </div>
         <div className="time-calendar-bar">
-          <button type="button" aria-label="上一段时间">
+          <button
+            type="button"
+            aria-label="上一段时间"
+            onClick={() => onSelectionChange(moveTimeSelection(selection, -1, calendarMode))}
+          >
             ‹
           </button>
-          <span>2026年6月 · {calendarMode === 'week' ? '本周' : '本月'}</span>
-          <button type="button" aria-label="下一段时间">
+          <span>{getCalendarLabel(selection, calendarMode)}</span>
+          <button
+            type="button"
+            aria-label="下一段时间"
+            onClick={() => onSelectionChange(moveTimeSelection(selection, 1, calendarMode))}
+          >
             ›
           </button>
         </div>
-        {calendarMode === 'week' ? <WeekCalendar /> : <MonthCalendar />}
+        {calendarMode === 'week' ? (
+          <WeekCalendar selection={selection} onSelect={onSelectionChange} />
+        ) : (
+          <MonthCalendar selection={selection} onSelect={onSelectionChange} />
+        )}
       </section>
     )
   }
 
-  if (selectedRange === 'week') {
+  if (selection.mode === 'week') {
     return (
       <section className="time-selector-shell" aria-label="周聚合选择">
         <div className="time-mode-section-head">
@@ -220,11 +219,14 @@ function renderModeContent(
           <span>选择一周</span>
         </div>
         <div className="time-selector-list">
-          {weekOptions.map((option) => (
+          {getWeekOptions(selection.anchorDate).map((option) => (
             <button
               type="button"
               key={option.label}
-              className={option.value === '当前' ? 'is-active' : undefined}
+              className={
+                isSelectionActive(selection, 'week', option.date) ? 'is-active' : undefined
+              }
+              onClick={() => onSelectionChange(selectWeek(option.date))}
             >
               <span>
                 <strong>{option.label}</strong>
@@ -238,7 +240,9 @@ function renderModeContent(
     )
   }
 
-  if (selectedRange === 'month') {
+  if (selection.mode === 'month') {
+    const selectedYear = new Date(`${selection.anchorDate}T00:00:00`).getFullYear()
+
     return (
       <section className="time-selector-shell" aria-label="月份聚合选择">
         <div className="time-mode-section-head">
@@ -249,11 +253,28 @@ function renderModeContent(
           {monthOptions.map((option) => (
             <button
               type="button"
-              key={option.label}
-              className={option.value === '当前' ? 'is-active' : undefined}
+              key={option}
+              className={
+                isSelectionActive(
+                  selection,
+                  'month',
+                  `${selectedYear}-${String(option).padStart(2, '0')}-01`,
+                )
+                  ? 'is-active'
+                  : undefined
+              }
+              onClick={() => onSelectionChange(selectMonth(selectedYear, option))}
             >
-              {option.label}
-              <span>{option.value}</span>
+              {option}月
+              <span>
+                {isSelectionActive(
+                  selection,
+                  'month',
+                  `${selectedYear}-${String(option).padStart(2, '0')}-01`,
+                )
+                  ? '当前'
+                  : '选择'}
+              </span>
             </button>
           ))}
         </div>
@@ -261,7 +282,7 @@ function renderModeContent(
     )
   }
 
-  if (selectedRange === 'year') {
+  if (selection.mode === 'year') {
     return (
       <section className="time-selector-shell" aria-label="年份聚合选择">
         <div className="time-mode-section-head">
@@ -272,11 +293,20 @@ function renderModeContent(
           {yearOptions.map((option) => (
             <button
               type="button"
-              key={option.label}
-              className={option.value === '当前' ? 'is-active' : undefined}
+              key={option}
+              className={
+                isSelectionActive(selection, 'year', `${option}-01-01`)
+                  ? 'is-active'
+                  : undefined
+              }
+              onClick={() => onSelectionChange(selectYear(option))}
             >
-              {option.label}
-              <span>{option.value}</span>
+              {option}
+              <span>
+                {isSelectionActive(selection, 'year', `${option}-01-01`)
+                  ? '当前'
+                  : '年度'}
+              </span>
             </button>
           ))}
         </div>
@@ -284,7 +314,7 @@ function renderModeContent(
     )
   }
 
-  if (selectedRange === 'all') {
+  if (selection.mode === 'all') {
     return (
       <section className="time-all-shell" aria-label="全部时间摘要">
         <div className="time-all-total">
@@ -292,14 +322,22 @@ function renderModeContent(
           <span>2022.03 至今</span>
         </div>
         <div className="time-selector-list">
-          <button type="button" className="is-active">
+          <button
+            type="button"
+            className={selection.label !== '导入数据' ? 'is-active' : undefined}
+            onClick={() => onSelectionChange(selectPresetRange('all'))}
+          >
             <span>
               <strong>完整人生数据</strong>
               <small>位置、时间、金钱统一按全量统计</small>
             </span>
             <em>全局</em>
           </button>
-          <button type="button">
+          <button
+            type="button"
+            className={selection.label === '导入数据' ? 'is-active' : undefined}
+            onClick={() => onSelectionChange(selectPresetRange('imported'))}
+          >
             <span>
               <strong>导入数据</strong>
               <small>外部位置、日程和账目数据</small>
@@ -317,13 +355,19 @@ function renderModeContent(
         <strong>自定义范围</strong>
       </div>
       <div className="time-range-fields">
-        <button type="button">
+        <button
+          type="button"
+          onClick={() => onSelectionChange(setCustomRangeBoundary(selection, 'start'))}
+        >
           <span>开始</span>
-          <strong>2026年5月1日</strong>
+          <strong>{formatTimeRangeDate(selection.start)}</strong>
         </button>
-        <button type="button">
+        <button
+          type="button"
+          onClick={() => onSelectionChange(setCustomRangeBoundary(selection, 'end'))}
+        >
           <span>结束</span>
-          <strong>2026年6月19日</strong>
+          <strong>{formatTimeRangeDate(selection.end)}</strong>
         </button>
       </div>
       <div className="time-range-rail" aria-hidden="true">
@@ -331,16 +375,33 @@ function renderModeContent(
         <i />
       </div>
       <div className="time-preset-grid">
-        <button type="button">近30天</button>
-        <button type="button">青岛之行</button>
-        <button type="button">本季度</button>
-        <button type="button">手动选择</button>
+        <button type="button" onClick={() => onSelectionChange(selectPresetRange('recent30'))}>
+          近30天
+        </button>
+        <button type="button" onClick={() => onSelectionChange(selectPresetRange('qingdao'))}>
+          青岛之行
+        </button>
+        <button type="button" onClick={() => onSelectionChange(selectPresetRange('quarter'))}>
+          本季度
+        </button>
+        <button
+          type="button"
+          onClick={() => onSelectionChange(setCustomRangeBoundary(selection, 'start'))}
+        >
+          手动选择
+        </button>
       </div>
     </section>
   )
 }
 
-function WeekCalendar() {
+function WeekCalendar({
+  selection,
+  onSelect,
+}: {
+  selection: TimeRangeSelection
+  onSelect: (selection: TimeRangeSelection) => void
+}) {
   return (
     <div className="time-calendar-grid time-calendar-grid--week">
       {weekdayLabels.map((label) => (
@@ -348,22 +409,27 @@ function WeekCalendar() {
           {label}
         </span>
       ))}
-      {weekDays.map((date) => (
+      {getVisibleWeekDays(selection.anchorDate).map((date) => (
         <button
           type="button"
-          key={date.toISOString()}
-          className={
-            date.getDate() === selectedDate.getDate() ? 'is-active' : undefined
-          }
+          key={date.date}
+          className={selection.start === date.date ? 'is-active' : undefined}
+          onClick={() => onSelect(selectDay(date.date))}
         >
-          {date.getDate()}
+          {date.day}
         </button>
       ))}
     </div>
   )
 }
 
-function MonthCalendar() {
+function MonthCalendar({
+  selection,
+  onSelect,
+}: {
+  selection: TimeRangeSelection
+  onSelect: (selection: TimeRangeSelection) => void
+}) {
   return (
     <div className="time-calendar-grid time-calendar-grid--month">
       {weekdayLabels.map((label) => (
@@ -371,13 +437,14 @@ function MonthCalendar() {
           {label}
         </span>
       ))}
-      {monthCalendarDays.map((day) => (
+      {getVisibleMonthDays(selection.anchorDate).map((day) => (
         <button
           type="button"
-          key={day}
-          className={day === selectedDate.getDate() ? 'is-active' : undefined}
+          key={day.date}
+          className={selection.start === day.date ? 'is-active' : undefined}
+          onClick={() => onSelect(selectDay(day.date))}
         >
-          {day}
+          {day.day}
         </button>
       ))}
     </div>

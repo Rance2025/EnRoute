@@ -144,4 +144,50 @@ describe('unified shell layout', () => {
     expect(screen.getByLabelText('自定义时间范围')).toBeInTheDocument()
     expect(screen.queryByLabelText('日历选择')).not.toBeInTheDocument()
   })
+
+  it('applies concrete selections from every time panel button group', () => {
+    render(<App amapConfig={configuredAmap} />)
+
+    fireEvent.click(screen.getByRole('button', { name: '21' }))
+
+    expect(screen.getByRole('heading', { name: '6月21日' })).toBeInTheDocument()
+    expect(screen.getByText('2026年6月21日 · 发生时间')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '上一段时间' }))
+
+    expect(screen.getByRole('heading', { name: '6月14日' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '月历' }))
+    fireEvent.click(screen.getByRole('button', { name: '下一段时间' }))
+
+    expect(screen.getByRole('heading', { name: '7月14日' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '周' }))
+    fireEvent.click(screen.getByRole('button', { name: /7月第30周/ }))
+
+    expect(screen.getByRole('heading', { name: '第30周' })).toBeInTheDocument()
+    expect(screen.getByText('7月20日 - 7月26日 · 按周聚合')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '月' }))
+    fireEvent.click(screen.getByRole('button', { name: /7月/ }))
+
+    expect(screen.getByRole('heading', { name: '7月' })).toBeInTheDocument()
+    expect(screen.getByText('2026年7月 · 按月聚合')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '年' }))
+    fireEvent.click(screen.getByRole('button', { name: /2025/ }))
+
+    expect(screen.getByRole('heading', { name: '2025年' })).toBeInTheDocument()
+    expect(screen.getByText('2025年 · 年度聚合')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '自定义' }))
+    fireEvent.click(screen.getByRole('button', { name: '近30天' }))
+
+    expect(screen.getByRole('heading', { name: '近30天' })).toBeInTheDocument()
+    expect(screen.getByText('2026年5月21日 - 2026年6月19日')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '记账' }))
+
+    expect(screen.getByText('自定义 · 人民币')).toBeInTheDocument()
+  })
 })

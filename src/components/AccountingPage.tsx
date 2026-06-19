@@ -25,7 +25,7 @@ import {
 import { formatCnyFromCents } from '../accounting/money'
 import { getCategoryPath, getTagPath } from '../accounting/trees'
 import type { Account, Category, Tag, Transaction, TransactionType } from '../accounting/types'
-import type { TimeRangeKey } from './TimeContextPanel'
+import { getTimeRangeDisplay, type TimeRangeSelection } from '../time/timeRange'
 
 const typeLabels: Record<TransactionType, string> = {
   income: '收入',
@@ -61,17 +61,8 @@ const accountingModes: Array<{ key: AccountingMode; label: string }> = [
   { key: 'report', label: '统计' },
 ]
 
-const timeRangeLabels: Record<TimeRangeKey, string> = {
-  day: '日',
-  week: '周',
-  month: '月',
-  year: '年',
-  all: '全部',
-  custom: '自定义',
-}
-
 type AccountingPageProps = {
-  timeRange: TimeRangeKey
+  timeRange: TimeRangeSelection
 }
 
 export function AccountingPage({ timeRange }: AccountingPageProps) {
@@ -126,7 +117,7 @@ export function AccountingPage({ timeRange }: AccountingPageProps) {
           <h1 id="accounting-title">记账</h1>
         </div>
         <div className="accounting-heading__actions">
-          <span>{timeRangeLabels[timeRange]} · 人民币</span>
+          <span>{getTimeRangeDisplay(timeRange).accountingLabel} · 人民币</span>
           <div className="accounting-mode-tabs" role="group" aria-label="记账工作区">
             {accountingModes.map((item) => (
               <button

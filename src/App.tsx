@@ -4,9 +4,14 @@ import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'r
 
 import { AccountingPage } from './components/AccountingPage'
 import { AmapCanvas } from './components/AmapCanvas'
-import { TimeContextPanel, type TimeRangeKey } from './components/TimeContextPanel'
+import { TimeContextPanel } from './components/TimeContextPanel'
 import { getAmapConfig, type AmapConfig } from './config/amap'
 import { calculateFallbackSingleWorldPaneLayout } from './config/mapPaneLayout'
+import {
+  createTodaySelection,
+  type CalendarDisplayMode,
+  type TimeRangeSelection,
+} from './time/timeRange'
 
 type AppProps = {
   amapConfig?: AmapConfig
@@ -41,7 +46,10 @@ function getViewportSize() {
 function App({ amapConfig }: AppProps) {
   const resolvedAmapConfig = useMemo(() => amapConfig ?? getAmapConfig(), [amapConfig])
   const [view, setView] = useState<AppView>('map')
-  const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRangeKey>('day')
+  const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRangeSelection>(
+    createTodaySelection,
+  )
+  const [calendarMode, setCalendarMode] = useState<CalendarDisplayMode>('week')
   const [mapPanelWidth, setMapPanelWidth] = useState(0)
   const [viewportSize, setViewportSize] = useState(getViewportSize)
   const fallbackLayout = useMemo(
@@ -117,8 +125,10 @@ function App({ amapConfig }: AppProps) {
 
       <TimeContextPanel
         view={view}
-        selectedRange={selectedTimeRange}
-        onRangeChange={setSelectedTimeRange}
+        selection={selectedTimeRange}
+        calendarMode={calendarMode}
+        onCalendarModeChange={setCalendarMode}
+        onSelectionChange={setSelectedTimeRange}
       />
 
       {view === 'map' ? (
