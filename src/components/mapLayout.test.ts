@@ -107,6 +107,7 @@ describe('map chrome layout', () => {
     const weekBodyRule = cssRule('.time-calendar-body--week')
     const monthBodyRule = cssRule('.time-calendar-body--month')
     const weekdaysRule = cssRule('.time-calendar-weekdays')
+    const gridWindowRule = cssRule('.time-calendar-grid-window')
     const gridRule = cssRule('.time-calendar-grid')
     const buttonRule = cssRule('.time-calendar-grid button')
 
@@ -114,9 +115,9 @@ describe('map chrome layout', () => {
     expect(shellRule).toContain('--time-calendar-weekday-height: 17px')
     expect(shellRule).toContain('--time-calendar-grid-gap: 5px')
     expect(switchRule).toContain('grid-template-columns: repeat(2, auto)')
-    expect(bodyRule).toContain('overflow: hidden')
+    expect(bodyRule).not.toContain('overflow: hidden')
     expect(bodyRule).toContain(
-      'max-height 260ms cubic-bezier(0.22, 1, 0.36, 1)',
+      'height 260ms cubic-bezier(0.22, 1, 0.36, 1)',
     )
     expect(weekBodyRule).toContain('--time-calendar-visible-rows: 1')
     expect(weekBodyRule).toContain(
@@ -125,8 +126,11 @@ describe('map chrome layout', () => {
     expect(monthBodyRule).toContain('--time-calendar-grid-offset: 0')
     expect(weekdaysRule).toContain('grid-template-columns: repeat(7, minmax(0, 1fr))')
     expect(weekdaysRule).toContain('margin-top: var(--time-calendar-grid-top-gap)')
+    expect(gridWindowRule).toContain('height: calc(')
+    expect(gridWindowRule).toContain('overflow: hidden')
+    expect(gridWindowRule).toContain('transition: height 260ms cubic-bezier(0.22, 1, 0.36, 1)')
     expect(gridRule).toContain('grid-template-columns: repeat(7, minmax(0, 1fr))')
-    expect(gridRule).toContain('margin-top: var(--time-calendar-grid-gap)')
+    expect(gridRule).not.toContain('margin-top: var(--time-calendar-grid-gap)')
     expect(gridRule).toContain('transform: translateY(')
     expect(gridRule).toContain(
       'transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1)',

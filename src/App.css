@@ -492,15 +492,14 @@
 .time-calendar-body {
   --time-calendar-visible-rows: 1;
 
-  max-height: calc(
+  height: calc(
     var(--time-calendar-grid-top-gap) +
     var(--time-calendar-weekday-height) +
     var(--time-calendar-grid-gap) +
     var(--time-calendar-visible-rows) * var(--time-calendar-day-height) +
     (var(--time-calendar-visible-rows) - 1) * var(--time-calendar-grid-gap)
   );
-  overflow: hidden;
-  transition: max-height 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: height 260ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .time-calendar-body--week {
@@ -520,11 +519,20 @@
   margin-top: var(--time-calendar-grid-top-gap);
 }
 
+.time-calendar-grid-window {
+  height: calc(
+    var(--time-calendar-visible-rows) * var(--time-calendar-day-height) +
+    (var(--time-calendar-visible-rows) - 1) * var(--time-calendar-grid-gap)
+  );
+  margin-top: var(--time-calendar-grid-gap);
+  overflow: hidden;
+  transition: height 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 .time-calendar-grid {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: var(--time-calendar-grid-gap);
-  margin-top: var(--time-calendar-grid-gap);
   transform: translateY(
     calc(
       var(--time-calendar-grid-offset, 0) *

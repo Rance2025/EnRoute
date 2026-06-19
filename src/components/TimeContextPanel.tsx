@@ -367,22 +367,24 @@ function AnimatedDayCalendar({
           </span>
         ))}
       </div>
-      <div className="time-calendar-grid" aria-label="日历日期">
-        {days.map((day) => (
-          <button
-            type="button"
-            key={day.date}
-            className={[
-              selection.start === day.date ? 'is-active' : null,
-              day.inCurrentMonth ? null : 'is-outside-month',
-            ]
-              .filter(Boolean)
-              .join(' ')}
-            onClick={() => onSelectionChange(selectDay(day.date))}
-          >
-            {day.day}
-          </button>
-        ))}
+      <div className="time-calendar-grid-window">
+        <div className="time-calendar-grid" aria-label="日历日期">
+          {days.map((day) => (
+            <button
+              type="button"
+              key={day.date}
+              className={[
+                selection.start === day.date ? 'is-active' : null,
+                day.inCurrentMonth ? null : 'is-outside-month',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+              onClick={() => onSelectionChange(selectDay(day.date))}
+            >
+              {day.day}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   )

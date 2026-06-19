@@ -218,6 +218,12 @@ describe('unified shell layout', () => {
     expect(weekBody).toHaveClass('time-calendar-body--week')
     expect(weekBody).toHaveStyle({ '--time-calendar-visible-rows': '1' })
     expect(weekBody).toHaveStyle({ '--time-calendar-active-week-index': '2' })
+    expect(weekBody?.querySelector('.time-calendar-weekdays')).not.toBeNull()
+    expect(weekBody?.querySelector('.time-calendar-grid-window')).not.toBeNull()
+    expect(weekBody?.querySelector('.time-calendar-grid-window .time-calendar-grid')).toBe(
+      weekGrid,
+    )
+    expect(weekBody?.querySelector('.time-calendar-grid-window .time-calendar-weekdays')).toBeNull()
     expect(weekButtons).toHaveLength(35)
     expect(weekButtons.slice(14, 21).map((button) => button.textContent)).toEqual([
       '15',
