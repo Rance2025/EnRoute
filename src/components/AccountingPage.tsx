@@ -57,12 +57,11 @@ const accountingModes: Array<{ key: AccountingMode; label: string }> = [
 ]
 
 const timeRangeLabels: Record<TimeRangeKey, string> = {
+  day: '日',
+  week: '周',
+  month: '月',
+  year: '年',
   all: '全部',
-  year: '本年',
-  month: '本月',
-  week: '本周',
-  yesterday: '昨天',
-  today: '今天',
   custom: '自定义',
 }
 

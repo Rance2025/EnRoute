@@ -41,7 +41,7 @@ function getViewportSize() {
 function App({ amapConfig }: AppProps) {
   const resolvedAmapConfig = useMemo(() => amapConfig ?? getAmapConfig(), [amapConfig])
   const [view, setView] = useState<AppView>('map')
-  const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRangeKey>('today')
+  const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRangeKey>('day')
   const [mapPanelWidth, setMapPanelWidth] = useState(0)
   const [viewportSize, setViewportSize] = useState(getViewportSize)
   const fallbackLayout = useMemo(

@@ -23,7 +23,9 @@ const configuredAmap = {
     southWest: [-180, -85.05112878] as [number, number],
     northEast: [180, 85.05112878] as [number, number],
   },
-  themes: [{ id: 'whitesmoke', name: '远山黛', style: 'amap://styles/whitesmoke' }],
+  themes: [
+    { id: 'whitesmoke', name: '远山黛', style: 'amap://styles/whitesmoke' },
+  ],
   features: ['bg', 'road', 'building'] as Array<'bg' | 'road' | 'building'>,
   showLabel: false,
 }
@@ -33,8 +35,18 @@ describe('unified shell layout', () => {
     render(<App amapConfig={configuredAmap} />)
 
     expect(screen.getByLabelText('时间范围面板')).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: '6月18日' })).toBeInTheDocument()
-    expect(screen.getByText('位置 3')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '今天' })).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: '时间模式' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '日' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(screen.getByLabelText('日历选择')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '周历' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(screen.getByText('足迹 18')).toBeInTheDocument()
     expect(screen.getByLabelText('在途 EnRoute 地图工作区')).toBeInTheDocument()
   })
 
@@ -46,26 +58,51 @@ describe('unified shell layout', () => {
     const shell = screen.getByRole('main')
 
     expect(screen.getByLabelText('时间范围面板')).toBeInTheDocument()
-    expect(screen.getByText('支出 ¥51')).toBeInTheDocument()
+    expect(screen.getByText('日 · 人民币')).toBeInTheDocument()
     expect(shell).toHaveClass('app-shell--accounting')
     expect(shell).toHaveClass('has-data-panel')
     expect(shell).not.toHaveStyle({ '--data-panel-width': '0px' })
     expect(screen.getByLabelText('在途 EnRoute 主工作区')).toBeInTheDocument()
   })
 
-  it('switches the shared accounting time range from the left panel', () => {
+  it('switches the shared time panel between top-level range modes', () => {
     render(<App amapConfig={configuredAmap} />)
 
     fireEvent.click(screen.getByRole('button', { name: '记账' }))
 
-    for (const range of ['全部', '本年', '本月', '本周', '昨天', '今天', '自定义']) {
+    for (const range of ['日', '周', '月', '年', '全部', '自定义']) {
       expect(screen.getByRole('button', { name: range })).toBeInTheDocument()
     }
 
-    fireEvent.click(screen.getByRole('button', { name: '本周' }))
+    fireEvent.click(screen.getByRole('button', { name: '周' }))
 
-    expect(screen.getByRole('button', { name: '本周' })).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByRole('heading', { name: '本周' })).toBeInTheDocument()
-    expect(screen.getByText('按发生时间筛选账目')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '周' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(screen.getByRole('heading', { name: '第25周' })).toBeInTheDocument()
+    expect(screen.getByLabelText('周聚合选择')).toBeInTheDocument()
+    expect(screen.queryByLabelText('日历选择')).not.toBeInTheDocument()
+    expect(screen.getByText('周 · 人民币')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '月' }))
+
+    expect(screen.getByLabelText('月份聚合选择')).toBeInTheDocument()
+    expect(screen.queryByLabelText('日历选择')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '年' }))
+
+    expect(screen.getByLabelText('年份聚合选择')).toBeInTheDocument()
+    expect(screen.queryByLabelText('日历选择')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '全部' }))
+
+    expect(screen.getByLabelText('全部时间摘要')).toBeInTheDocument()
+    expect(screen.queryByLabelText('日历选择')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '自定义' }))
+
+    expect(screen.getByLabelText('自定义时间范围')).toBeInTheDocument()
+    expect(screen.queryByLabelText('日历选择')).not.toBeInTheDocument()
   })
 })
