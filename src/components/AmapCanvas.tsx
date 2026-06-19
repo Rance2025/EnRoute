@@ -14,8 +14,9 @@ import {
 import { calculateBoundedZoomCenter, installBoundedMapZoom, zoomByStep } from '../config/mapZoomBounds'
 import { loadFootprintPoints } from '../layers/footprintDataSource'
 import { createMassFootprintLayer } from '../layers/massFootprintLayer'
+import type { FootprintPoint } from '../layers/footprintTypes'
 import { loadAmap, type AMapNamespace } from '../services/amapLoader'
-import { MapControls } from './MapControls'
+import { MapControls, type FootprintStyle } from './MapControls'
 
 type AmapCanvasProps = {
   config: AmapConfig
@@ -23,6 +24,11 @@ type AmapCanvasProps = {
 }
 
 type MapStatus = 'missing-config' | 'loading' | 'ready' | 'error'
+
+const DEFAULT_FOOTPRINT_STYLE: FootprintStyle = {
+  pixelSize: 1.5,
+  color: '#123f35',
+}
 
 export function AmapCanvas({ config, onPanelWidthChange }: AmapCanvasProps) {
   const mapNodeRef = useRef<HTMLDivElement | null>(null)
@@ -34,13 +40,20 @@ export function AmapCanvas({ config, onPanelWidthChange }: AmapCanvasProps) {
   const disposeZoomClampRef = useRef<(() => void) | null>(null)
   const footprintLayerRef = useRef<ReturnType<typeof createMassFootprintLayer> | null>(null)
   const footprintAbortControllerRef = useRef<AbortController | null>(null)
+  const footprintPointsRef = useRef<FootprintPoint[] | null>(null)
   const [status, setStatus] = useState<MapStatus>(
     config.isConfigured ? 'loading' : 'missing-config',
   )
   const [errorMessage, setErrorMessage] = useState('')
+  const [footprintStyle, setFootprintStyle] = useState<FootprintStyle>(DEFAULT_FOOTPRINT_STYLE)
 
   const themes = config.themes.length ? config.themes : AMAP_THEMES
   const mapTheme = themes[0]
+
+  const destroyFootprintLayer = useCallback(() => {
+    footprintLayerRef.current?.destroy()
+    footprintLayerRef.current = null
+  }, [])
 
   const clampViewAfterZoom = useCallback(() => {
     window.setTimeout(() => {
@@ -159,7 +172,6 @@ export function AmapCanvas({ config, onPanelWidthChange }: AmapCanvasProps) {
         }
         setStatus('ready')
 
-        footprintLayerRef.current = createMassFootprintLayer(AMap, map)
         footprintAbortControllerRef.current = new AbortController()
         loadFootprintPoints(
           import.meta.env.VITE_FOOTPRINT_DATA_URL,
@@ -167,6 +179,7 @@ export function AmapCanvas({ config, onPanelWidthChange }: AmapCanvasProps) {
         )
           .then((points) => {
             if (disposed) return
+            footprintPointsRef.current = points
             footprintLayerRef.current?.update(points)
           })
           .catch((error: unknown) => {
@@ -184,8 +197,8 @@ export function AmapCanvas({ config, onPanelWidthChange }: AmapCanvasProps) {
       geolocationRef.current = null
       footprintAbortControllerRef.current?.abort()
       footprintAbortControllerRef.current = null
-      footprintLayerRef.current?.destroy()
-      footprintLayerRef.current = null
+      destroyFootprintLayer()
+      footprintPointsRef.current = null
       if (import.meta.env.DEV) {
         delete window.__ENROUTE_MAP__
       }
@@ -204,8 +217,25 @@ export function AmapCanvas({ config, onPanelWidthChange }: AmapCanvasProps) {
     config,
     mapTheme.style,
     onPanelWidthChange,
+    destroyFootprintLayer,
     updatePaneLayout,
   ])
+
+  useEffect(() => {
+    if (status !== 'ready' || !amapRef.current || !mapRef.current) return
+
+    const layer = createMassFootprintLayer(amapRef.current, mapRef.current, footprintStyle)
+    footprintLayerRef.current = layer
+    if (footprintPointsRef.current) {
+      layer.update(footprintPointsRef.current)
+    }
+
+    return () => {
+      if (footprintLayerRef.current === layer) {
+        destroyFootprintLayer()
+      }
+    }
+  }, [destroyFootprintLayer, footprintStyle, status])
 
   useEffect(() => {
     function updateLayoutAfterResize() {
@@ -253,6 +283,8 @@ export function AmapCanvas({ config, onPanelWidthChange }: AmapCanvasProps) {
             onReset={resetView}
             onZoomIn={zoomIn}
             onZoomOut={zoomOut}
+            footprintStyle={footprintStyle}
+            onFootprintStyleChange={setFootprintStyle}
           />
           {status === 'error' ? (
             <div className="map-message" role="alert">

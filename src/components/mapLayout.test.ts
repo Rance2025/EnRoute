@@ -376,11 +376,32 @@ describe('map chrome layout', () => {
   })
 
   it('keeps the 2D map toolbar compact', () => {
-    const rule = cssRule('.map-toolbar button')
+    const rule = cssRule('.map-toolbar > button')
 
     expect(rule).toContain('width: 38px')
     expect(rule).toContain('height: 38px')
     expect(amapCanvasSource).not.toContain('new AMap.ControlBar')
+  })
+
+  it('positions footprint style settings as a compact popover above the map toolbar', () => {
+    const toolbarRule = cssRule('.map-toolbar')
+    const toolbarButtonRule = cssRule('.map-toolbar > button')
+    const popoverRule = cssRule('.footprint-style-popover')
+    const rowRule = cssRule('.footprint-style-popover__row')
+    const swatchRule = cssRule('.footprint-style-popover__swatch')
+
+    expect(toolbarRule).toContain('overflow: visible')
+    expect(cssRule('.map-toolbar button')).toBe('')
+    expect(toolbarButtonRule).toContain('width: 38px')
+    expect(appCss).toContain('.map-toolbar > button:hover')
+    expect(popoverRule).toContain('position: absolute')
+    expect(popoverRule).toContain('right: 0')
+    expect(popoverRule).toContain('bottom: calc(100% + 10px)')
+    expect(popoverRule).toContain('width: 218px')
+    expect(popoverRule).toContain('max-width: calc(100vw - 28px)')
+    expect(rowRule).toContain('grid-template-columns:')
+    expect(swatchRule).toContain('border-radius: 999px')
+    expect(swatchRule).toContain('background: var(--swatch-color)')
   })
 
   it('removes the AMap compass and limits map dragging to configured bounds', () => {
