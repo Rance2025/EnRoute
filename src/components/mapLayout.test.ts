@@ -142,18 +142,36 @@ describe('map chrome layout', () => {
     expect(cssRule('.segmented-control')).toContain(
       '--segmented-label-color: rgba(23, 35, 31, 0.62)',
     )
+    expect(cssRule('.segmented-control')).toContain('--segmented-active-label-color: #f8fbfa')
+    expect(cssRule('.segmented-control')).toContain(
+      '--segmented-disabled-label-color: rgba(23, 35, 31, 0.26)',
+    )
     expect(cssRule('.segmented-control button')).toContain(
       'color: var(--segmented-label-color)',
     )
     expect(cssRule('.segmented-control button')).not.toContain('mix-blend-mode')
-    expect(segmentedControlSource).toContain('segmented-control__thumb-label')
-    expect(cssRule('.segmented-control__thumb-label')).toContain(
+    expect(segmentedControlSource).not.toContain('segmented-control__thumb-label')
+    expect(cssRule('.segmented-control__thumb-label')).toBe('')
+    expect(cssRule('.time-mode-tabs')).toContain(
+      '--segmented-label-color: rgba(255, 255, 255, 0.66)',
+    )
+    expect(cssRule('.time-mode-tabs')).toContain('--segmented-active-label-color: #123f35')
+    expect(cssRule(".app-nav .segmented-control button[aria-pressed='true']")).toContain(
+      'color: var(--segmented-label-color)',
+    )
+    expect(cssRule('.segmented-control button::after')).toContain(
       'color: var(--segmented-active-label-color)',
     )
-    expect(cssRule('.segmented-control__thumb-label')).toContain('pointer-events: none')
-    expect(cssRule('.time-mode-tabs')).toContain('--segmented-active-label-color: #123f35')
+    expect(cssRule('.segmented-control button::after')).toContain(
+      'content: attr(data-segment-label)',
+    )
+    expect(cssRule('.segmented-control button::after')).toContain('clip-path')
+    expect(cssRule('.segmented-control button::after')).toContain(
+      'var(--segmented-active-start, 0%)',
+    )
+    expect(cssRule('.segmented-control button::after')).toContain('pointer-events: none')
     expect(lastCssRule(".segmented-control button[aria-pressed='true']")).toContain(
-      'color: transparent',
+      'color: var(--segmented-label-color)',
     )
     expect(lastCssRule(".segmented-control button[aria-pressed='true']")).toContain(
       'background: transparent',
@@ -163,6 +181,9 @@ describe('map chrome layout', () => {
     )
     expect(lastCssRule('.segmented-control button:hover')).toContain(
       'color: var(--segmented-label-color)',
+    )
+    expect(lastCssRule(".segmented-control button[aria-pressed='true']")).not.toContain(
+      'color: transparent',
     )
   })
 
