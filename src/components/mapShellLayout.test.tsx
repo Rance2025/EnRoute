@@ -219,6 +219,34 @@ describe('unified shell layout', () => {
     expect(within(monthBody as HTMLElement).getAllByRole('button')).toHaveLength(35)
   })
 
+  it('keeps the month grid mounted until the collapse transition finishes', () => {
+    render(<App amapConfig={configuredAmap} />)
+
+    fireEvent.click(screen.getByRole('button', { name: '月历' }))
+
+    const expandedBody = screen.getByLabelText('日历日期').closest('.time-calendar-body')
+
+    expect(expandedBody).toHaveClass('time-calendar-body--month')
+    expect(within(expandedBody as HTMLElement).getAllByRole('button')).toHaveLength(35)
+
+    fireEvent.click(screen.getByRole('button', { name: '周历' }))
+
+    const collapsingBody = screen.getByLabelText('日历日期').closest('.time-calendar-body')
+
+    expect(collapsingBody).toHaveClass('time-calendar-body--week')
+    expect(collapsingBody).toHaveClass('is-collapsing')
+    expect(collapsingBody).toHaveStyle({ '--time-calendar-visible-rows': '1' })
+    expect(within(collapsingBody as HTMLElement).getAllByRole('button')).toHaveLength(35)
+
+    fireEvent.transitionEnd(collapsingBody as HTMLElement, { propertyName: 'max-height' })
+
+    const collapsedBody = screen.getByLabelText('日历日期').closest('.time-calendar-body')
+
+    expect(collapsedBody).toHaveClass('time-calendar-body--week')
+    expect(collapsedBody).not.toHaveClass('is-collapsing')
+    expect(within(collapsedBody as HTMLElement).getAllByRole('button')).toHaveLength(7)
+  })
+
   it('applies concrete selections from every time panel button group', () => {
     render(<App amapConfig={configuredAmap} />)
 
