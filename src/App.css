@@ -2115,6 +2115,7 @@
   color: #17211f;
   background: rgba(255, 255, 255, 0.68);
   font-size: 12px;
+  cursor: default;
 }
 
 .footprint-style-popover__swatches {
