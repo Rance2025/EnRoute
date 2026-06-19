@@ -84,7 +84,7 @@ describe('unified shell layout', () => {
     const sizeValue = within(popover).getByText('1.5')
 
     expect(sizeInput).toHaveAttribute('type', 'range')
-    expect(sizeInput).toHaveAttribute('min', '0.3')
+    expect(sizeInput).toHaveAttribute('min', '0.8')
     expect(sizeInput).toHaveAttribute('max', '3.5')
     expect(sizeInput).toHaveAttribute('step', '0.1')
     expect(sizeInput).toHaveValue('1.5')
@@ -405,6 +405,22 @@ describe('unified shell layout', () => {
     expect(screen.getByLabelText('日历日期').closest('.time-calendar-body')).toBe(weekBody)
     expect(screen.getByLabelText('日历日期').closest('.time-calendar-body')).toHaveClass(
       'time-calendar-body--week',
+    )
+  })
+
+  it('keeps calendar display mode local across parent rerenders', () => {
+    const { rerender } = render(<App amapConfig={configuredAmap} />)
+
+    fireEvent.click(screen.getByRole('button', { name: '月历' }))
+
+    expect(screen.getByLabelText('日历日期').closest('.time-calendar-body')).toHaveClass(
+      'time-calendar-body--month',
+    )
+
+    rerender(<App amapConfig={configuredAmap} />)
+
+    expect(screen.getByLabelText('日历日期').closest('.time-calendar-body')).toHaveClass(
+      'time-calendar-body--month',
     )
   })
 

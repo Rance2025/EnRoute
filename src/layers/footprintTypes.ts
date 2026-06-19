@@ -29,3 +29,8 @@ export type LngLatBounds = {
   east: number
   north: number
 }
+
+export type WorldPixelPoint = {
+  x: number
+  y: number
+}

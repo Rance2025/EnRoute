@@ -8,7 +8,7 @@ export const DEFAULT_FOOTPRINT_STYLE: FootprintStyle = {
   color: '#123f35',
 }
 
-export const FOOTPRINT_PIXEL_SIZE_MIN = 0.3
+export const FOOTPRINT_PIXEL_SIZE_MIN = 0.8
 export const FOOTPRINT_PIXEL_SIZE_MAX = 3.5
 export const FOOTPRINT_PIXEL_SIZE_STEP = 0.1
 
