@@ -101,6 +101,28 @@ describe('map chrome layout', () => {
     expect(gridActiveRule).not.toContain('box-shadow')
   })
 
+  it('animates day calendar expansion while preserving the week row button height', () => {
+    const shellRule = cssRule('.time-calendar-shell')
+    const bodyRule = cssRule('.time-calendar-body')
+    const weekBodyRule = cssRule('.time-calendar-body--week')
+    const monthBodyRule = cssRule('.time-calendar-body--month')
+    const buttonRule = cssRule('.time-calendar-grid button')
+    const monthButtonRule = cssRule('.time-calendar-grid--month button')
+
+    expect(shellRule).toContain('--time-calendar-day-height: 37px')
+    expect(shellRule).toContain('--time-calendar-grid-top-gap: 10px')
+    expect(bodyRule).toContain('overflow: hidden')
+    expect(bodyRule).toContain('transition:')
+    expect(bodyRule).toContain('max-height')
+    expect(bodyRule).toContain('var(--time-calendar-grid-top-gap)')
+    expect(bodyRule).toContain('opacity')
+    expect(weekBodyRule).toContain('--time-calendar-visible-rows: 1')
+    expect(monthBodyRule).toContain('--time-calendar-visible-rows: 6')
+    expect(buttonRule).toContain('height: var(--time-calendar-day-height)')
+    expect(buttonRule).toContain('min-height: var(--time-calendar-day-height)')
+    expect(monthButtonRule).not.toContain('min-height: 31px')
+  })
+
   it('lets segmented sliders drag from the switch surface with drag cursors', () => {
     expect(cssRule('.segmented-control')).toContain('cursor: grab')
     expect(cssRule('.segmented-control')).toContain('user-select: none')

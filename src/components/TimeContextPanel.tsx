@@ -1,3 +1,5 @@
+import type { CSSProperties } from 'react'
+
 import type { AppView } from '../App'
 import { SegmentedControl, type SegmentedOption } from './SegmentedControl'
 import {
@@ -187,11 +189,23 @@ function renderModeContent(
             ›
           </button>
         </div>
-        {calendarMode === 'week' ? (
-          <WeekCalendar selection={selection} onSelect={onSelectionChange} />
-        ) : (
-          <MonthCalendar selection={selection} onSelect={onSelectionChange} />
-        )}
+        <div
+          className={`time-calendar-body time-calendar-body--${calendarMode}`}
+          style={
+            {
+              '--time-calendar-visible-rows':
+                calendarMode === 'week'
+                  ? 1
+                  : getVisibleMonthDays(selection.anchorDate).length / 7,
+            } as CSSProperties
+          }
+        >
+          {calendarMode === 'week' ? (
+            <WeekCalendar selection={selection} onSelect={onSelectionChange} />
+          ) : (
+            <MonthCalendar selection={selection} onSelect={onSelectionChange} />
+          )}
+        </div>
       </section>
     )
   }
@@ -378,7 +392,7 @@ function WeekCalendar({
   onSelect: (selection: TimeRangeSelection) => void
 }) {
   return (
-    <div className="time-calendar-grid time-calendar-grid--week">
+    <div className="time-calendar-grid time-calendar-grid--week" aria-label="日历日期">
       {weekdayLabels.map((label) => (
         <span key={label} className="time-calendar-weekday">
           {label}
@@ -406,7 +420,7 @@ function MonthCalendar({
   onSelect: (selection: TimeRangeSelection) => void
 }) {
   return (
-    <div className="time-calendar-grid time-calendar-grid--month">
+    <div className="time-calendar-grid time-calendar-grid--month" aria-label="日历日期">
       {weekdayLabels.map((label) => (
         <span key={label} className="time-calendar-weekday">
           {label}
