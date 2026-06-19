@@ -80,6 +80,27 @@ describe('map chrome layout', () => {
     expect(activeRule).not.toContain('box-shadow')
   })
 
+  it('applies the same restrained hover-only motion to week month and year selectors', () => {
+    const weekRule = cssRule('.time-selector-list button')
+    const weekHoverRule = cssRule('.time-selector-list button:hover')
+    const weekActiveRule = cssRule('.time-selector-list button:active')
+    const gridRule = cssRule('.time-grid-selector button')
+    const gridHoverRule = cssRule('.time-grid-selector button:hover')
+    const gridActiveRule = cssRule('.time-grid-selector button:active')
+
+    expect(weekRule).toContain('transform 150ms ease')
+    expect(weekHoverRule).toContain('transform: translateY(-0.5px)')
+    expect(weekHoverRule).not.toContain('translateY(-1px)')
+    expect(weekActiveRule).not.toContain('transform')
+    expect(weekActiveRule).not.toContain('box-shadow')
+
+    expect(gridRule).toContain('transform 150ms ease')
+    expect(gridHoverRule).toContain('transform: translateY(-0.5px)')
+    expect(gridHoverRule).not.toContain('translateY(-1px)')
+    expect(gridActiveRule).not.toContain('transform')
+    expect(gridActiveRule).not.toContain('box-shadow')
+  })
+
   it('lets segmented sliders drag from the switch surface with drag cursors', () => {
     expect(cssRule('.segmented-control')).toContain('cursor: grab')
     expect(cssRule('.segmented-control')).toContain('user-select: none')
