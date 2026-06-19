@@ -39,6 +39,7 @@ export function AmapCanvas({ config, onPanelWidthChange }: AmapCanvasProps) {
   const footprintPointsRef = useRef<FootprintPoint[]>([])
   const footprintSettleTimerRef = useRef<number | null>(null)
   const footprintAbortControllerRef = useRef<AbortController | null>(null)
+  const footprintUpdateVersionRef = useRef(0)
   const [status, setStatus] = useState<MapStatus>(
     config.isConfigured ? 'loading' : 'missing-config',
   )
@@ -103,11 +104,16 @@ export function AmapCanvas({ config, onPanelWidthChange }: AmapCanvasProps) {
   const scheduleFootprintUpdate = useCallback((map: AMap.Map, container: HTMLElement | null) => {
     if (!container || !footprintLayerRef.current || !footprintWorkerRef.current) return
 
+    const updateVersion = footprintUpdateVersionRef.current + 1
+    footprintUpdateVersionRef.current = updateVersion
+
     if (footprintSettleTimerRef.current !== null) {
       window.clearTimeout(footprintSettleTimerRef.current)
     }
 
     footprintSettleTimerRef.current = window.setTimeout(() => {
+      if (footprintUpdateVersionRef.current !== updateVersion) return
+
       const viewportBounds = getPaddedViewportBounds(map, container, 0.25)
 
       footprintWorkerRef.current
@@ -118,10 +124,12 @@ export function AmapCanvas({ config, onPanelWidthChange }: AmapCanvasProps) {
           viewportBounds,
         })
         .then((points) => {
+          if (footprintUpdateVersionRef.current !== updateVersion) return
           footprintLayerRef.current?.update(points)
         })
         .catch((error: unknown) => {
-          if (error instanceof Error && error.message.includes('superseded')) return
+          if (footprintUpdateVersionRef.current !== updateVersion) return
+          if (isBenignFootprintAggregationError(error)) return
           if (import.meta.env.DEV) console.warn(error)
         })
     }, 160)
@@ -226,6 +234,7 @@ export function AmapCanvas({ config, onPanelWidthChange }: AmapCanvasProps) {
 
     return () => {
       disposed = true
+      footprintUpdateVersionRef.current += 1
       geolocationRef.current = null
       removeFootprintSettleHandlers?.()
       if (footprintSettleTimerRef.current !== null) {
@@ -328,6 +337,13 @@ export function AmapCanvas({ config, onPanelWidthChange }: AmapCanvasProps) {
 
 function toAmapBounds(AMap: AMapNamespace, bounds: MapBounds) {
   return new AMap.Bounds(bounds.southWest, bounds.northEast)
+}
+
+function isBenignFootprintAggregationError(error: unknown) {
+  if (!(error instanceof Error)) return false
+
+  const message = error.message.toLowerCase()
+  return message.includes('superseded') || message.includes('disposed') || message.includes('aborted')
 }
 
 function getPaddedViewportBounds(
