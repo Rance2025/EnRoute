@@ -70,12 +70,14 @@ describe('map chrome layout', () => {
     expect(activeRule).toContain('box-shadow')
   })
 
-  it('keeps calendar date buttons from stacking hover lift and click press motion', () => {
+  it('keeps calendar date hover lift restrained and removes click press motion', () => {
     const hoverRule = cssRule('.time-calendar-grid button:hover')
     const activeRule = cssRule('.time-calendar-grid button:active')
 
-    expect(hoverRule).not.toContain('transform')
-    expect(activeRule).toContain('transform: scale(0.98)')
+    expect(hoverRule).toContain('transform: translateY(-0.5px)')
+    expect(hoverRule).not.toContain('translateY(-1px)')
+    expect(activeRule).not.toContain('transform')
+    expect(activeRule).not.toContain('box-shadow')
   })
 
   it('lets segmented sliders drag from the switch surface with drag cursors', () => {
