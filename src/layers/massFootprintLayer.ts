@@ -49,7 +49,8 @@ export function createMassFootprintLayer(
 }
 
 function createPointIconDataUrl(color: string, size: number) {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><rect width="${size}" height="${size}" fill="${color}"/></svg>`
+  const radius = size / 2
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><circle cx="${radius}" cy="${radius}" r="${radius}" fill="${color}"/></svg>`
 
   return `data:image/svg+xml,${encodeURIComponent(svg)}`
 }
