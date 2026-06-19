@@ -8,11 +8,7 @@ import { SegmentedControl, type SegmentedOption } from './components/SegmentedCo
 import { TimeContextPanel } from './components/TimeContextPanel'
 import { getAmapConfig, type AmapConfig } from './config/amap'
 import { calculateFallbackSingleWorldPaneLayout } from './config/mapPaneLayout'
-import {
-  createTodaySelection,
-  type CalendarDisplayMode,
-  type TimeRangeSelection,
-} from './time/timeRange'
+import { createTodaySelection, type TimeRangeSelection } from './time/timeRange'
 
 type AppProps = {
   amapConfig?: AmapConfig
@@ -44,7 +40,6 @@ function App({ amapConfig }: AppProps) {
   const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRangeSelection>(
     createTodaySelection,
   )
-  const [calendarMode, setCalendarMode] = useState<CalendarDisplayMode>('week')
   const [mapPanelWidth, setMapPanelWidth] = useState(0)
   const [viewportSize, setViewportSize] = useState(getViewportSize)
   const fallbackLayout = useMemo(
@@ -111,8 +106,6 @@ function App({ amapConfig }: AppProps) {
       <TimeContextPanel
         view={view}
         selection={selectedTimeRange}
-        calendarMode={calendarMode}
-        onCalendarModeChange={setCalendarMode}
         onSelectionChange={setSelectedTimeRange}
       />
 

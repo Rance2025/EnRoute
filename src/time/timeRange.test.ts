@@ -4,9 +4,10 @@ import {
   createCurrentSelection,
   createTodaySelection,
   getCurrentRangeActionLabel,
+  getPickerPage,
   getTimeRangeDisplay,
   getVisibleMonthDays,
-  moveTimeSelection,
+  movePickerPage,
   selectDay,
   selectMonth,
   selectPresetRange,
@@ -61,24 +62,6 @@ describe('time range selection model', () => {
     expect(getCurrentRangeActionLabel('year')).toBe('回到今年')
   })
 
-  it('moves day and month calendar selections by one visible period', () => {
-    const day = createTodaySelection()
-
-    expect(moveTimeSelection(day, -1, 'week')).toMatchObject({
-      mode: 'day',
-      anchorDate: '2026-06-12',
-      start: '2026-06-12',
-      end: '2026-06-12',
-    })
-
-    expect(moveTimeSelection(day, 1, 'month')).toMatchObject({
-      mode: 'day',
-      anchorDate: '2026-07-19',
-      start: '2026-07-19',
-      end: '2026-07-19',
-    })
-  })
-
   it('lays out month calendars against the real weekday grid', () => {
     const days = getVisibleMonthDays('2026-07-14')
 
@@ -96,6 +79,131 @@ describe('time range selection model', () => {
     expect(days[0]).toMatchObject({ day: 29, inCurrentMonth: false })
     expect(days[2]).toMatchObject({ day: 1, inCurrentMonth: true })
     expect(days.at(-1)).toMatchObject({ date: '2026-08-02', inCurrentMonth: false })
+  })
+
+  it('builds unified picker pages for day, week, month, and year modes', () => {
+    const dayPage = getPickerPage(selectDay('2026-07-14'))
+
+    expect(dayPage).toMatchObject({
+      mode: 'day',
+      title: '2026年7月',
+      gridClassName: 'time-picker-grid--days',
+    })
+    expect(dayPage.options).toHaveLength(35)
+    expect(dayPage.options[0]).toMatchObject({
+      key: '2026-06-29',
+      label: '29',
+      start: '2026-06-29',
+      outsidePage: true,
+    })
+    expect(dayPage.options.find((option) => option.key === '2026-07-14')).toMatchObject({
+      label: '14',
+      start: '2026-07-14',
+      active: true,
+      outsidePage: false,
+    })
+
+    const weekPage = getPickerPage(selectWeek('2026-07-20'))
+
+    expect(weekPage).toMatchObject({
+      mode: 'week',
+      title: '2026年7月',
+      gridClassName: 'time-picker-grid--weeks',
+    })
+    expect(weekPage.options.map((option) => option.start)).toEqual([
+      '2026-06-29',
+      '2026-07-06',
+      '2026-07-13',
+      '2026-07-20',
+      '2026-07-27',
+    ])
+    expect(weekPage.options.find((option) => option.start === '2026-07-20')).toMatchObject({
+      label: '第30周',
+      detail: '7月20日 - 7月26日',
+      active: true,
+    })
+
+    const monthPage = getPickerPage(selectMonth(2026, 7))
+
+    expect(monthPage).toMatchObject({
+      mode: 'month',
+      title: '2026年',
+      gridClassName: 'time-picker-grid--months',
+    })
+    expect(monthPage.options).toHaveLength(12)
+    expect(monthPage.options[6]).toMatchObject({
+      key: '2026-07',
+      label: '7月',
+      start: '2026-07-01',
+      active: true,
+    })
+
+    const yearPage = getPickerPage(selectYear(2026))
+
+    expect(yearPage).toMatchObject({
+      mode: 'year',
+      title: '2020 - 2029',
+      gridClassName: 'time-picker-grid--years',
+    })
+    expect(yearPage.options.map((option) => option.label)).toEqual([
+      '2020年',
+      '2021年',
+      '2022年',
+      '2023年',
+      '2024年',
+      '2025年',
+      '2026年',
+      '2027年',
+      '2028年',
+      '2029年',
+    ])
+    expect(yearPage.options.find((option) => option.key === '2026')).toMatchObject({
+      active: true,
+      start: '2026-01-01',
+    })
+  })
+
+  it('moves unified picker pages by the visible page unit', () => {
+    expect(movePickerPage(selectDay('2026-07-14'), -1)).toMatchObject({
+      mode: 'day',
+      anchorDate: '2026-06-14',
+      start: '2026-06-14',
+    })
+
+    expect(movePickerPage(selectWeek('2026-07-20'), 1)).toMatchObject({
+      mode: 'week',
+      anchorDate: '2026-08-17',
+      start: '2026-08-17',
+      end: '2026-08-23',
+    })
+
+    expect(movePickerPage(selectMonth(2026, 7), 1)).toMatchObject({
+      mode: 'month',
+      anchorDate: '2027-07-01',
+      start: '2027-07-01',
+      end: '2027-07-31',
+    })
+
+    expect(movePickerPage(selectYear(2026), -1)).toMatchObject({
+      mode: 'year',
+      anchorDate: '2016-06-30',
+      start: '2016-01-01',
+      end: '2016-12-31',
+    })
+  })
+
+  it('keeps day page movement inside the target month at month ends', () => {
+    expect(movePickerPage(selectDay('2026-01-31'), 1)).toMatchObject({
+      mode: 'day',
+      anchorDate: '2026-02-28',
+      start: '2026-02-28',
+    })
+
+    expect(movePickerPage(selectDay('2026-03-31'), -1)).toMatchObject({
+      mode: 'day',
+      anchorDate: '2026-02-28',
+      start: '2026-02-28',
+    })
   })
 
   it('selects concrete day, week, month, and year ranges', () => {

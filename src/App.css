@@ -295,7 +295,6 @@
   background: rgba(23, 62, 53, 0.18);
 }
 
-.time-calendar-shell,
 .time-selector-shell,
 .time-all-shell,
 .time-custom-shell {
@@ -304,13 +303,6 @@
   border-radius: 22px;
   background: rgba(255, 255, 255, 0.62);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.66);
-}
-
-.time-calendar-shell {
-  --time-calendar-day-height: 37px;
-  --time-calendar-weekday-height: 17px;
-  --time-calendar-grid-gap: 5px;
-  --time-calendar-grid-top-gap: 10px;
 }
 
 .time-mode-section-head {
@@ -337,14 +329,14 @@
   white-space: nowrap;
 }
 
-.time-calendar-bar {
+.time-picker-bar {
   display: grid;
   grid-template-columns: 31px minmax(0, 1fr) 31px;
   align-items: center;
   gap: 7px;
 }
 
-.time-calendar-bar button {
+.time-picker-bar button {
   display: grid;
   place-items: center;
   width: 31px;
@@ -367,7 +359,7 @@
     transform 150ms ease;
 }
 
-.time-calendar-bar button:hover {
+.time-picker-bar button:hover {
   border-color: rgba(18, 63, 53, 0.16);
   background: rgba(255, 255, 255, 0.92);
   box-shadow:
@@ -375,14 +367,14 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.86);
 }
 
-.time-calendar-bar button:active {
+.time-picker-bar button:active {
   transform: scale(0.94);
   box-shadow:
     0 2px 6px rgba(18, 63, 53, 0.08),
     inset 0 2px 6px rgba(18, 63, 53, 0.14);
 }
 
-.time-calendar-bar span {
+.time-picker-bar span {
   min-width: 0;
   height: 31px;
   display: grid;
@@ -398,74 +390,35 @@
   white-space: nowrap;
 }
 
-.time-calendar-switch {
-  --segmented-thumb-bg: #123f35;
-  --segmented-thumb-shadow: 0 7px 17px rgba(18, 63, 53, 0.18);
-  --segmented-padding: 3px;
-
-  display: inline-grid;
-  grid-template-columns: repeat(2, auto);
-  gap: 3px;
-  padding: 3px;
-  border-radius: 999px;
-  background: rgba(17, 40, 35, 0.075);
-}
-
-.time-calendar-switch button {
-  height: 26px;
-  padding: 0 9px;
-  border: 0;
-  border-radius: 999px;
-  color: rgba(17, 40, 35, 0.58);
-  background: transparent;
-  font-size: 11px;
-  font-weight: 820;
-}
-
-.time-calendar-switch button[aria-pressed='true'] {
-  color: #f8fbfa;
-  background: #123f35;
-}
-
-.time-calendar-switch.segmented-control button[aria-pressed='true'] {
-  background: transparent;
-}
-
-.time-calendar-grid {
+.time-picker-grid {
   display: grid;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.time-picker-grid--days {
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: var(--time-calendar-grid-gap);
-  margin-top: var(--time-calendar-grid-top-gap);
 }
 
-.time-calendar-body {
-  --time-calendar-visible-rows: 1;
-
-  max-height: calc(
-    var(--time-calendar-grid-top-gap) +
-    var(--time-calendar-weekday-height) +
-    var(--time-calendar-grid-gap) +
-    var(--time-calendar-visible-rows) * var(--time-calendar-day-height) +
-    (var(--time-calendar-visible-rows) - 1) * var(--time-calendar-grid-gap)
-  );
-  overflow: hidden;
-  opacity: 1;
-  transition:
-    max-height 260ms cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 180ms ease;
+.time-picker-grid--weeks {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.time-calendar-body--week {
-  --time-calendar-visible-rows: 1;
+.time-picker-grid--months {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
 }
 
-.time-calendar-body--month {
-  --time-calendar-visible-rows: 6;
+.time-picker-grid--months button {
+  min-height: 46px;
+}
+
+.time-picker-grid--years {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 3px;
 }
 
 .time-calendar-weekday {
-  height: var(--time-calendar-weekday-height);
-  min-height: var(--time-calendar-weekday-height);
+  min-height: 17px;
   display: grid;
   place-items: center;
   color: rgba(17, 40, 35, 0.34);
@@ -473,9 +426,12 @@
   font-weight: 850;
 }
 
-.time-calendar-grid button {
-  height: var(--time-calendar-day-height);
-  min-height: var(--time-calendar-day-height);
+.time-picker-grid button {
+  min-width: 0;
+  min-height: 37px;
+  display: grid;
+  place-items: center;
+  gap: 3px;
   border: 1px solid transparent;
   border-radius: 13px;
   color: rgba(17, 40, 35, 0.66);
@@ -492,7 +448,36 @@
     transform 150ms ease;
 }
 
-.time-calendar-grid button:hover {
+.time-picker-grid--days button {
+  min-height: 31px;
+}
+
+.time-picker-grid--weeks button {
+  min-height: 52px;
+  align-content: center;
+}
+
+.time-picker-grid--years button {
+  font-size: 9px;
+  font-weight: 720;
+  white-space: nowrap;
+}
+
+.time-picker-grid--years button span {
+  white-space: nowrap;
+}
+
+.time-picker-grid button small {
+  min-width: 0;
+  overflow: hidden;
+  color: rgba(17, 40, 35, 0.46);
+  font-size: 10px;
+  font-weight: 740;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.time-picker-grid button:hover {
   color: #123f35;
   border-color: rgba(18, 63, 53, 0.16);
   background: rgba(18, 63, 53, 0.105);
@@ -502,27 +487,31 @@
   transform: translateY(-0.5px);
 }
 
-.time-calendar-grid button:active {
+.time-picker-grid button:active {
 }
 
-.time-calendar-grid button:focus-visible {
+.time-picker-grid button:focus-visible {
   outline: 2px solid rgba(18, 63, 53, 0.34);
   outline-offset: 2px;
 }
 
-.time-calendar-grid button.is-active {
+.time-picker-grid button.is-active {
   color: #f8fbfa;
   border-color: transparent;
   background: #123f35;
   box-shadow: 0 9px 20px rgba(18, 63, 53, 0.22);
 }
 
-.time-calendar-grid button.is-outside-month {
+.time-picker-grid button.is-active small {
+  color: rgba(255, 255, 255, 0.68);
+}
+
+.time-picker-grid button.is-outside-page {
   color: rgba(17, 40, 35, 0.32);
   background: rgba(17, 40, 35, 0.032);
 }
 
-.time-calendar-grid button.is-outside-month:hover {
+.time-picker-grid button.is-outside-page:hover {
   color: rgba(17, 40, 35, 0.58);
 }
 
@@ -602,69 +591,6 @@
   font-weight: 820;
   text-align: right;
   white-space: nowrap;
-}
-
-.time-grid-selector {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.time-grid-selector--months {
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-}
-
-.time-grid-selector button {
-  min-height: 54px;
-  border: 1px solid rgba(23, 35, 31, 0.08);
-  border-radius: 16px;
-  color: rgba(17, 40, 35, 0.66);
-  background: rgba(255, 255, 255, 0.62);
-  font-size: 13px;
-  font-weight: 850;
-  cursor: pointer;
-  transition:
-    border-color 160ms ease,
-    background 160ms ease,
-    box-shadow 150ms ease,
-    color 150ms ease,
-    transform 150ms ease;
-}
-
-.time-grid-selector button:hover {
-  color: #123f35;
-  border-color: rgba(18, 63, 53, 0.16);
-  background: rgba(255, 255, 255, 0.74);
-  box-shadow:
-    0 8px 16px rgba(18, 63, 53, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.66);
-  transform: translateY(-0.5px);
-}
-
-.time-grid-selector button:active {
-}
-
-.time-grid-selector--months button {
-  min-height: 46px;
-}
-
-.time-grid-selector button span {
-  display: block;
-  margin-top: 3px;
-  color: rgba(23, 35, 31, 0.52);
-  font-size: 10px;
-  font-weight: 760;
-}
-
-.time-grid-selector button.is-active {
-  color: #f8fbfa;
-  border-color: transparent;
-  background: #123f35;
-  box-shadow: 0 10px 20px rgba(18, 63, 53, 0.16);
-}
-
-.time-grid-selector button.is-active span {
-  color: rgba(255, 255, 255, 0.68);
 }
 
 .time-all-total {
