@@ -9,6 +9,7 @@ lerna-debug.log*
 vite-dev.log
 vite-dev.err.log
 vite-dev.pid
+vite-dev-*.pid
 
 # Dependencies
 node_modules
