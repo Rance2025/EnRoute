@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { AmapConfig } from '../config/amap'
-import type { AggregatedFootprintPoint, FootprintPoint } from '../layers/footprintTypes'
+import type { FootprintPoint } from '../layers/footprintTypes'
 
 const configuredAmap: AmapConfig = {
   key: 'test-key',
@@ -42,18 +42,6 @@ const loadedPoints: FootprintPoint[] = [
   },
 ]
 
-const aggregatedPoints: AggregatedFootprintPoint[] = [
-  {
-    id: 'bucket-1',
-    longitude: 121.5,
-    latitude: 31.2,
-    count: 1,
-    minAccuracy: 5,
-    startTimestampSeconds: 1,
-    endTimestampSeconds: 1,
-  },
-]
-
 const localStorageMock = createLocalStorageMock()
 Object.defineProperty(window, 'localStorage', {
   configurable: true,
@@ -81,14 +69,10 @@ async function renderFootprintMassMarks({
   containerSize = { width: 1024, height: 768 },
   loadFootprintsPromise,
   mapOverrides,
-  aggregateResult = aggregatedPoints,
-  aggregateImplementation,
 }: {
   containerSize?: { width: number; height: number }
   loadFootprintsPromise: Promise<FootprintPoint[]>
   mapOverrides?: Partial<MockMap>
-  aggregateResult?: AggregatedFootprintPoint[]
-  aggregateImplementation?: () => Promise<AggregatedFootprintPoint[]>
 }) {
   const mapMoveHandlers: Array<() => void> = []
   const moveEndHandlers: Array<() => void> = []
@@ -108,10 +92,6 @@ async function renderFootprintMassMarks({
 
     return layer
   })
-  const aggregateFootprints = vi.fn(aggregateImplementation ?? (async () => aggregateResult))
-  const setWorkerPoints = vi.fn()
-  const disposeFootprintWorker = vi.fn()
-
   class MockMap {
     addControl = vi.fn()
     destroy = vi.fn()
@@ -151,15 +131,6 @@ async function renderFootprintMassMarks({
   vi.doMock('../layers/massFootprintLayer', () => ({
     createMassFootprintLayer,
   }))
-  vi.doMock('../layers/footprintWorkerClient', () => ({
-    FootprintWorkerClient: vi.fn(function FootprintWorkerClient() {
-      return {
-        aggregate: aggregateFootprints,
-        setPoints: setWorkerPoints,
-        dispose: disposeFootprintWorker,
-      }
-    }),
-  }))
   vi.doMock('../services/amapLoader', () => ({
     loadAmap: vi.fn(async () => ({
       MassMarks: class MassMarks {},
@@ -191,15 +162,12 @@ async function renderFootprintMassMarks({
   })
 
   return {
-    aggregateFootprints,
     createMassFootprintLayer,
     completeHandlers,
-    disposeFootprintWorker,
     layerRecords,
     mapMoveHandlers,
     moveEndHandlers,
     renderResult,
-    setWorkerPoints,
     zoomChangeHandlers,
     zoomEndHandlers,
   }
@@ -214,9 +182,9 @@ afterEach(() => {
 })
 
 describe('AmapCanvas footprint layer wiring', () => {
-  it('updates the native MassMarks footprint layer with aggregated viewport representatives after data loads', async () => {
+  it('updates the native MassMarks footprint layer with every raw footprint point after data loads', async () => {
     const loadFootprints = createDeferred<FootprintPoint[]>()
-    const { aggregateFootprints, createMassFootprintLayer, layerRecords, moveEndHandlers, setWorkerPoints } = await renderFootprintMassMarks({
+    const { createMassFootprintLayer, layerRecords, moveEndHandlers } = await renderFootprintMassMarks({
       loadFootprintsPromise: loadFootprints.promise,
     })
 
@@ -234,28 +202,11 @@ describe('AmapCanvas footprint layer wiring', () => {
         pixelSize: 1.5,
       },
     )
-    await waitFor(() => expect(aggregateFootprints).toHaveBeenCalledWith(
-      expect.objectContaining({
-        zoom: 10,
-        cellSizePx: 1,
-        viewportBounds: {
-          west: 120,
-          south: 30,
-          east: 122,
-          north: 32,
-        },
-        viewportNorthWestWorldPixel: expect.objectContaining({
-          x: expect.any(Number),
-          y: expect.any(Number),
-        }),
-      }),
-    ))
-    expect(setWorkerPoints).toHaveBeenCalledWith(loadedPoints)
-    expect(layerRecords[0].update).toHaveBeenCalledWith(aggregatedPoints)
+    expect(layerRecords[0].update).toHaveBeenCalledWith(loadedPoints)
 
     layerRecords[0].update.mockClear()
 
-    expect(moveEndHandlers).toHaveLength(1)
+    expect(moveEndHandlers).toHaveLength(0)
     expect(layerRecords[0].update).not.toHaveBeenCalled()
   })
 
@@ -275,11 +226,11 @@ describe('AmapCanvas footprint layer wiring', () => {
     expect(layerRecords[0].update).not.toHaveBeenCalled()
   })
 
-  it('re-aggregates footprints after zoomend while MassMarks keeps following zoom natively', async () => {
+  it('does not rebuild footprint data after zoomend because MassMarks follows zoom natively', async () => {
     const setCenter = vi.fn()
     const setZoomAndCenter = vi.fn()
     const loadFootprints = createDeferred<FootprintPoint[]>()
-    const { aggregateFootprints, layerRecords, zoomEndHandlers } = await renderFootprintMassMarks({
+    const { layerRecords, zoomEndHandlers } = await renderFootprintMassMarks({
       loadFootprintsPromise: loadFootprints.promise,
       mapOverrides: {
         getZoom: () => 2,
@@ -293,9 +244,7 @@ describe('AmapCanvas footprint layer wiring', () => {
       loadFootprints.resolve(loadedPoints)
       await Promise.resolve()
     })
-    await waitFor(() => expect(aggregateFootprints).toHaveBeenCalledTimes(1))
     layerRecords[0].update.mockClear()
-    aggregateFootprints.mockClear()
     setCenter.mockClear()
     setZoomAndCenter.mockClear()
 
@@ -312,14 +261,13 @@ describe('AmapCanvas footprint layer wiring', () => {
       vi.useRealTimers()
     }
 
-    expect(aggregateFootprints).toHaveBeenCalledTimes(2)
-    expect(layerRecords[0].update).toHaveBeenCalledWith(aggregatedPoints)
+    expect(layerRecords[0].update).not.toHaveBeenCalled()
     expect(setCenter.mock.calls.length + setZoomAndCenter.mock.calls.length).toBeLessThanOrEqual(2)
   })
 
-  it('re-aggregates footprints during map move and zoom changes instead of waiting for interaction end', async () => {
+  it('keeps MassMarks data stable during map move and zoom interactions', async () => {
     const loadFootprints = createDeferred<FootprintPoint[]>()
-    const { aggregateFootprints, layerRecords, mapMoveHandlers, zoomChangeHandlers } = await renderFootprintMassMarks({
+    const { layerRecords, mapMoveHandlers, moveEndHandlers, zoomChangeHandlers } = await renderFootprintMassMarks({
       loadFootprintsPromise: loadFootprints.promise,
     })
 
@@ -327,28 +275,18 @@ describe('AmapCanvas footprint layer wiring', () => {
       loadFootprints.resolve(loadedPoints)
       await Promise.resolve()
     })
-    await waitFor(() => expect(aggregateFootprints).toHaveBeenCalledTimes(1))
     layerRecords[0].update.mockClear()
-    aggregateFootprints.mockClear()
 
-    expect(mapMoveHandlers).toHaveLength(1)
-    expect(zoomChangeHandlers).toHaveLength(1)
-
-    await act(async () => {
-      mapMoveHandlers[0]()
-      zoomChangeHandlers[0]()
-      await new Promise((resolve) => window.requestAnimationFrame(resolve))
-      await Promise.resolve()
-    })
-
-    expect(aggregateFootprints).toHaveBeenCalledTimes(1)
-    expect(layerRecords[0].update).toHaveBeenCalledWith(aggregatedPoints)
+    expect(mapMoveHandlers).toHaveLength(0)
+    expect(zoomChangeHandlers).toHaveLength(0)
+    expect(moveEndHandlers).toHaveLength(0)
+    expect(layerRecords[0].update).not.toHaveBeenCalled()
   })
 
-  it('re-aggregates footprints after a window resize because the viewport changed', async () => {
+  it('resizes the map without refreshing raw MassMarks footprint data', async () => {
     const loadFootprints = createDeferred<FootprintPoint[]>()
     const resize = vi.fn()
-    const { aggregateFootprints, layerRecords } = await renderFootprintMassMarks({
+    const { layerRecords } = await renderFootprintMassMarks({
       loadFootprintsPromise: loadFootprints.promise,
       mapOverrides: { resize },
     })
@@ -357,68 +295,17 @@ describe('AmapCanvas footprint layer wiring', () => {
       loadFootprints.resolve(loadedPoints)
       await Promise.resolve()
     })
-    await waitFor(() => expect(aggregateFootprints).toHaveBeenCalledTimes(1))
     layerRecords[0].update.mockClear()
-    aggregateFootprints.mockClear()
 
     window.dispatchEvent(new Event('resize'))
 
     await waitFor(() => expect(resize).toHaveBeenCalledTimes(1))
-    await waitFor(() => expect(aggregateFootprints).toHaveBeenCalledTimes(1))
-    expect(resize.mock.invocationCallOrder[0]).toBeLessThan(
-      aggregateFootprints.mock.invocationCallOrder[0],
-    )
-    expect(layerRecords[0].update).toHaveBeenCalledWith(aggregatedPoints)
-  })
-
-  it('ignores stale aggregation results when a newer viewport request finishes first', async () => {
-    const firstAggregation = createDeferred<AggregatedFootprintPoint[]>()
-    const secondAggregation = createDeferred<AggregatedFootprintPoint[]>()
-    const latestPoints: AggregatedFootprintPoint[] = [
-      {
-        ...aggregatedPoints[0],
-        id: 'latest-bucket',
-        longitude: 122,
-      },
-    ]
-    const loadFootprints = createDeferred<FootprintPoint[]>()
-    const { layerRecords, moveEndHandlers } = await renderFootprintMassMarks({
-      loadFootprintsPromise: loadFootprints.promise,
-      aggregateImplementation: vi
-        .fn()
-        .mockReturnValueOnce(firstAggregation.promise)
-        .mockReturnValueOnce(secondAggregation.promise),
-    })
-
-    await act(async () => {
-      loadFootprints.resolve(loadedPoints)
-      await Promise.resolve()
-    })
-    expect(moveEndHandlers).toHaveLength(1)
-
-    await act(async () => {
-      moveEndHandlers[0]()
-      await Promise.resolve()
-    })
-
-    await act(async () => {
-      secondAggregation.resolve(latestPoints)
-      await Promise.resolve()
-    })
-
-    expect(layerRecords[0].update).toHaveBeenLastCalledWith(latestPoints)
-
-    await act(async () => {
-      firstAggregation.resolve(aggregatedPoints)
-      await Promise.resolve()
-    })
-
-    expect(layerRecords[0].update).toHaveBeenLastCalledWith(latestPoints)
+    expect(layerRecords[0].update).not.toHaveBeenCalled()
   })
 
   it('destroys the native MassMarks footprint layer on unmount', async () => {
     const loadFootprints = createDeferred<FootprintPoint[]>()
-    const { disposeFootprintWorker, layerRecords, renderResult } = await renderFootprintMassMarks({
+    const { layerRecords, renderResult } = await renderFootprintMassMarks({
       loadFootprintsPromise: loadFootprints.promise,
     })
 
@@ -430,7 +317,6 @@ describe('AmapCanvas footprint layer wiring', () => {
     renderResult.unmount()
 
     expect(layerRecords[0].destroy).toHaveBeenCalledTimes(1)
-    expect(disposeFootprintWorker).toHaveBeenCalledTimes(1)
   })
 
   it('recreates the native footprint layer with loaded points when toolbar style settings change', async () => {
@@ -465,7 +351,7 @@ describe('AmapCanvas footprint layer wiring', () => {
         pixelSize: 2.4,
       },
     )
-    expect(layerRecords[2].update).toHaveBeenCalledWith(aggregatedPoints)
+    expect(layerRecords[2].update).toHaveBeenCalledWith(loadedPoints)
   })
 
   it('restores valid stored footprint style settings before creating the native layer', async () => {

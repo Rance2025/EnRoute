@@ -71,7 +71,7 @@ describe('FootprintWorkerClient', () => {
     await expect(aggregation).resolves.toEqual([])
   })
 
-  it('resolves only the latest aggregation request', async () => {
+  it('resolves only the latest aggregation request after the active worker job finishes', async () => {
     const worker = new FakeWorker()
     const client = new FootprintWorkerClient(() => worker as unknown as Worker)
 
@@ -91,6 +91,33 @@ describe('FootprintWorkerClient', () => {
       viewportNorthWestWorldPixel,
     })
 
+    expect(worker.terminate).not.toHaveBeenCalled()
+    expect(worker.postedMessages).toEqual([
+      {
+        type: 'set-points',
+        points,
+      },
+      {
+        type: 'aggregate',
+        requestId: 1,
+        zoom: 10,
+        cellSizePx: 10,
+        viewportBounds: { west: 0, south: 0, east: 1, north: 1 },
+        viewportNorthWestWorldPixel,
+      },
+    ])
+
+    worker.onmessage?.(
+      new MessageEvent('message', {
+        data: { requestId: 1, points: [] },
+      }),
+    )
+    expect(worker.postedMessages[2]).toMatchObject({
+      type: 'aggregate',
+      requestId: 2,
+      zoom: 11,
+    })
+
     worker.onmessage?.(
       new MessageEvent('message', {
         data: { requestId: 2, points: [] },
@@ -101,11 +128,9 @@ describe('FootprintWorkerClient', () => {
     await firstExpectation
   })
 
-  it('restarts the worker when replacing a pending aggregation request', async () => {
-    const firstWorker = new FakeWorker()
-    const secondWorker = new FakeWorker()
-    const workers = [firstWorker, secondWorker]
-    const client = new FootprintWorkerClient(() => workers.shift() as unknown as Worker)
+  it('coalesces multiple superseded aggregation requests without restarting the worker', async () => {
+    const worker = new FakeWorker()
+    const client = new FootprintWorkerClient(() => worker as unknown as Worker)
 
     client.setPoints(points)
     const first = client.aggregate({
@@ -121,31 +146,90 @@ describe('FootprintWorkerClient', () => {
       viewportBounds: { west: 0, south: 0, east: 1, north: 1 },
       viewportNorthWestWorldPixel,
     })
+    const secondExpectation = expect(second).rejects.toThrow('superseded')
+    const third = client.aggregate({
+      zoom: 12,
+      cellSizePx: 10,
+      viewportBounds: { west: 0, south: 0, east: 1, north: 1 },
+      viewportNorthWestWorldPixel,
+    })
 
-    expect(firstWorker.terminate).toHaveBeenCalledTimes(1)
-    expect(secondWorker.postedMessages).toEqual([
+    expect(worker.terminate).not.toHaveBeenCalled()
+    expect(worker.postedMessages).toEqual([
       {
         type: 'set-points',
         points,
       },
       {
         type: 'aggregate',
-        requestId: 2,
-        zoom: 11,
+        requestId: 1,
+        zoom: 10,
         cellSizePx: 10,
         viewportBounds: { west: 0, south: 0, east: 1, north: 1 },
         viewportNorthWestWorldPixel,
       },
     ])
 
-    secondWorker.onmessage?.(
+    worker.onmessage?.(
+      new MessageEvent('message', {
+        data: { requestId: 1, points: [] },
+      }),
+    )
+
+    expect(worker.postedMessages).toHaveLength(3)
+    expect(worker.postedMessages[2]).toMatchObject({
+      type: 'aggregate',
+      requestId: 3,
+      zoom: 12,
+    })
+
+    worker.onmessage?.(
+      new MessageEvent('message', {
+        data: { requestId: 3, points: [] },
+      }),
+    )
+
+    await expect(third).resolves.toEqual([])
+    await firstExpectation
+    await secondExpectation
+  })
+
+  it('clears active worker state after an error so later requests can run', async () => {
+    const worker = new FakeWorker()
+    const client = new FootprintWorkerClient(() => worker as unknown as Worker)
+
+    client.setPoints(points)
+    const failed = client.aggregate({
+      zoom: 10,
+      cellSizePx: 10,
+      viewportBounds: { west: 0, south: 0, east: 1, north: 1 },
+      viewportNorthWestWorldPixel,
+    })
+
+    worker.onerror?.(new ErrorEvent('error'))
+
+    await expect(failed).rejects.toThrow('failed')
+
+    const recovered = client.aggregate({
+      zoom: 11,
+      cellSizePx: 10,
+      viewportBounds: { west: 0, south: 0, east: 1, north: 1 },
+      viewportNorthWestWorldPixel,
+    })
+
+    expect(worker.postedMessages[2]).toMatchObject({
+      type: 'aggregate',
+      requestId: 2,
+      zoom: 11,
+    })
+
+    worker.onmessage?.(
       new MessageEvent('message', {
         data: { requestId: 2, points: [] },
       }),
     )
 
-    await expect(second).resolves.toEqual([])
-    await firstExpectation
+    await expect(recovered).resolves.toEqual([])
   })
 
   it('terminates the worker on dispose', () => {

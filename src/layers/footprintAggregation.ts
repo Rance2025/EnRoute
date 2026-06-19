@@ -16,7 +16,7 @@ type AggregateFootprintPointsInput = {
 
 type Bucket = {
   count: number
-  sumX: number
+  sumRelativeX: number
   sumY: number
   minAccuracy: number
   startTimestampSeconds: number
@@ -37,10 +37,12 @@ export function aggregateFootprintPoints({
     if (!isPointInsideBounds(point, viewportBounds)) continue
 
     const projected = projectLngLat([point.longitude, point.latitude], zoom)
-    const bucketX = Math.floor(
-      normalizeViewportRelativeWorldX(projected.x, viewportNorthWestWorldPixel.x, worldWidthPx) /
-        cellSizePx,
+    const relativeX = normalizeViewportRelativeWorldX(
+      projected.x,
+      viewportNorthWestWorldPixel.x,
+      worldWidthPx,
     )
+    const bucketX = Math.floor(relativeX / cellSizePx)
     const bucketY = Math.floor((projected.y - viewportNorthWestWorldPixel.y) / cellSizePx)
     const bucketKey = `${bucketX}:${bucketY}`
     const bucket = buckets.get(bucketKey)
@@ -48,7 +50,7 @@ export function aggregateFootprintPoints({
     if (!bucket) {
       buckets.set(bucketKey, {
         count: 1,
-        sumX: projected.x,
+        sumRelativeX: relativeX,
         sumY: projected.y,
         minAccuracy: point.accuracy,
         startTimestampSeconds: point.timestampSeconds,
@@ -58,7 +60,7 @@ export function aggregateFootprintPoints({
     }
 
     bucket.count += 1
-    bucket.sumX += projected.x
+    bucket.sumRelativeX += relativeX
     bucket.sumY += projected.y
     bucket.minAccuracy = Math.min(bucket.minAccuracy, point.accuracy)
     bucket.startTimestampSeconds = Math.min(bucket.startTimestampSeconds, point.timestampSeconds)
@@ -66,9 +68,13 @@ export function aggregateFootprintPoints({
   }
 
   return [...buckets.entries()].map(([id, bucket]) => {
+    const averageX = normalizeWorldX(
+      viewportNorthWestWorldPixel.x + bucket.sumRelativeX / bucket.count,
+      worldWidthPx,
+    )
     const [longitude, latitude] = unprojectWorldPoint(
       {
-        x: bucket.sumX / bucket.count,
+        x: averageX,
         y: bucket.sumY / bucket.count,
       },
       zoom,
@@ -106,4 +112,10 @@ function normalizeViewportRelativeWorldX(projectedX: number, originX: number, wo
   const relativeX = projectedX - originX
 
   return relativeX < 0 ? relativeX + worldWidthPx : relativeX
+}
+
+function normalizeWorldX(x: number, worldWidthPx: number) {
+  const normalizedX = x % worldWidthPx
+
+  return normalizedX < 0 ? normalizedX + worldWidthPx : normalizedX
 }

@@ -29,41 +29,51 @@ type WorkerResponse = {
 
 type PendingRequest = {
   requestId: number
+  promise: Promise<AggregatedFootprintPoint[]>
   resolve: (points: AggregatedFootprintPoint[]) => void
   reject: (error: Error) => void
 }
 
 export class FootprintWorkerClient {
   private nextRequestId = 1
+  private activeRequestId: number | null = null
   private pendingRequest: PendingRequest | null = null
-  private storedPoints: FootprintPoint[] = []
-  private readonly workerFactory: () => Worker
-  private worker: Worker
+  private queuedInput: AggregateInput | null = null
+  private readonly worker: Worker
 
   constructor(
     workerFactory: () => Worker = () =>
       new Worker(new URL('./footprintAggregation.worker.ts', import.meta.url), { type: 'module' }),
   ) {
-    this.workerFactory = workerFactory
-    this.worker = this.workerFactory()
+    this.worker = workerFactory()
     this.installWorkerHandlers()
   }
 
   private installWorkerHandlers() {
     this.worker.onmessage = (event: MessageEvent<WorkerResponse>) => {
-      if (!this.pendingRequest || event.data.requestId !== this.pendingRequest.requestId) return
+      if (event.data.requestId !== this.activeRequestId) return
+
+      this.activeRequestId = null
+      if (this.queuedInput) {
+        const queuedInput = this.queuedInput
+        this.queuedInput = null
+        this.postAggregateRequest(queuedInput)
+        return
+      }
 
       const pendingRequest = this.pendingRequest
+      if (!pendingRequest || event.data.requestId !== pendingRequest.requestId) return
       this.pendingRequest = null
       pendingRequest.resolve(event.data.points)
     }
     this.worker.onerror = () => {
+      this.activeRequestId = null
+      this.queuedInput = null
       this.rejectPending(new Error('Footprint aggregation worker failed'))
     }
   }
 
   setPoints(points: FootprintPoint[]) {
-    this.storedPoints = points
     this.worker.postMessage({
       type: 'set-points',
       points,
@@ -71,29 +81,57 @@ export class FootprintWorkerClient {
   }
 
   aggregate(input: AggregateInput): Promise<AggregatedFootprintPoint[]> {
-    if (this.pendingRequest) {
+    if (this.activeRequestId !== null) {
       this.rejectPending(new Error('Footprint aggregation request superseded'))
-      this.worker.terminate()
-      this.worker = this.workerFactory()
-      this.installWorkerHandlers()
-      this.worker.postMessage({
-        type: 'set-points',
-        points: this.storedPoints,
-      } satisfies SetPointsRequest)
+      this.pendingRequest = this.createPendingRequest(input)
+      this.queuedInput = input
+      return this.pendingRequest.promise
     }
 
-    const requestId = this.nextRequestId
-    this.nextRequestId += 1
-
-    return new Promise((resolve, reject) => {
-      this.pendingRequest = { requestId, resolve, reject }
-      this.worker.postMessage({ type: 'aggregate', requestId, ...input } satisfies AggregateRequest)
-    })
+    return this.createPendingRequest(input).promise
   }
 
   dispose() {
     this.rejectPending(new Error('Footprint aggregation worker disposed'))
+    this.activeRequestId = null
+    this.queuedInput = null
     this.worker.terminate()
+  }
+
+  private createPendingRequest(input: AggregateInput): PendingRequest {
+    const requestId = this.nextRequestId
+    this.nextRequestId += 1
+
+    let resolveRequest: (points: AggregatedFootprintPoint[]) => void = () => {}
+    let rejectRequest: (error: Error) => void = () => {}
+    const promise = new Promise<AggregatedFootprintPoint[]>((resolve, reject) => {
+      resolveRequest = resolve
+      rejectRequest = reject
+    })
+    const pendingRequest: PendingRequest = {
+      requestId,
+      promise,
+      resolve: resolveRequest,
+      reject: rejectRequest,
+    }
+    this.pendingRequest = pendingRequest
+
+    if (this.activeRequestId === null) {
+      this.postAggregateRequest(input)
+    }
+
+    return pendingRequest
+  }
+
+  private postAggregateRequest(input: AggregateInput) {
+    if (!this.pendingRequest) return
+
+    this.activeRequestId = this.pendingRequest.requestId
+    this.worker.postMessage({
+      type: 'aggregate',
+      requestId: this.pendingRequest.requestId,
+      ...input,
+    } satisfies AggregateRequest)
   }
 
   private rejectPending(error: Error) {
