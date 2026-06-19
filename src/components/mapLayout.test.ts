@@ -184,23 +184,27 @@ describe('map chrome layout', () => {
     )
   })
 
-  it('keeps day calendar active cells from casting clipped edge shadows', () => {
-    const calendarActiveRule = cssRule('.time-calendar-grid button.is-active')
+  it('gives day calendar active cells the same uncut raised shadow as picker cells', () => {
+    const sharedActiveRule =
+      appCss.match(
+        /\.time-calendar-grid button\.is-active,\s*\.time-picker-grid button\.is-active\s*\{[^}]*\}/,
+      )?.[0] ?? ''
     const pickerActiveRule = cssRule('.time-picker-grid button.is-active')
 
-    expect(calendarActiveRule).toContain('box-shadow:')
-    expect(calendarActiveRule).toContain('inset')
-    expect(calendarActiveRule).not.toContain('0 9px 20px')
+    expect(sharedActiveRule).toContain('box-shadow:')
+    expect(sharedActiveRule).toContain('0 9px 20px')
     expect(pickerActiveRule).toContain('0 9px 20px')
   })
 
-  it('keeps day calendar hover feedback inside dense grid cells', () => {
-    const calendarHoverRule = cssRule('.time-calendar-grid button:hover')
+  it('gives day calendar hover feedback the same restrained lift as picker cells', () => {
+    const sharedHoverRule =
+      appCss.match(
+        /\.time-calendar-grid button:hover,\s*\.time-picker-grid button:hover\s*\{[^}]*\}/,
+      )?.[0] ?? ''
     const pickerHoverRule = cssRule('.time-picker-grid button:hover')
 
-    expect(calendarHoverRule).toContain('box-shadow: inset')
-    expect(calendarHoverRule).toContain('transform: none')
-    expect(calendarHoverRule).not.toContain('0 8px 16px')
+    expect(sharedHoverRule).toContain('0 8px 16px')
+    expect(sharedHoverRule).toContain('transform: translateY(-0.5px)')
     expect(pickerHoverRule).toContain('0 8px 16px')
     expect(pickerHoverRule).toContain('transform: translateY(-0.5px)')
   })
@@ -216,8 +220,17 @@ describe('map chrome layout', () => {
 
     expect(stageRule).not.toContain('animation:')
     expect(stageRule).not.toContain('transform')
+    expect(dayWindowRule).toContain('--time-picker-shadow-buffer')
+    expect(dayWindowRule).toContain('var(--time-picker-shadow-buffer) * 2')
+    expect(dayWindowRule).toContain('padding: var(--time-picker-shadow-buffer)')
+    expect(dayWindowRule).toContain('width: calc(100% + var(--time-picker-shadow-buffer) * 2)')
+    expect(dayWindowRule).toContain('calc(var(--time-picker-shadow-buffer) * -1)')
     expect(dayWindowRule).toContain('overflow: hidden')
     expect(dayMotionRule).toContain('width: 100%')
+    expect(pickerWindowRule).toContain('--time-picker-shadow-buffer')
+    expect(pickerWindowRule).toContain('padding: var(--time-picker-shadow-buffer)')
+    expect(pickerWindowRule).toContain('width: calc(100% + var(--time-picker-shadow-buffer) * 2)')
+    expect(pickerWindowRule).toContain('calc(var(--time-picker-shadow-buffer) * -1)')
     expect(pickerWindowRule).toContain('overflow: hidden')
     expect(pickerMotionRule).toContain('width: 100%')
     expect(previousRule).toContain('--time-range-enter-x: -')

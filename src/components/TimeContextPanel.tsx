@@ -445,13 +445,17 @@ function AnimatedDayCalendar({
             .join(' ')}
         >
           <div className="time-calendar-grid" aria-label="日历日期">
-            {days.map((day) => (
+            {days.map((day, index) => (
               <button
                 type="button"
                 key={day.date}
                 className={[
                   selection.start === day.date ? 'is-active' : null,
                   day.inCurrentMonth ? null : 'is-outside-month',
+                  calendarMode === 'week' &&
+                  Math.floor(index / 7) === activeWeekIndex
+                    ? 'is-visible-week'
+                    : null,
                 ]
                   .filter(Boolean)
                   .join(' ')}
