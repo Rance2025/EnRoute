@@ -143,6 +143,7 @@ describe('map chrome layout', () => {
       '--segmented-label-color: rgba(23, 35, 31, 0.62)',
     )
     expect(cssRule('.segmented-control')).toContain('--segmented-active-label-color: #f8fbfa')
+    expect(cssRule('.segmented-control')).toContain('--segmented-thumb-shadow: none')
     expect(cssRule('.segmented-control')).toContain(
       '--segmented-disabled-label-color: rgba(23, 35, 31, 0.26)',
     )
@@ -155,6 +156,9 @@ describe('map chrome layout', () => {
     expect(cssRule('.time-mode-tabs')).toContain(
       '--segmented-label-color: rgba(255, 255, 255, 0.66)',
     )
+    expect(cssRule('.time-mode-tabs')).not.toContain('--segmented-thumb-shadow')
+    expect(cssRule('.accounting-mode-tabs')).not.toContain('--segmented-thumb-shadow')
+    expect(cssRule('.transaction-type-switch')).not.toContain('--segmented-thumb-shadow')
     expect(cssRule('.time-mode-tabs')).toContain('--segmented-active-label-color: #123f35')
     expect(cssRule(".app-nav .segmented-control button[aria-pressed='true']")).toContain(
       'color: var(--segmented-label-color)',
