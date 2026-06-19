@@ -9,5 +9,5 @@ or simplified line layers.
 Planned layer boundaries:
 
 - `trackLayer`: simplified route lines by zoom level.
-- `pointLayer`: visible-footprint points for the current viewport.
+- `pointLayer`: Loca-rendered footprint glow points. Raw points are parsed once, then screen-space aggregated after `moveend` and `zoomend`; React does not render individual points.
 - `densityLayer`: heatmap or grid aggregation for low zoom levels.
