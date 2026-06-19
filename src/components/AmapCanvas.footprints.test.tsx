@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest'
-import { act, cleanup, render, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { AmapConfig } from '../config/amap'
@@ -61,18 +61,27 @@ function createDeferred<T>(): Deferred<T> {
 
 async function renderFootprintMassMarks({
   containerSize = { width: 1024, height: 768 },
-  destroy = vi.fn(),
   loadFootprintsPromise,
 }: {
   containerSize?: { width: number; height: number }
-  destroy?: () => void
   loadFootprintsPromise: Promise<FootprintPoint[]>
 }) {
   const moveEndHandlers: Array<() => void> = []
   const zoomEndHandlers: Array<() => void> = []
   const completeHandlers: Array<() => void> = []
-  const update = vi.fn()
-  const createMassFootprintLayer = vi.fn(() => ({ update, destroy }))
+  const layerRecords: Array<{
+    destroy: ReturnType<typeof vi.fn>
+    update: ReturnType<typeof vi.fn>
+  }> = []
+  const createMassFootprintLayer = vi.fn(() => {
+    const layer = {
+      destroy: vi.fn(),
+      update: vi.fn(),
+    }
+    layerRecords.push(layer)
+
+    return layer
+  })
 
   class MockMap {
     addControl = vi.fn()
@@ -137,10 +146,9 @@ async function renderFootprintMassMarks({
   return {
     createMassFootprintLayer,
     completeHandlers,
-    destroy,
+    layerRecords,
     moveEndHandlers,
     renderResult,
-    update,
     zoomEndHandlers,
   }
 }
@@ -155,7 +163,7 @@ afterEach(() => {
 describe('AmapCanvas footprint layer wiring', () => {
   it('updates the native MassMarks footprint layer with raw loaded points after data loads', async () => {
     const loadFootprints = createDeferred<FootprintPoint[]>()
-    const { createMassFootprintLayer, moveEndHandlers, update } = await renderFootprintMassMarks({
+    const { createMassFootprintLayer, layerRecords, moveEndHandlers } = await renderFootprintMassMarks({
       loadFootprintsPromise: loadFootprints.promise,
     })
 
@@ -167,18 +175,22 @@ describe('AmapCanvas footprint layer wiring', () => {
     expect(createMassFootprintLayer).toHaveBeenCalledWith(
       expect.objectContaining({ MassMarks: expect.any(Function) }),
       expect.any(Object),
+      {
+        color: '#123f35',
+        pixelSize: 1.5,
+      },
     )
-    expect(update).toHaveBeenCalledWith(loadedPoints)
+    expect(layerRecords[0].update).toHaveBeenCalledWith(loadedPoints)
 
-    update.mockClear()
+    layerRecords[0].update.mockClear()
 
     expect(moveEndHandlers).toHaveLength(0)
-    expect(update).not.toHaveBeenCalled()
+    expect(layerRecords[0].update).not.toHaveBeenCalled()
   })
 
   it('does not reproject footprints after AMap complete because MassMarks follows map motion natively', async () => {
     const loadFootprints = createDeferred<FootprintPoint[]>()
-    const { completeHandlers, update } = await renderFootprintMassMarks({
+    const { completeHandlers, layerRecords } = await renderFootprintMassMarks({
       loadFootprintsPromise: loadFootprints.promise,
     })
 
@@ -186,15 +198,15 @@ describe('AmapCanvas footprint layer wiring', () => {
       loadFootprints.resolve(loadedPoints)
       await Promise.resolve()
     })
-    update.mockClear()
+    layerRecords[0].update.mockClear()
 
     expect(completeHandlers).toHaveLength(0)
-    expect(update).not.toHaveBeenCalled()
+    expect(layerRecords[0].update).not.toHaveBeenCalled()
   })
 
   it('does not reproject footprints after zoomend because MassMarks follows zoom natively', async () => {
     const loadFootprints = createDeferred<FootprintPoint[]>()
-    const { zoomEndHandlers, update } = await renderFootprintMassMarks({
+    const { layerRecords, zoomEndHandlers } = await renderFootprintMassMarks({
       loadFootprintsPromise: loadFootprints.promise,
     })
 
@@ -202,16 +214,16 @@ describe('AmapCanvas footprint layer wiring', () => {
       loadFootprints.resolve(loadedPoints)
       await Promise.resolve()
     })
-    update.mockClear()
+    layerRecords[0].update.mockClear()
 
     zoomEndHandlers[0]()
 
-    expect(update).not.toHaveBeenCalled()
+    expect(layerRecords[0].update).not.toHaveBeenCalled()
   })
 
   it('does not reproject footprints after a window resize because MassMarks remains attached to the map', async () => {
     const loadFootprints = createDeferred<FootprintPoint[]>()
-    const { update } = await renderFootprintMassMarks({
+    const { layerRecords } = await renderFootprintMassMarks({
       loadFootprintsPromise: loadFootprints.promise,
     })
 
@@ -219,18 +231,16 @@ describe('AmapCanvas footprint layer wiring', () => {
       loadFootprints.resolve(loadedPoints)
       await Promise.resolve()
     })
-    update.mockClear()
+    layerRecords[0].update.mockClear()
 
     window.dispatchEvent(new Event('resize'))
 
-    expect(update).not.toHaveBeenCalled()
+    expect(layerRecords[0].update).not.toHaveBeenCalled()
   })
 
   it('destroys the native MassMarks footprint layer on unmount', async () => {
-    const destroy = vi.fn()
     const loadFootprints = createDeferred<FootprintPoint[]>()
-    const { renderResult } = await renderFootprintMassMarks({
-      destroy,
+    const { layerRecords, renderResult } = await renderFootprintMassMarks({
       loadFootprintsPromise: loadFootprints.promise,
     })
 
@@ -241,6 +251,67 @@ describe('AmapCanvas footprint layer wiring', () => {
 
     renderResult.unmount()
 
-    expect(destroy).toHaveBeenCalled()
+    expect(layerRecords[0].destroy).toHaveBeenCalledTimes(1)
+  })
+
+  it('recreates the native footprint layer with loaded points when toolbar style settings change', async () => {
+    const loadFootprints = createDeferred<FootprintPoint[]>()
+    const { createMassFootprintLayer, layerRecords } = await renderFootprintMassMarks({
+      loadFootprintsPromise: loadFootprints.promise,
+    })
+
+    await act(async () => {
+      loadFootprints.resolve(loadedPoints)
+      await Promise.resolve()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: '足迹显示设置' }))
+    fireEvent.change(screen.getByLabelText('足迹点大小'), {
+      target: { value: '2.4' },
+    })
+    fireEvent.change(screen.getByLabelText('足迹点颜色'), {
+      target: { value: '#4f7cff' },
+    })
+
+    await waitFor(() => expect(createMassFootprintLayer).toHaveBeenCalledTimes(3))
+
+    expect(layerRecords[0].destroy).toHaveBeenCalled()
+    expect(layerRecords[1].destroy).toHaveBeenCalled()
+    expect(createMassFootprintLayer).toHaveBeenLastCalledWith(
+      expect.objectContaining({ MassMarks: expect.any(Function) }),
+      expect.any(Object),
+      {
+        color: '#4f7cff',
+        pixelSize: 2.4,
+      },
+    )
+    expect(layerRecords[2].update).toHaveBeenCalledWith(loadedPoints)
+  })
+
+  it('keeps the existing footprint style when the size input receives an invalid value', async () => {
+    const loadFootprints = createDeferred<FootprintPoint[]>()
+    const { createMassFootprintLayer } = await renderFootprintMassMarks({
+      loadFootprintsPromise: loadFootprints.promise,
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: '足迹显示设置' }))
+    fireEvent.change(screen.getByLabelText('足迹点大小数值'), {
+      target: { value: 'not-a-number' },
+    })
+
+    await act(async () => {
+      loadFootprints.resolve(loadedPoints)
+      await Promise.resolve()
+    })
+
+    expect(createMassFootprintLayer).toHaveBeenCalledTimes(1)
+    expect(createMassFootprintLayer).toHaveBeenLastCalledWith(
+      expect.objectContaining({ MassMarks: expect.any(Function) }),
+      expect.any(Object),
+      {
+        color: '#123f35',
+        pixelSize: 1.5,
+      },
+    )
   })
 })

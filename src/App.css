@@ -1983,9 +1983,10 @@
     0 14px 40px rgba(31, 46, 42, 0.13),
     inset 0 1px 0 rgba(255, 255, 255, 0.76);
   backdrop-filter: blur(20px) saturate(1.12);
+  overflow: visible;
 }
 
-.map-toolbar button {
+.map-toolbar > button {
   display: grid;
   width: 38px;
   height: 38px;
@@ -2001,15 +2002,88 @@
     transform 160ms ease;
 }
 
-.map-toolbar button:hover {
+.map-toolbar > button:hover {
   color: #14211f;
   background: rgba(25, 34, 32, 0.08);
   transform: translateY(-1px);
 }
 
-.map-toolbar button:focus-visible {
+.map-toolbar > button:focus-visible {
   outline: 2px solid rgba(38, 58, 54, 0.38);
   outline-offset: 3px;
+}
+
+.footprint-style-popover {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 10px);
+  width: 218px;
+  max-width: calc(100vw - 28px);
+  padding: 12px;
+  border: 1px solid rgba(23, 31, 29, 0.1);
+  border-radius: 14px;
+  color: #17211f;
+  background: rgba(250, 252, 251, 0.92);
+  box-shadow:
+    0 18px 42px rgba(31, 46, 42, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(18px) saturate(1.12);
+}
+
+.footprint-style-popover__row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 8px 10px;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.footprint-style-popover__row + .footprint-style-popover__row,
+.footprint-style-popover__swatches {
+  margin-top: 10px;
+}
+
+.footprint-style-popover__row input[type='range'] {
+  grid-column: 1 / -1;
+  width: 100%;
+  accent-color: #123f35;
+}
+
+.footprint-style-popover__row input[type='color'] {
+  width: 38px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid rgba(23, 31, 29, 0.18);
+  border-radius: 999px;
+  background: transparent;
+}
+
+.footprint-style-popover__number {
+  width: 54px;
+  height: 24px;
+  padding: 0 6px;
+  border: 1px solid rgba(23, 31, 29, 0.12);
+  border-radius: 999px;
+  color: #17211f;
+  background: rgba(255, 255, 255, 0.68);
+  font-size: 12px;
+}
+
+.footprint-style-popover__swatches {
+  display: flex;
+  gap: 8px;
+}
+
+.footprint-style-popover__swatch {
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  padding: 0;
+  border: 1px solid rgba(23, 31, 29, 0.14);
+  border-radius: 999px;
+  background: var(--swatch-color);
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.62);
 }
 
 .map-message {
@@ -2082,11 +2156,11 @@
 
   .map-toolbar {
     max-width: calc(100vw - 28px);
-    overflow-x: auto;
+    overflow: visible;
   }
 
-  .map-toolbar button {
-    flex: 0 0 42px;
+  .map-toolbar > button {
+    flex: 0 0 38px;
   }
 
   .accounting-page {

@@ -67,21 +67,84 @@ describe('createMassFootprintLayer', () => {
       zIndex: 20,
     })
     const options = runtime.MassMarks.mock.calls[0]?.[1]
-    expect(options?.style.size.width).toBe(2)
-    expect(options?.style.size.height).toBe(2)
-    expect(options?.style.anchor.x).toBe(1)
-    expect(options?.style.anchor.y).toBe(1)
+    expect(options?.style.size.width).toBe(1.5)
+    expect(options?.style.size.height).toBe(1.5)
+    expect(options?.style.anchor.x).toBe(0.75)
+    expect(options?.style.anchor.y).toBe(0.75)
     const iconSvg = decodeURIComponent(options?.style.url ?? '')
-    expect(iconSvg).toContain('#b8544c')
-    expect(iconSvg).toContain('width="2"')
-    expect(iconSvg).toContain('height="2"')
+    expect(iconSvg).toContain('#123f35')
+    expect(iconSvg).toContain('width="1.5"')
+    expect(iconSvg).toContain('height="1.5"')
     expect(iconSvg).toContain('<circle')
-    expect(iconSvg).toContain('cx="1"')
-    expect(iconSvg).toContain('cy="1"')
-    expect(iconSvg).toContain('r="1"')
+    expect(iconSvg).toContain('cx="0.75"')
+    expect(iconSvg).toContain('cy="0.75"')
+    expect(iconSvg).toContain('r="0.75"')
     expect(iconSvg).toContain('fill-opacity="0.82"')
     expect(iconSvg).not.toContain('<rect')
     expect(runtime.setMap).toHaveBeenCalledWith(map)
+
+    layer.destroy()
+  })
+
+  it('encodes custom point size and color into the native MassMarks icon', () => {
+    const runtime = createMassMarksRuntime()
+    const layer = createMassFootprintLayer(runtime, {} as AMap.Map, {
+      color: '#4f7cff',
+      pixelSize: 3.4,
+    })
+
+    const options = runtime.MassMarks.mock.calls[0]?.[1]
+    expect(options?.style.size.width).toBe(3.4)
+    expect(options?.style.size.height).toBe(3.4)
+    expect(options?.style.anchor.x).toBe(1.7)
+    expect(options?.style.anchor.y).toBe(1.7)
+    const iconSvg = decodeURIComponent(options?.style.url ?? '')
+    expect(iconSvg).toContain('#4f7cff')
+    expect(iconSvg).toContain('width="3.4"')
+    expect(iconSvg).toContain('height="3.4"')
+    expect(iconSvg).toContain('cx="1.7"')
+    expect(iconSvg).toContain('cy="1.7"')
+    expect(iconSvg).toContain('r="1.7"')
+
+    layer.destroy()
+  })
+
+  it('rounds custom point size to 0.1 precision before creating the native icon', () => {
+    const runtime = createMassMarksRuntime()
+    const layer = createMassFootprintLayer(runtime, {} as AMap.Map, {
+      pixelSize: 1.23,
+    })
+
+    const options = runtime.MassMarks.mock.calls[0]?.[1]
+    expect(options?.style.size.width).toBe(1.2)
+    expect(options?.style.size.height).toBe(1.2)
+    expect(options?.style.anchor.x).toBe(0.6)
+    expect(options?.style.anchor.y).toBe(0.6)
+    const iconSvg = decodeURIComponent(options?.style.url ?? '')
+    expect(iconSvg).toContain('width="1.2"')
+    expect(iconSvg).toContain('height="1.2"')
+    expect(iconSvg).toContain('cx="0.6"')
+    expect(iconSvg).toContain('cy="0.6"')
+    expect(iconSvg).toContain('r="0.6"')
+
+    layer.destroy()
+  })
+
+  it('clamps invalid custom style values before creating the native icon', () => {
+    const runtime = createMassMarksRuntime()
+    const layer = createMassFootprintLayer(runtime, {} as AMap.Map, {
+      color: 'url(javascript:alert(1))',
+      pixelSize: Number.NaN,
+    })
+
+    const options = runtime.MassMarks.mock.calls[0]?.[1]
+    expect(options?.style.size.width).toBe(1.5)
+    expect(options?.style.size.height).toBe(1.5)
+    expect(options?.style.anchor.x).toBe(0.75)
+    expect(options?.style.anchor.y).toBe(0.75)
+    const iconSvg = decodeURIComponent(options?.style.url ?? '')
+    expect(iconSvg).toContain('#123f35')
+    expect(iconSvg).not.toContain('javascript')
 
     layer.destroy()
   })

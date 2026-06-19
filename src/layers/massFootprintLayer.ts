@@ -5,16 +5,21 @@ type MassFootprintLayerOptions = {
   pixelSize?: number
 }
 
-const DEFAULT_COLOR = '#b8544c'
-const DEFAULT_PIXEL_SIZE = 2
+const DEFAULT_COLOR = '#123f35'
+const DEFAULT_PIXEL_SIZE = 1.5
 const DEFAULT_OPACITY = 0.82
+const MAX_PIXEL_SIZE = 5
+const MIN_PIXEL_SIZE = 1
+const PIXEL_SIZE_PRECISION = 10
+const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/
 
 export function createMassFootprintLayer(
   AMapRuntime: Pick<typeof AMap, 'MassMarks' | 'Pixel' | 'Size'>,
   map: AMap.Map,
   options: MassFootprintLayerOptions = {},
 ) {
-  const pixelSize = options.pixelSize ?? DEFAULT_PIXEL_SIZE
+  const pixelSize = normalizePixelSize(options.pixelSize)
+  const color = normalizeColor(options.color)
   const halfPixel = pixelSize / 2
   let destroyed = false
   const massMarks = new AMapRuntime.MassMarks([], {
@@ -22,7 +27,7 @@ export function createMassFootprintLayer(
     cursor: 'default',
     opacity: 1,
     style: {
-      url: createPointIconDataUrl(options.color ?? DEFAULT_COLOR, pixelSize),
+      url: createPointIconDataUrl(color, pixelSize),
       size: new AMapRuntime.Size(pixelSize, pixelSize),
       anchor: new AMapRuntime.Pixel(halfPixel, halfPixel),
     },
@@ -47,6 +52,22 @@ export function createMassFootprintLayer(
       massMarks.setMap(null)
     },
   }
+}
+
+function normalizePixelSize(pixelSize: number | undefined) {
+  if (typeof pixelSize !== 'number' || !Number.isFinite(pixelSize)) {
+    return DEFAULT_PIXEL_SIZE
+  }
+
+  const clampedPixelSize = Math.min(Math.max(pixelSize, MIN_PIXEL_SIZE), MAX_PIXEL_SIZE)
+
+  return Math.round(clampedPixelSize * PIXEL_SIZE_PRECISION) / PIXEL_SIZE_PRECISION
+}
+
+function normalizeColor(color: string | undefined) {
+  if (!color || !HEX_COLOR_PATTERN.test(color)) return DEFAULT_COLOR
+
+  return color.toLowerCase()
 }
 
 function createPointIconDataUrl(color: string, size: number) {

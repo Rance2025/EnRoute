@@ -28,6 +28,7 @@ dist-ssr
 .superpowers/
 .worktrees/
 output/
+test-results/
 
 # Local personal data samples
 external/

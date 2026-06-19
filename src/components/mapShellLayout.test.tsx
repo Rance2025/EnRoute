@@ -64,6 +64,47 @@ describe('unified shell layout', () => {
     expect(screen.getByLabelText('在途 EnRoute 地图工作区')).toBeInTheDocument()
   })
 
+  it('opens compact footprint style controls from the map toolbar', () => {
+    render(<App amapConfig={configuredAmap} />)
+
+    expect(screen.queryByRole('dialog', { name: '足迹显示设置' })).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '足迹显示设置' }))
+
+    const popover = screen.getByRole('dialog', { name: '足迹显示设置' })
+    const sizeInput = within(popover).getByLabelText('足迹点大小')
+    const colorInput = within(popover).getByLabelText('足迹点颜色')
+
+    expect(sizeInput).toHaveAttribute('type', 'range')
+    expect(sizeInput).toHaveAttribute('min', '1')
+    expect(sizeInput).toHaveAttribute('max', '5')
+    expect(sizeInput).toHaveAttribute('step', '0.1')
+    expect(sizeInput).toHaveValue('1.5')
+    expect(colorInput).toHaveAttribute('type', 'color')
+    expect(colorInput).toHaveValue('#123f35')
+
+    fireEvent.change(sizeInput, { target: { value: '2.4' } })
+    fireEvent.change(colorInput, { target: { value: '#4f7cff' } })
+
+    expect(sizeInput).toHaveValue('2.4')
+    expect(colorInput).toHaveValue('#4f7cff')
+  })
+
+  it('rounds footprint point size controls to 0.1 precision', () => {
+    render(<App amapConfig={configuredAmap} />)
+
+    fireEvent.click(screen.getByRole('button', { name: '足迹显示设置' }))
+
+    const popover = screen.getByRole('dialog', { name: '足迹显示设置' })
+    const sizeInput = within(popover).getByLabelText('足迹点大小')
+    const sizeNumberInput = within(popover).getByLabelText('足迹点大小数值')
+
+    fireEvent.change(sizeNumberInput, { target: { value: '1.23' } })
+
+    expect(sizeNumberInput).toHaveValue(1.2)
+    expect(sizeInput).toHaveValue('1.2')
+  })
+
   it('uses project-facing time panel copy without implementation notes', () => {
     render(<App amapConfig={configuredAmap} />)
 
