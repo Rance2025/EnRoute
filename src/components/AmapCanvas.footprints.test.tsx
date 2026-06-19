@@ -184,6 +184,7 @@ describe('AmapCanvas footprint layer wiring', () => {
       expect.any(Object),
       {
         color: '#123f35',
+        opacity: 0.82,
         pixelSize: 1.5,
       },
     )
@@ -289,6 +290,7 @@ describe('AmapCanvas footprint layer wiring', () => {
       expect.any(Object),
       {
         color: '#4f7cff',
+        opacity: 0.82,
         pixelSize: 2.4,
       },
     )
@@ -298,7 +300,7 @@ describe('AmapCanvas footprint layer wiring', () => {
   it('restores valid stored footprint style settings before creating the native layer', async () => {
     window.localStorage.setItem(
       'enroute.footprintStyle',
-      JSON.stringify({ color: '#4f7cff', pixelSize: 2.7 }),
+      JSON.stringify({ color: '#4f7cff', opacity: 0.66, pixelSize: 2.7 }),
     )
     const loadFootprints = createDeferred<FootprintPoint[]>()
     const { createMassFootprintLayer } = await renderFootprintMassMarks({
@@ -316,6 +318,7 @@ describe('AmapCanvas footprint layer wiring', () => {
       expect.any(Object),
       {
         color: '#4f7cff',
+        opacity: 0.66,
         pixelSize: 2.7,
       },
     )
@@ -324,7 +327,7 @@ describe('AmapCanvas footprint layer wiring', () => {
   it('normalizes invalid stored footprint style settings before creating the native layer', async () => {
     window.localStorage.setItem(
       'enroute.footprintStyle',
-      JSON.stringify({ color: 'javascript:alert(1)', pixelSize: 9 }),
+      JSON.stringify({ color: 'javascript:alert(1)', opacity: 0.1, pixelSize: 9 }),
     )
     const loadFootprints = createDeferred<FootprintPoint[]>()
     const { createMassFootprintLayer } = await renderFootprintMassMarks({
@@ -336,6 +339,7 @@ describe('AmapCanvas footprint layer wiring', () => {
       expect.any(Object),
       {
         color: '#123f35',
+        opacity: 0.3,
         pixelSize: 3.5,
       },
     )

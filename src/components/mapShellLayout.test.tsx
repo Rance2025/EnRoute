@@ -81,8 +81,10 @@ describe('unified shell layout', () => {
 
     const popover = screen.getByRole('dialog', { name: '足迹显示设置' })
     const sizeInput = within(popover).getByLabelText('足迹点大小')
+    const opacityInput = within(popover).getByLabelText('足迹点透明度')
     const colorInput = within(popover).getByLabelText('足迹点颜色')
     const sizeValue = within(popover).getByText('1.5')
+    const opacityValue = within(popover).getByText('0.82')
 
     expect(sizeInput).toHaveAttribute('type', 'range')
     expect(sizeInput).toHaveAttribute('min', '0.3')
@@ -92,15 +94,39 @@ describe('unified shell layout', () => {
     expect(sizeValue).toHaveClass('footprint-style-popover__value')
     expect(within(popover).queryByLabelText('足迹点大小数值')).not.toBeInTheDocument()
     expect(within(popover).queryByRole('spinbutton')).not.toBeInTheDocument()
+    expect(opacityInput).toHaveAttribute('type', 'range')
+    expect(opacityInput).toHaveAttribute('min', '0.3')
+    expect(opacityInput).toHaveAttribute('max', '1')
+    expect(opacityInput).toHaveAttribute('step', '0.01')
+    expect(opacityInput).toHaveValue('0.82')
+    expect(opacityValue).toHaveClass('footprint-style-popover__value')
+    expect(within(popover).queryByLabelText('足迹点透明度数值')).not.toBeInTheDocument()
     expect(colorInput).toHaveAttribute('type', 'color')
     expect(colorInput).toHaveValue('#123f35')
 
     fireEvent.change(sizeInput, { target: { value: '2.4' } })
+    fireEvent.change(opacityInput, { target: { value: '0.64' } })
     fireEvent.change(colorInput, { target: { value: '#4f7cff' } })
 
     expect(sizeInput).toHaveValue('2.4')
     expect(within(popover).getByText('2.4')).toHaveClass('footprint-style-popover__value')
+    expect(opacityInput).toHaveValue('0.64')
+    expect(within(popover).getByText('0.64')).toHaveClass('footprint-style-popover__value')
     expect(colorInput).toHaveValue('#4f7cff')
+  })
+
+  it('rounds footprint point opacity controls to 0.01 precision through the slider', () => {
+    render(<App amapConfig={configuredAmap} />)
+
+    fireEvent.click(screen.getByRole('button', { name: '足迹显示设置' }))
+
+    const popover = screen.getByRole('dialog', { name: '足迹显示设置' })
+    const opacityInput = within(popover).getByLabelText('足迹点透明度')
+
+    fireEvent.change(opacityInput, { target: { value: '0.736' } })
+
+    expect(opacityInput).toHaveValue('0.74')
+    expect(within(popover).getByText('0.74')).toHaveClass('footprint-style-popover__value')
   })
 
   it('rounds footprint point size controls to 0.1 precision through the slider', () => {
@@ -126,12 +152,15 @@ describe('unified shell layout', () => {
     fireEvent.change(within(popover).getByLabelText('足迹点大小'), {
       target: { value: '2.7' },
     })
+    fireEvent.change(within(popover).getByLabelText('足迹点透明度'), {
+      target: { value: '0.64' },
+    })
     fireEvent.change(within(popover).getByLabelText('足迹点颜色'), {
       target: { value: '#4f7cff' },
     })
 
     expect(window.localStorage.getItem('enroute.footprintStyle')).toBe(
-      JSON.stringify({ pixelSize: 2.7, color: '#4f7cff' }),
+      JSON.stringify({ pixelSize: 2.7, color: '#4f7cff', opacity: 0.64 }),
     )
 
     unmount()
@@ -141,6 +170,8 @@ describe('unified shell layout', () => {
     popover = screen.getByRole('dialog', { name: '足迹显示设置' })
     expect(within(popover).getByLabelText('足迹点大小')).toHaveValue('2.7')
     expect(within(popover).getByText('2.7')).toHaveClass('footprint-style-popover__value')
+    expect(within(popover).getByLabelText('足迹点透明度')).toHaveValue('0.64')
+    expect(within(popover).getByText('0.64')).toHaveClass('footprint-style-popover__value')
     expect(within(popover).getByLabelText('足迹点颜色')).toHaveValue('#4f7cff')
   })
 
