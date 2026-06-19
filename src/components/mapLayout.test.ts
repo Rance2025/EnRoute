@@ -6,6 +6,7 @@ const appCss = readFileSync('src/App.css', 'utf8')
 const amapCanvasSource = readFileSync('src/components/AmapCanvas.tsx', 'utf8')
 const amapLoaderSource = readFileSync('src/services/amapLoader.ts', 'utf8')
 const segmentedControlSource = readFileSync('src/components/SegmentedControl.tsx', 'utf8')
+const timeContextPanelSource = readFileSync('src/components/TimeContextPanel.tsx', 'utf8')
 
 function cssRule(selector: string) {
   const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -132,6 +133,7 @@ describe('map chrome layout', () => {
     const bodyRule = cssRule('.time-calendar-body')
     const weekBodyRule = cssRule('.time-calendar-body--week')
     const monthBodyRule = cssRule('.time-calendar-body--month')
+    const collapsingWeekBodyRule = cssRule('.time-calendar-body--collapsing-week')
     const weekdaysRule = cssRule('.time-calendar-weekdays')
     const gridWindowRule = cssRule('.time-calendar-grid-window')
     const gridRule = cssRule('.time-calendar-grid')
@@ -150,6 +152,9 @@ describe('map chrome layout', () => {
       '--time-calendar-grid-offset: calc(var(--time-calendar-active-week-index) * -1)',
     )
     expect(monthBodyRule).toContain('--time-calendar-grid-offset: 0')
+    expect(collapsingWeekBodyRule).toContain(
+      '--time-calendar-grid-offset: calc(var(--time-calendar-active-week-index) * -1)',
+    )
     expect(weekdaysRule).toContain('grid-template-columns: repeat(7, minmax(0, 1fr))')
     expect(weekdaysRule).toContain('margin-top: var(--time-calendar-grid-top-gap)')
     expect(gridWindowRule).toContain('height: calc(')
@@ -164,8 +169,17 @@ describe('map chrome layout', () => {
     expect(cssRule('.time-calendar-body--week .time-calendar-grid')).toContain(
       'transition: none',
     )
+    expect(cssRule('.time-calendar-body--collapsing-week .time-calendar-grid')).toBe('')
     expect(buttonRule).toContain('height: var(--time-calendar-day-height)')
     expect(buttonRule).toContain('min-height: var(--time-calendar-day-height)')
+  })
+
+  it('starts the day calendar collapse transition from the calendar switch event', () => {
+    expect(timeContextPanelSource).toContain('function handleCalendarModeChange')
+    expect(timeContextPanelSource).toContain("calendarMode === 'month' && mode === 'week'")
+    expect(timeContextPanelSource).toContain('handleCalendarModeChange,')
+    expect(timeContextPanelSource).toContain('onChange={onCalendarModeChange}')
+    expect(timeContextPanelSource).not.toContain('previousCalendarModeRef')
   })
 
   it('keeps unified top-level time picker grids compact across week month and year modes', () => {

@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 
 import type { AppView } from '../App'
 import { SegmentedControl, type SegmentedOption } from './SegmentedControl'
@@ -27,6 +27,8 @@ import {
 } from '../time/timeRange'
 
 export type TimeRangeKey = TimeRangeMode
+
+const DAY_CALENDAR_TRANSITION_MS = 260
 
 const timeModeOptions: Array<SegmentedOption<TimeRangeMode>> = [
   { value: 'day', label: '日' },
@@ -92,6 +94,8 @@ export function TimeContextPanel({
   onCalendarModeChange,
   onSelectionChange,
 }: TimeContextPanelProps) {
+  const [isDayCalendarCollapsingWeek, setIsDayCalendarCollapsingWeek] = useState(false)
+  const [dayCalendarCollapseSequence, setDayCalendarCollapseSequence] = useState(0)
   const [navigationState, setNavigationState] = useState<TimeNavigationState>({
     direction: null,
     sequence: 0,
@@ -99,9 +103,32 @@ export function TimeContextPanel({
   const heading = getTimeRangeDisplay(selection)
   const resetLabel = getCurrentRangeActionLabel(selection.mode)
 
+  useEffect(() => {
+    if (!isDayCalendarCollapsingWeek) return undefined
+
+    const timer = window.setTimeout(() => {
+      setIsDayCalendarCollapsingWeek(false)
+    }, DAY_CALENDAR_TRANSITION_MS)
+
+    return () => {
+      window.clearTimeout(timer)
+    }
+  }, [dayCalendarCollapseSequence, isDayCalendarCollapsingWeek])
+
   function handleSelectionChange(nextSelection: TimeRangeSelection) {
     setNavigationState((current) => ({ ...current, direction: null }))
     onSelectionChange(nextSelection)
+  }
+
+  function handleCalendarModeChange(mode: CalendarDisplayMode) {
+    if (calendarMode === 'month' && mode === 'week') {
+      setIsDayCalendarCollapsingWeek(true)
+      setDayCalendarCollapseSequence((current) => current + 1)
+    } else {
+      setIsDayCalendarCollapsingWeek(false)
+    }
+
+    onCalendarModeChange(mode)
   }
 
   function handlePeriodNavigate(
@@ -116,6 +143,8 @@ export function TimeContextPanel({
   }
 
   function handleModeChange(range: TimeRangeMode) {
+    setIsDayCalendarCollapsingWeek(false)
+
     if (range === 'day') handleSelectionChange(selectDay(selection.anchorDate))
     if (range === 'week') handleSelectionChange(selectWeek(selection.anchorDate))
     if (range === 'month') {
@@ -168,8 +197,9 @@ export function TimeContextPanel({
             {renderModeContent(
               selection,
               calendarMode,
+              isDayCalendarCollapsingWeek,
               navigationState,
-              onCalendarModeChange,
+              handleCalendarModeChange,
               handleSelectionChange,
               handlePeriodNavigate,
             )}
@@ -206,6 +236,7 @@ function createSelectionFromPickerOption(
 function renderModeContent(
   selection: TimeRangeSelection,
   calendarMode: CalendarDisplayMode,
+  isDayCalendarCollapsingWeek: boolean,
   navigationState: TimeNavigationState,
   onCalendarModeChange: (mode: CalendarDisplayMode) => void,
   onSelectionChange: (selection: TimeRangeSelection) => void,
@@ -219,6 +250,7 @@ function renderModeContent(
       <DayCalendarSection
         selection={selection}
         calendarMode={calendarMode}
+        isCollapsingWeek={isDayCalendarCollapsingWeek}
         navigationState={navigationState}
         onCalendarModeChange={onCalendarModeChange}
         onSelectionChange={onSelectionChange}
@@ -335,6 +367,7 @@ function renderModeContent(
 function DayCalendarSection({
   selection,
   calendarMode,
+  isCollapsingWeek,
   navigationState,
   onCalendarModeChange,
   onSelectionChange,
@@ -342,6 +375,7 @@ function DayCalendarSection({
 }: {
   selection: TimeRangeSelection
   calendarMode: CalendarDisplayMode
+  isCollapsingWeek: boolean
   navigationState: TimeNavigationState
   onCalendarModeChange: (mode: CalendarDisplayMode) => void
   onSelectionChange: (selection: TimeRangeSelection) => void
@@ -391,6 +425,7 @@ function DayCalendarSection({
       </div>
       <AnimatedDayCalendar
         calendarMode={calendarMode}
+        isCollapsingWeek={isCollapsingWeek}
         navigationState={navigationState}
         selection={selection}
         onSelectionChange={onSelectionChange}
@@ -401,11 +436,13 @@ function DayCalendarSection({
 
 function AnimatedDayCalendar({
   calendarMode,
+  isCollapsingWeek,
   navigationState,
   selection,
   onSelectionChange,
 }: {
   calendarMode: CalendarDisplayMode
+  isCollapsingWeek: boolean
   navigationState: TimeNavigationState
   selection: TimeRangeSelection
   onSelectionChange: (selection: TimeRangeSelection) => void
@@ -414,10 +451,11 @@ function AnimatedDayCalendar({
   const renderedRows = days.length / 7
   const visibleRows = calendarMode === 'week' ? 1 : renderedRows
   const activeWeekIndex = getVisibleMonthWeekIndex(selection.anchorDate)
+  const calendarBodyMode = isCollapsingWeek ? 'collapsing-week' : calendarMode
 
   return (
     <div
-      className={`time-calendar-body time-calendar-body--${calendarMode}`}
+      className={`time-calendar-body time-calendar-body--${calendarBodyMode}`}
       style={
         {
           '--time-calendar-visible-rows': visibleRows,
@@ -452,7 +490,7 @@ function AnimatedDayCalendar({
                 className={[
                   selection.start === day.date ? 'is-active' : null,
                   day.inCurrentMonth ? null : 'is-outside-month',
-                  calendarMode === 'week' &&
+                  calendarBodyMode === 'week' &&
                   Math.floor(index / 7) === activeWeekIndex
                     ? 'is-visible-week'
                     : null,

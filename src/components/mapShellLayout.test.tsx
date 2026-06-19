@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest'
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import App from '../App'
 
@@ -11,6 +11,7 @@ Object.defineProperty(window, 'localStorage', {
 })
 
 afterEach(() => {
+  vi.useRealTimers()
   cleanup()
   window.localStorage.clear()
 })
@@ -404,8 +405,39 @@ describe('unified shell layout', () => {
 
     expect(screen.getByLabelText('日历日期').closest('.time-calendar-body')).toBe(weekBody)
     expect(screen.getByLabelText('日历日期').closest('.time-calendar-body')).toHaveClass(
-      'time-calendar-body--week',
+      'time-calendar-body--collapsing-week',
     )
+  })
+
+  it('keeps the expanded month rows during the day calendar collapse animation', () => {
+    vi.useFakeTimers()
+    render(<App amapConfig={configuredAmap} />)
+
+    const weekBody = screen.getByLabelText('日历日期').closest('.time-calendar-body')
+
+    fireEvent.click(screen.getByRole('button', { name: '月历' }))
+    expect(weekBody).toHaveClass('time-calendar-body--month')
+    expect(weekBody).toHaveStyle({ '--time-calendar-visible-rows': '5' })
+
+    fireEvent.click(screen.getByRole('button', { name: '周历' }))
+
+    expect(weekBody).toHaveClass('time-calendar-body--collapsing-week')
+    expect(weekBody).not.toHaveClass('time-calendar-body--week')
+    expect(weekBody).toHaveStyle({ '--time-calendar-visible-rows': '1' })
+
+    act(() => {
+      vi.advanceTimersByTime(259)
+    })
+
+    expect(weekBody).toHaveClass('time-calendar-body--collapsing-week')
+
+    act(() => {
+      vi.advanceTimersByTime(1)
+    })
+
+    expect(weekBody).toHaveClass('time-calendar-body--week')
+    expect(weekBody).not.toHaveClass('time-calendar-body--collapsing-week')
+    expect(weekBody).toHaveStyle({ '--time-calendar-visible-rows': '1' })
   })
 
   it('renders top-level week, month, and year with paged aggregation grids', () => {
