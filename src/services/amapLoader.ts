@@ -25,5 +25,8 @@ export async function loadAmap(config: AmapConfig): Promise<AMapNamespace> {
     key: config.key,
     version: '2.0',
     plugins: ['AMap.Geolocation', 'AMap.Scale'],
+    Loca: {
+      version: '2.0.0',
+    },
   }) as Promise<AMapNamespace>
 }
