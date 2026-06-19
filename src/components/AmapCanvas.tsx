@@ -65,6 +65,7 @@ function AmapCanvasComponent({ config, onPanelWidthChange }: AmapCanvasProps) {
 
     footprintStyleRef.current = normalizedFootprintStyle
     writeStoredFootprintStyle(normalizedFootprintStyle)
+    footprintLayerRef.current?.scheduleStyleUpdate(normalizedFootprintStyle)
     setFootprintStyle(normalizedFootprintStyle)
   }, [])
 
@@ -245,7 +246,11 @@ function AmapCanvasComponent({ config, onPanelWidthChange }: AmapCanvasProps) {
   useEffect(() => {
     if (status !== 'ready' || !amapRef.current || !mapRef.current) return
 
-    const layer = createMassFootprintLayer(amapRef.current, mapRef.current, footprintStyle)
+    const layer = createMassFootprintLayer(
+      amapRef.current,
+      mapRef.current,
+      footprintStyleRef.current,
+    )
     footprintLayerRef.current = layer
     if (footprintPointsRef.current) {
       layer.update(footprintPointsRef.current)
@@ -256,7 +261,7 @@ function AmapCanvasComponent({ config, onPanelWidthChange }: AmapCanvasProps) {
         destroyFootprintLayer()
       }
     }
-  }, [destroyFootprintLayer, footprintStyle, status])
+  }, [destroyFootprintLayer, status])
 
   useEffect(() => {
     function updateLayoutAfterResize() {

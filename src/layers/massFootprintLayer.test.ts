@@ -30,6 +30,7 @@ describe('createMassFootprintLayer', () => {
     const clear = vi.fn()
     const setMap = vi.fn()
     const setData = vi.fn()
+    const setStyle = vi.fn()
     class Size {
       constructor(
         public width: number,
@@ -43,10 +44,10 @@ describe('createMassFootprintLayer', () => {
       ) {}
     }
     const MassMarks = vi.fn(function () {
-      return { clear, setData, setMap }
+      return { clear, setData, setMap, setStyle }
     })
 
-    return { clear, MassMarks, Pixel, setData, setMap, Size }
+    return { clear, MassMarks, Pixel, setData, setMap, setStyle, Size }
   }
 
   it('creates a native AMap MassMarks layer with a tiny theme-colored sharp point icon', () => {
@@ -215,6 +216,72 @@ describe('createMassFootprintLayer', () => {
 
     expect(runtime.setData).toHaveBeenCalledTimes(2)
     expect(runtime.setData.mock.calls[1]?.[0]).toBe(runtime.setData.mock.calls[0]?.[0])
+  })
+
+  it('schedules native style updates without resetting raw point data', () => {
+    vi.useFakeTimers()
+    const runtime = createMassMarksRuntime()
+    const layer = createMassFootprintLayer(runtime, {} as AMap.Map)
+
+    layer.update(points)
+    runtime.setData.mockClear()
+    layer.scheduleStyleUpdate({
+      color: '#4f7cff',
+      opacity: 0.64,
+      pixelSize: 2.4,
+    })
+
+    expect(runtime.setStyle).not.toHaveBeenCalled()
+    expect(runtime.setData).not.toHaveBeenCalled()
+
+    vi.runOnlyPendingTimers()
+
+    expect(runtime.setData).not.toHaveBeenCalled()
+    expect(runtime.setStyle).toHaveBeenCalledTimes(1)
+    const nextStyle = runtime.setStyle.mock.calls[0]?.[0]
+    expect(nextStyle.size.width).toBe(2.4)
+    expect(nextStyle.anchor.x).toBe(1.2)
+    expect(decodeURIComponent(nextStyle.url)).toContain('#4f7cff')
+    expect(decodeURIComponent(nextStyle.url)).toContain('fill-opacity="0.64"')
+
+    layer.destroy()
+    vi.useRealTimers()
+  })
+
+  it('applies only the latest queued native style update', () => {
+    vi.useFakeTimers()
+    const runtime = createMassMarksRuntime()
+    const layer = createMassFootprintLayer(runtime, {} as AMap.Map)
+
+    layer.scheduleStyleUpdate({ color: '#4f7cff' })
+    layer.scheduleStyleUpdate({ color: '#b8544c', pixelSize: 2.8 })
+
+    vi.runOnlyPendingTimers()
+
+    expect(runtime.setStyle).toHaveBeenCalledTimes(1)
+    const nextStyle = runtime.setStyle.mock.calls[0]?.[0]
+    expect(nextStyle.size.width).toBe(2.8)
+    expect(decodeURIComponent(nextStyle.url)).toContain('#b8544c')
+    expect(decodeURIComponent(nextStyle.url)).not.toContain('#4f7cff')
+
+    layer.destroy()
+    vi.useRealTimers()
+  })
+
+  it('cancels a queued native style update when the latest style returns to the active style', () => {
+    vi.useFakeTimers()
+    const runtime = createMassMarksRuntime()
+    const layer = createMassFootprintLayer(runtime, {} as AMap.Map)
+
+    layer.scheduleStyleUpdate({ color: '#4f7cff', pixelSize: 2.4 })
+    layer.scheduleStyleUpdate({ color: '#123f35', opacity: 0.82, pixelSize: 1.5 })
+
+    vi.runOnlyPendingTimers()
+
+    expect(runtime.setStyle).not.toHaveBeenCalled()
+
+    layer.destroy()
+    vi.useRealTimers()
   })
 
   it('clears and detaches the native MassMarks layer on destroy', () => {
