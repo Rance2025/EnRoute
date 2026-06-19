@@ -17,6 +17,7 @@ export function createCanvasFootprintLayer(
   const color = options.color ?? DEFAULT_COLOR
   const pixelSize = options.pixelSize ?? DEFAULT_PIXEL_SIZE
 
+  canvas.dataset.layer = 'footprints'
   canvas.style.position = 'absolute'
   canvas.style.inset = '0'
   canvas.style.pointerEvents = 'none'

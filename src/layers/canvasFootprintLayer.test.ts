@@ -66,6 +66,7 @@ describe('createCanvasFootprintLayer', () => {
 
     const canvas = container.querySelector('canvas')
     expect(canvas).toBeInstanceOf(HTMLCanvasElement)
+    expect(canvas?.dataset.layer).toBe('footprints')
     expect(canvas?.width).toBe(640)
     expect(canvas?.height).toBe(480)
     expect(canvas?.style.width).toBe('320px')
