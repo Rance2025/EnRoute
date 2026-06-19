@@ -51,6 +51,18 @@ describe('single-world map pane layout', () => {
     })
   })
 
+  it('sizes the map pane from the cropped-world zoom used by the live map', () => {
+    expect(
+      calculateFallbackSingleWorldPaneLayout({
+        viewportWidth: 2048,
+        viewportHeight: 1152,
+      }),
+    ).toEqual({
+      mapPaneWidth: expect.closeTo(1468.37, 2),
+      sidePanelWidth: expect.closeTo(579.63, 2),
+    })
+  })
+
   it('uses AMap projection measurements scaled to the target zoom', () => {
     const worldWidth = measureAmapWorldPixelWidthAtZoom(
       {

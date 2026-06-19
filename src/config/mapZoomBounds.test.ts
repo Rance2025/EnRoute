@@ -180,23 +180,33 @@ describe('bounded map zooming', () => {
   })
 
   it('locks the center to the vertical render midpoint at minimum AMap zoom', () => {
+    vi.useFakeTimers()
     const container = document.createElement('div')
     Object.defineProperties(container, {
       clientWidth: { value: 1432 },
       clientHeight: { value: 815 },
     })
+    let zoom = 2.52
+    let center: [number, number] = [104, 35]
     const map = {
       setStatus: vi.fn(),
-      getZoom: vi.fn(() => 2),
-      getCenter: vi.fn(() => lngLat([104, 35])),
-      setZoomAndCenter: vi.fn(),
+      getZoom: vi.fn(() => zoom),
+      getCenter: vi.fn(() => lngLat(center)),
+      setZoomAndCenter: vi.fn((nextZoom: number, nextCenter: [number, number]) => {
+        zoom = nextZoom
+        center = nextCenter
+      }),
     }
 
     zoomByStep(map, container, renderBounds, -1)
+    vi.runAllTimers()
 
-    expect(map.setZoomAndCenter).toHaveBeenCalledWith(2, expect.any(Array), true)
-    expect(map.setZoomAndCenter.mock.calls[0][1][0]).toBeCloseTo(104)
-    expect(map.setZoomAndCenter.mock.calls[0][1][1]).toBeCloseTo(0)
+    const lastCall = map.setZoomAndCenter.mock.calls.at(-1)
+    expect(lastCall?.[0]).toBeCloseTo(2.02)
+    expect(lastCall?.[1][0]).toBeCloseTo(104)
+    expect(lastCall?.[1][1]).toBeCloseTo(0)
+
+    vi.useRealTimers()
   })
 
   it('does not restart zoom animation when already locked at minimum zoom', () => {
@@ -211,7 +221,7 @@ describe('bounded map zooming', () => {
     })
     const map: BoundedZoomMap = {
       setStatus: vi.fn(),
-      getZoom: () => 2,
+      getZoom: () => 2.02,
       getCenter: () => lngLat([104, 0]),
       setZoomAndCenter: vi.fn(),
     }

@@ -3,6 +3,7 @@ import type { MapBounds } from './mapCamera'
 export const TILE_SIZE = 256
 export const AMAP_MIN_ZOOM = 2
 export const MAX_MERCATOR_LATITUDE = 85.05112878
+const POLAR_EDGE_CROP_FACTOR = 1.27
 
 export type WorldPoint = {
   x: number
@@ -10,7 +11,10 @@ export type WorldPoint = {
 }
 
 export function calculateMinimumZoomForWorldCoverage(viewportHeight: number) {
-  return Math.max(roundZoomUpToAmapPrecision(Math.log2(viewportHeight / TILE_SIZE)), AMAP_MIN_ZOOM)
+  return Math.max(
+    roundZoomUpToAmapPrecision(Math.log2((viewportHeight * POLAR_EDGE_CROP_FACTOR) / TILE_SIZE)),
+    AMAP_MIN_ZOOM,
+  )
 }
 
 export function projectLngLat([lng, lat]: [number, number], zoom: number): WorldPoint {

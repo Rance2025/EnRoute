@@ -168,9 +168,10 @@ describe('bounded map dragging', () => {
     expect(nextCenter).toEqual([120, 76])
   })
 
-  it('calculates a minimum zoom that keeps the vertical world larger than the viewport', () => {
-    expect(calculateMinimumZoomForLatitudeCoverage(815)).toBe(2)
-    expect(calculateMinimumZoomForLatitudeCoverage(1800)).toBe(2.82)
+  it('calculates a minimum zoom that crops polar edges instead of barely fitting the world', () => {
+    expect(calculateMinimumZoomForLatitudeCoverage(815)).toBe(2.02)
+    expect(calculateMinimumZoomForLatitudeCoverage(1152)).toBe(2.52)
+    expect(calculateMinimumZoomForLatitudeCoverage(1800)).toBe(3.16)
   })
 
   it('locks vertical dragging at the render center when the map cannot zoom out to fit the viewport height', () => {
