@@ -50,6 +50,7 @@
   --segmented-padding: 4px;
   --segmented-thumb-bg: #123f35;
   --segmented-thumb-shadow: 0 8px 22px rgba(31, 52, 48, 0.2);
+  --segmented-label-contrast-color: #ffffff;
 
   position: relative;
   isolation: isolate;
@@ -102,7 +103,9 @@
 .segmented-control button {
   position: relative;
   z-index: 1;
+  color: var(--segmented-label-contrast-color);
   cursor: inherit;
+  mix-blend-mode: difference;
 }
 
 .segmented-control button[aria-pressed='true'] {
@@ -1254,6 +1257,29 @@
 
 .transaction-type-switch.segmented-control button[aria-pressed='true'] {
   background: transparent;
+}
+
+.segmented-control button {
+  color: var(--segmented-label-contrast-color);
+  background: transparent;
+  box-shadow: none;
+}
+
+.segmented-control button:hover {
+  color: var(--segmented-label-contrast-color);
+  background: transparent;
+  box-shadow: none;
+}
+
+.segmented-control button[aria-pressed='true'] {
+  color: var(--segmented-label-contrast-color);
+  background: transparent;
+  box-shadow: none;
+}
+
+.segmented-control button:disabled {
+  color: var(--segmented-label-contrast-color);
+  opacity: 0.46;
 }
 
 .transaction-editor label,
