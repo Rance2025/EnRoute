@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   createTodaySelection,
   getTimeRangeDisplay,
+  getVisibleMonthDays,
   moveTimeSelection,
   selectDay,
   selectMonth,
@@ -43,6 +44,25 @@ describe('time range selection model', () => {
       start: '2026-07-19',
       end: '2026-07-19',
     })
+  })
+
+  it('lays out month calendars against the real weekday grid', () => {
+    const days = getVisibleMonthDays('2026-07-14')
+
+    expect(days).toHaveLength(35)
+    expect(days.slice(0, 7).map((day) => day.date)).toEqual([
+      '2026-06-29',
+      '2026-06-30',
+      '2026-07-01',
+      '2026-07-02',
+      '2026-07-03',
+      '2026-07-04',
+      '2026-07-05',
+    ])
+    expect(days.findIndex((day) => day.date === '2026-07-01')).toBe(2)
+    expect(days[0]).toMatchObject({ day: 29, inCurrentMonth: false })
+    expect(days[2]).toMatchObject({ day: 1, inCurrentMonth: true })
+    expect(days.at(-1)).toMatchObject({ date: '2026-08-02', inCurrentMonth: false })
   })
 
   it('selects concrete day, week, month, and year ranges', () => {

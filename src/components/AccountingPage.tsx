@@ -26,6 +26,7 @@ import { formatCnyFromCents } from '../accounting/money'
 import { getCategoryPath, getTagPath } from '../accounting/trees'
 import type { Account, Category, Tag, Transaction, TransactionType } from '../accounting/types'
 import { getTimeRangeDisplay, type TimeRangeSelection } from '../time/timeRange'
+import { SegmentedControl, type SegmentedOption } from './SegmentedControl'
 
 const typeLabels: Record<TransactionType, string> = {
   income: '收入',
@@ -55,10 +56,16 @@ type AccountingMode = 'accounts' | 'ledger' | 'report'
 
 type DraftUpdater = <Key extends keyof Draft>(key: Key, value: Draft[Key]) => void
 
-const accountingModes: Array<{ key: AccountingMode; label: string }> = [
-  { key: 'accounts', label: '账户' },
-  { key: 'ledger', label: '流水' },
-  { key: 'report', label: '统计' },
+const accountingModes: Array<SegmentedOption<AccountingMode>> = [
+  { value: 'accounts', label: '账户' },
+  { value: 'ledger', label: '流水' },
+  { value: 'report', label: '统计' },
+]
+
+const transactionTypeOptions: Array<SegmentedOption<TransactionType>> = [
+  { value: 'expense', label: typeLabels.expense },
+  { value: 'income', label: typeLabels.income },
+  { value: 'transfer', label: typeLabels.transfer },
 ]
 
 type AccountingPageProps = {
@@ -116,18 +123,13 @@ export function AccountingPage({ timeRange }: AccountingPageProps) {
           <span>{getTimeRangeDisplay(timeRange).accountingLabel}</span>
           <strong>人民币</strong>
         </div>
-        <div className="accounting-mode-tabs" role="group" aria-label="记账工作区">
-          {accountingModes.map((item) => (
-            <button
-              type="button"
-              key={item.key}
-              aria-pressed={mode === item.key}
-              onClick={() => setMode(item.key)}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          ariaLabel="记账工作区"
+          className="accounting-mode-tabs"
+          options={accountingModes}
+          value={mode}
+          onChange={setMode}
+        />
       </header>
 
       <section className="accounting-overview" aria-label="记账概览">
@@ -400,18 +402,13 @@ function TransactionEditor({
 }) {
   return (
     <form className="transaction-editor" onSubmit={(event) => event.preventDefault()}>
-      <div className="transaction-type-switch" role="group" aria-label="交易类型选择">
-        {(['expense', 'income', 'transfer'] as TransactionType[]).map((type) => (
-          <button
-            type="button"
-            key={type}
-            aria-pressed={draft.type === type}
-            onClick={() => updateDraft('type', type)}
-          >
-            {typeLabels[type]}
-          </button>
-        ))}
-      </div>
+      <SegmentedControl
+        ariaLabel="交易类型选择"
+        className="transaction-type-switch"
+        options={transactionTypeOptions}
+        value={draft.type}
+        onChange={(type) => updateDraft('type', type)}
+      />
 
       <label className="sr-only">
         <span>交易类型</span>

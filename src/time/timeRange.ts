@@ -256,14 +256,19 @@ export function getVisibleMonthDays(anchorDate: string): DateCell[] {
   const anchor = parseDate(anchorDate)
   const year = anchor.getFullYear()
   const month = anchor.getMonth()
+  const firstVisibleDay = startOfWeek(new Date(year, month, 1))
+  const lastMonthDay = new Date(year, month + 1, 0)
+  const lastVisibleDay = addDays(startOfWeek(lastMonthDay), 6)
+  const visibleDayCount =
+    Math.round((lastVisibleDay.getTime() - firstVisibleDay.getTime()) / 86_400_000) + 1
 
-  return Array.from({ length: new Date(year, month + 1, 0).getDate() }, (_, index) => {
-    const date = new Date(year, month, index + 1)
+  return Array.from({ length: visibleDayCount }, (_, index) => {
+    const date = addDays(firstVisibleDay, index)
 
     return {
       date: formatDateKey(date),
       day: date.getDate(),
-      inCurrentMonth: true,
+      inCurrentMonth: date.getMonth() === month,
     }
   })
 }

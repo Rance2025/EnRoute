@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'r
 
 import { AccountingPage } from './components/AccountingPage'
 import { AmapCanvas } from './components/AmapCanvas'
+import { SegmentedControl, type SegmentedOption } from './components/SegmentedControl'
 import { TimeContextPanel } from './components/TimeContextPanel'
 import { getAmapConfig, type AmapConfig } from './config/amap'
 import { calculateFallbackSingleWorldPaneLayout } from './config/mapPaneLayout'
@@ -19,17 +20,11 @@ type AppProps = {
 
 export type AppView = 'overview' | 'map' | 'schedule' | 'accounting'
 
-type ViewOption = {
-  view: AppView
-  label: string
-  enabled: boolean
-}
-
-const viewOptions: ViewOption[] = [
-  { view: 'overview', label: '概览', enabled: false },
-  { view: 'map', label: '地图', enabled: true },
-  { view: 'schedule', label: '日程', enabled: false },
-  { view: 'accounting', label: '记账', enabled: true },
+const viewOptions: Array<SegmentedOption<AppView>> = [
+  { value: 'overview', label: '概览', disabled: true },
+  { value: 'map', label: '地图' },
+  { value: 'schedule', label: '日程', disabled: true },
+  { value: 'accounting', label: '记账' },
 ]
 
 function calculateUnifiedPanelFallbackWidth(viewportWidth: number) {
@@ -78,12 +73,12 @@ function App({ amapConfig }: AppProps) {
 
   useEffect(() => {
     for (const option of viewOptions) {
-      document.body.classList.toggle(`is-${option.view}-view`, view === option.view)
+      document.body.classList.toggle(`is-${option.value}-view`, view === option.value)
     }
 
     return () => {
       for (const option of viewOptions) {
-        document.body.classList.remove(`is-${option.view}-view`)
+        document.body.classList.remove(`is-${option.value}-view`)
       }
     }
   }, [view])
@@ -104,23 +99,13 @@ function App({ amapConfig }: AppProps) {
           <span>在途</span>
           <span>EnRoute</span>
         </div>
-        <div className="app-nav__tabs" role="group" aria-label="页面">
-          {viewOptions.map((option) => (
-            <button
-              type="button"
-              key={option.view}
-              aria-pressed={view === option.view}
-              disabled={!option.enabled}
-              onClick={() => {
-                if (option.enabled) {
-                  setView(option.view)
-                }
-              }}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          ariaLabel="页面"
+          className="app-nav__tabs"
+          options={viewOptions}
+          value={view}
+          onChange={setView}
+        />
       </nav>
 
       <TimeContextPanel

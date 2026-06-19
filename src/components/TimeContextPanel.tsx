@@ -1,4 +1,5 @@
 import type { AppView } from '../App'
+import { SegmentedControl, type SegmentedOption } from './SegmentedControl'
 import {
   createTodaySelection,
   formatTimeRangeDate,
@@ -22,18 +23,18 @@ import {
 
 export type TimeRangeKey = TimeRangeMode
 
-type TimeModeOption = {
-  key: TimeRangeMode
-  label: string
-}
+const timeModeOptions: Array<SegmentedOption<TimeRangeMode>> = [
+  { value: 'day', label: '日' },
+  { value: 'week', label: '周' },
+  { value: 'month', label: '月' },
+  { value: 'year', label: '年' },
+  { value: 'all', label: '全部' },
+  { value: 'custom', label: '自定义' },
+]
 
-const timeModeOptions: TimeModeOption[] = [
-  { key: 'day', label: '日' },
-  { key: 'week', label: '周' },
-  { key: 'month', label: '月' },
-  { key: 'year', label: '年' },
-  { key: 'all', label: '全部' },
-  { key: 'custom', label: '自定义' },
+const calendarModeOptions: Array<SegmentedOption<CalendarDisplayMode>> = [
+  { value: 'week', label: '周历' },
+  { value: 'month', label: '月历' },
 ]
 
 const weekdayLabels = ['一', '二', '三', '四', '五', '六', '日']
@@ -117,18 +118,13 @@ export function TimeContextPanel({
             </button>
           </div>
 
-          <div className="time-mode-tabs" role="group" aria-label="时间模式">
-            {timeModeOptions.map((option) => (
-              <button
-                type="button"
-                key={option.key}
-                aria-pressed={selection.mode === option.key}
-                onClick={() => handleModeChange(option.key)}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
+          <SegmentedControl
+            ariaLabel="时间模式"
+            className="time-mode-tabs"
+            options={timeModeOptions}
+            value={selection.mode}
+            onChange={handleModeChange}
+          />
         </header>
 
         <div className="time-panel-content">
@@ -164,26 +160,13 @@ function renderModeContent(
       <section className="time-calendar-shell" aria-label="日历选择">
         <div className="time-mode-section-head">
           <strong>按日选择</strong>
-          <div
+          <SegmentedControl
+            ariaLabel="日历显示方式"
             className="time-calendar-switch"
-            role="group"
-            aria-label="日历显示方式"
-          >
-            <button
-              type="button"
-              aria-pressed={calendarMode === 'week'}
-              onClick={() => setCalendarMode('week')}
-            >
-              周历
-            </button>
-            <button
-              type="button"
-              aria-pressed={calendarMode === 'month'}
-              onClick={() => setCalendarMode('month')}
-            >
-              月历
-            </button>
-          </div>
+            options={calendarModeOptions}
+            value={calendarMode}
+            onChange={setCalendarMode}
+          />
         </div>
         <div className="time-calendar-bar">
           <button
@@ -441,7 +424,12 @@ function MonthCalendar({
         <button
           type="button"
           key={day.date}
-          className={selection.start === day.date ? 'is-active' : undefined}
+          className={[
+            selection.start === day.date ? 'is-active' : null,
+            day.inCurrentMonth ? null : 'is-outside-month',
+          ]
+            .filter(Boolean)
+            .join(' ')}
           onClick={() => onSelect(selectDay(day.date))}
         >
           {day.day}
