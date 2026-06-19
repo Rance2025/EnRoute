@@ -99,7 +99,7 @@ describe('createLocaFootprintLayer', () => {
     })
     expect(setStyle).toHaveBeenCalledWith({
       unit: 'px',
-      radius: 2,
+      radius: 1,
       color: 'rgba(184, 84, 76, 0.92)',
       borderWidth: 0,
       blurWidth: 0,

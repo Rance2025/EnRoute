@@ -77,9 +77,16 @@ export function aggregateFootprintPoints({
 
 function isPointInsideBounds(point: FootprintPoint, bounds: LngLatBounds) {
   return (
-    point.longitude >= bounds.west &&
-    point.longitude <= bounds.east &&
+    isLongitudeInsideBounds(point.longitude, bounds) &&
     point.latitude >= bounds.south &&
     point.latitude <= bounds.north
   )
+}
+
+function isLongitudeInsideBounds(longitude: number, bounds: LngLatBounds) {
+  if (bounds.west <= bounds.east) {
+    return longitude >= bounds.west && longitude <= bounds.east
+  }
+
+  return longitude >= bounds.west || longitude <= bounds.east
 }
