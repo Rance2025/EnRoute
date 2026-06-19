@@ -68,6 +68,8 @@ async function renderFootprintCanvas({
   destroy?: () => void
   loadFootprintsPromise: Promise<FootprintPoint[]>
 }) {
+  const mapMoveHandlers: Array<() => void> = []
+  const zoomChangeHandlers: Array<() => void> = []
   const moveEndHandlers: Array<() => void> = []
   const zoomEndHandlers: Array<() => void> = []
   const completeHandlers: Array<() => void> = []
@@ -79,6 +81,8 @@ async function renderFootprintCanvas({
     destroy = vi.fn()
     resize = vi.fn()
     on = vi.fn((eventName: string, callback: () => void) => {
+      if (eventName === 'mapmove') mapMoveHandlers.push(callback)
+      if (eventName === 'zoomchange') zoomChangeHandlers.push(callback)
       if (eventName === 'moveend') moveEndHandlers.push(callback)
       if (eventName === 'zoomend') zoomEndHandlers.push(callback)
       if (eventName === 'complete') completeHandlers.push(callback)
@@ -133,9 +137,11 @@ async function renderFootprintCanvas({
     createCanvasFootprintLayer,
     completeHandlers,
     destroy,
+    mapMoveHandlers,
     moveEndHandlers,
     renderResult,
     update,
+    zoomChangeHandlers,
     zoomEndHandlers,
   }
 }
@@ -148,6 +154,56 @@ afterEach(() => {
 })
 
 describe('AmapCanvas footprint layer wiring', () => {
+  it('updates the canvas footprint layer on the next animation frame while the map is moving', async () => {
+    const loadFootprints = createDeferred<FootprintPoint[]>()
+    const { mapMoveHandlers, update } = await renderFootprintCanvas({
+      loadFootprintsPromise: loadFootprints.promise,
+    })
+
+    const requestAnimationFrame = vi
+      .spyOn(window, 'requestAnimationFrame')
+      .mockImplementation((callback: FrameRequestCallback) => {
+        callback(0)
+        return 1
+      })
+
+    await act(async () => {
+      loadFootprints.resolve(loadedPoints)
+      await Promise.resolve()
+    })
+    update.mockClear()
+
+    mapMoveHandlers[0]()
+
+    expect(requestAnimationFrame).toHaveBeenCalled()
+    expect(update).toHaveBeenCalledWith(loadedPoints, expect.any(Object), expect.any(HTMLElement))
+  })
+
+  it('updates the canvas footprint layer on the next animation frame while the map is zooming', async () => {
+    const loadFootprints = createDeferred<FootprintPoint[]>()
+    const { update, zoomChangeHandlers } = await renderFootprintCanvas({
+      loadFootprintsPromise: loadFootprints.promise,
+    })
+
+    const requestAnimationFrame = vi
+      .spyOn(window, 'requestAnimationFrame')
+      .mockImplementation((callback: FrameRequestCallback) => {
+        callback(0)
+        return 1
+      })
+
+    await act(async () => {
+      loadFootprints.resolve(loadedPoints)
+      await Promise.resolve()
+    })
+    update.mockClear()
+
+    zoomChangeHandlers[0]()
+
+    expect(requestAnimationFrame).toHaveBeenCalled()
+    expect(update).toHaveBeenCalledWith(loadedPoints, expect.any(Object), expect.any(HTMLElement))
+  })
+
   it('updates the canvas footprint layer with raw loaded points after a map settle event', async () => {
     const loadFootprints = createDeferred<FootprintPoint[]>()
     const { moveEndHandlers, update } = await renderFootprintCanvas({
