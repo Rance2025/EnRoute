@@ -86,10 +86,11 @@ describe('createMassFootprintLayer', () => {
     layer.destroy()
   })
 
-  it('encodes custom point size and color into the native MassMarks icon', () => {
+  it('encodes custom point size, color, and opacity into the native MassMarks icon', () => {
     const runtime = createMassMarksRuntime()
     const layer = createMassFootprintLayer(runtime, {} as AMap.Map, {
       color: '#4f7cff',
+      opacity: 0.64,
       pixelSize: 3.4,
     })
 
@@ -105,6 +106,20 @@ describe('createMassFootprintLayer', () => {
     expect(iconSvg).toContain('cx="1.7"')
     expect(iconSvg).toContain('cy="1.7"')
     expect(iconSvg).toContain('r="1.7"')
+    expect(iconSvg).toContain('fill-opacity="0.64"')
+
+    layer.destroy()
+  })
+
+  it('rounds custom point opacity to 0.01 precision before creating the native icon', () => {
+    const runtime = createMassMarksRuntime()
+    const layer = createMassFootprintLayer(runtime, {} as AMap.Map, {
+      opacity: 0.736,
+    })
+
+    const options = runtime.MassMarks.mock.calls[0]?.[1]
+    const iconSvg = decodeURIComponent(options?.style.url ?? '')
+    expect(iconSvg).toContain('fill-opacity="0.74"')
 
     layer.destroy()
   })
@@ -134,6 +149,7 @@ describe('createMassFootprintLayer', () => {
     const runtime = createMassMarksRuntime()
     const layer = createMassFootprintLayer(runtime, {} as AMap.Map, {
       color: 'url(javascript:alert(1))',
+      opacity: Number.NaN,
       pixelSize: Number.NaN,
     })
 
@@ -144,19 +160,22 @@ describe('createMassFootprintLayer', () => {
     expect(options?.style.anchor.y).toBe(0.75)
     const iconSvg = decodeURIComponent(options?.style.url ?? '')
     expect(iconSvg).toContain('#123f35')
+    expect(iconSvg).toContain('fill-opacity="0.82"')
     expect(iconSvg).not.toContain('javascript')
 
     layer.destroy()
   })
 
-  it('clamps custom point size to the supported 0.3 to 3.5 range', () => {
+  it('clamps custom point size and opacity to their supported ranges', () => {
     const smallRuntime = createMassMarksRuntime()
     const largeRuntime = createMassMarksRuntime()
 
     const smallLayer = createMassFootprintLayer(smallRuntime, {} as AMap.Map, {
+      opacity: 0.1,
       pixelSize: 0.1,
     })
     const largeLayer = createMassFootprintLayer(largeRuntime, {} as AMap.Map, {
+      opacity: 1.2,
       pixelSize: 4.2,
     })
 
@@ -165,9 +184,11 @@ describe('createMassFootprintLayer', () => {
     expect(smallOptions?.style.size.width).toBe(0.3)
     expect(smallOptions?.style.anchor.x).toBe(0.15)
     expect(decodeURIComponent(smallOptions?.style.url ?? '')).toContain('width="0.3"')
+    expect(decodeURIComponent(smallOptions?.style.url ?? '')).toContain('fill-opacity="0.3"')
     expect(largeOptions?.style.size.width).toBe(3.5)
     expect(largeOptions?.style.anchor.x).toBe(1.75)
     expect(decodeURIComponent(largeOptions?.style.url ?? '')).toContain('width="3.5"')
+    expect(decodeURIComponent(largeOptions?.style.url ?? '')).toContain('fill-opacity="1"')
 
     smallLayer.destroy()
     largeLayer.destroy()

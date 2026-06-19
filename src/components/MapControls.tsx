@@ -2,10 +2,14 @@ import type { CSSProperties } from 'react'
 import { useId, useState } from 'react'
 import { Crosshair, LocateFixed, Minus, Plus, Settings2 } from 'lucide-react'
 import {
+  FOOTPRINT_OPACITY_MAX,
+  FOOTPRINT_OPACITY_MIN,
+  FOOTPRINT_OPACITY_STEP,
   FOOTPRINT_PIXEL_SIZE_MAX,
   FOOTPRINT_PIXEL_SIZE_MIN,
   FOOTPRINT_PIXEL_SIZE_STEP,
   normalizeFootprintColor,
+  normalizeFootprintOpacity,
   normalizeFootprintPixelSize,
   type FootprintStyle,
 } from '../layers/footprintStyle'
@@ -33,6 +37,7 @@ export function MapControls({
 }: MapControlsProps) {
   const [isFootprintStyleOpen, setIsFootprintStyleOpen] = useState(false)
   const sizeInputId = useId()
+  const opacityInputId = useId()
   const colorInputId = useId()
 
   function updatePixelSize(value: string) {
@@ -54,6 +59,16 @@ export function MapControls({
     })
   }
 
+  function updateOpacity(value: string) {
+    const nextOpacity = Number.parseFloat(value)
+    if (!Number.isFinite(nextOpacity)) return
+
+    onFootprintStyleChange({
+      ...footprintStyle,
+      opacity: normalizeFootprintOpacity(nextOpacity),
+    })
+  }
+
   return (
     <div className="map-toolbar" aria-label="地图工具">
       {isFootprintStyleOpen ? (
@@ -69,6 +84,19 @@ export function MapControls({
               step={FOOTPRINT_PIXEL_SIZE_STEP}
               value={footprintStyle.pixelSize}
               onChange={(event) => updatePixelSize(event.target.value)}
+            />
+          </div>
+          <div className="footprint-style-popover__row">
+            <label htmlFor={opacityInputId}>足迹点透明度</label>
+            <span className="footprint-style-popover__value">{footprintStyle.opacity}</span>
+            <input
+              id={opacityInputId}
+              type="range"
+              min={FOOTPRINT_OPACITY_MIN}
+              max={FOOTPRINT_OPACITY_MAX}
+              step={FOOTPRINT_OPACITY_STEP}
+              value={footprintStyle.opacity}
+              onChange={(event) => updateOpacity(event.target.value)}
             />
           </div>
           <div className="footprint-style-popover__row">

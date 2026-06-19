@@ -1,12 +1,15 @@
 import type { FootprintPoint } from './footprintTypes'
-import { normalizeFootprintColor, normalizeFootprintPixelSize } from './footprintStyle'
+import {
+  normalizeFootprintColor,
+  normalizeFootprintOpacity,
+  normalizeFootprintPixelSize,
+} from './footprintStyle'
 
 type MassFootprintLayerOptions = {
   color?: string
+  opacity?: number
   pixelSize?: number
 }
-
-const DEFAULT_OPACITY = 0.82
 
 export function createMassFootprintLayer(
   AMapRuntime: Pick<typeof AMap, 'MassMarks' | 'Pixel' | 'Size'>,
@@ -15,6 +18,7 @@ export function createMassFootprintLayer(
 ) {
   const pixelSize = normalizeFootprintPixelSize(options.pixelSize)
   const color = normalizeFootprintColor(options.color)
+  const opacity = normalizeFootprintOpacity(options.opacity)
   const halfPixel = pixelSize / 2
   let destroyed = false
   const massMarks = new AMapRuntime.MassMarks([], {
@@ -22,7 +26,7 @@ export function createMassFootprintLayer(
     cursor: 'default',
     opacity: 1,
     style: {
-      url: createPointIconDataUrl(color, pixelSize),
+      url: createPointIconDataUrl(color, pixelSize, opacity),
       size: new AMapRuntime.Size(pixelSize, pixelSize),
       anchor: new AMapRuntime.Pixel(halfPixel, halfPixel),
     },
@@ -49,9 +53,9 @@ export function createMassFootprintLayer(
   }
 }
 
-function createPointIconDataUrl(color: string, size: number) {
+function createPointIconDataUrl(color: string, size: number, opacity: number) {
   const radius = size / 2
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><circle cx="${radius}" cy="${radius}" r="${radius}" fill="${color}" fill-opacity="${DEFAULT_OPACITY}"/></svg>`
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><circle cx="${radius}" cy="${radius}" r="${radius}" fill="${color}" fill-opacity="${opacity}"/></svg>`
 
   return `data:image/svg+xml,${encodeURIComponent(svg)}`
 }
