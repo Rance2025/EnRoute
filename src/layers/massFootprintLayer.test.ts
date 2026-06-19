@@ -71,7 +71,10 @@ describe('createMassFootprintLayer', () => {
     expect(options?.style.size.height).toBe(2)
     expect(options?.style.anchor.x).toBe(1)
     expect(options?.style.anchor.y).toBe(1)
-    expect(decodeURIComponent(options?.style.url ?? '')).toContain('#b8544c')
+    const iconSvg = decodeURIComponent(options?.style.url ?? '')
+    expect(iconSvg).toContain('#b8544c')
+    expect(iconSvg).toContain('<circle')
+    expect(iconSvg).not.toContain('<rect')
     expect(runtime.setMap).toHaveBeenCalledWith(map)
 
     layer.destroy()
