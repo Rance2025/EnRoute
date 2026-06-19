@@ -41,10 +41,17 @@ describe('unified shell layout', () => {
       'aria-pressed',
       'true',
     )
-    expect(screen.getByLabelText('时间选择页')).toBeInTheDocument()
+    expect(screen.getByLabelText('日历选择')).toBeInTheDocument()
     expect(screen.getByText('2026年6月')).toBeInTheDocument()
-    expect(screen.queryByRole('group', { name: '日历显示方式' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '周历' })).not.toBeInTheDocument()
+    expect(screen.getByRole('group', { name: '日历显示方式' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '周历' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(screen.getByRole('button', { name: '月历' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    )
     expect(screen.getByRole('slider', { name: '页面滑块' })).toBeInTheDocument()
     expect(screen.getByRole('slider', { name: '时间模式滑块' })).toHaveAttribute(
       'aria-valuetext',
@@ -60,7 +67,7 @@ describe('unified shell layout', () => {
   it('uses project-facing time panel copy without implementation notes', () => {
     render(<App amapConfig={configuredAmap} />)
 
-    const pickerHead = screen.getByLabelText('时间选择页').querySelector('.time-mode-section-head')
+    const pickerHead = screen.getByLabelText('日历选择').querySelector('.time-mode-section-head')
 
     expect(pickerHead).not.toBeNull()
     expect(within(pickerHead as HTMLElement).queryByText('只在日模式显示日历')).not.toBeInTheDocument()
@@ -69,6 +76,9 @@ describe('unified shell layout', () => {
     fireEvent.click(screen.getByRole('button', { name: '周' }))
 
     expect(screen.getByText('按周聚合')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /第25周/ })).toBeInTheDocument()
+    expect(screen.queryByRole('group', { name: '日历显示方式' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '周历' })).not.toBeInTheDocument()
     expect(screen.queryByText('选择一周')).not.toBeInTheDocument()
     expect(screen.queryByText('选择一整周')).not.toBeInTheDocument()
 
@@ -131,6 +141,7 @@ describe('unified shell layout', () => {
     expect(screen.getByRole('heading', { name: '第25周' })).toBeInTheDocument()
     expect(screen.getByLabelText('时间选择页')).toBeInTheDocument()
     expect(screen.queryByLabelText('日历选择')).not.toBeInTheDocument()
+    expect(screen.queryByRole('group', { name: '日历显示方式' })).not.toBeInTheDocument()
     expect(screen.getByLabelText('当前账目范围')).toHaveTextContent('周')
 
     fireEvent.click(screen.getByRole('button', { name: '月' }))
@@ -192,42 +203,72 @@ describe('unified shell layout', () => {
     expect(within(monthSelector).queryByText('当前')).not.toBeInTheDocument()
   })
 
-  it('renders day, week, month, and year with the same paged picker shell', () => {
+  it('keeps day calendar week and month displays on the same date grid', () => {
     render(<App amapConfig={configuredAmap} />)
 
-    const dayPicker = screen.getByLabelText('时间选择页')
-    const dayFrame = dayPicker.querySelector('.time-picker-calendar-frame')
-    const dayGrid = dayPicker.querySelector('.time-picker-grid')
-    const dayButtons = within(dayPicker).getAllByRole('button')
+    const weekCalendar = screen.getByLabelText('日历选择')
+    const weekBody = screen.getByLabelText('日历日期').closest('.time-calendar-body')
+    const weekGrid = screen.getByLabelText('日历日期')
+    const weekButtons = within(weekGrid).getAllByRole('button')
 
-    expect(within(dayPicker).getByText('按日选择')).toBeInTheDocument()
-    expect(within(dayPicker).getByText('2026年6月')).toBeInTheDocument()
-    expect(within(dayPicker).getByLabelText('上一页')).toBeInTheDocument()
-    expect(within(dayPicker).getByLabelText('下一页')).toBeInTheDocument()
-    expect(dayFrame).toHaveStyle({ '--time-picker-visible-rows': '5' })
-    expect(dayGrid).toHaveClass('time-picker-grid--calendar')
-    expect(within(dayPicker).getAllByRole('button')).toHaveLength(37)
+    expect(within(weekCalendar).getByText('按日选择')).toBeInTheDocument()
+    expect(within(weekCalendar).getByText('2026年6月')).toBeInTheDocument()
+    expect(within(weekCalendar).getByLabelText('上一段时间')).toBeInTheDocument()
+    expect(within(weekCalendar).getByLabelText('下一段时间')).toBeInTheDocument()
+    expect(weekBody).toHaveClass('time-calendar-body--week')
+    expect(weekBody).toHaveStyle({ '--time-calendar-visible-rows': '1' })
+    expect(weekBody).toHaveStyle({ '--time-calendar-active-week-index': '2' })
+    expect(weekButtons).toHaveLength(35)
+    expect(weekButtons.slice(14, 21).map((button) => button.textContent)).toEqual([
+      '15',
+      '16',
+      '17',
+      '18',
+      '19',
+      '20',
+      '21',
+    ])
+    expect(within(weekGrid).getByRole('button', { name: '19' })).toHaveClass('is-active')
+
+    fireEvent.click(screen.getByRole('button', { name: '月历' }))
+
+    const monthBody = screen.getByLabelText('日历日期').closest('.time-calendar-body')
+    const monthGrid = screen.getByLabelText('日历日期')
+    const monthButtons = within(monthGrid).getAllByRole('button')
+
+    expect(monthBody).toBe(weekBody)
+    expect(monthGrid).toBe(weekGrid)
+    expect(monthBody).toHaveClass('time-calendar-body--month')
+    expect(monthBody).toHaveStyle({ '--time-calendar-visible-rows': '5' })
+    expect(monthBody).toHaveStyle({ '--time-calendar-active-week-index': '2' })
+    expect(monthButtons).toHaveLength(35)
+    expect(monthButtons[14]).toBe(weekButtons[14])
+    expect(monthButtons[20]).toBe(weekButtons[20])
+
+    fireEvent.click(screen.getByRole('button', { name: '周历' }))
+
+    expect(screen.getByLabelText('日历日期').closest('.time-calendar-body')).toBe(weekBody)
+    expect(screen.getByLabelText('日历日期').closest('.time-calendar-body')).toHaveClass(
+      'time-calendar-body--week',
+    )
+  })
+
+  it('renders top-level week, month, and year with paged aggregation grids', () => {
+    render(<App amapConfig={configuredAmap} />)
 
     fireEvent.click(screen.getByRole('button', { name: '周' }))
 
     const weekPicker = screen.getByLabelText('时间选择页')
-    const weekFrame = weekPicker.querySelector('.time-picker-calendar-frame')
-    const weekGrid = weekPicker.querySelector('.time-picker-grid')
-    const weekButtons = within(weekPicker).getAllByRole('button')
 
     expect(within(weekPicker).getByText('按周聚合')).toBeInTheDocument()
     expect(within(weekPicker).getByText('2026年6月')).toBeInTheDocument()
-    expect(weekFrame).toBe(dayFrame)
-    expect(weekGrid).toBe(dayGrid)
-    expect(weekFrame).toHaveStyle({ '--time-picker-visible-rows': '1' })
-    expect(weekFrame).toHaveStyle({ '--time-picker-active-week-index': '2' })
-    expect(weekFrame).toHaveStyle({ '--time-picker-grid-offset': '-2' })
-    expect(weekGrid).toHaveClass('time-picker-grid--calendar')
-    expect(weekButtons).toHaveLength(37)
-    expect(weekButtons[16]).toBe(dayButtons[16])
-    expect(within(weekPicker).getByRole('button', { name: '19' })).toHaveClass('is-active')
-    expect(within(weekPicker).queryByRole('button', { name: /第25周/ })).not.toBeInTheDocument()
-    expect(screen.queryByText('选择一周')).not.toBeInTheDocument()
+    expect(within(weekPicker).getByLabelText('上一页')).toBeInTheDocument()
+    expect(within(weekPicker).getByLabelText('下一页')).toBeInTheDocument()
+    expect(within(weekPicker).getByRole('button', { name: /第25周/ })).toBeInTheDocument()
+    expect(weekPicker.querySelector('.time-picker-grid')).toHaveClass('time-picker-grid--weeks')
+    expect(weekPicker.querySelector('.time-picker-calendar-frame')).not.toBeInTheDocument()
+    expect(screen.queryByRole('group', { name: '日历显示方式' })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('日历日期')).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '月' }))
 
@@ -244,20 +285,16 @@ describe('unified shell layout', () => {
     expect(within(yearPicker).getByRole('button', { name: '2029年' })).toBeInTheDocument()
   })
 
-  it('keeps the same date cells mounted when the active week moves into the month grid', () => {
+  it('moves the day calendar active week into the month grid without replacing cells', () => {
     render(<App amapConfig={configuredAmap} />)
 
-    fireEvent.click(screen.getByRole('button', { name: '周' }))
+    const weekBody = screen.getByLabelText('日历日期').closest('.time-calendar-body')
+    const weekGrid = screen.getByLabelText('日历日期')
+    const weekButtons = within(weekGrid).getAllByRole('button')
 
-    const weekPicker = screen.getByLabelText('时间选择页')
-    const weekFrame = weekPicker.querySelector('.time-picker-calendar-frame')
-    const weekGrid = weekPicker.querySelector('.time-picker-grid')
-    const weekButtons = within(weekPicker).getAllByRole('button')
-
-    expect(weekFrame).toHaveStyle({ '--time-picker-visible-rows': '1' })
-    expect(weekFrame).toHaveStyle({ '--time-picker-active-week-index': '2' })
-    expect(weekFrame).toHaveStyle({ '--time-picker-grid-offset': '-2' })
-    expect(weekButtons.slice(16, 23).map((button) => button.textContent)).toEqual([
+    expect(weekBody).toHaveStyle({ '--time-calendar-visible-rows': '1' })
+    expect(weekBody).toHaveStyle({ '--time-calendar-active-week-index': '2' })
+    expect(weekButtons.slice(14, 21).map((button) => button.textContent)).toEqual([
       '15',
       '16',
       '17',
@@ -267,19 +304,25 @@ describe('unified shell layout', () => {
       '21',
     ])
 
-    fireEvent.click(screen.getByRole('button', { name: '日' }))
+    fireEvent.click(screen.getByRole('button', { name: '月历' }))
 
-    const dayPicker = screen.getByLabelText('时间选择页')
-    const dayFrame = dayPicker.querySelector('.time-picker-calendar-frame')
-    const dayGrid = dayPicker.querySelector('.time-picker-grid')
-    const dayButtons = within(dayPicker).getAllByRole('button')
+    const monthBody = screen.getByLabelText('日历日期').closest('.time-calendar-body')
+    const monthGrid = screen.getByLabelText('日历日期')
+    const monthButtons = within(monthGrid).getAllByRole('button')
 
-    expect(dayFrame).toBe(weekFrame)
-    expect(dayGrid).toBe(weekGrid)
-    expect(dayFrame).toHaveStyle({ '--time-picker-visible-rows': '5' })
-    expect(dayFrame).toHaveStyle({ '--time-picker-grid-offset': '0' })
-    expect(dayButtons[16]).toBe(weekButtons[16])
-    expect(dayButtons[22]).toBe(weekButtons[22])
+    expect(monthBody).toBe(weekBody)
+    expect(monthGrid).toBe(weekGrid)
+    expect(monthBody).toHaveStyle({ '--time-calendar-visible-rows': '5' })
+    expect(monthButtons[14]).toBe(weekButtons[14])
+    expect(monthButtons[20]).toBe(weekButtons[20])
+
+    fireEvent.click(screen.getByRole('button', { name: '周历' }))
+
+    const collapsedButtons = within(screen.getByLabelText('日历日期')).getAllByRole('button')
+
+    expect(screen.getByLabelText('日历日期').closest('.time-calendar-body')).toBe(weekBody)
+    expect(collapsedButtons[14]).toBe(weekButtons[14])
+    expect(collapsedButtons[20]).toBe(weekButtons[20])
   })
 
   it('applies concrete selections from every time panel button group', () => {
@@ -290,20 +333,21 @@ describe('unified shell layout', () => {
     expect(screen.getByRole('heading', { name: '6月21日' })).toBeInTheDocument()
     expect(screen.getByText('2026年6月21日 · 发生时间')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: '上一页' }))
+    fireEvent.click(screen.getByRole('button', { name: '上一段时间' }))
 
-    expect(screen.getByRole('heading', { name: '5月21日' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '6月14日' })).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: '下一页' }))
+    fireEvent.click(screen.getByRole('button', { name: '下一段时间' }))
 
     expect(screen.getByRole('heading', { name: '6月21日' })).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: '下一页' }))
+    fireEvent.click(screen.getByRole('button', { name: '月历' }))
+    fireEvent.click(screen.getByRole('button', { name: '下一段时间' }))
 
     expect(screen.getByRole('heading', { name: '7月21日' })).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '周' }))
-    fireEvent.click(screen.getByRole('button', { name: '20' }))
+    fireEvent.click(screen.getByRole('button', { name: /第30周/ }))
 
     expect(screen.getByRole('heading', { name: '第30周' })).toBeInTheDocument()
     expect(screen.getByText('7月20日 - 7月26日 · 按周聚合')).toBeInTheDocument()
