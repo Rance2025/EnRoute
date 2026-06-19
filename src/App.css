@@ -42,12 +42,15 @@
 }
 
 .app-nav__tabs {
+  --segmented-gap: 2px;
+
   display: flex;
-  gap: 2px;
+  gap: var(--segmented-gap);
 }
 
 .segmented-control {
   --segmented-padding: 4px;
+  --segmented-gap: 0px;
   --segmented-thumb-bg: #123f35;
   --segmented-thumb-shadow: none;
   --segmented-label-color: rgba(23, 35, 31, 0.62);
@@ -68,7 +71,7 @@
 
 .segmented-control__thumb {
   position: absolute;
-  z-index: 0;
+  z-index: 2;
   top: var(--segmented-padding);
   bottom: var(--segmented-padding);
   left: calc(
@@ -77,6 +80,7 @@
       var(--segment-thumb-index, var(--segment-index))
   );
   width: calc((100% - var(--segmented-padding) * 2) / var(--segment-count));
+  overflow: hidden;
   border-radius: 999px;
   background: var(--segmented-thumb-bg);
   box-shadow: var(--segmented-thumb-shadow);
@@ -92,16 +96,50 @@
 
 .segmented-control__thumb.is-dragging {
   cursor: grabbing;
-  transform: scale(0.98);
   transition:
     background 160ms ease,
-    box-shadow 160ms ease,
-    transform 160ms ease;
+    box-shadow 160ms ease;
 }
 
 .segmented-control__thumb:focus-visible {
   outline: 2px solid rgba(248, 251, 250, 0.74);
   outline-offset: -3px;
+}
+
+.segmented-control__active-labels {
+  position: absolute;
+  inset: 0 auto 0 0;
+  display: grid;
+  width: calc(100% * var(--segment-count));
+  grid-template-columns: repeat(var(--segment-count), minmax(0, 1fr));
+  gap: var(--segmented-gap);
+  color: var(--segmented-active-label-color);
+  pointer-events: none;
+  transform: translateX(
+    calc(
+      -100% / var(--segment-count) *
+      var(--segment-thumb-index, var(--segment-index))
+    )
+  );
+  transition: transform 190ms ease;
+}
+
+.segmented-control__thumb.is-dragging .segmented-control__active-labels {
+  transition: none;
+}
+
+.segmented-control__active-label {
+  min-width: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  color: inherit;
+  font-size: var(--segmented-label-font-size);
+  font-weight: var(--segmented-label-font-weight);
+  line-height: 1;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .segmented-control button {
@@ -123,25 +161,6 @@
   font-size: var(--segmented-label-font-size);
   font-weight: var(--segmented-label-font-weight);
   line-height: 1;
-  pointer-events: none;
-  text-align: center;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.segmented-control button::after {
-  grid-area: 1 / 1;
-  max-width: 100%;
-  overflow: hidden;
-  color: var(--segmented-active-label-color);
-  content: attr(data-segment-label);
-  font-size: var(--segmented-label-font-size);
-  font-weight: var(--segmented-label-font-weight);
-  line-height: 1;
-  clip-path: inset(
-    0 calc(100% - var(--segmented-active-end, 0%)) 0
-    var(--segmented-active-start, 0%)
-  );
   pointer-events: none;
   text-align: center;
   text-overflow: ellipsis;
@@ -278,6 +297,7 @@
 }
 
 .time-mode-tabs {
+  --segmented-gap: 3px;
   --segmented-thumb-bg: rgba(255, 255, 255, 0.94);
   --segmented-label-color: rgba(255, 255, 255, 0.66);
   --segmented-active-label-color: #123f35;
@@ -287,7 +307,7 @@
 
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 3px;
+  gap: var(--segmented-gap);
   margin-top: 14px;
   padding: 4px;
   border-radius: 999px;
@@ -927,11 +947,12 @@
 }
 
 .accounting-mode-tabs {
+  --segmented-gap: 3px;
   --segmented-thumb-bg: var(--accounting-accent);
   --segmented-label-font-weight: 820;
 
   display: flex;
-  gap: 3px;
+  gap: var(--segmented-gap);
   padding: 4px;
   border: 1px solid rgba(19, 34, 30, 0.08);
   border-radius: 999px;
@@ -1226,13 +1247,14 @@
 }
 
 .transaction-type-switch {
+  --segmented-gap: 3px;
   --segmented-thumb-bg: var(--accounting-accent);
   --segmented-label-font-size: 12px;
   --segmented-label-font-weight: 820;
 
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 3px;
+  gap: var(--segmented-gap);
   padding: 4px;
   border-radius: 999px;
   background: rgba(19, 34, 30, 0.065);

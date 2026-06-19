@@ -72,10 +72,33 @@ describe('SegmentedControl', () => {
     const slider = screen.getByRole('slider')
     const selectedButton = screen.getByRole('button', { pressed: true })
 
-    expect(slider).toBeEmptyDOMElement()
     expect(slider.querySelector('.segmented-control__thumb-label')).toBeNull()
+    expect(slider.querySelector('.segmented-control__active-labels')).toHaveAttribute(
+      'aria-hidden',
+      'true',
+    )
     expect(selectedButton.querySelectorAll('.segmented-control__label')).toHaveLength(1)
     expect(selectedButton).toHaveAttribute('data-segment-label', selectedButton.textContent)
+  })
+
+  it('uses one slider-clipped active label layer instead of per-button color clips', () => {
+    render(<DemoSegmentedControl />)
+
+    const control = screen.getByRole('group', { name: '页面' })
+    const activeLabels = control.querySelector('.segmented-control__active-labels')
+    const buttons = screen.getAllByRole('button')
+
+    expect(activeLabels).toHaveAttribute('aria-hidden', 'true')
+    expect(
+      [...activeLabels?.querySelectorAll('.segmented-control__active-label') ?? []].map(
+        (label) => label.textContent,
+      ),
+    ).toEqual(pageOptions.map((option) => option.label))
+
+    for (const button of buttons) {
+      expect(button.style.getPropertyValue('--segmented-active-start')).toBe('')
+      expect(button.style.getPropertyValue('--segmented-active-end')).toBe('')
+    }
   })
 
   it('previews a middle slider position while dragging and snaps on release', () => {
