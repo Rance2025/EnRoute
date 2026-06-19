@@ -688,6 +688,12 @@
   box-shadow: 0 9px 20px rgba(18, 63, 53, 0.22);
 }
 
+.time-calendar-grid button.is-active {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.08);
+}
+
 .time-picker-grid button.is-active small {
   color: rgba(255, 255, 255, 0.68);
 }
