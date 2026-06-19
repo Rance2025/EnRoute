@@ -4,7 +4,6 @@ import {
   ArrowUpRight,
   BarChart3,
   BookOpen,
-  CalendarClock,
   CircleDollarSign,
   Pencil,
   Plus,
@@ -194,22 +193,11 @@ function LedgerWorkspace({
             <TransactionRow key={transaction.id} transaction={transaction} />
           ))}
         </div>
-        <section className="ledger-insight" aria-label="流水洞察">
-          <div className="ledger-insight__head">
-            <span>流水洞察</span>
-            <strong>按当前时间范围</strong>
-          </div>
-          <div className="ledger-insight__grid">
-            <LedgerInsightCard title="账户影响" value="微信 - 日常" detail="5 笔流水 · 净流入 ¥4790.23" />
-            <LedgerInsightCard title="主要分类" value="餐饮 / 晚餐" detail="支出样本中占比最高" />
-            <LedgerInsightCard title="标签线索" value="旅行 / 青岛之行" detail="可跨分类追踪同一段经历" />
-          </div>
-        </section>
       </section>
 
       <section
         className="accounting-panel quick-record-panel ledger-record-panel"
-        aria-label="快速记录与时间规则"
+        aria-label="快速记录"
       >
         <WorkspacePanelHead icon={CircleDollarSign} title="快速记录" detail="MVP 表单" />
         <h2 id="quick-record-title" className="sr-only">
@@ -222,17 +210,6 @@ function LedgerWorkspace({
           updateDraft={updateDraft}
           toggleTag={toggleTag}
         />
-        <section className="ledger-time-note" aria-label="发生时间规则">
-          <div className="ledger-time-note__head">
-            <CalendarClock size={15} strokeWidth={1.9} />
-            <span>发生 / 记录时间</span>
-          </div>
-          <div className="ledger-time-note__grid">
-            <TimeRule label="默认" value="未选择时等于记录时间" />
-            <TimeRule label="外显" value="流水优先显示发生时间" />
-            <TimeRule label="导入" value="外部时间映射到发生时间" />
-          </div>
-        </section>
       </section>
     </div>
   )
@@ -585,39 +562,12 @@ function MiniStat({ label, value }: { label: string; value: string }) {
   )
 }
 
-function LedgerInsightCard({
-  title,
-  value,
-  detail,
-}: {
-  title: string
-  value: string
-  detail: string
-}) {
-  return (
-    <article className="ledger-insight-card">
-      <span>{title}</span>
-      <strong>{value}</strong>
-      <em>{detail}</em>
-    </article>
-  )
-}
-
 function CategoryRule({ label, value }: { label: string; value: string }) {
   return (
     <article className="category-rule">
       <span>{label}</span>
       <em>{value}</em>
     </article>
-  )
-}
-
-function TimeRule({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="time-rule">
-      <strong>{label}</strong>
-      <span>{value}</span>
-    </div>
   )
 }
 
