@@ -95,9 +95,11 @@ describe('unified shell layout', () => {
     fireEvent.click(screen.getByRole('button', { name: '记账' }))
 
     const shell = screen.getByRole('main')
+    const accountingScope = screen.getByLabelText('当前账目范围')
 
     expect(screen.getByLabelText('时间范围面板')).toBeInTheDocument()
-    expect(screen.getByText('日 · 人民币')).toBeInTheDocument()
+    expect(accountingScope).toHaveTextContent('日')
+    expect(accountingScope).toHaveTextContent('人民币')
     expect(shell).toHaveClass('app-shell--accounting')
     expect(shell).toHaveClass('has-data-panel')
     expect(shell).not.toHaveStyle({ '--data-panel-width': '0px' })
@@ -122,7 +124,7 @@ describe('unified shell layout', () => {
     expect(screen.getByRole('heading', { name: '第25周' })).toBeInTheDocument()
     expect(screen.getByLabelText('周聚合选择')).toBeInTheDocument()
     expect(screen.queryByLabelText('日历选择')).not.toBeInTheDocument()
-    expect(screen.getByText('周 · 人民币')).toBeInTheDocument()
+    expect(screen.getByLabelText('当前账目范围')).toHaveTextContent('周')
 
     fireEvent.click(screen.getByRole('button', { name: '月' }))
 
@@ -188,6 +190,9 @@ describe('unified shell layout', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '记账' }))
 
-    expect(screen.getByText('自定义 · 人民币')).toBeInTheDocument()
+    const accountingScope = screen.getByLabelText('当前账目范围')
+
+    expect(accountingScope).toHaveTextContent('自定义')
+    expect(accountingScope).toHaveTextContent('人民币')
   })
 })
