@@ -38,6 +38,13 @@ describe('map chrome layout', () => {
     expect(stageRule).toContain('width: calc(100vw - var(--data-panel-width))')
   })
 
+  it('keeps the accounting page fixed while ledger internals scroll', () => {
+    expect(cssRule('.accounting-page')).toContain('overflow: hidden')
+    expect(cssRule('.accounting-workspace')).toContain('overflow: hidden')
+    expect(cssRule('.transaction-list')).toContain('overflow: auto')
+    expect(cssRule('.transaction-editor')).toContain('overflow: auto')
+  })
+
   it('initializes the map at the single-world minimum zoom', () => {
     expect(amapCanvasSource).toContain(
       'const initialZoom = calculateMinimumZoomForLatitudeCoverage(mapNodeRef.current.clientHeight)',

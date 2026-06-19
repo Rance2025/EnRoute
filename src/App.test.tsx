@@ -173,4 +173,44 @@ describe('App', () => {
     expect(screen.getByLabelText('发生时间')).toBeInTheDocument()
     expect(screen.getByLabelText('备注')).toBeInTheDocument()
   })
+
+  it('switches the whole accounting workspace between account, ledger, and report modes', async () => {
+    render(
+      <App
+        amapConfig={{
+          key: '',
+          securityJsCode: '',
+          isConfigured: false,
+          missingKeys: ['VITE_AMAP_KEY', 'VITE_AMAP_SECURITY_CODE'],
+          defaultCenter: [104.195397, 35.86166],
+          defaultZoom: 4.2,
+          defaultBounds: {
+            southWest: [73.3, 17.8],
+            northEast: [135.1, 53.7],
+          },
+          themes: [],
+          features: ['bg', 'road', 'building'],
+          showLabel: false,
+        }}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '记账' }))
+
+    expect(screen.getByRole('button', { name: '流水' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByLabelText('交易流水工作区')).toBeInTheDocument()
+    expect(screen.queryByLabelText('账户管理工作区')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '账户' }))
+
+    expect(screen.getByRole('button', { name: '账户' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByLabelText('账户管理工作区')).toBeInTheDocument()
+    expect(screen.queryByLabelText('交易流水工作区')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '统计' }))
+
+    expect(screen.getByRole('button', { name: '统计' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByLabelText('统计报告工作区')).toBeInTheDocument()
+    expect(screen.queryByLabelText('账户管理工作区')).not.toBeInTheDocument()
+  })
 })

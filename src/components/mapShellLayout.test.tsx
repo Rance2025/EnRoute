@@ -43,9 +43,29 @@ describe('unified shell layout', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '记账' }))
 
+    const shell = screen.getByRole('main')
+
     expect(screen.getByLabelText('时间范围面板')).toBeInTheDocument()
     expect(screen.getByText('支出 ¥51')).toBeInTheDocument()
-    expect(screen.getByRole('main')).toHaveClass('app-shell--accounting')
+    expect(shell).toHaveClass('app-shell--accounting')
+    expect(shell).toHaveClass('has-data-panel')
+    expect(shell).not.toHaveStyle({ '--data-panel-width': '0px' })
     expect(screen.getByLabelText('在途 EnRoute 主工作区')).toBeInTheDocument()
+  })
+
+  it('switches the shared accounting time range from the left panel', () => {
+    render(<App amapConfig={configuredAmap} />)
+
+    fireEvent.click(screen.getByRole('button', { name: '记账' }))
+
+    for (const range of ['全部', '本年', '本月', '本周', '昨天', '今天', '自定义']) {
+      expect(screen.getByRole('button', { name: range })).toBeInTheDocument()
+    }
+
+    fireEvent.click(screen.getByRole('button', { name: '本周' }))
+
+    expect(screen.getByRole('button', { name: '本周' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('heading', { name: '本周' })).toBeInTheDocument()
+    expect(screen.getByText('按发生时间筛选账目')).toBeInTheDocument()
   })
 })

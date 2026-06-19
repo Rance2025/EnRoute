@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'r
 
 import { AccountingPage } from './components/AccountingPage'
 import { AmapCanvas } from './components/AmapCanvas'
-import { TimeContextPanel } from './components/TimeContextPanel'
+import { TimeContextPanel, type TimeRangeKey } from './components/TimeContextPanel'
 import { getAmapConfig, type AmapConfig } from './config/amap'
 import { calculateFallbackSingleWorldPaneLayout } from './config/mapPaneLayout'
 
@@ -27,6 +27,10 @@ const viewOptions: ViewOption[] = [
   { view: 'accounting', label: '记账', enabled: true },
 ]
 
+function calculateUnifiedPanelFallbackWidth(viewportWidth: number) {
+  return Math.round(Math.min(Math.max(viewportWidth * 0.26, 320), 420))
+}
+
 function getViewportSize() {
   return {
     width: window.innerWidth,
@@ -37,6 +41,7 @@ function getViewportSize() {
 function App({ amapConfig }: AppProps) {
   const resolvedAmapConfig = useMemo(() => amapConfig ?? getAmapConfig(), [amapConfig])
   const [view, setView] = useState<AppView>('map')
+  const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRangeKey>('today')
   const [mapPanelWidth, setMapPanelWidth] = useState(0)
   const [viewportSize, setViewportSize] = useState(getViewportSize)
   const fallbackLayout = useMemo(
@@ -75,7 +80,11 @@ function App({ amapConfig }: AppProps) {
     }
   }, [view])
 
-  const dataPanelWidth = Math.max(mapPanelWidth, fallbackLayout.sidePanelWidth)
+  const measuredDataPanelWidth = Math.max(mapPanelWidth, fallbackLayout.sidePanelWidth)
+  const dataPanelWidth =
+    view === 'map'
+      ? measuredDataPanelWidth
+      : Math.max(measuredDataPanelWidth, calculateUnifiedPanelFallbackWidth(viewportSize.width))
 
   return (
     <main
@@ -106,13 +115,17 @@ function App({ amapConfig }: AppProps) {
         </div>
       </nav>
 
-      <TimeContextPanel view={view} />
+      <TimeContextPanel
+        view={view}
+        selectedRange={selectedTimeRange}
+        onRangeChange={setSelectedTimeRange}
+      />
 
       {view === 'map' ? (
         <AmapCanvas config={resolvedAmapConfig} onPanelWidthChange={handlePanelWidthChange} />
       ) : (
         <section className="main-workspace" aria-label="在途 EnRoute 主工作区">
-          <AccountingPage />
+          <AccountingPage timeRange={selectedTimeRange} />
         </section>
       )}
     </main>

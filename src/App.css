@@ -98,7 +98,7 @@
 
 .time-context-panel__scroll {
   height: 100%;
-  padding: 92px 16px 18px;
+  padding: 92px 18px 18px;
   overflow: auto;
   scrollbar-width: thin;
   scrollbar-color: rgba(23, 62, 53, 0.22) transparent;
@@ -163,26 +163,42 @@
 
 .time-scope-list {
   display: grid;
-  gap: 8px;
+  gap: 7px;
 }
 
 .time-scope-list button {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
   gap: 10px;
-  min-height: 38px;
-  padding: 0 12px;
-  border: 0;
-  border-radius: 8px;
+  width: 100%;
+  min-height: 42px;
+  padding: 0 13px;
+  border: 1px solid rgba(23, 35, 31, 0.06);
+  border-radius: 10px;
   color: rgba(18, 32, 27, 0.76);
-  background: rgba(255, 255, 255, 0.66);
+  background: rgba(255, 255, 255, 0.58);
   cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.66);
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    transform 160ms ease;
+}
+
+.time-scope-list button:hover {
+  border-color: rgba(23, 62, 53, 0.16);
+  background: rgba(255, 255, 255, 0.78);
+  transform: translateY(-1px);
 }
 
 .time-scope-list .is-active {
   color: #173e35;
-  background: rgba(23, 62, 53, 0.1);
+  border-color: rgba(23, 62, 53, 0.18);
+  background: rgba(242, 248, 246, 0.92);
+  box-shadow:
+    0 8px 20px rgba(23, 62, 53, 0.08),
+    inset 3px 0 0 #b8544c;
 }
 
 .time-scope-list span,
@@ -191,6 +207,23 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.time-scope-list span {
+  font-weight: 780;
+}
+
+.time-scope-list b {
+  color: rgba(18, 32, 27, 0.5);
+  font-size: 12px;
+  font-weight: 720;
+}
+
+.time-range-caption {
+  margin: -2px 0 10px;
+  color: rgba(23, 35, 31, 0.52);
+  font-size: 12px;
+  font-weight: 730;
 }
 
 .time-life-line {
@@ -310,12 +343,12 @@
   grid-template-rows: auto auto minmax(0, 1fr);
   height: 100%;
   min-height: 0;
-  padding: 88px clamp(16px, 2.5vw, 30px) 22px;
+  padding: 86px clamp(18px, 2.5vw, 30px) 20px;
   overflow: hidden;
   color: #17231f;
   background:
-    linear-gradient(180deg, rgba(221, 231, 226, 0.9), rgba(241, 244, 241, 0.98) 320px),
-    #f1f4f1;
+    linear-gradient(180deg, rgba(229, 236, 232, 0.92), rgba(247, 248, 245, 0.98) 310px),
+    #f7f8f5;
 }
 
 .accounting-heading {
@@ -325,7 +358,7 @@
   gap: 20px;
   min-width: 0;
   width: 100%;
-  margin: 0 0 18px;
+  margin: 0 0 14px;
 }
 
 .accounting-heading p,
@@ -343,32 +376,78 @@
 .accounting-heading h1 {
   margin-top: 3px;
   color: #12201c;
-  font-size: 38px;
+  font-size: 34px;
   line-height: 1;
 }
 
-.accounting-heading > span {
+.accounting-heading__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.accounting-heading__actions > span {
   color: rgba(23, 35, 31, 0.62);
-  font-size: 14px;
+  font-size: 13px;
+  font-weight: 730;
   white-space: nowrap;
+}
+
+.accounting-mode-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid rgba(23, 35, 31, 0.08);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.58);
+  box-shadow:
+    0 12px 28px rgba(31, 46, 42, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(18px) saturate(1.1);
+}
+
+.accounting-mode-tabs button {
+  height: 32px;
+  min-width: 62px;
+  padding: 0 13px;
+  border: 0;
+  border-radius: 999px;
+  color: rgba(23, 35, 31, 0.66);
+  background: transparent;
+  font-weight: 760;
+  cursor: pointer;
+  transition:
+    color 160ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.accounting-mode-tabs button[aria-pressed='true'] {
+  color: #f8fbfa;
+  background: #1f3430;
+  box-shadow: 0 7px 17px rgba(31, 52, 48, 0.18);
 }
 
 .accounting-overview {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 1px;
+  gap: 8px;
   min-width: 0;
   width: 100%;
   overflow: hidden;
-  border: 1px solid rgba(23, 35, 31, 0.1);
-  border-radius: 8px;
-  background: rgba(23, 35, 31, 0.11);
+  border-radius: 10px;
 }
 
 .metric {
   min-width: 0;
-  padding: 18px 18px 17px;
-  background: rgba(250, 252, 250, 0.82);
+  padding: 14px 16px 13px;
+  border: 1px solid rgba(23, 35, 31, 0.075);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow:
+    0 12px 34px rgba(36, 51, 46, 0.055),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
 }
 
 .metric span {
@@ -382,20 +461,28 @@
   display: block;
   overflow-wrap: anywhere;
   color: #17231f;
-  font-size: 25px;
+  font-size: 22px;
   line-height: 1.1;
 }
 
 .accounting-workspace {
   display: grid;
-  grid-template-columns: minmax(220px, 0.85fr) minmax(420px, 1.55fr) minmax(280px, 0.95fr);
+  min-height: 0;
+  gap: 12px;
+  margin-top: 12px;
+  overflow: hidden;
+}
+
+.accounting-workspace--ledger {
+  grid-template-columns: minmax(210px, 0.76fr) minmax(440px, 1.72fr) minmax(280px, 0.95fr);
   grid-template-areas:
     'accounts transactions editor'
     'trees transactions editor';
-  min-height: 0;
-  gap: 14px;
-  margin-top: 14px;
-  overflow: hidden;
+}
+
+.accounting-workspace--accounts,
+.accounting-workspace--report {
+  grid-template-columns: minmax(420px, 1.15fr) minmax(360px, 0.85fr);
 }
 
 .ledger-panel {
@@ -404,10 +491,13 @@
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  border: 1px solid rgba(23, 35, 31, 0.1);
-  border-radius: 8px;
-  background: rgba(250, 252, 250, 0.72);
-  box-shadow: 0 18px 56px rgba(36, 51, 46, 0.08);
+  border: 1px solid rgba(23, 35, 31, 0.08);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.58);
+  box-shadow:
+    0 18px 46px rgba(36, 51, 46, 0.065),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(18px) saturate(1.08);
 }
 
 .ledger-panel--accounts {
@@ -430,8 +520,9 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 13px 14px;
-  border-bottom: 1px solid rgba(23, 35, 31, 0.09);
+  flex: 0 0 auto;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(23, 35, 31, 0.07);
   color: rgba(23, 35, 31, 0.75);
   font-size: 14px;
   font-weight: 760;
@@ -492,6 +583,7 @@
   display: grid;
   align-content: start;
   gap: 6px;
+  overflow: auto;
 }
 
 .transaction-row {
@@ -499,10 +591,11 @@
   grid-template-columns: 72px minmax(120px, 1fr) minmax(150px, 1.05fr) 78px 92px;
   align-items: center;
   gap: 10px;
-  padding: 11px 10px;
-  border: 1px solid rgba(23, 35, 31, 0.08);
-  border-radius: 7px;
-  background: rgba(255, 255, 255, 0.42);
+  min-height: 58px;
+  padding: 10px 10px;
+  border: 1px solid rgba(23, 35, 31, 0.065);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.52);
 }
 
 .transaction-row__type {
@@ -556,6 +649,7 @@
   display: grid;
   align-content: start;
   gap: 10px;
+  overflow: auto;
 }
 
 .transaction-editor label,
@@ -581,7 +675,7 @@
   width: 100%;
   min-width: 0;
   border: 1px solid rgba(23, 35, 31, 0.13);
-  border-radius: 7px;
+  border-radius: 9px;
   color: #17231f;
   background: rgba(255, 255, 255, 0.74);
 }
@@ -656,6 +750,134 @@
   color: rgba(23, 35, 31, 0.68);
   background: rgba(255, 255, 255, 0.36);
   font-size: 12px;
+}
+
+.account-management-list,
+.account-settings-grid,
+.report-metrics,
+.report-bar-list {
+  padding: 12px;
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(23, 62, 53, 0.22) transparent;
+}
+
+.account-management-list {
+  display: grid;
+  align-content: start;
+  gap: 9px;
+}
+
+.account-management-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid rgba(23, 35, 31, 0.07);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.56);
+}
+
+.account-management-row div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.account-management-row div:last-child {
+  justify-items: end;
+}
+
+.account-management-row strong,
+.setting-note strong {
+  color: #17231f;
+  font-size: 14px;
+}
+
+.account-management-row span,
+.setting-note span {
+  color: rgba(23, 35, 31, 0.55);
+  font-size: 12px;
+}
+
+.account-management-row b {
+  color: #173f35;
+  font-size: 15px;
+}
+
+.account-management-row b.is-negative {
+  color: #a3443b;
+}
+
+.account-settings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+  gap: 10px;
+}
+
+.setting-note {
+  display: grid;
+  gap: 7px;
+  min-height: 106px;
+  padding: 14px;
+  border: 1px solid rgba(23, 35, 31, 0.07);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.52);
+}
+
+.report-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+  gap: 9px;
+}
+
+.report-bar-list {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+}
+
+.report-bar-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.72fr) minmax(160px, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 42px;
+}
+
+.report-bar-row span,
+.report-bar-row b {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.report-bar-row span {
+  color: rgba(23, 35, 31, 0.66);
+}
+
+.report-bar-row b {
+  color: #17231f;
+}
+
+.report-bar-row div {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(23, 35, 31, 0.08);
+}
+
+.report-bar-row i {
+  display: block;
+  width: calc(var(--bar-size) * 100%);
+  height: 100%;
+  border-radius: inherit;
+  background: #b8544c;
 }
 
 .sr-only {
@@ -834,7 +1056,22 @@
   }
 
   .accounting-heading h1 {
-    font-size: 34px;
+    font-size: 32px;
+  }
+
+  .accounting-heading__actions {
+    width: 100%;
+    align-items: stretch;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .accounting-mode-tabs {
+    width: 100%;
+  }
+
+  .accounting-mode-tabs button {
+    flex: 1 1 0;
   }
 
   .accounting-overview {
@@ -851,12 +1088,20 @@
 
   .accounting-workspace {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-areas:
-      'accounts'
-      'editor'
-      'transactions'
-      'trees';
     overflow: visible;
+  }
+
+  .accounting-workspace--ledger {
+    grid-template-areas:
+      'transactions'
+      'editor'
+      'accounts'
+      'trees';
+  }
+
+  .accounting-workspace--accounts,
+  .accounting-workspace--report {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .transaction-row {
