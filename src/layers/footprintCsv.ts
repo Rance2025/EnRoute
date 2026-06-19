@@ -1,4 +1,8 @@
 import type { FootprintPoint } from './footprintTypes'
+import {
+  transformFootprintCoordinate,
+  type FootprintCoordinateSystem,
+} from './footprintCoordinates'
 
 const REQUIRED_COLUMNS = [
   'dataTime',
@@ -14,7 +18,14 @@ const REQUIRED_COLUMNS = [
   'altitude',
 ]
 
-export function parseFootprintCsv(csv: string): FootprintPoint[] {
+export type ParseFootprintCsvOptions = {
+  sourceCoordinateSystem?: FootprintCoordinateSystem
+}
+
+export function parseFootprintCsv(
+  csv: string,
+  { sourceCoordinateSystem = 'wgs84' }: ParseFootprintCsvOptions = {},
+): FootprintPoint[] {
   const [headerLine, ...lines] = csv.replace(/^\uFEFF/, '').split(/\r?\n/)
   if (!headerLine) return []
 
@@ -31,7 +42,7 @@ export function parseFootprintCsv(csv: string): FootprintPoint[] {
     if (!line.trim()) return []
 
     const cells = line.split(',').map((cell) => cell.trim())
-    const point = parseRow(cells, columnIndex, rowIndex)
+    const point = parseRow(cells, columnIndex, rowIndex, sourceCoordinateSystem)
 
     return point ? [point] : []
   })
@@ -41,6 +52,7 @@ function parseRow(
   cells: string[],
   columnIndex: Map<string, number>,
   rowIndex: number,
+  sourceCoordinateSystem: FootprintCoordinateSystem,
 ): FootprintPoint | null {
   const value = (column: string) => Number(cells[columnIndex.get(column) ?? -1])
   const longitude = value('longitude')
@@ -51,11 +63,17 @@ function parseRow(
   if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90) return null
   if (!Number.isFinite(timestampSeconds) || timestampSeconds <= 0) return null
 
+  const transformedCoordinate = transformFootprintCoordinate({
+    longitude,
+    latitude,
+    sourceCoordinateSystem,
+  })
+
   return {
     id: `${Math.trunc(timestampSeconds)}-${rowIndex}`,
     timestampSeconds: Math.trunc(timestampSeconds),
-    longitude,
-    latitude,
+    longitude: transformedCoordinate.longitude,
+    latitude: transformedCoordinate.latitude,
     accuracy: value('accuracy'),
     speed: value('speed'),
     distance: value('distance'),

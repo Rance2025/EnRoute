@@ -13,8 +13,8 @@ describe('parseFootprintCsv', () => {
       {
         id: '1768144456-0',
         timestampSeconds: 1768144456,
-        longitude: 121.511383,
-        latitude: 31.296564,
+        longitude: expect.closeTo(121.515779, 6),
+        latitude: expect.closeTo(31.29454, 6),
         accuracy: 5.729415,
         speed: -1,
         distance: 0,
@@ -38,5 +38,17 @@ describe('parseFootprintCsv', () => {
 
     expect(parseFootprintCsv(csv)).toHaveLength(1)
     expect(parseFootprintCsv(csv)[0].timestampSeconds).toBe(1768144458)
+  })
+
+  it('keeps coordinates unchanged when the CSV source coordinate system is gcj02', () => {
+    const csv = [
+      'dataTime,locType,longitude,latitude,heading,accuracy,speed,distance,isBackForeground,stepType,altitude',
+      '1768144456,1,121.511383,31.296564,0,5,-1,0,1,0,10',
+    ].join('\n')
+
+    expect(parseFootprintCsv(csv, { sourceCoordinateSystem: 'gcj02' })[0]).toMatchObject({
+      longitude: 121.511383,
+      latitude: 31.296564,
+    })
   })
 })
