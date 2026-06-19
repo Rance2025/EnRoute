@@ -11,6 +11,13 @@ function cssRule(selector: string) {
   return appCss.match(new RegExp(`${escapedSelector}\\s*\\{[^}]*\\}`))?.[0] ?? ''
 }
 
+function lastCssRule(selector: string) {
+  const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const matches = [...appCss.matchAll(new RegExp(`${escapedSelector}\\s*\\{[^}]*\\}`, 'g'))]
+
+  return matches.at(-1)?.[0] ?? ''
+}
+
 describe('map chrome layout', () => {
   it('does not render a second map wordmark inside the map chrome', () => {
     expect(amapCanvasSource).not.toContain('className="brand-header"')
@@ -112,6 +119,30 @@ describe('map chrome layout', () => {
     )
     expect(cssRule(".segmented-control button[aria-pressed='true']")).toContain(
       'pointer-events: none',
+    )
+  })
+
+  it('keeps segmented labels readable while the slider crosses each segment', () => {
+    expect(cssRule('.segmented-control')).toContain(
+      '--segmented-label-contrast-color: #ffffff',
+    )
+    expect(cssRule('.segmented-control button')).toContain(
+      'color: var(--segmented-label-contrast-color)',
+    )
+    expect(cssRule('.segmented-control button')).toContain(
+      'mix-blend-mode: difference',
+    )
+    expect(lastCssRule(".segmented-control button[aria-pressed='true']")).toContain(
+      'color: var(--segmented-label-contrast-color)',
+    )
+    expect(lastCssRule(".segmented-control button[aria-pressed='true']")).toContain(
+      'background: transparent',
+    )
+    expect(lastCssRule(".segmented-control button[aria-pressed='true']")).toContain(
+      'box-shadow: none',
+    )
+    expect(lastCssRule('.segmented-control button:hover')).toContain(
+      'color: var(--segmented-label-contrast-color)',
     )
   })
 
