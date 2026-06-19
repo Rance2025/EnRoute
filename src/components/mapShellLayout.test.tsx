@@ -14,6 +14,7 @@ afterEach(() => {
   vi.useRealTimers()
   cleanup()
   window.localStorage.clear()
+  vi.restoreAllMocks()
 })
 
 const configuredAmap = {
@@ -143,7 +144,9 @@ describe('unified shell layout', () => {
     expect(within(popover).getByText('1.2')).toHaveClass('footprint-style-popover__value')
   })
 
-  it('persists footprint style settings across remounts', () => {
+  it('persists footprint style settings after toolbar edits settle', () => {
+    vi.useFakeTimers()
+    const setItemSpy = vi.spyOn(window.localStorage, 'setItem')
     const { unmount } = render(<App amapConfig={configuredAmap} />)
 
     fireEvent.click(screen.getByRole('button', { name: '足迹显示设置' }))
@@ -159,6 +162,17 @@ describe('unified shell layout', () => {
       target: { value: '#4f7cff' },
     })
 
+    expect(within(popover).getByLabelText('足迹点大小')).toHaveValue('2.7')
+    expect(within(popover).getByLabelText('足迹点透明度')).toHaveValue('0.64')
+    expect(within(popover).getByLabelText('足迹点颜色')).toHaveValue('#4f7cff')
+    expect(window.localStorage.getItem('enroute.footprintStyle')).toBeNull()
+    expect(setItemSpy).not.toHaveBeenCalled()
+
+    act(() => {
+      vi.advanceTimersByTime(180)
+    })
+
+    expect(setItemSpy).toHaveBeenCalledTimes(1)
     expect(window.localStorage.getItem('enroute.footprintStyle')).toBe(
       JSON.stringify({ pixelSize: 2.7, color: '#4f7cff', opacity: 0.64 }),
     )
@@ -173,6 +187,54 @@ describe('unified shell layout', () => {
     expect(within(popover).getByLabelText('足迹点透明度')).toHaveValue('0.64')
     expect(within(popover).getByText('0.64')).toHaveClass('footprint-style-popover__value')
     expect(within(popover).getByLabelText('足迹点颜色')).toHaveValue('#4f7cff')
+  })
+
+  it('commits pending footprint style edits when closing the popover', () => {
+    vi.useFakeTimers()
+    render(<App amapConfig={configuredAmap} />)
+
+    fireEvent.click(screen.getByRole('button', { name: '足迹显示设置' }))
+
+    const popover = screen.getByRole('dialog', { name: '足迹显示设置' })
+    fireEvent.change(within(popover).getByLabelText('足迹点大小'), {
+      target: { value: '2.3' },
+    })
+    fireEvent.change(within(popover).getByLabelText('足迹点透明度'), {
+      target: { value: '0.7' },
+    })
+
+    expect(window.localStorage.getItem('enroute.footprintStyle')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: '足迹显示设置' }))
+
+    expect(screen.queryByRole('dialog', { name: '足迹显示设置' })).not.toBeInTheDocument()
+    expect(window.localStorage.getItem('enroute.footprintStyle')).toBe(
+      JSON.stringify({ pixelSize: 2.3, color: '#123f35', opacity: 0.7 }),
+    )
+  })
+
+  it('persists pending footprint style edits when leaving the map view', () => {
+    vi.useFakeTimers()
+    render(<App amapConfig={configuredAmap} />)
+
+    fireEvent.click(screen.getByRole('button', { name: '足迹显示设置' }))
+
+    const popover = screen.getByRole('dialog', { name: '足迹显示设置' })
+    fireEvent.change(within(popover).getByLabelText('足迹点大小'), {
+      target: { value: '2.1' },
+    })
+    fireEvent.change(within(popover).getByLabelText('足迹点颜色'), {
+      target: { value: '#4f7cff' },
+    })
+
+    expect(window.localStorage.getItem('enroute.footprintStyle')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: '记账' }))
+
+    expect(screen.queryByRole('dialog', { name: '足迹显示设置' })).not.toBeInTheDocument()
+    expect(window.localStorage.getItem('enroute.footprintStyle')).toBe(
+      JSON.stringify({ pixelSize: 2.1, color: '#4f7cff', opacity: 0.82 }),
+    )
   })
 
   it('uses project-facing time panel copy without implementation notes', () => {

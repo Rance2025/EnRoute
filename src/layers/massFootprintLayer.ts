@@ -16,6 +16,8 @@ export type MassFootprintPoint = {
   latitude: number
 }
 
+const massMarksDataCache = new WeakMap<MassFootprintPoint[], AMap.MassMarksData[]>()
+
 export function createMassFootprintLayer(
   AMapRuntime: Pick<typeof AMap, 'MassMarks' | 'Pixel' | 'Size'>,
   map: AMap.Map,
@@ -42,12 +44,7 @@ export function createMassFootprintLayer(
 
   return {
     update(points: MassFootprintPoint[]) {
-      massMarks.setData(
-        points.map((point) => ({
-          id: point.id,
-          lnglat: [point.longitude, point.latitude],
-        })),
-      )
+      massMarks.setData(toMassMarksData(points))
     },
     destroy() {
       if (destroyed) return
@@ -56,6 +53,19 @@ export function createMassFootprintLayer(
       massMarks.setMap(null)
     },
   }
+}
+
+function toMassMarksData(points: MassFootprintPoint[]) {
+  const cachedData = massMarksDataCache.get(points)
+  if (cachedData) return cachedData
+
+  const data = points.map((point) => ({
+    id: point.id,
+    lnglat: [point.longitude, point.latitude] as AMap.LngLatLike,
+  }))
+  massMarksDataCache.set(points, data)
+
+  return data
 }
 
 function createPointIconDataUrl(color: string, size: number, opacity: number) {
