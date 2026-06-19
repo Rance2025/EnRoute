@@ -24,6 +24,8 @@ Optional local footprint samples can be served from `public/local/` by setting
 the ignored local public folder. Footprint CSV coordinates default to WGS84 and
 are converted locally to GCJ-02 for AMap; set
 `VITE_FOOTPRINT_COORDINATE_SYSTEM=gcj02` when the source CSV is already GCJ-02.
+Loaded footprint samples render through AMap `MassMarks`, so AMap owns point
+projection during drag and zoom instead of a React or custom canvas overlay.
 
 The first phase renders a 2D AMap base surface with the `远山黛` style, hidden
 labels, a compact custom toolbar, no AMap compass, and limited drag bounds to

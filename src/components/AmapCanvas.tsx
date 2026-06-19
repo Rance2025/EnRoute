@@ -12,9 +12,8 @@ import {
   measureAmapWorldPixelWidthAtZoom,
 } from '../config/mapPaneLayout'
 import { calculateBoundedZoomCenter, installBoundedMapZoom, zoomByStep } from '../config/mapZoomBounds'
-import { createCanvasFootprintLayer } from '../layers/canvasFootprintLayer'
 import { loadFootprintPoints } from '../layers/footprintDataSource'
-import type { FootprintPoint } from '../layers/footprintTypes'
+import { createMassFootprintLayer } from '../layers/massFootprintLayer'
 import { loadAmap, type AMapNamespace } from '../services/amapLoader'
 import { MapControls } from './MapControls'
 
@@ -33,11 +32,8 @@ export function AmapCanvas({ config, onPanelWidthChange }: AmapCanvasProps) {
   const disposeDragRef = useRef<(() => void) | null>(null)
   const disposeZoomRef = useRef<(() => void) | null>(null)
   const disposeZoomClampRef = useRef<(() => void) | null>(null)
-  const footprintLayerRef = useRef<ReturnType<typeof createCanvasFootprintLayer> | null>(null)
-  const footprintPointsRef = useRef<FootprintPoint[]>([])
-  const footprintSettleTimerRef = useRef<number | null>(null)
+  const footprintLayerRef = useRef<ReturnType<typeof createMassFootprintLayer> | null>(null)
   const footprintAbortControllerRef = useRef<AbortController | null>(null)
-  const footprintUpdateVersionRef = useRef(0)
   const [status, setStatus] = useState<MapStatus>(
     config.isConfigured ? 'loading' : 'missing-config',
   )
@@ -99,23 +95,6 @@ export function AmapCanvas({ config, onPanelWidthChange }: AmapCanvasProps) {
     [config.renderBounds, onPanelWidthChange],
   )
 
-  const scheduleFootprintUpdate = useCallback((container: HTMLElement | null) => {
-    if (!container || !footprintLayerRef.current) return
-
-    const updateVersion = footprintUpdateVersionRef.current + 1
-    footprintUpdateVersionRef.current = updateVersion
-
-    if (footprintSettleTimerRef.current !== null) {
-      window.clearTimeout(footprintSettleTimerRef.current)
-    }
-
-    footprintSettleTimerRef.current = window.setTimeout(() => {
-      if (footprintUpdateVersionRef.current !== updateVersion) return
-
-      footprintLayerRef.current?.update(footprintPointsRef.current)
-    }, 160)
-  }, [])
-
   useEffect(() => {
     if (!config.isConfigured || !mapNodeRef.current) {
       setStatus('missing-config')
@@ -124,7 +103,6 @@ export function AmapCanvas({ config, onPanelWidthChange }: AmapCanvasProps) {
     }
 
     let disposed = false
-    let removeFootprintSettleHandlers: (() => void) | null = null
 
     setStatus('loading')
     setErrorMessage('')
@@ -161,16 +139,6 @@ export function AmapCanvas({ config, onPanelWidthChange }: AmapCanvasProps) {
         map.on('zoomend', clampLatitudeBounds)
         disposeZoomClampRef.current = () => map.off('zoomend', clampLatitudeBounds)
 
-        const updateFootprintsAfterSettle = () => scheduleFootprintUpdate(mapNodeRef.current)
-        map.on('complete', updateFootprintsAfterSettle)
-        map.on('moveend', updateFootprintsAfterSettle)
-        map.on('zoomend', updateFootprintsAfterSettle)
-        removeFootprintSettleHandlers = () => {
-          map.off('complete', updateFootprintsAfterSettle)
-          map.off('moveend', updateFootprintsAfterSettle)
-          map.off('zoomend', updateFootprintsAfterSettle)
-        }
-
         AMap.plugin('AMap.Geolocation', () => {
           if (disposed) return
           geolocationRef.current = new AMap.Geolocation({
@@ -191,7 +159,7 @@ export function AmapCanvas({ config, onPanelWidthChange }: AmapCanvasProps) {
         }
         setStatus('ready')
 
-        footprintLayerRef.current = createCanvasFootprintLayer(AMap, map, mapNodeRef.current)
+        footprintLayerRef.current = createMassFootprintLayer(AMap, map)
         footprintAbortControllerRef.current = new AbortController()
         loadFootprintPoints(
           import.meta.env.VITE_FOOTPRINT_DATA_URL,
@@ -199,8 +167,7 @@ export function AmapCanvas({ config, onPanelWidthChange }: AmapCanvasProps) {
         )
           .then((points) => {
             if (disposed) return
-            footprintPointsRef.current = points
-            scheduleFootprintUpdate(mapNodeRef.current)
+            footprintLayerRef.current?.update(points)
           })
           .catch((error: unknown) => {
             if (!disposed && import.meta.env.DEV) console.warn(error)
@@ -214,18 +181,11 @@ export function AmapCanvas({ config, onPanelWidthChange }: AmapCanvasProps) {
 
     return () => {
       disposed = true
-      footprintUpdateVersionRef.current += 1
       geolocationRef.current = null
-      removeFootprintSettleHandlers?.()
-      if (footprintSettleTimerRef.current !== null) {
-        window.clearTimeout(footprintSettleTimerRef.current)
-        footprintSettleTimerRef.current = null
-      }
       footprintAbortControllerRef.current?.abort()
       footprintAbortControllerRef.current = null
       footprintLayerRef.current?.destroy()
       footprintLayerRef.current = null
-      footprintPointsRef.current = []
       if (import.meta.env.DEV) {
         delete window.__ENROUTE_MAP__
       }
@@ -244,7 +204,6 @@ export function AmapCanvas({ config, onPanelWidthChange }: AmapCanvasProps) {
     config,
     mapTheme.style,
     onPanelWidthChange,
-    scheduleFootprintUpdate,
     updatePaneLayout,
   ])
 
@@ -252,7 +211,6 @@ export function AmapCanvas({ config, onPanelWidthChange }: AmapCanvasProps) {
     function updateLayoutAfterResize() {
       if (!mapRef.current || !mapNodeRef.current) return
       updatePaneLayout(mapRef.current, mapNodeRef.current)
-      scheduleFootprintUpdate(mapNodeRef.current)
     }
 
     window.addEventListener('resize', updateLayoutAfterResize)
@@ -260,7 +218,7 @@ export function AmapCanvas({ config, onPanelWidthChange }: AmapCanvasProps) {
     return () => {
       window.removeEventListener('resize', updateLayoutAfterResize)
     }
-  }, [scheduleFootprintUpdate, updatePaneLayout])
+  }, [updatePaneLayout])
 
   function resetView() {
     if (!mapRef.current || !amapRef.current) return

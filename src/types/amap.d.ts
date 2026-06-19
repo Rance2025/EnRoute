@@ -1,6 +1,18 @@
 declare namespace AMap {
   type LngLatLike = [number, number]
 
+  class Size {
+    constructor(width: number, height: number)
+    width: number
+    height: number
+  }
+
+  class Pixel {
+    constructor(x: number, y: number)
+    x: number
+    y: number
+  }
+
   class Bounds {
     constructor(southWest: LngLatLike, northEast: LngLatLike)
   }
@@ -44,19 +56,30 @@ declare namespace AMap {
     zoomOut(): void
   }
 
-  class CustomLayer {
-    constructor(canvas: HTMLCanvasElement, options: CustomLayerOptions)
-    render(): void
+  class MassMarks {
+    constructor(data: MassMarksData[], options: MassMarksOptions)
+    clear(): void
+    setData(data: MassMarksData[]): void
     setMap(map: Map | null): void
   }
 
-  type CustomLayerOptions = {
-    map?: Map
+  type MassMarksData = {
+    id?: string
+    lnglat: LngLatLike
+  }
+
+  type MassMarksOptions = {
     zIndex?: number
-    zooms?: [number, number]
     opacity?: number
+    cursor?: string
     alwaysRender?: boolean
-    render?: () => void
+    style: MassMarksStyle
+  }
+
+  type MassMarksStyle = {
+    url: string
+    size: Size
+    anchor: Pixel
   }
 
   type BoundsLike =
