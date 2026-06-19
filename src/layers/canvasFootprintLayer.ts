@@ -9,6 +9,8 @@ const DEFAULT_COLOR = 'rgba(184, 84, 76, 0.92)'
 const DEFAULT_PIXEL_SIZE = 1
 
 export function createCanvasFootprintLayer(
+  AMapRuntime: Pick<typeof AMap, 'CustomLayer'>,
+  map: AMap.Map,
   container: HTMLElement,
   options: CanvasFootprintLayerOptions = {},
 ) {
@@ -16,13 +18,13 @@ export function createCanvasFootprintLayer(
   const context = canvas.getContext('2d')
   const color = options.color ?? DEFAULT_COLOR
   const pixelSize = options.pixelSize ?? DEFAULT_PIXEL_SIZE
+  let points: FootprintPoint[] = []
 
   canvas.dataset.layer = 'footprints'
   canvas.style.position = 'absolute'
   canvas.style.inset = '0'
   canvas.style.pointerEvents = 'none'
   canvas.style.zIndex = '20'
-  container.appendChild(canvas)
 
   function resize(target: HTMLElement) {
     const dpr = getDevicePixelRatio()
@@ -42,32 +44,44 @@ export function createCanvasFootprintLayer(
 
   resize(container)
 
+  function render() {
+    if (!context) return
+
+    const { dpr, width, height } = resize(container)
+    context.setTransform(dpr, 0, 0, dpr, 0, 0)
+    context.clearRect(0, 0, width, height)
+    context.fillStyle = color
+
+    const occupiedPixels = new Set<string>()
+    for (const point of points) {
+      const screenPoint = map.lngLatToContainer([point.longitude, point.latitude])
+      const x = Math.floor(screenPoint.x)
+      const y = Math.floor(screenPoint.y)
+
+      if (x < 0 || y < 0 || x >= width || y >= height) continue
+
+      const pixelKey = `${x}:${y}`
+      if (occupiedPixels.has(pixelKey)) continue
+
+      occupiedPixels.add(pixelKey)
+      context.fillRect(x, y, pixelSize, pixelSize)
+    }
+  }
+
+  const customLayer = new AMapRuntime.CustomLayer(canvas, {
+    map,
+    zIndex: 20,
+    alwaysRender: false,
+    render,
+  })
+
   return {
-    update(points: FootprintPoint[], map: AMap.Map, target: HTMLElement = container) {
-      if (!context) return
-
-      const { dpr, width, height } = resize(target)
-      context.setTransform(dpr, 0, 0, dpr, 0, 0)
-      context.clearRect(0, 0, width, height)
-      context.fillStyle = color
-
-      const occupiedPixels = new Set<string>()
-      for (const point of points) {
-        const screenPoint = map.lngLatToContainer([point.longitude, point.latitude])
-        const x = Math.floor(screenPoint.x)
-        const y = Math.floor(screenPoint.y)
-
-        if (x < 0 || y < 0 || x >= width || y >= height) continue
-
-        const pixelKey = `${x}:${y}`
-        if (occupiedPixels.has(pixelKey)) continue
-
-        occupiedPixels.add(pixelKey)
-        context.fillRect(x, y, pixelSize, pixelSize)
-      }
+    update(nextPoints: FootprintPoint[]) {
+      points = nextPoints
+      customLayer.render()
     },
     destroy() {
-      canvas.remove()
+      customLayer.setMap(null)
     },
   }
 }
