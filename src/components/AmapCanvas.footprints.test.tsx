@@ -59,7 +59,7 @@ function createDeferred<T>(): Deferred<T> {
   return { promise, resolve, reject }
 }
 
-async function renderFootprintCanvas({
+async function renderFootprintMassMarks({
   containerSize = { width: 1024, height: 768 },
   destroy = vi.fn(),
   loadFootprintsPromise,
@@ -72,7 +72,7 @@ async function renderFootprintCanvas({
   const zoomEndHandlers: Array<() => void> = []
   const completeHandlers: Array<() => void> = []
   const update = vi.fn()
-  const createCanvasFootprintLayer = vi.fn(() => ({ update, destroy }))
+  const createMassFootprintLayer = vi.fn(() => ({ update, destroy }))
 
   class MockMap {
     addControl = vi.fn()
@@ -101,12 +101,14 @@ async function renderFootprintCanvas({
   vi.doMock('../layers/footprintDataSource', () => ({
     loadFootprintPoints: vi.fn(() => loadFootprintsPromise),
   }))
-  vi.doMock('../layers/canvasFootprintLayer', () => ({
-    createCanvasFootprintLayer,
+  vi.doMock('../layers/massFootprintLayer', () => ({
+    createMassFootprintLayer,
   }))
   vi.doMock('../services/amapLoader', () => ({
     loadAmap: vi.fn(async () => ({
-      CustomLayer: class CustomLayer {},
+      MassMarks: class MassMarks {},
+      Pixel: class Pixel {},
+      Size: class Size {},
       Map: MockMap,
       Scale: class Scale {},
       Geolocation: class Geolocation {},
@@ -128,10 +130,12 @@ async function renderFootprintCanvas({
     value: containerSize.height,
   })
 
-  await waitFor(() => expect(moveEndHandlers).toHaveLength(1), { timeout: 1000 })
+  await waitFor(() => expect(createMassFootprintLayer).toHaveBeenCalledTimes(1), {
+    timeout: 1000,
+  })
 
   return {
-    createCanvasFootprintLayer,
+    createMassFootprintLayer,
     completeHandlers,
     destroy,
     moveEndHandlers,
@@ -149,105 +153,83 @@ afterEach(() => {
 })
 
 describe('AmapCanvas footprint layer wiring', () => {
-  it('updates the canvas footprint layer with raw loaded points after a map settle event', async () => {
+  it('updates the native MassMarks footprint layer with raw loaded points after data loads', async () => {
     const loadFootprints = createDeferred<FootprintPoint[]>()
-    const { createCanvasFootprintLayer, moveEndHandlers, update } = await renderFootprintCanvas({
+    const { createMassFootprintLayer, moveEndHandlers, update } = await renderFootprintMassMarks({
       loadFootprintsPromise: loadFootprints.promise,
     })
 
-    vi.useFakeTimers()
     await act(async () => {
       loadFootprints.resolve(loadedPoints)
       await Promise.resolve()
     })
 
-    moveEndHandlers[0]()
-    await vi.advanceTimersByTimeAsync(159)
-
-    expect(update).not.toHaveBeenCalled()
-
-    await vi.advanceTimersByTimeAsync(1)
-
-    expect(createCanvasFootprintLayer).toHaveBeenCalledWith(
-      expect.objectContaining({ CustomLayer: expect.any(Function) }),
+    expect(createMassFootprintLayer).toHaveBeenCalledWith(
+      expect.objectContaining({ MassMarks: expect.any(Function) }),
       expect.any(Object),
-      expect.any(HTMLElement),
     )
     expect(update).toHaveBeenCalledWith(loadedPoints)
-  })
 
-  it('updates the canvas footprint layer after the AMap complete event settles', async () => {
-    const loadFootprints = createDeferred<FootprintPoint[]>()
-    const { completeHandlers, update } = await renderFootprintCanvas({
-      loadFootprintsPromise: loadFootprints.promise,
-    })
-
-    vi.useFakeTimers()
-    await act(async () => {
-      loadFootprints.resolve(loadedPoints)
-      await Promise.resolve()
-    })
-    await vi.advanceTimersByTimeAsync(160)
     update.mockClear()
 
-    completeHandlers[0]()
-    await vi.advanceTimersByTimeAsync(159)
-
+    expect(moveEndHandlers).toHaveLength(0)
     expect(update).not.toHaveBeenCalled()
-
-    await vi.advanceTimersByTimeAsync(1)
-
-    expect(update).toHaveBeenCalledWith(loadedPoints)
   })
 
-  it('does not update for a superseded settle event', async () => {
+  it('does not reproject footprints after AMap complete because MassMarks follows map motion natively', async () => {
     const loadFootprints = createDeferred<FootprintPoint[]>()
-    const { moveEndHandlers, update } = await renderFootprintCanvas({
+    const { completeHandlers, update } = await renderFootprintMassMarks({
       loadFootprintsPromise: loadFootprints.promise,
     })
 
-    vi.useFakeTimers()
     await act(async () => {
       loadFootprints.resolve(loadedPoints)
       await Promise.resolve()
     })
+    update.mockClear()
 
-    moveEndHandlers[0]()
-    moveEndHandlers[0]()
-    await vi.advanceTimersByTimeAsync(159)
-
+    expect(completeHandlers).toHaveLength(0)
     expect(update).not.toHaveBeenCalled()
-
-    await vi.advanceTimersByTimeAsync(1)
-
-    expect(update).toHaveBeenCalledTimes(1)
-    expect(update).toHaveBeenCalledWith(loadedPoints)
   })
 
-  it('updates the canvas footprint layer after a window resize settles', async () => {
+  it('does not reproject footprints after zoomend because MassMarks follows zoom natively', async () => {
     const loadFootprints = createDeferred<FootprintPoint[]>()
-    const { update } = await renderFootprintCanvas({
+    const { zoomEndHandlers, update } = await renderFootprintMassMarks({
       loadFootprintsPromise: loadFootprints.promise,
     })
 
-    vi.useFakeTimers()
     await act(async () => {
       loadFootprints.resolve(loadedPoints)
       await Promise.resolve()
     })
-    await vi.advanceTimersByTimeAsync(160)
+    update.mockClear()
+
+    zoomEndHandlers[0]()
+
+    expect(update).not.toHaveBeenCalled()
+  })
+
+  it('does not reproject footprints after a window resize because MassMarks remains attached to the map', async () => {
+    const loadFootprints = createDeferred<FootprintPoint[]>()
+    const { update } = await renderFootprintMassMarks({
+      loadFootprintsPromise: loadFootprints.promise,
+    })
+
+    await act(async () => {
+      loadFootprints.resolve(loadedPoints)
+      await Promise.resolve()
+    })
     update.mockClear()
 
     window.dispatchEvent(new Event('resize'))
-    await vi.advanceTimersByTimeAsync(160)
 
-    expect(update).toHaveBeenCalledWith(loadedPoints)
+    expect(update).not.toHaveBeenCalled()
   })
 
-  it('destroys the canvas footprint layer on unmount', async () => {
+  it('destroys the native MassMarks footprint layer on unmount', async () => {
     const destroy = vi.fn()
     const loadFootprints = createDeferred<FootprintPoint[]>()
-    const { renderResult } = await renderFootprintCanvas({
+    const { renderResult } = await renderFootprintMassMarks({
       destroy,
       loadFootprintsPromise: loadFootprints.promise,
     })
