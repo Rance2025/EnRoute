@@ -280,7 +280,7 @@ describe('unified shell layout', () => {
     const accountingScope = screen.getByLabelText('当前账目范围')
 
     expect(screen.getByLabelText('时间范围面板')).toBeInTheDocument()
-    expect(accountingScope).toHaveTextContent('日')
+    expect(accountingScope).toHaveTextContent('月')
     expect(accountingScope).toHaveTextContent('人民币')
     expect(shell).toHaveClass('app-shell--accounting')
     expect(shell).toHaveClass('has-data-panel')
@@ -290,10 +290,7 @@ describe('unified shell layout', () => {
       'aria-valuetext',
       '流水',
     )
-    expect(screen.getByRole('slider', { name: '交易类型选择滑块' })).toHaveAttribute(
-      'aria-valuetext',
-      '支出',
-    )
+    expect(screen.getByLabelText('流水图谱工作区')).toBeInTheDocument()
   })
 
   it('switches the shared time panel between top-level range modes', () => {

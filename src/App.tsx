@@ -10,6 +10,7 @@ import { getAmapConfig, type AmapConfig } from './config/amap'
 import { calculateFallbackSingleWorldPaneLayout } from './config/mapPaneLayout'
 import {
   createTodaySelection,
+  selectMonth,
   type TimeRangeSelection,
 } from './time/timeRange'
 
@@ -56,6 +57,17 @@ function App({ amapConfig }: AppProps) {
   const handlePanelWidthChange = useCallback((width: number) => {
     setMapPanelWidth(width)
   }, [])
+  const handleViewChange = useCallback((nextView: AppView) => {
+    setView(nextView)
+
+    if (
+      nextView === 'accounting' &&
+      view !== 'accounting' &&
+      timeSelectionsAreEqual(selectedTimeRange, createTodaySelection())
+    ) {
+      setSelectedTimeRange({ ...selectMonth(2026, 6), anchorDate: '2026-06-19' })
+    }
+  }, [selectedTimeRange, view])
 
   useEffect(() => {
     function updateViewportSize() {
@@ -102,7 +114,7 @@ function App({ amapConfig }: AppProps) {
           className="app-nav__tabs"
           options={viewOptions}
           value={view}
-          onChange={setView}
+          onChange={handleViewChange}
         />
       </nav>
 
@@ -124,3 +136,16 @@ function App({ amapConfig }: AppProps) {
 }
 
 export default App
+
+function timeSelectionsAreEqual(
+  currentSelection: TimeRangeSelection,
+  nextSelection: TimeRangeSelection,
+) {
+  return (
+    currentSelection.mode === nextSelection.mode &&
+    currentSelection.start === nextSelection.start &&
+    currentSelection.end === nextSelection.end &&
+    currentSelection.anchorDate === nextSelection.anchorDate &&
+    currentSelection.label === nextSelection.label
+  )
+}

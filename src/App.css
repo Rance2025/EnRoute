@@ -1990,6 +1990,612 @@
   font-weight: 720;
 }
 
+.accounting-title-lockup {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.accounting-title-lockup span {
+  color: rgba(19, 34, 30, 0.48);
+  font-size: 11px;
+  font-weight: 860;
+  text-transform: uppercase;
+}
+
+.accounting-title-lockup strong {
+  overflow: hidden;
+  color: var(--accounting-ink);
+  font-size: 18px;
+  font-weight: 880;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.metric span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ledger-atlas-side,
+.accounts-side-column,
+.analytics-right-column {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  gap: 12px;
+}
+
+.ledger-atlas-side {
+  grid-template-rows: minmax(244px, 0.75fr) minmax(260px, 1fr);
+}
+
+.accounts-side-column,
+.analytics-right-column {
+  grid-template-rows: minmax(210px, 0.72fr) minmax(260px, 1fr);
+}
+
+.ledger-flow-list,
+.account-period-list,
+.import-fund-list,
+.account-movement-list,
+.analytics-bar-list,
+.tag-cross-list,
+.taxonomy-tree-panel__body {
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(18, 63, 53, 0.18) transparent;
+}
+
+.ledger-flow-list {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-height: 0;
+  padding: 0 11px 12px;
+}
+
+.ledger-flow-row {
+  display: grid;
+  grid-template-columns: 74px minmax(130px, 1fr) minmax(132px, 0.92fr) 78px 96px;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 58px;
+  padding: 10px 11px;
+  border: 1px solid rgba(19, 34, 30, 0.055);
+  border-radius: 17px;
+  color: var(--accounting-ink);
+  background: rgba(255, 255, 255, 0.5);
+  text-align: left;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.68);
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.ledger-flow-row:hover,
+.ledger-flow-row.is-selected {
+  border-color: rgba(18, 63, 53, 0.22);
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow:
+    0 10px 22px rgba(31, 48, 43, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.ledger-flow-row:hover {
+  transform: translateY(-1px);
+}
+
+.ledger-flow-row__type {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: rgba(19, 34, 30, 0.62);
+  font-size: 12px;
+  font-weight: 840;
+}
+
+.ledger-flow-row--income .ledger-flow-row__type,
+.ledger-flow-row--income b {
+  color: var(--accounting-income);
+}
+
+.ledger-flow-row--expense .ledger-flow-row__type,
+.ledger-flow-row--expense b {
+  color: var(--accounting-expense);
+}
+
+.ledger-flow-row--transfer .ledger-flow-row__type,
+.ledger-flow-row--transfer b {
+  color: var(--accounting-transfer);
+}
+
+.ledger-flow-row__main,
+.ledger-flow-row__taxonomy {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.ledger-flow-row strong,
+.ledger-flow-row em,
+.ledger-flow-row time,
+.ledger-flow-row b {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ledger-flow-row__main strong {
+  color: var(--accounting-ink);
+  font-size: 14px;
+  font-weight: 840;
+}
+
+.ledger-flow-row__taxonomy strong,
+.ledger-flow-row__main em,
+.ledger-flow-row__taxonomy em,
+.ledger-flow-row time {
+  color: rgba(19, 34, 30, 0.52);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 720;
+}
+
+.ledger-flow-row b {
+  justify-self: end;
+  font-size: 14px;
+}
+
+.transaction-inspector {
+  gap: 0;
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(18, 63, 53, 0.18) transparent;
+}
+
+.transaction-inspector__amount {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px 10px;
+  margin: 0 13px;
+  padding: 15px;
+  border-radius: 19px;
+  color: #f8fbfa;
+  background: linear-gradient(135deg, #123f35, #0d2d26);
+}
+
+.transaction-inspector__amount span,
+.transaction-inspector__amount em {
+  color: rgba(255, 255, 255, 0.66);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 760;
+}
+
+.transaction-inspector__amount strong {
+  grid-column: 1 / -1;
+  color: #fff;
+  font-size: 30px;
+  line-height: 1;
+}
+
+.transaction-inspector__title {
+  display: grid;
+  gap: 5px;
+  padding: 12px 14px 8px;
+}
+
+.transaction-inspector__title strong {
+  overflow: hidden;
+  color: var(--accounting-ink);
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.transaction-inspector__title span {
+  color: rgba(19, 34, 30, 0.52);
+  font-size: 12px;
+  font-weight: 720;
+}
+
+.transaction-mapping-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0 13px 12px;
+}
+
+.transaction-mapping-grid div {
+  min-width: 0;
+  padding: 10px;
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.transaction-mapping-grid dt,
+.transaction-mapping-grid dd {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.transaction-mapping-grid dt {
+  margin-bottom: 5px;
+  color: rgba(19, 34, 30, 0.45);
+  font-size: 11px;
+  font-weight: 760;
+}
+
+.transaction-mapping-grid dd {
+  color: rgba(19, 34, 30, 0.75);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.transaction-inspector__status {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  margin: auto 13px 13px;
+  padding: 10px 12px;
+  border-radius: 15px;
+  background: rgba(18, 63, 53, 0.065);
+}
+
+.transaction-inspector__status span,
+.transaction-inspector__status em {
+  color: rgba(19, 34, 30, 0.5);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 760;
+}
+
+.transaction-inspector__status strong {
+  color: var(--accounting-accent);
+  font-size: 12px;
+}
+
+.taxonomy-twin,
+.analytics-tree-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  min-height: 0;
+}
+
+.taxonomy-tree-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid rgba(19, 34, 30, 0.08);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.52);
+  box-shadow:
+    0 16px 36px rgba(31, 48, 43, 0.07),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+
+.taxonomy-tree-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 13px 8px;
+}
+
+.taxonomy-tree-panel__head strong {
+  color: rgba(19, 34, 30, 0.78);
+  font-size: 13px;
+}
+
+.taxonomy-tree-panel__head span {
+  color: rgba(19, 34, 30, 0.45);
+  font-size: 11px;
+  font-weight: 760;
+  white-space: nowrap;
+}
+
+.taxonomy-tree-panel__body {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-height: 0;
+  padding: 0 9px 10px;
+}
+
+.taxonomy-node {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 5px 8px;
+  min-height: 42px;
+  padding: 7px 8px 7px calc(10px + var(--taxonomy-depth, 0) * 15px);
+  overflow: hidden;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  color: var(--accounting-ink);
+  background: rgba(18, 63, 53, 0.045);
+  text-align: left;
+  cursor: pointer;
+}
+
+.taxonomy-node.is-selected {
+  border-color: rgba(18, 63, 53, 0.24);
+  background: rgba(18, 63, 53, 0.09);
+}
+
+.taxonomy-node.is-empty {
+  opacity: 0.58;
+}
+
+.taxonomy-node__rail {
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: calc(6px + var(--taxonomy-depth, 0) * 15px);
+  width: 2px;
+  border-radius: 999px;
+  background: rgba(18, 63, 53, 0.22);
+}
+
+.taxonomy-node__main {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.taxonomy-node__main strong,
+.taxonomy-node__main em,
+.taxonomy-node__amount {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.taxonomy-node__main strong {
+  color: rgba(19, 34, 30, 0.78);
+  font-size: 12px;
+}
+
+.taxonomy-node__main em,
+.taxonomy-node__amount {
+  color: rgba(19, 34, 30, 0.48);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 760;
+}
+
+.taxonomy-node__bar {
+  grid-column: 1 / -1;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(19, 34, 30, 0.08);
+}
+
+.taxonomy-node__bar i {
+  display: block;
+  width: calc(var(--taxonomy-share) * 100%);
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accounting-accent);
+}
+
+.account-period-list {
+  display: grid;
+  align-content: start;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+  min-height: 0;
+  padding: 0 12px 12px;
+}
+
+.account-period-card {
+  display: grid;
+  gap: 13px;
+  min-width: 0;
+  padding: 13px;
+  border: 1px solid rgba(19, 34, 30, 0.07);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.54);
+}
+
+.account-period-card__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.account-period-card__top span,
+.import-fund-row em {
+  color: rgba(19, 34, 30, 0.45);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 780;
+}
+
+.account-period-card__top strong,
+.import-fund-row strong,
+.account-movement-row strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--accounting-ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-period-card__amount {
+  display: grid;
+  gap: 5px;
+}
+
+.account-period-card__amount span,
+.account-period-card__grid em,
+.import-fund-row span,
+.account-movement-row time,
+.account-movement-row span {
+  color: rgba(19, 34, 30, 0.5);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 760;
+}
+
+.account-period-card__amount strong {
+  color: var(--accounting-accent);
+  font-size: 23px;
+  line-height: 1;
+}
+
+.account-period-card__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.account-period-card__grid span {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+  padding: 8px;
+  border-radius: 12px;
+  background: rgba(18, 63, 53, 0.055);
+}
+
+.account-period-card__grid strong {
+  overflow: hidden;
+  color: rgba(19, 34, 30, 0.76);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.import-fund-list,
+.account-movement-list,
+.analytics-bar-list,
+.tag-cross-list {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-height: 0;
+  padding: 0 12px 12px;
+}
+
+.import-fund-row,
+.account-movement-row,
+.analytics-bar-row,
+.tag-cross-row {
+  min-width: 0;
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.import-fund-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 11px;
+}
+
+.import-fund-row div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.account-movement-row {
+  display: grid;
+  grid-template-columns: 68px minmax(0, 1fr);
+  gap: 3px 10px;
+  padding: 10px 11px;
+}
+
+.account-movement-row span {
+  grid-column: 2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.analytics-bar-row {
+  display: grid;
+  grid-template-columns: minmax(116px, 0.72fr) minmax(130px, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  min-height: 38px;
+  padding: 9px 11px;
+}
+
+.analytics-bar-row span,
+.analytics-bar-row strong,
+.tag-cross-row span,
+.tag-cross-row strong,
+.tag-cross-row em {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.analytics-bar-row span,
+.tag-cross-row span {
+  color: rgba(19, 34, 30, 0.62);
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.analytics-bar-row div {
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(19, 34, 30, 0.08);
+}
+
+.analytics-bar-row i {
+  display: block;
+  width: calc(var(--analytics-share) * 100%);
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accounting-expense);
+}
+
+.analytics-bar-row strong,
+.tag-cross-row em {
+  color: var(--accounting-ink);
+  font-size: 12px;
+  font-style: normal;
+}
+
+.tag-cross-row {
+  display: grid;
+  grid-template-columns: minmax(100px, 0.8fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  min-height: 38px;
+  padding: 9px 11px;
+}
+
+.tag-cross-row strong {
+  color: rgba(19, 34, 30, 0.78);
+  font-size: 12px;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;
@@ -2224,6 +2830,8 @@
   }
 
   .accounting-page {
+    grid-template-rows: auto auto auto;
+    height: 100%;
     padding: 82px 12px 18px;
     overflow: auto;
   }
@@ -2257,6 +2865,7 @@
 
   .accounting-workspace {
     grid-template-columns: minmax(0, 1fr);
+    min-height: auto;
     overflow: visible;
   }
 
@@ -2310,6 +2919,83 @@
 
   .transaction-row b {
     grid-area: amount;
+  }
+
+  .accounting-title-lockup strong {
+    font-size: 16px;
+  }
+
+  .ledger-atlas-side,
+  .accounts-side-column,
+  .analytics-right-column,
+  .taxonomy-twin,
+  .analytics-tree-grid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto;
+    min-height: auto;
+    overflow: visible;
+  }
+
+  .ledger-flow-row {
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      'main amount'
+      'taxonomy taxonomy'
+      'type time';
+    min-height: 100px;
+  }
+
+  .accounting-panel,
+  .transaction-inspector,
+  .ledger-flow-list,
+  .account-period-list,
+  .import-fund-list,
+  .account-movement-list,
+  .analytics-bar-list,
+  .tag-cross-list,
+  .taxonomy-tree-panel__body {
+    overflow: visible;
+  }
+
+  .ledger-flow-row__type {
+    grid-area: type;
+  }
+
+  .ledger-flow-row__main {
+    grid-area: main;
+  }
+
+  .ledger-flow-row__taxonomy {
+    grid-area: taxonomy;
+  }
+
+  .ledger-flow-row time {
+    grid-area: time;
+    justify-self: end;
+  }
+
+  .ledger-flow-row b {
+    grid-area: amount;
+  }
+
+  .transaction-mapping-grid,
+  .account-period-list,
+  .account-period-card__grid,
+  .analytics-bar-row,
+  .tag-cross-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .account-movement-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .account-movement-row span {
+    grid-column: auto;
+  }
+
+  .analytics-bar-row div {
+    width: 100%;
   }
 
   .editor-grid {
