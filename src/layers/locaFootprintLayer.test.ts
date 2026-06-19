@@ -63,6 +63,7 @@ describe('createLocaFootprintLayer', () => {
 
     expect(Loca.Container).toHaveBeenCalledWith({ map })
     expect(Loca.PointLayer).toHaveBeenCalledWith({
+      loca: expect.objectContaining({ add, destroy }),
       zIndex: 20,
       opacity: 0.9,
       visible: true,
@@ -87,7 +88,7 @@ describe('createLocaFootprintLayer', () => {
         features: [],
       },
     })
-    expect(add).toHaveBeenCalledWith(expect.any(Object))
+    expect(add).not.toHaveBeenCalled()
     expect(destroy).toHaveBeenCalled()
   })
 })
