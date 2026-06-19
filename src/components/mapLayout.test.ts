@@ -12,12 +12,10 @@ function cssRule(selector: string) {
 }
 
 describe('map chrome layout', () => {
-  it('anchors the wordmark to the upper-left instead of centering it', () => {
-    const rule = cssRule('.brand-header')
-
-    expect(rule).toContain('left: max(')
-    expect(rule).not.toContain('left: 50%')
-    expect(rule).not.toContain('translateX(-50%)')
+  it('does not render a second map wordmark inside the map chrome', () => {
+    expect(amapCanvasSource).not.toContain('className="brand-header"')
+    expect(cssRule('.brand-header')).toBe('')
+    expect(cssRule('.brand-header h1')).toBe('')
   })
 
   it('reserves a left data panel and keeps the map in the remaining workspace', () => {
@@ -71,9 +69,7 @@ describe('map chrome layout', () => {
     expect(rule).not.toContain('translateX(-50%)')
   })
 
-  it('keeps the floating wordmark compact', () => {
-    expect(cssRule('.brand-header h1')).toContain('font-size: clamp(15px, 1.35vw, 18px)')
-    expect(cssRule('.brand-header h1 span:last-child')).not.toContain('font-size:')
+  it('keeps map chrome text from using oversized hero typography', () => {
     expect(appCss).not.toMatch(/font-size:\s*clamp\(22px,\s*3\.6vw,\s*38px\)/)
   })
 

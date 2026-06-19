@@ -30,7 +30,7 @@ describe('App', () => {
       />,
     )
 
-    expect(screen.getByRole('banner', { name: '在途 EnRoute' })).toBeInTheDocument()
+    expect(screen.getByRole('navigation', { name: '主导航' })).toHaveTextContent('EnRoute')
     expect(screen.getByText('需要配置高德地图密钥')).toBeInTheDocument()
     expect(screen.getByText(/VITE_AMAP_KEY/)).toBeInTheDocument()
     expect(screen.getByText(/VITE_AMAP_SECURITY_CODE/)).toBeInTheDocument()
@@ -81,7 +81,8 @@ describe('App', () => {
       />,
     )
 
-    expect(screen.getByRole('banner', { name: '在途 EnRoute' })).toBeInTheDocument()
+    expect(screen.getByRole('navigation', { name: '主导航' })).toHaveTextContent('EnRoute')
+    expect(screen.getAllByText('EnRoute')).toHaveLength(1)
     expect(screen.queryByText('途')).not.toBeInTheDocument()
     expect(screen.queryByText(/地图已就绪/)).not.toBeInTheDocument()
     expect(screen.queryByText(/远山黛/)).not.toBeInTheDocument()

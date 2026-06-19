@@ -218,13 +218,6 @@ export function AmapCanvas({ config, onPanelWidthChange }: AmapCanvasProps) {
     >
       <div className="amap-surface" ref={mapNodeRef} />
 
-      <header className="brand-header" aria-label="在途 EnRoute">
-        <h1>
-          <span>在途</span>
-          <span>EnRoute</span>
-        </h1>
-      </header>
-
       {config.isConfigured ? (
         <>
           <MapControls

@@ -633,24 +633,10 @@
   cursor: grabbing;
 }
 
-.brand-header,
 .map-toolbar,
 .map-message {
   position: absolute;
   z-index: 2;
-}
-
-.brand-header {
-  top: max(18px, env(safe-area-inset-top));
-  left: max(18px, env(safe-area-inset-left));
-  padding: 8px 12px 9px;
-  border: 1px solid rgba(23, 31, 29, 0.08);
-  border-radius: 999px;
-  background: rgba(250, 252, 251, 0.72);
-  box-shadow:
-    0 12px 34px rgba(31, 46, 42, 0.1),
-    inset 0 1px 0 rgba(255, 255, 255, 0.76);
-  backdrop-filter: blur(20px) saturate(1.12);
 }
 
 .accounting-page {
@@ -1206,28 +1192,6 @@
   border: 0;
 }
 
-.brand-header h1 {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  margin: 0;
-  color: #16211f;
-  font-size: clamp(15px, 1.35vw, 18px);
-  font-weight: 760;
-  line-height: 1;
-  letter-spacing: 0;
-  white-space: nowrap;
-}
-
-.brand-header h1 span:first-child {
-  font-weight: 820;
-}
-
-.brand-header h1 span:last-child {
-  color: rgba(22, 33, 31, 0.66);
-  font-weight: 700;
-}
-
 .map-toolbar {
   right: var(--map-chrome-x);
   bottom: var(--map-chrome-y);
@@ -1337,16 +1301,6 @@
   .main-workspace {
     inset: 0;
     width: 100vw;
-  }
-
-  .brand-header {
-    top: max(12px, env(safe-area-inset-top));
-    left: max(12px, env(safe-area-inset-left));
-    max-width: calc(100vw - 28px);
-  }
-
-  .brand-header h1 {
-    font-size: 16px;
   }
 
   .map-toolbar {
