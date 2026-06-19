@@ -66,20 +66,63 @@ describe('SegmentedControl', () => {
     )
   })
 
-  it('drags the slider to the segment under the pointer', () => {
+  it('previews a middle slider position while dragging and snaps on release', () => {
     render(<DemoSegmentedControl />)
     mockControlRect()
 
+    const control = screen.getByRole('group', { name: '页面' })
     const slider = screen.getByRole('slider', { name: '页面滑块' })
 
     fireEvent.pointerDown(slider, { clientX: 150, pointerId: 1 })
-    fireEvent.pointerMove(slider, { clientX: 360, pointerId: 1 })
-    fireEvent.pointerUp(slider, { clientX: 360, pointerId: 1 })
+
+    expect(screen.getByRole('button', { name: '地图' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+
+    fireEvent.pointerMove(slider, { clientX: 300, pointerId: 1 })
+
+    expect(control.style.getPropertyValue('--segment-thumb-index')).toBe('2.5')
+    expect(screen.getByRole('button', { name: '地图' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+
+    fireEvent.pointerUp(slider, { clientX: 300, pointerId: 1 })
 
     expect(screen.getByRole('button', { name: '记账' })).toHaveAttribute(
       'aria-pressed',
       'true',
     )
+    expect(control.style.getPropertyValue('--segment-thumb-index')).toBe('')
+    expect(control).not.toHaveClass('is-dragging')
+  })
+
+  it('ends a drag when the pointer is released over a segment button', () => {
+    render(<DemoSegmentedControl />)
+    mockControlRect()
+
+    const control = screen.getByRole('group', { name: '页面' })
+    const slider = screen.getByRole('slider', { name: '页面滑块' })
+    const targetButton = screen.getByRole('button', { name: '记账' })
+    const setPointerCapture = vi.fn()
+    const releasePointerCapture = vi.fn()
+
+    Object.assign(control, {
+      setPointerCapture,
+      hasPointerCapture: vi.fn(() => true),
+      releasePointerCapture,
+    })
+
+    fireEvent.pointerDown(slider, { clientX: 150, pointerId: 1 })
+    fireEvent.pointerMove(targetButton, { clientX: 300, pointerId: 1 })
+    fireEvent.pointerUp(targetButton, { clientX: 300, pointerId: 1 })
+
+    expect(setPointerCapture).toHaveBeenCalledWith(1)
+    expect(releasePointerCapture).toHaveBeenCalledWith(1)
+    expect(targetButton).toHaveAttribute('aria-pressed', 'true')
+    expect(control.style.getPropertyValue('--segment-thumb-index')).toBe('')
+    expect(control).not.toHaveClass('is-dragging')
   })
 
   it('uses arrow keys to move across enabled segments', () => {
