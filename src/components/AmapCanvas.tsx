@@ -12,6 +12,10 @@ import {
   measureAmapWorldPixelWidthAtZoom,
 } from '../config/mapPaneLayout'
 import { calculateBoundedZoomCenter, installBoundedMapZoom, zoomByStep } from '../config/mapZoomBounds'
+import { loadFootprintPoints } from '../layers/footprintDataSource'
+import { FootprintWorkerClient } from '../layers/footprintWorkerClient'
+import { createLocaFootprintLayer } from '../layers/locaFootprintLayer'
+import type { FootprintPoint, LngLatBounds } from '../layers/footprintTypes'
 import { loadAmap, type AMapNamespace } from '../services/amapLoader'
 import { MapControls } from './MapControls'
 
@@ -30,6 +34,11 @@ export function AmapCanvas({ config, onPanelWidthChange }: AmapCanvasProps) {
   const disposeDragRef = useRef<(() => void) | null>(null)
   const disposeZoomRef = useRef<(() => void) | null>(null)
   const disposeZoomClampRef = useRef<(() => void) | null>(null)
+  const footprintLayerRef = useRef<ReturnType<typeof createLocaFootprintLayer> | null>(null)
+  const footprintWorkerRef = useRef<FootprintWorkerClient | null>(null)
+  const footprintPointsRef = useRef<FootprintPoint[]>([])
+  const footprintSettleTimerRef = useRef<number | null>(null)
+  const footprintAbortControllerRef = useRef<AbortController | null>(null)
   const [status, setStatus] = useState<MapStatus>(
     config.isConfigured ? 'loading' : 'missing-config',
   )
@@ -91,6 +100,33 @@ export function AmapCanvas({ config, onPanelWidthChange }: AmapCanvasProps) {
     [config.renderBounds, onPanelWidthChange],
   )
 
+  const scheduleFootprintUpdate = useCallback((map: AMap.Map, container: HTMLElement | null) => {
+    if (!container || !footprintLayerRef.current || !footprintWorkerRef.current) return
+
+    if (footprintSettleTimerRef.current !== null) {
+      window.clearTimeout(footprintSettleTimerRef.current)
+    }
+
+    footprintSettleTimerRef.current = window.setTimeout(() => {
+      const viewportBounds = getPaddedViewportBounds(map, container, 0.25)
+
+      footprintWorkerRef.current
+        ?.aggregate({
+          points: footprintPointsRef.current,
+          zoom: map.getZoom(),
+          cellSizePx: 8,
+          viewportBounds,
+        })
+        .then((points) => {
+          footprintLayerRef.current?.update(points)
+        })
+        .catch((error: unknown) => {
+          if (error instanceof Error && error.message.includes('superseded')) return
+          if (import.meta.env.DEV) console.warn(error)
+        })
+    }, 160)
+  }, [])
+
   useEffect(() => {
     if (!config.isConfigured || !mapNodeRef.current) {
       setStatus('missing-config')
@@ -99,6 +135,7 @@ export function AmapCanvas({ config, onPanelWidthChange }: AmapCanvasProps) {
     }
 
     let disposed = false
+    let removeFootprintSettleHandlers: (() => void) | null = null
 
     setStatus('loading')
     setErrorMessage('')
@@ -135,6 +172,14 @@ export function AmapCanvas({ config, onPanelWidthChange }: AmapCanvasProps) {
         map.on('zoomend', clampLatitudeBounds)
         disposeZoomClampRef.current = () => map.off('zoomend', clampLatitudeBounds)
 
+        const updateFootprintsAfterSettle = () => scheduleFootprintUpdate(map, mapNodeRef.current)
+        map.on('moveend', updateFootprintsAfterSettle)
+        map.on('zoomend', updateFootprintsAfterSettle)
+        removeFootprintSettleHandlers = () => {
+          map.off('moveend', updateFootprintsAfterSettle)
+          map.off('zoomend', updateFootprintsAfterSettle)
+        }
+
         AMap.plugin('AMap.Geolocation', () => {
           if (disposed) return
           geolocationRef.current = new AMap.Geolocation({
@@ -154,6 +199,24 @@ export function AmapCanvas({ config, onPanelWidthChange }: AmapCanvasProps) {
           window.__ENROUTE_MAP__ = map
         }
         setStatus('ready')
+
+        if (window.Loca) {
+          footprintLayerRef.current = createLocaFootprintLayer(window.Loca, map)
+          footprintWorkerRef.current = new FootprintWorkerClient()
+          footprintAbortControllerRef.current = new AbortController()
+          loadFootprintPoints(
+            import.meta.env.VITE_FOOTPRINT_DATA_URL,
+            footprintAbortControllerRef.current.signal,
+          )
+            .then((points) => {
+              if (disposed) return
+              footprintPointsRef.current = points
+              scheduleFootprintUpdate(map, mapNodeRef.current)
+            })
+            .catch((error: unknown) => {
+              if (!disposed && import.meta.env.DEV) console.warn(error)
+            })
+        }
       })
       .catch((error: unknown) => {
         if (disposed) return
@@ -164,6 +227,18 @@ export function AmapCanvas({ config, onPanelWidthChange }: AmapCanvasProps) {
     return () => {
       disposed = true
       geolocationRef.current = null
+      removeFootprintSettleHandlers?.()
+      if (footprintSettleTimerRef.current !== null) {
+        window.clearTimeout(footprintSettleTimerRef.current)
+        footprintSettleTimerRef.current = null
+      }
+      footprintAbortControllerRef.current?.abort()
+      footprintAbortControllerRef.current = null
+      footprintWorkerRef.current?.dispose()
+      footprintWorkerRef.current = null
+      footprintLayerRef.current?.destroy()
+      footprintLayerRef.current = null
+      footprintPointsRef.current = []
       if (import.meta.env.DEV) {
         delete window.__ENROUTE_MAP__
       }
@@ -177,7 +252,14 @@ export function AmapCanvas({ config, onPanelWidthChange }: AmapCanvasProps) {
       mapRef.current = null
       amapRef.current = null
     }
-  }, [clampViewAfterZoom, config, mapTheme.style, onPanelWidthChange, updatePaneLayout])
+  }, [
+    clampViewAfterZoom,
+    config,
+    mapTheme.style,
+    onPanelWidthChange,
+    scheduleFootprintUpdate,
+    updatePaneLayout,
+  ])
 
   useEffect(() => {
     function updateLayoutAfterResize() {
@@ -246,4 +328,29 @@ export function AmapCanvas({ config, onPanelWidthChange }: AmapCanvasProps) {
 
 function toAmapBounds(AMap: AMapNamespace, bounds: MapBounds) {
   return new AMap.Bounds(bounds.southWest, bounds.northEast)
+}
+
+function getPaddedViewportBounds(
+  map: AMap.Map,
+  container: HTMLElement,
+  paddingRatio: number,
+): LngLatBounds {
+  const paddingX = container.clientWidth * paddingRatio
+  const paddingY = container.clientHeight * paddingRatio
+  const corners = [
+    map.containerToLngLat({ x: -paddingX, y: -paddingY }),
+    map.containerToLngLat({
+      x: container.clientWidth + paddingX,
+      y: container.clientHeight + paddingY,
+    }),
+  ]
+  const lngs = corners.map((corner) => corner.getLng())
+  const lats = corners.map((corner) => corner.getLat())
+
+  return {
+    west: Math.min(...lngs),
+    south: Math.min(...lats),
+    east: Math.max(...lngs),
+    north: Math.max(...lats),
+  }
 }
