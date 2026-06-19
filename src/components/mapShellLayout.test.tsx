@@ -191,6 +191,8 @@ describe('unified shell layout', () => {
 
   it('moves day week month and year ranges through the same directional navigator', () => {
     render(<App amapConfig={configuredAmap} />)
+    const getActiveGridMotion = () =>
+      document.querySelector('.time-calendar-grid-motion, .time-picker-grid-motion')
 
     expect(screen.getByLabelText('时间范围内容')).not.toHaveClass(
       'time-panel-content__stage--previous',
@@ -203,13 +205,17 @@ describe('unified shell layout', () => {
 
     let stage = screen.getByLabelText('时间范围内容')
     expect(screen.getByRole('heading', { name: '6月12日' })).toBeInTheDocument()
-    expect(stage).toHaveClass('time-panel-content__stage--previous')
+    expect(stage).not.toHaveClass('time-panel-content__stage--previous')
+    expect(stage).not.toHaveClass('time-panel-content__stage--next')
+    expect(getActiveGridMotion()).toHaveClass('time-range-grid-motion--previous')
 
     fireEvent.click(screen.getByRole('button', { name: '下一段时间' }))
 
     stage = screen.getByLabelText('时间范围内容')
     expect(screen.getByRole('heading', { name: '今天' })).toBeInTheDocument()
-    expect(stage).toHaveClass('time-panel-content__stage--next')
+    expect(stage).not.toHaveClass('time-panel-content__stage--previous')
+    expect(stage).not.toHaveClass('time-panel-content__stage--next')
+    expect(getActiveGridMotion()).toHaveClass('time-range-grid-motion--next')
 
     fireEvent.click(screen.getByRole('button', { name: '周' }))
     fireEvent.click(screen.getByRole('button', { name: '下一页' }))
@@ -217,7 +223,9 @@ describe('unified shell layout', () => {
     stage = screen.getByLabelText('时间范围内容')
     expect(screen.getByRole('heading', { name: '第29周' })).toBeInTheDocument()
     expect(screen.getByText('7月13日 - 7月19日 · 按周聚合')).toBeInTheDocument()
-    expect(stage).toHaveClass('time-panel-content__stage--next')
+    expect(stage).not.toHaveClass('time-panel-content__stage--previous')
+    expect(stage).not.toHaveClass('time-panel-content__stage--next')
+    expect(getActiveGridMotion()).toHaveClass('time-range-grid-motion--next')
 
     fireEvent.click(screen.getByRole('button', { name: '月' }))
     fireEvent.click(screen.getByRole('button', { name: '上一页' }))
@@ -225,14 +233,18 @@ describe('unified shell layout', () => {
     stage = screen.getByLabelText('时间范围内容')
     expect(screen.getByRole('heading', { name: '7月' })).toBeInTheDocument()
     expect(screen.getByText('2025年7月 · 按月聚合')).toBeInTheDocument()
-    expect(stage).toHaveClass('time-panel-content__stage--previous')
+    expect(stage).not.toHaveClass('time-panel-content__stage--previous')
+    expect(stage).not.toHaveClass('time-panel-content__stage--next')
+    expect(getActiveGridMotion()).toHaveClass('time-range-grid-motion--previous')
 
     fireEvent.click(screen.getByRole('button', { name: '年' }))
     fireEvent.click(screen.getByRole('button', { name: '下一页' }))
 
     stage = screen.getByLabelText('时间范围内容')
     expect(screen.getByRole('heading', { name: '2035年' })).toBeInTheDocument()
-    expect(stage).toHaveClass('time-panel-content__stage--next')
+    expect(stage).not.toHaveClass('time-panel-content__stage--previous')
+    expect(stage).not.toHaveClass('time-panel-content__stage--next')
+    expect(getActiveGridMotion()).toHaveClass('time-range-grid-motion--next')
 
     fireEvent.click(screen.getByRole('button', { name: '全部' }))
 

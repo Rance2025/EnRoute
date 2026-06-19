@@ -202,16 +202,29 @@ describe('map chrome layout', () => {
     expect(pickerHoverRule).toContain('transform: translateY(-0.5px)')
   })
 
-  it('animates period navigation content with directional entry classes', () => {
+  it('keeps the calendar shell fixed while animating only inner grid content', () => {
     const stageRule = cssRule('.time-panel-content__stage')
-    const previousRule = cssRule('.time-panel-content__stage--previous')
-    const nextRule = cssRule('.time-panel-content__stage--next')
+    const dayWindowRule = cssRule('.time-calendar-grid-window')
+    const dayMotionRule = cssRule('.time-calendar-grid-motion')
+    const pickerWindowRule = cssRule('.time-picker-grid-window')
+    const pickerMotionRule = cssRule('.time-picker-grid-motion')
+    const previousRule = cssRule('.time-range-grid-motion--previous')
+    const nextRule = cssRule('.time-range-grid-motion--next')
 
-    expect(stageRule).toContain('animation:')
-    expect(stageRule).toContain('timeRangeStageIn')
+    expect(stageRule).not.toContain('animation:')
+    expect(stageRule).not.toContain('transform')
+    expect(dayWindowRule).toContain('overflow: hidden')
+    expect(dayMotionRule).toContain('width: 100%')
+    expect(pickerWindowRule).toContain('overflow: hidden')
+    expect(pickerMotionRule).toContain('width: 100%')
     expect(previousRule).toContain('--time-range-enter-x: -')
+    expect(previousRule).toContain('animation:')
+    expect(previousRule).toContain('timeRangeGridIn')
     expect(nextRule).toContain('--time-range-enter-x: ')
-    expect(appCss).toContain('@keyframes timeRangeStageIn')
+    expect(nextRule).toContain('animation:')
+    expect(nextRule).toContain('timeRangeGridIn')
+    expect(appCss).toContain('@keyframes timeRangeGridIn')
+    expect(appCss).not.toContain('@keyframes timeRangeStageIn')
   })
 
   it('lets segmented sliders drag from the switch surface with drag cursors', () => {

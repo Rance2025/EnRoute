@@ -80,6 +80,11 @@ type TimeContextPanelProps = {
 
 type TimeNavigationDirection = 'previous' | 'next'
 
+type TimeNavigationState = {
+  direction: TimeNavigationDirection | null
+  sequence: number
+}
+
 export function TimeContextPanel({
   view,
   selection,
@@ -87,10 +92,10 @@ export function TimeContextPanel({
   onCalendarModeChange,
   onSelectionChange,
 }: TimeContextPanelProps) {
-  const [navigationState, setNavigationState] = useState<{
-    direction: TimeNavigationDirection | null
-    sequence: number
-  }>({ direction: null, sequence: 0 })
+  const [navigationState, setNavigationState] = useState<TimeNavigationState>({
+    direction: null,
+    sequence: 0,
+  })
   const heading = getTimeRangeDisplay(selection)
   const resetLabel = getCurrentRangeActionLabel(selection.mode)
 
@@ -126,15 +131,6 @@ export function TimeContextPanel({
     if (range === 'custom') handleSelectionChange(selectPresetRange('recent30'))
   }
 
-  const stageClassName = [
-    'time-panel-content__stage',
-    navigationState.direction
-      ? `time-panel-content__stage--${navigationState.direction}`
-      : null,
-  ]
-    .filter(Boolean)
-    .join(' ')
-
   return (
     <aside className="time-context-panel" aria-label="时间范围面板">
       <div className="time-context-panel__scroll">
@@ -166,13 +162,13 @@ export function TimeContextPanel({
 
         <div className="time-panel-content">
           <div
-            key={`${navigationState.sequence}-${selection.mode}-${selection.start}-${selection.end}`}
-            className={stageClassName}
+            className="time-panel-content__stage"
             aria-label="时间范围内容"
           >
             {renderModeContent(
               selection,
               calendarMode,
+              navigationState,
               onCalendarModeChange,
               handleSelectionChange,
               handlePeriodNavigate,
@@ -210,6 +206,7 @@ function createSelectionFromPickerOption(
 function renderModeContent(
   selection: TimeRangeSelection,
   calendarMode: CalendarDisplayMode,
+  navigationState: TimeNavigationState,
   onCalendarModeChange: (mode: CalendarDisplayMode) => void,
   onSelectionChange: (selection: TimeRangeSelection) => void,
   onPeriodNavigate: (
@@ -222,6 +219,7 @@ function renderModeContent(
       <DayCalendarSection
         selection={selection}
         calendarMode={calendarMode}
+        navigationState={navigationState}
         onCalendarModeChange={onCalendarModeChange}
         onSelectionChange={onSelectionChange}
         onPeriodNavigate={onPeriodNavigate}
@@ -239,6 +237,7 @@ function renderModeContent(
     return (
       <TimePickerPage
         page={page}
+        navigationState={navigationState}
         onMove={(direction) =>
           onPeriodNavigate(
             direction === -1 ? 'previous' : 'next',
@@ -336,12 +335,14 @@ function renderModeContent(
 function DayCalendarSection({
   selection,
   calendarMode,
+  navigationState,
   onCalendarModeChange,
   onSelectionChange,
   onPeriodNavigate,
 }: {
   selection: TimeRangeSelection
   calendarMode: CalendarDisplayMode
+  navigationState: TimeNavigationState
   onCalendarModeChange: (mode: CalendarDisplayMode) => void
   onSelectionChange: (selection: TimeRangeSelection) => void
   onPeriodNavigate: (
@@ -390,6 +391,7 @@ function DayCalendarSection({
       </div>
       <AnimatedDayCalendar
         calendarMode={calendarMode}
+        navigationState={navigationState}
         selection={selection}
         onSelectionChange={onSelectionChange}
       />
@@ -399,10 +401,12 @@ function DayCalendarSection({
 
 function AnimatedDayCalendar({
   calendarMode,
+  navigationState,
   selection,
   onSelectionChange,
 }: {
   calendarMode: CalendarDisplayMode
+  navigationState: TimeNavigationState
   selection: TimeRangeSelection
   onSelectionChange: (selection: TimeRangeSelection) => void
 }) {
@@ -429,22 +433,34 @@ function AnimatedDayCalendar({
         ))}
       </div>
       <div className="time-calendar-grid-window">
-        <div className="time-calendar-grid" aria-label="日历日期">
-          {days.map((day) => (
-            <button
-              type="button"
-              key={day.date}
-              className={[
-                selection.start === day.date ? 'is-active' : null,
-                day.inCurrentMonth ? null : 'is-outside-month',
-              ]
-                .filter(Boolean)
-                .join(' ')}
-              onClick={() => onSelectionChange(selectDay(day.date))}
-            >
-              {day.day}
-            </button>
-          ))}
+        <div
+          key={navigationState.sequence}
+          className={[
+            'time-calendar-grid-motion',
+            navigationState.direction
+              ? `time-range-grid-motion--${navigationState.direction}`
+              : null,
+          ]
+            .filter(Boolean)
+            .join(' ')}
+        >
+          <div className="time-calendar-grid" aria-label="日历日期">
+            {days.map((day) => (
+              <button
+                type="button"
+                key={day.date}
+                className={[
+                  selection.start === day.date ? 'is-active' : null,
+                  day.inCurrentMonth ? null : 'is-outside-month',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+                onClick={() => onSelectionChange(selectDay(day.date))}
+              >
+                {day.day}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
     </div>
@@ -453,10 +469,12 @@ function AnimatedDayCalendar({
 
 function TimePickerPage({
   page,
+  navigationState,
   onMove,
   onSelect,
 }: {
   page: PickerPage
+  navigationState: TimeNavigationState
   onMove: (direction: -1 | 1) => void
   onSelect: (option: PickerPageOption) => void
 }) {
@@ -492,7 +510,21 @@ function TimePickerPage({
           ›
         </button>
       </div>
-      <div className={gridClassName}>{optionButtons}</div>
+      <div className="time-picker-grid-window">
+        <div
+          key={navigationState.sequence}
+          className={[
+            'time-picker-grid-motion',
+            navigationState.direction
+              ? `time-range-grid-motion--${navigationState.direction}`
+              : null,
+          ]
+            .filter(Boolean)
+            .join(' ')}
+        >
+          <div className={gridClassName}>{optionButtons}</div>
+        </div>
+      </div>
     </section>
   )
 }
