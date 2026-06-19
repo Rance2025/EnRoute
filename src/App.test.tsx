@@ -129,7 +129,9 @@ describe('App', () => {
       'aria-pressed',
       'true',
     )
-    expect(screen.getByRole('heading', { name: '记账' })).toBeInTheDocument()
+    expect(screen.getByLabelText('记账工作区')).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: '记账' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Money ledger')).not.toBeInTheDocument()
     expect(screen.getByRole('main')).toHaveClass('app-shell--accounting')
     expect(document.body).toHaveClass('is-accounting-view')
     expect(document.body).not.toHaveClass('is-map-view')
@@ -164,10 +166,14 @@ describe('App', () => {
     const ledgerWorkspace = screen.getByLabelText('交易流水工作区')
 
     expect(ledgerWorkspace).toBeInTheDocument()
+    expect(within(ledgerWorkspace).getByLabelText('快速记录与时间规则')).toBeInTheDocument()
+    expect(within(ledgerWorkspace).queryByLabelText('流水侧栏')).not.toBeInTheDocument()
     expect(within(ledgerWorkspace).getByRole('heading', { name: '快速记录' })).toBeInTheDocument()
     expect(within(ledgerWorkspace).getAllByText('秒思 5月实习').length).toBeGreaterThan(0)
     expect(within(ledgerWorkspace).getAllByText('鲜旺发牛肉火锅').length).toBeGreaterThan(0)
     expect(within(ledgerWorkspace).getAllByText('餐饮 / 晚餐').length).toBeGreaterThan(0)
+    expect(within(ledgerWorkspace).getByLabelText('流水洞察')).toBeInTheDocument()
+    expect(within(ledgerWorkspace).getByText('账户影响')).toBeInTheDocument()
     expect(within(ledgerWorkspace).getByLabelText('交易类型')).toBeInTheDocument()
     expect(within(ledgerWorkspace).getByLabelText('金额')).toBeInTheDocument()
     expect(within(ledgerWorkspace).getByLabelText('发生时间')).toBeInTheDocument()
@@ -233,14 +239,19 @@ describe('App', () => {
     const reportWorkspace = screen.getByLabelText('统计报告工作区')
 
     expect(within(reportWorkspace).getByText('统计报告')).toBeInTheDocument()
-    expect(within(reportWorkspace).getByText('分类与标签管理')).toBeInTheDocument()
-    expect(within(reportWorkspace).getByRole('button', { name: '新建分类' })).toBeInTheDocument()
-    expect(within(reportWorkspace).getByRole('button', { name: '编辑标签' })).toBeInTheDocument()
-    expect(within(reportWorkspace).getByText('收入分类')).toBeInTheDocument()
-    expect(within(reportWorkspace).getAllByText('支出分类').length).toBeGreaterThan(1)
-    expect(within(reportWorkspace).getByText('转账分类')).toBeInTheDocument()
-    expect(within(reportWorkspace).getByText('全局标签')).toBeInTheDocument()
-    expect(within(reportWorkspace).getAllByText('旅行 / 青岛之行').length).toBeGreaterThan(0)
+    expect(within(reportWorkspace).queryByText('分类与标签管理')).not.toBeInTheDocument()
+
+    const categoryPanel = within(reportWorkspace).getByLabelText('分类管理')
+    const tagPanel = within(reportWorkspace).getByLabelText('标签管理')
+
+    expect(within(categoryPanel).getByRole('button', { name: '新建分类' })).toBeInTheDocument()
+    expect(within(categoryPanel).getByText('收入分类')).toBeInTheDocument()
+    expect(within(categoryPanel).getByText('支出分类')).toBeInTheDocument()
+    expect(within(categoryPanel).getByText('转账分类')).toBeInTheDocument()
+    expect(within(categoryPanel).getByText('分类树规则')).toBeInTheDocument()
+    expect(within(tagPanel).getByRole('button', { name: '编辑标签' })).toBeInTheDocument()
+    expect(within(tagPanel).getByText('全局标签')).toBeInTheDocument()
+    expect(within(tagPanel).getAllByText('旅行 / 青岛之行').length).toBeGreaterThan(0)
   })
 
   it('switches the whole accounting workspace between account, ledger, and report modes', async () => {

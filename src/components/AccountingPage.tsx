@@ -119,26 +119,23 @@ export function AccountingPage({ timeRange }: AccountingPageProps) {
   }
 
   return (
-    <section className="accounting-page" aria-labelledby="accounting-title">
-      <header className="accounting-heading">
-        <div>
-          <p>Money ledger</p>
-          <h1 id="accounting-title">记账</h1>
+    <section className="accounting-page" aria-label="记账页面">
+      <header className="accounting-topbar">
+        <div className="accounting-scope-chip" aria-label="当前账目范围">
+          <span>{timeRangeLabels[timeRange]}</span>
+          <strong>人民币</strong>
         </div>
-        <div className="accounting-heading__actions">
-          <span>{timeRangeLabels[timeRange]} · 人民币</span>
-          <div className="accounting-mode-tabs" role="group" aria-label="记账工作区">
-            {accountingModes.map((item) => (
-              <button
-                type="button"
-                key={item.key}
-                aria-pressed={mode === item.key}
-                onClick={() => setMode(item.key)}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
+        <div className="accounting-mode-tabs" role="group" aria-label="记账工作区">
+          {accountingModes.map((item) => (
+            <button
+              type="button"
+              key={item.key}
+              aria-pressed={mode === item.key}
+              onClick={() => setMode(item.key)}
+            >
+              {item.label}
+            </button>
+          ))}
         </div>
       </header>
 
@@ -206,32 +203,46 @@ function LedgerWorkspace({
             <TransactionRow key={transaction.id} transaction={transaction} />
           ))}
         </div>
-      </section>
-
-      <aside className="ledger-side-rail" aria-label="流水侧栏">
-        <section className="accounting-panel quick-record-panel" aria-labelledby="quick-record-title">
-          <WorkspacePanelHead icon={CircleDollarSign} title="快速记录" detail="MVP 表单" />
-          <h2 id="quick-record-title" className="sr-only">
-            快速记录
-          </h2>
-          <TransactionEditor
-            draft={draft}
-            categoriesForType={categoriesForType}
-            selectedCategoryBelongsToType={selectedCategoryBelongsToType}
-            updateDraft={updateDraft}
-            toggleTag={toggleTag}
-          />
-        </section>
-
-        <section className="accounting-panel ledger-context-panel">
-          <WorkspacePanelHead icon={CalendarClock} title="发生时间" detail="默认等于记录时间" />
-          <div className="ledger-context-list">
-            <ContextRow label="默认" value="用户不选择时使用创建时间" />
-            <ContextRow label="外显" value="所有流水优先展示发生时间" />
-            <ContextRow label="导入" value="外部数据映射到发生时间" />
+        <section className="ledger-insight" aria-label="流水洞察">
+          <div className="ledger-insight__head">
+            <span>流水洞察</span>
+            <strong>按当前时间范围</strong>
+          </div>
+          <div className="ledger-insight__grid">
+            <LedgerInsightCard title="账户影响" value="微信 - 日常" detail="5 笔流水 · 净流入 ¥4790.23" />
+            <LedgerInsightCard title="主要分类" value="餐饮 / 晚餐" detail="支出样本中占比最高" />
+            <LedgerInsightCard title="标签线索" value="旅行 / 青岛之行" detail="可跨分类追踪同一段经历" />
           </div>
         </section>
-      </aside>
+      </section>
+
+      <section
+        className="accounting-panel quick-record-panel ledger-record-panel"
+        aria-label="快速记录与时间规则"
+      >
+        <WorkspacePanelHead icon={CircleDollarSign} title="快速记录" detail="MVP 表单" />
+        <h2 id="quick-record-title" className="sr-only">
+          快速记录
+        </h2>
+        <TransactionEditor
+          draft={draft}
+          categoriesForType={categoriesForType}
+          selectedCategoryBelongsToType={selectedCategoryBelongsToType}
+          updateDraft={updateDraft}
+          toggleTag={toggleTag}
+        />
+        <section className="ledger-time-note" aria-label="发生时间规则">
+          <div className="ledger-time-note__head">
+            <CalendarClock size={15} strokeWidth={1.9} />
+            <span>发生 / 记录时间</span>
+          </div>
+          <div className="ledger-time-note__grid">
+            <TimeRule label="默认" value="未选择时等于记录时间" />
+            <TimeRule label="外显" value="流水优先显示发生时间" />
+            <TimeRule label="导入" value="外部时间映射到发生时间" />
+          </div>
+        </section>
+      </section>
     </div>
   )
 }
@@ -342,27 +353,43 @@ function ReportWorkspace({
         </section>
       </section>
 
-      <section className="accounting-panel taxonomy-management-panel">
-        <div className="taxonomy-management-head">
-          <PanelTitle icon={Tags} title="分类与标签管理" />
-          <div>
+      <div className="report-management-column">
+        <section className="accounting-panel category-management-panel" aria-label="分类管理">
+          <div className="taxonomy-management-head">
+            <PanelTitle icon={ReceiptText} title="分类管理" />
             <button type="button">
               <Plus size={14} strokeWidth={2.2} />
               新建分类
             </button>
+          </div>
+          <div className="taxonomy-scroll taxonomy-scroll--category">
+            <TreeGroup title="收入分类" items={demoCategories.filter((item) => item.type === 'income')} />
+            <TreeGroup title="支出分类" items={demoCategories.filter((item) => item.type === 'expense')} />
+            <TreeGroup title="转账分类" items={demoCategories.filter((item) => item.type === 'transfer')} />
+          </div>
+          <section className="category-rules" aria-label="分类树规则">
+            <strong>分类树规则</strong>
+            <div>
+              <CategoryRule label="三棵树" value="收入、支出、转账分别维护" />
+              <CategoryRule label="单分类" value="一笔交易只选择一个分类" />
+              <CategoryRule label="其他" value="未细分时落入对应类型的其他" />
+            </div>
+          </section>
+        </section>
+
+        <section className="accounting-panel tag-management-panel" aria-label="标签管理">
+          <div className="taxonomy-management-head taxonomy-management-head--compact">
+            <PanelTitle icon={Tags} title="标签管理" />
             <button type="button">
               <Pencil size={14} strokeWidth={2.1} />
               编辑标签
             </button>
           </div>
-        </div>
-        <div className="taxonomy-scroll">
-          <TreeGroup title="收入分类" items={demoCategories.filter((item) => item.type === 'income')} />
-          <TreeGroup title="支出分类" items={demoCategories.filter((item) => item.type === 'expense')} />
-          <TreeGroup title="转账分类" items={demoCategories.filter((item) => item.type === 'transfer')} />
-          <TreeGroup title="全局标签" items={demoTags} />
-        </div>
-      </section>
+          <div className="taxonomy-scroll taxonomy-scroll--tag">
+            <TreeGroup title="全局标签" items={demoTags} />
+          </div>
+        </section>
+      </div>
     </div>
   )
 }
@@ -567,11 +594,38 @@ function MiniStat({ label, value }: { label: string; value: string }) {
   )
 }
 
-function ContextRow({ label, value }: { label: string; value: string }) {
+function LedgerInsightCard({
+  title,
+  value,
+  detail,
+}: {
+  title: string
+  value: string
+  detail: string
+}) {
   return (
-    <div className="context-row">
-      <span>{label}</span>
+    <article className="ledger-insight-card">
+      <span>{title}</span>
       <strong>{value}</strong>
+      <em>{detail}</em>
+    </article>
+  )
+}
+
+function CategoryRule({ label, value }: { label: string; value: string }) {
+  return (
+    <article className="category-rule">
+      <span>{label}</span>
+      <em>{value}</em>
+    </article>
+  )
+}
+
+function TimeRule({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="time-rule">
+      <strong>{label}</strong>
+      <span>{value}</span>
     </div>
   )
 }
