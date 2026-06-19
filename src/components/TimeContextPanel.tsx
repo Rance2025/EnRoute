@@ -1,3 +1,5 @@
+import type { CSSProperties } from 'react'
+
 import type { AppView } from '../App'
 import { SegmentedControl, type SegmentedOption } from './SegmentedControl'
 import {
@@ -259,6 +261,38 @@ function TimePickerPage({
   onMove: (direction: -1 | 1) => void
   onSelect: (option: PickerPageOption) => void
 }) {
+  const isCalendarGrid = page.mode === 'day' || page.mode === 'week'
+  const gridClassName = [
+    'time-picker-grid',
+    page.gridClassName,
+    isCalendarGrid ? 'time-picker-grid--calendar' : null,
+  ]
+    .filter(Boolean)
+    .join(' ')
+  const calendarFrameStyle = isCalendarGrid
+    ? ({
+        '--time-picker-visible-rows': page.visibleRows,
+        '--time-picker-active-week-index': page.activeWeekIndex,
+        '--time-picker-grid-offset': page.mode === 'week' ? page.activeWeekIndex * -1 : 0,
+      } as CSSProperties)
+    : undefined
+  const optionButtons = page.options.map((option) => (
+    <button
+      type="button"
+      key={option.key}
+      className={[
+        option.active ? 'is-active' : null,
+        option.outsidePage ? 'is-outside-page' : null,
+      ]
+        .filter(Boolean)
+        .join(' ')}
+      onClick={() => onSelect(option)}
+    >
+      <span>{option.label}</span>
+      {option.detail ? <small>{option.detail}</small> : null}
+    </button>
+  ))
+
   return (
     <section className="time-selector-shell" aria-label="时间选择页">
       <div className="time-mode-section-head">
@@ -273,30 +307,20 @@ function TimePickerPage({
           ›
         </button>
       </div>
-      <div className={['time-picker-grid', page.gridClassName].join(' ')}>
-        {page.mode === 'day' &&
-          weekdayLabels.map((label) => (
-            <span key={label} className="time-calendar-weekday">
-              {label}
-            </span>
-          ))}
-        {page.options.map((option) => (
-          <button
-            type="button"
-            key={option.key}
-            className={[
-              option.active ? 'is-active' : null,
-              option.outsidePage ? 'is-outside-page' : null,
-            ]
-              .filter(Boolean)
-              .join(' ')}
-            onClick={() => onSelect(option)}
-          >
-            <span>{option.label}</span>
-            {option.detail ? <small>{option.detail}</small> : null}
-          </button>
-        ))}
-      </div>
+      {isCalendarGrid ? (
+        <div className="time-picker-calendar-frame" style={calendarFrameStyle}>
+          <div className="time-picker-calendar-weekdays">
+            {weekdayLabels.map((label) => (
+              <span key={label} className="time-calendar-weekday">
+                {label}
+              </span>
+            ))}
+          </div>
+          <div className={gridClassName}>{optionButtons}</div>
+        </div>
+      ) : (
+        <div className={gridClassName}>{optionButtons}</div>
+      )}
     </section>
   )
 }

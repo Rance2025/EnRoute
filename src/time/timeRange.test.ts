@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, expectTypeOf, it } from 'vitest'
 
 import {
   createCurrentSelection,
@@ -6,6 +6,7 @@ import {
   getCurrentRangeActionLabel,
   getPickerPage,
   getTimeRangeDisplay,
+  getVisibleMonthWeekIndex,
   getVisibleMonthDays,
   movePickerPage,
   selectDay,
@@ -81,6 +82,12 @@ describe('time range selection model', () => {
     expect(days.at(-1)).toMatchObject({ date: '2026-08-02', inCurrentMonth: false })
   })
 
+  it('locates the active week inside the visible month grid', () => {
+    expect(getVisibleMonthWeekIndex('2026-06-19')).toBe(2)
+    expect(getVisibleMonthWeekIndex('2026-07-14')).toBe(2)
+    expect(getVisibleMonthWeekIndex('2026-08-30')).toBe(4)
+  })
+
   it('builds unified picker pages for day, week, month, and year modes', () => {
     const dayPage = getPickerPage(selectDay('2026-07-14'))
 
@@ -88,7 +95,13 @@ describe('time range selection model', () => {
       mode: 'day',
       title: '2026年7月',
       gridClassName: 'time-picker-grid--days',
+      visibleRows: 5,
+      activeWeekIndex: 2,
     })
+    if (dayPage.mode === 'day' || dayPage.mode === 'week') {
+      expectTypeOf(dayPage.visibleRows).toEqualTypeOf<number>()
+      expectTypeOf(dayPage.activeWeekIndex).toEqualTypeOf<number>()
+    }
     expect(dayPage.options).toHaveLength(35)
     expect(dayPage.options[0]).toMatchObject({
       key: '2026-06-29',
@@ -108,20 +121,40 @@ describe('time range selection model', () => {
     expect(weekPage).toMatchObject({
       mode: 'week',
       title: '2026年7月',
-      gridClassName: 'time-picker-grid--weeks',
+      gridClassName: 'time-picker-grid--days',
+      visibleRows: 1,
+      activeWeekIndex: 3,
     })
-    expect(weekPage.options.map((option) => option.start)).toEqual([
-      '2026-06-29',
-      '2026-07-06',
-      '2026-07-13',
+    if (weekPage.mode === 'day' || weekPage.mode === 'week') {
+      expectTypeOf(weekPage.visibleRows).toEqualTypeOf<number>()
+      expectTypeOf(weekPage.activeWeekIndex).toEqualTypeOf<number>()
+    }
+    expect(weekPage.options).toHaveLength(35)
+    expect(weekPage.options.slice(21, 28).map((option) => option.start)).toEqual([
       '2026-07-20',
-      '2026-07-27',
+      '2026-07-21',
+      '2026-07-22',
+      '2026-07-23',
+      '2026-07-24',
+      '2026-07-25',
+      '2026-07-26',
     ])
     expect(weekPage.options.find((option) => option.start === '2026-07-20')).toMatchObject({
-      label: '第30周',
-      detail: '7月20日 - 7月26日',
+      label: '20',
       active: true,
     })
+    expect(weekPage.options.find((option) => option.start === '2026-07-20')).not.toHaveProperty(
+      'detail',
+    )
+    expect(weekPage.options.filter((option) => option.active).map((option) => option.start)).toEqual([
+      '2026-07-20',
+      '2026-07-21',
+      '2026-07-22',
+      '2026-07-23',
+      '2026-07-24',
+      '2026-07-25',
+      '2026-07-26',
+    ])
 
     const monthPage = getPickerPage(selectMonth(2026, 7))
 

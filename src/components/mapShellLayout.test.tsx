@@ -196,19 +196,37 @@ describe('unified shell layout', () => {
     render(<App amapConfig={configuredAmap} />)
 
     const dayPicker = screen.getByLabelText('时间选择页')
+    const dayFrame = dayPicker.querySelector('.time-picker-calendar-frame')
+    const dayGrid = dayPicker.querySelector('.time-picker-grid')
+    const dayButtons = within(dayPicker).getAllByRole('button')
 
     expect(within(dayPicker).getByText('按日选择')).toBeInTheDocument()
     expect(within(dayPicker).getByText('2026年6月')).toBeInTheDocument()
     expect(within(dayPicker).getByLabelText('上一页')).toBeInTheDocument()
     expect(within(dayPicker).getByLabelText('下一页')).toBeInTheDocument()
+    expect(dayFrame).toHaveStyle({ '--time-picker-visible-rows': '5' })
+    expect(dayGrid).toHaveClass('time-picker-grid--calendar')
     expect(within(dayPicker).getAllByRole('button')).toHaveLength(37)
 
     fireEvent.click(screen.getByRole('button', { name: '周' }))
 
     const weekPicker = screen.getByLabelText('时间选择页')
+    const weekFrame = weekPicker.querySelector('.time-picker-calendar-frame')
+    const weekGrid = weekPicker.querySelector('.time-picker-grid')
+    const weekButtons = within(weekPicker).getAllByRole('button')
+
     expect(within(weekPicker).getByText('按周聚合')).toBeInTheDocument()
     expect(within(weekPicker).getByText('2026年6月')).toBeInTheDocument()
-    expect(within(weekPicker).getByRole('button', { name: /第25周/ })).toBeInTheDocument()
+    expect(weekFrame).toBe(dayFrame)
+    expect(weekGrid).toBe(dayGrid)
+    expect(weekFrame).toHaveStyle({ '--time-picker-visible-rows': '1' })
+    expect(weekFrame).toHaveStyle({ '--time-picker-active-week-index': '2' })
+    expect(weekFrame).toHaveStyle({ '--time-picker-grid-offset': '-2' })
+    expect(weekGrid).toHaveClass('time-picker-grid--calendar')
+    expect(weekButtons).toHaveLength(37)
+    expect(weekButtons[16]).toBe(dayButtons[16])
+    expect(within(weekPicker).getByRole('button', { name: '19' })).toHaveClass('is-active')
+    expect(within(weekPicker).queryByRole('button', { name: /第25周/ })).not.toBeInTheDocument()
     expect(screen.queryByText('选择一周')).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '月' }))
@@ -224,6 +242,44 @@ describe('unified shell layout', () => {
     expect(within(yearPicker).getByText('2020 - 2029')).toBeInTheDocument()
     expect(within(yearPicker).getAllByRole('button')).toHaveLength(12)
     expect(within(yearPicker).getByRole('button', { name: '2029年' })).toBeInTheDocument()
+  })
+
+  it('keeps the same date cells mounted when the active week moves into the month grid', () => {
+    render(<App amapConfig={configuredAmap} />)
+
+    fireEvent.click(screen.getByRole('button', { name: '周' }))
+
+    const weekPicker = screen.getByLabelText('时间选择页')
+    const weekFrame = weekPicker.querySelector('.time-picker-calendar-frame')
+    const weekGrid = weekPicker.querySelector('.time-picker-grid')
+    const weekButtons = within(weekPicker).getAllByRole('button')
+
+    expect(weekFrame).toHaveStyle({ '--time-picker-visible-rows': '1' })
+    expect(weekFrame).toHaveStyle({ '--time-picker-active-week-index': '2' })
+    expect(weekFrame).toHaveStyle({ '--time-picker-grid-offset': '-2' })
+    expect(weekButtons.slice(16, 23).map((button) => button.textContent)).toEqual([
+      '15',
+      '16',
+      '17',
+      '18',
+      '19',
+      '20',
+      '21',
+    ])
+
+    fireEvent.click(screen.getByRole('button', { name: '日' }))
+
+    const dayPicker = screen.getByLabelText('时间选择页')
+    const dayFrame = dayPicker.querySelector('.time-picker-calendar-frame')
+    const dayGrid = dayPicker.querySelector('.time-picker-grid')
+    const dayButtons = within(dayPicker).getAllByRole('button')
+
+    expect(dayFrame).toBe(weekFrame)
+    expect(dayGrid).toBe(weekGrid)
+    expect(dayFrame).toHaveStyle({ '--time-picker-visible-rows': '5' })
+    expect(dayFrame).toHaveStyle({ '--time-picker-grid-offset': '0' })
+    expect(dayButtons[16]).toBe(weekButtons[16])
+    expect(dayButtons[22]).toBe(weekButtons[22])
   })
 
   it('applies concrete selections from every time panel button group', () => {
@@ -247,7 +303,7 @@ describe('unified shell layout', () => {
     expect(screen.getByRole('heading', { name: '7月21日' })).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '周' }))
-    fireEvent.click(screen.getByRole('button', { name: /第30周/ }))
+    fireEvent.click(screen.getByRole('button', { name: '20' }))
 
     expect(screen.getByRole('heading', { name: '第30周' })).toBeInTheDocument()
     expect(screen.getByText('7月20日 - 7月26日 · 按周聚合')).toBeInTheDocument()

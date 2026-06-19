@@ -102,11 +102,19 @@ describe('map chrome layout', () => {
 
   it('keeps unified time picker grids compact across day week month and year modes', () => {
     expect(cssRule('.time-picker-grid')).toContain('gap: 6px')
-    expect(cssRule('.time-picker-grid--days')).toContain(
+    expect(cssRule('.time-picker-calendar-frame')).toContain('overflow: hidden')
+    expect(cssRule('.time-picker-calendar-frame')).toContain(
+      'transition: max-height 260ms cubic-bezier(0.22, 1, 0.36, 1)',
+    )
+    expect(cssRule('.time-picker-calendar-weekdays')).toContain(
       'grid-template-columns: repeat(7, minmax(0, 1fr))',
     )
-    expect(cssRule('.time-picker-grid--weeks')).toContain(
-      'grid-template-columns: repeat(2, minmax(0, 1fr))',
+    expect(cssRule('.time-picker-grid--calendar')).toContain('transform: translateY(')
+    expect(cssRule('.time-picker-grid--calendar')).toContain(
+      'transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1)',
+    )
+    expect(cssRule('.time-picker-grid--days')).toContain(
+      'grid-template-columns: repeat(7, minmax(0, 1fr))',
     )
     expect(cssRule('.time-picker-grid--months')).toContain(
       'grid-template-columns: repeat(6, minmax(0, 1fr))',
