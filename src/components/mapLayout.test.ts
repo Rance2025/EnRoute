@@ -161,6 +161,9 @@ describe('map chrome layout', () => {
     expect(gridRule).toContain(
       'transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1)',
     )
+    expect(cssRule('.time-calendar-body--week .time-calendar-grid')).toContain(
+      'transition: none',
+    )
     expect(buttonRule).toContain('height: var(--time-calendar-day-height)')
     expect(buttonRule).toContain('min-height: var(--time-calendar-day-height)')
   })
