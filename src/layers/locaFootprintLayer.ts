@@ -37,6 +37,7 @@ export function createLocaFootprintLayer(LocaRuntime: typeof Loca, map: AMap.Map
     borderWidth: 0,
     blurWidth: 5,
   })
+  pointLayer.setSource(new LocaRuntime.GeoJSONSource({ data: createFootprintGeoJson([]) }))
 
   return {
     update(points: AggregatedFootprintPoint[]) {

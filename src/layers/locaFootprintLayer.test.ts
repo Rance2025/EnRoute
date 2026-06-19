@@ -39,6 +39,38 @@ describe('createFootprintGeoJson', () => {
 })
 
 describe('createLocaFootprintLayer', () => {
+  it('initializes with an empty source before external updates', () => {
+    const setSource = vi.fn()
+    const setStyle = vi.fn()
+    const map = {}
+    const Loca = {
+      Container: vi.fn(function () {
+        return { destroy: vi.fn() }
+      }),
+      PointLayer: vi.fn(function () {
+        return { setSource, setStyle }
+      }),
+      GeoJSONSource: vi.fn(function (options: unknown) {
+        return options
+      }),
+    } as unknown as typeof globalThis.Loca
+
+    createLocaFootprintLayer(Loca, map as AMap.Map)
+
+    expect(Loca.GeoJSONSource).toHaveBeenCalledWith({
+      data: {
+        type: 'FeatureCollection',
+        features: [],
+      },
+    })
+    expect(setSource).toHaveBeenCalledWith({
+      data: {
+        type: 'FeatureCollection',
+        features: [],
+      },
+    })
+  })
+
   it('updates source data and destroys the container', () => {
     const setSource = vi.fn()
     const setStyle = vi.fn()
