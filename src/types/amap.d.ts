@@ -44,6 +44,21 @@ declare namespace AMap {
     zoomOut(): void
   }
 
+  class CustomLayer {
+    constructor(canvas: HTMLCanvasElement, options: CustomLayerOptions)
+    render(): void
+    setMap(map: Map | null): void
+  }
+
+  type CustomLayerOptions = {
+    map?: Map
+    zIndex?: number
+    zooms?: [number, number]
+    opacity?: number
+    alwaysRender?: boolean
+    render?: () => void
+  }
+
   type BoundsLike =
     | Bounds
     | {

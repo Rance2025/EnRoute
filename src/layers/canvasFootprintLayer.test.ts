@@ -41,6 +41,20 @@ function createContainer(width = 320, height = 240) {
 }
 
 describe('createCanvasFootprintLayer', () => {
+  function createCustomLayerRuntime() {
+    const render = vi.fn()
+    const setMap = vi.fn()
+    const CustomLayer = vi.fn(function (
+      _canvas: HTMLCanvasElement,
+      options: AMap.CustomLayerOptions,
+    ) {
+      render.mockImplementation(() => options.render?.())
+      return { render, setMap }
+    })
+
+    return { CustomLayer, render, setMap }
+  }
+
   function mockCanvasContext() {
     const context = {
       arc: vi.fn(),
@@ -60,26 +74,37 @@ describe('createCanvasFootprintLayer', () => {
   it('sizes the canvas backing store by device pixel ratio while keeping CSS dimensions', () => {
     vi.spyOn(window, 'devicePixelRatio', 'get').mockReturnValue(2)
     mockCanvasContext()
+    const customLayer = createCustomLayerRuntime()
     const container = createContainer(320, 240)
+    const map = {} as AMap.Map
 
-    const layer = createCanvasFootprintLayer(container)
+    const layer = createCanvasFootprintLayer(customLayer, map, container)
 
-    const canvas = container.querySelector('canvas')
+    const canvas = customLayer.CustomLayer.mock.calls[0]?.[0]
     expect(canvas).toBeInstanceOf(HTMLCanvasElement)
     expect(canvas?.dataset.layer).toBe('footprints')
     expect(canvas?.width).toBe(640)
     expect(canvas?.height).toBe(480)
     expect(canvas?.style.width).toBe('320px')
     expect(canvas?.style.height).toBe('240px')
+    expect(container.querySelector('canvas')).toBeNull()
+    expect(customLayer.CustomLayer).toHaveBeenCalledWith(canvas, {
+      map,
+      zIndex: 20,
+      alwaysRender: false,
+      render: expect.any(Function),
+    })
 
     layer.destroy()
+
+    expect(customLayer.setMap).toHaveBeenCalledWith(null)
   })
 
   it('draws only one integer fillRect for multiple points in the same screen pixel', () => {
     vi.spyOn(window, 'devicePixelRatio', 'get').mockReturnValue(1)
     const context = mockCanvasContext()
+    const customLayer = createCustomLayerRuntime()
     const container = createContainer()
-    const layer = createCanvasFootprintLayer(container, { color: '#b8544c' })
     const map = {
       lngLatToContainer: vi
         .fn()
@@ -87,8 +112,9 @@ describe('createCanvasFootprintLayer', () => {
         .mockReturnValueOnce({ x: 10.4, y: 20.1 })
         .mockReturnValueOnce({ x: 30.8, y: 40.2 }),
     } as unknown as AMap.Map
+    const layer = createCanvasFootprintLayer(customLayer, map, container, { color: '#b8544c' })
 
-    layer.update(points, map, container)
+    layer.update(points)
 
     expect(context.fillRect).toHaveBeenCalledTimes(2)
     expect(context.clearRect).toHaveBeenCalledWith(0, 0, 320, 240)

@@ -64,7 +64,7 @@ describe('loadAmap', () => {
     expect(loadMock).toHaveBeenCalledWith({
       key: 'test-key',
       version: '2.0',
-      plugins: ['AMap.Geolocation', 'AMap.Scale'],
+      plugins: ['AMap.CustomLayer', 'AMap.Geolocation', 'AMap.Scale'],
     })
     expect(window._AMapSecurityConfig).toEqual({
       securityJsCode: 'test-security-code',
