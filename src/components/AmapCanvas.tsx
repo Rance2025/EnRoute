@@ -8,15 +8,13 @@ import {
 } from '../config/mapDragBounds'
 import { DEFAULT_MAP_CAMERA, resetMapCamera, type MapBounds } from '../config/mapCamera'
 import {
-  calculateWorldPixelWidthAtZoom,
   calculateSingleWorldMapPaneLayout,
   measureAmapWorldPixelWidthAtZoom,
 } from '../config/mapPaneLayout'
 import { calculateBoundedZoomCenter, installBoundedMapZoom, zoomByStep } from '../config/mapZoomBounds'
+import { createCanvasFootprintLayer } from '../layers/canvasFootprintLayer'
 import { loadFootprintPoints } from '../layers/footprintDataSource'
-import { FootprintWorkerClient } from '../layers/footprintWorkerClient'
-import { createLocaFootprintLayer } from '../layers/locaFootprintLayer'
-import type { FootprintPoint, LngLatBounds } from '../layers/footprintTypes'
+import type { FootprintPoint } from '../layers/footprintTypes'
 import { loadAmap, type AMapNamespace } from '../services/amapLoader'
 import { MapControls } from './MapControls'
 
@@ -35,8 +33,7 @@ export function AmapCanvas({ config, onPanelWidthChange }: AmapCanvasProps) {
   const disposeDragRef = useRef<(() => void) | null>(null)
   const disposeZoomRef = useRef<(() => void) | null>(null)
   const disposeZoomClampRef = useRef<(() => void) | null>(null)
-  const footprintLayerRef = useRef<ReturnType<typeof createLocaFootprintLayer> | null>(null)
-  const footprintWorkerRef = useRef<FootprintWorkerClient | null>(null)
+  const footprintLayerRef = useRef<ReturnType<typeof createCanvasFootprintLayer> | null>(null)
   const footprintPointsRef = useRef<FootprintPoint[]>([])
   const footprintSettleTimerRef = useRef<number | null>(null)
   const footprintAbortControllerRef = useRef<AbortController | null>(null)
@@ -103,7 +100,7 @@ export function AmapCanvas({ config, onPanelWidthChange }: AmapCanvasProps) {
   )
 
   const scheduleFootprintUpdate = useCallback((map: AMap.Map, container: HTMLElement | null) => {
-    if (!container || !footprintLayerRef.current || !footprintWorkerRef.current) return
+    if (!container || !footprintLayerRef.current) return
 
     const updateVersion = footprintUpdateVersionRef.current + 1
     footprintUpdateVersionRef.current = updateVersion
@@ -115,24 +112,7 @@ export function AmapCanvas({ config, onPanelWidthChange }: AmapCanvasProps) {
     footprintSettleTimerRef.current = window.setTimeout(() => {
       if (footprintUpdateVersionRef.current !== updateVersion) return
 
-      const viewportBounds = getPaddedViewportBounds(map, container, 0.25)
-
-      footprintWorkerRef.current
-        ?.aggregate({
-          points: footprintPointsRef.current,
-          zoom: map.getZoom(),
-          cellSizePx: 1,
-          viewportBounds,
-        })
-        .then((points) => {
-          if (footprintUpdateVersionRef.current !== updateVersion) return
-          footprintLayerRef.current?.update(points)
-        })
-        .catch((error: unknown) => {
-          if (footprintUpdateVersionRef.current !== updateVersion) return
-          if (isBenignFootprintAggregationError(error)) return
-          if (import.meta.env.DEV) console.warn(error)
-        })
+      footprintLayerRef.current?.update(footprintPointsRef.current, map, container)
     }, 160)
   }, [])
 
@@ -209,23 +189,20 @@ export function AmapCanvas({ config, onPanelWidthChange }: AmapCanvasProps) {
         }
         setStatus('ready')
 
-        if (window.Loca) {
-          footprintLayerRef.current = createLocaFootprintLayer(window.Loca, map)
-          footprintWorkerRef.current = new FootprintWorkerClient()
-          footprintAbortControllerRef.current = new AbortController()
-          loadFootprintPoints(
-            import.meta.env.VITE_FOOTPRINT_DATA_URL,
-            footprintAbortControllerRef.current.signal,
-          )
-            .then((points) => {
-              if (disposed) return
-              footprintPointsRef.current = points
-              scheduleFootprintUpdate(map, mapNodeRef.current)
-            })
-            .catch((error: unknown) => {
-              if (!disposed && import.meta.env.DEV) console.warn(error)
-            })
-        }
+        footprintLayerRef.current = createCanvasFootprintLayer(mapNodeRef.current)
+        footprintAbortControllerRef.current = new AbortController()
+        loadFootprintPoints(
+          import.meta.env.VITE_FOOTPRINT_DATA_URL,
+          footprintAbortControllerRef.current.signal,
+        )
+          .then((points) => {
+            if (disposed) return
+            footprintPointsRef.current = points
+            scheduleFootprintUpdate(map, mapNodeRef.current)
+          })
+          .catch((error: unknown) => {
+            if (!disposed && import.meta.env.DEV) console.warn(error)
+          })
       })
       .catch((error: unknown) => {
         if (disposed) return
@@ -244,8 +221,6 @@ export function AmapCanvas({ config, onPanelWidthChange }: AmapCanvasProps) {
       }
       footprintAbortControllerRef.current?.abort()
       footprintAbortControllerRef.current = null
-      footprintWorkerRef.current?.dispose()
-      footprintWorkerRef.current = null
       footprintLayerRef.current?.destroy()
       footprintLayerRef.current = null
       footprintPointsRef.current = []
@@ -275,6 +250,7 @@ export function AmapCanvas({ config, onPanelWidthChange }: AmapCanvasProps) {
     function updateLayoutAfterResize() {
       if (!mapRef.current || !mapNodeRef.current) return
       updatePaneLayout(mapRef.current, mapNodeRef.current)
+      scheduleFootprintUpdate(mapRef.current, mapNodeRef.current)
     }
 
     window.addEventListener('resize', updateLayoutAfterResize)
@@ -282,7 +258,7 @@ export function AmapCanvas({ config, onPanelWidthChange }: AmapCanvasProps) {
     return () => {
       window.removeEventListener('resize', updateLayoutAfterResize)
     }
-  }, [updatePaneLayout])
+  }, [scheduleFootprintUpdate, updatePaneLayout])
 
   function resetView() {
     if (!mapRef.current || !amapRef.current) return
@@ -340,37 +316,3 @@ function toAmapBounds(AMap: AMapNamespace, bounds: MapBounds) {
   return new AMap.Bounds(bounds.southWest, bounds.northEast)
 }
 
-function isBenignFootprintAggregationError(error: unknown) {
-  if (!(error instanceof Error)) return false
-
-  const message = error.message.toLowerCase()
-  return message.includes('superseded') || message.includes('disposed') || message.includes('aborted')
-}
-
-function getPaddedViewportBounds(
-  map: AMap.Map,
-  container: HTMLElement,
-  paddingRatio: number,
-): LngLatBounds {
-  const paddingX = container.clientWidth * paddingRatio
-  const paddingY = container.clientHeight * paddingRatio
-  const viewportWidth = container.clientWidth + paddingX * 2
-  const worldWidth = calculateWorldPixelWidthAtZoom(map.getZoom())
-  const corners = [
-    map.containerToLngLat({ x: -paddingX, y: -paddingY }),
-    map.containerToLngLat({
-      x: container.clientWidth + paddingX,
-      y: container.clientHeight + paddingY,
-    }),
-  ]
-  const lngs = corners.map((corner) => corner.getLng())
-  const lats = corners.map((corner) => corner.getLat())
-  const spansFullWorld = viewportWidth >= worldWidth - 1
-
-  return {
-    west: spansFullWorld ? -180 : lngs[0],
-    south: Math.min(...lats),
-    east: spansFullWorld ? 180 : lngs[1],
-    north: Math.max(...lats),
-  }
-}

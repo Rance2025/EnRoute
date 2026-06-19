@@ -65,9 +65,6 @@ describe('loadAmap', () => {
       key: 'test-key',
       version: '2.0',
       plugins: ['AMap.Geolocation', 'AMap.Scale'],
-      Loca: {
-        version: '2.0.0',
-      },
     })
     expect(window._AMapSecurityConfig).toEqual({
       securityJsCode: 'test-security-code',
