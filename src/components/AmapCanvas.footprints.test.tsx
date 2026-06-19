@@ -95,11 +95,13 @@ async function renderFootprintMassMarks({
   const completeHandlers: Array<() => void> = []
   const layerRecords: Array<{
     destroy: ReturnType<typeof vi.fn>
+    scheduleStyleUpdate: ReturnType<typeof vi.fn>
     update: ReturnType<typeof vi.fn>
   }> = []
   const createMassFootprintLayer = vi.fn(() => {
     const layer = {
       destroy: vi.fn(),
+      scheduleStyleUpdate: vi.fn(),
       update: vi.fn(),
     }
     layerRecords.push(layer)
@@ -335,7 +337,7 @@ describe('AmapCanvas footprint layer wiring', () => {
     expect(layerRecords[0].destroy).toHaveBeenCalledTimes(1)
   })
 
-  it('defers native footprint style recreation until toolbar edits settle', async () => {
+  it('schedules native footprint style updates without rebuilding the layer during toolbar edits', async () => {
     const loadFootprints = createDeferred<FootprintPoint[]>()
     const { createMassFootprintLayer, layerRecords } = await renderFootprintMassMarks({
       loadFootprintsPromise: loadFootprints.promise,
@@ -380,19 +382,15 @@ describe('AmapCanvas footprint layer wiring', () => {
       await Promise.resolve()
     })
 
-    expect(createMassFootprintLayer).toHaveBeenCalledTimes(2)
+    expect(createMassFootprintLayer).toHaveBeenCalledTimes(1)
 
-    expect(layerRecords[0].destroy).toHaveBeenCalled()
-    expect(createMassFootprintLayer).toHaveBeenLastCalledWith(
-      expect.objectContaining({ MassMarks: expect.any(Function) }),
-      expect.any(Object),
-      {
-        color: '#4f7cff',
-        opacity: 0.64,
-        pixelSize: 2.4,
-      },
-    )
-    expect(layerRecords[1].update).toHaveBeenCalledWith(loadedPoints)
+    expect(layerRecords[0].destroy).not.toHaveBeenCalled()
+    expect(layerRecords[0].scheduleStyleUpdate).toHaveBeenCalledWith({
+      color: '#4f7cff',
+      opacity: 0.64,
+      pixelSize: 2.4,
+    })
+    expect(layerRecords[0].update).toHaveBeenCalledWith(loadedPoints)
   })
 
   it('skips native footprint layer recreation for equivalent style commits', async () => {
@@ -446,6 +444,30 @@ describe('AmapCanvas footprint layer wiring', () => {
         pixelSize: 2.7,
       },
     )
+  })
+
+  it('schedules pending footprint style changes onto the existing native layer', async () => {
+    const loadFootprints = createDeferred<FootprintPoint[]>()
+    const { layerRecords } = await renderFootprintMassMarks({
+      loadFootprintsPromise: loadFootprints.promise,
+    })
+    vi.useFakeTimers()
+
+    fireEvent.click(screen.getByRole('button', { name: '足迹显示设置' }))
+    fireEvent.change(screen.getByLabelText('足迹点大小'), {
+      target: { value: '2.2' },
+    })
+
+    await act(async () => {
+      vi.advanceTimersByTime(180)
+      await Promise.resolve()
+    })
+
+    expect(layerRecords[0].scheduleStyleUpdate).toHaveBeenCalledWith({
+      color: '#123f35',
+      opacity: 0.82,
+      pixelSize: 2.2,
+    })
   })
 
   it('normalizes invalid stored footprint style settings before creating the native layer', async () => {

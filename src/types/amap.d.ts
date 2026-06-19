@@ -61,6 +61,7 @@ declare namespace AMap {
     clear(): void
     setData(data: MassMarksData[]): void
     setMap(map: Map | null): void
+    setStyle(style: MassMarksStyle | MassMarksStyle[]): void
   }
 
   type MassMarksData = {
