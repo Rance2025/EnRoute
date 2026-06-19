@@ -50,7 +50,11 @@
   --segmented-padding: 4px;
   --segmented-thumb-bg: #123f35;
   --segmented-thumb-shadow: 0 8px 22px rgba(31, 52, 48, 0.2);
-  --segmented-label-contrast-color: #ffffff;
+  --segmented-label-color: rgba(23, 35, 31, 0.62);
+  --segmented-active-label-color: #f8fbfa;
+  --segmented-disabled-label-color: rgba(23, 35, 31, 0.26);
+  --segmented-label-font-size: inherit;
+  --segmented-label-font-weight: inherit;
 
   position: relative;
   isolation: isolate;
@@ -100,12 +104,26 @@
   outline-offset: -3px;
 }
 
+.segmented-control__thumb-label {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  color: var(--segmented-active-label-color);
+  font-size: var(--segmented-label-font-size);
+  font-weight: var(--segmented-label-font-weight);
+  line-height: 1;
+  pointer-events: none;
+  text-align: center;
+  white-space: nowrap;
+}
+
 .segmented-control button {
   position: relative;
   z-index: 1;
-  color: var(--segmented-label-contrast-color);
+  color: var(--segmented-label-color);
   cursor: inherit;
-  mix-blend-mode: difference;
 }
 
 .segmented-control button[aria-pressed='true'] {
@@ -240,6 +258,9 @@
 .time-mode-tabs {
   --segmented-thumb-bg: rgba(255, 255, 255, 0.94);
   --segmented-thumb-shadow: 0 8px 18px rgba(0, 0, 0, 0.13);
+  --segmented-active-label-color: #123f35;
+  --segmented-label-font-size: 12px;
+  --segmented-label-font-weight: 860;
 
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
@@ -857,6 +878,7 @@
 .accounting-mode-tabs {
   --segmented-thumb-bg: var(--accounting-accent);
   --segmented-thumb-shadow: 0 7px 17px rgba(18, 63, 53, 0.2);
+  --segmented-label-font-weight: 820;
 
   display: flex;
   gap: 3px;
@@ -1156,6 +1178,8 @@
 .transaction-type-switch {
   --segmented-thumb-bg: var(--accounting-accent);
   --segmented-thumb-shadow: 0 7px 16px rgba(18, 63, 53, 0.16);
+  --segmented-label-font-size: 12px;
+  --segmented-label-font-weight: 820;
 
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1186,26 +1210,26 @@
 }
 
 .segmented-control button {
-  color: var(--segmented-label-contrast-color);
+  color: var(--segmented-label-color);
   background: transparent;
   box-shadow: none;
 }
 
 .segmented-control button:hover {
-  color: var(--segmented-label-contrast-color);
+  color: var(--segmented-label-color);
   background: transparent;
   box-shadow: none;
 }
 
 .segmented-control button[aria-pressed='true'] {
-  color: var(--segmented-label-contrast-color);
+  color: transparent;
   background: transparent;
   box-shadow: none;
 }
 
 .segmented-control button:disabled {
-  color: var(--segmented-label-contrast-color);
-  opacity: 0.46;
+  color: var(--segmented-disabled-label-color);
+  opacity: 1;
 }
 
 .transaction-editor label,

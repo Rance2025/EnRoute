@@ -156,7 +156,11 @@ export function SegmentedControl<Value extends string>({
         aria-valuetext={selectedOption?.label}
         onPointerDown={handlePointerDown}
         onKeyDown={handleKeyDown}
-      />
+      >
+        <span className="segmented-control__thumb-label" aria-hidden="true">
+          {selectedOption?.label}
+        </span>
+      </span>
       {options.map((option) => (
         <button
           type="button"
