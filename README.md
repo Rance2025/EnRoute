@@ -28,5 +28,5 @@ are converted locally to GCJ-02 for AMap; set
 The first phase renders a 2D AMap base surface with the `远山黛` style, hidden
 labels, a compact custom toolbar, no AMap compass, and limited drag bounds to
 avoid exposing blank map edges. Future track and point layers should use
-viewport loading, simplification, clustering, and AMap Loca/WebGL instead of
+viewport loading, simplification, clustering, and canvas/WebGL layers instead of
 React DOM markers.

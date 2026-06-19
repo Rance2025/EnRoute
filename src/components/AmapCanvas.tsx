@@ -162,9 +162,11 @@ export function AmapCanvas({ config, onPanelWidthChange }: AmapCanvasProps) {
         disposeZoomClampRef.current = () => map.off('zoomend', clampLatitudeBounds)
 
         const updateFootprintsAfterSettle = () => scheduleFootprintUpdate(map, mapNodeRef.current)
+        map.on('complete', updateFootprintsAfterSettle)
         map.on('moveend', updateFootprintsAfterSettle)
         map.on('zoomend', updateFootprintsAfterSettle)
         removeFootprintSettleHandlers = () => {
+          map.off('complete', updateFootprintsAfterSettle)
           map.off('moveend', updateFootprintsAfterSettle)
           map.off('zoomend', updateFootprintsAfterSettle)
         }

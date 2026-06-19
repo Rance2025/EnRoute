@@ -70,6 +70,7 @@ async function renderFootprintCanvas({
 }) {
   const moveEndHandlers: Array<() => void> = []
   const zoomEndHandlers: Array<() => void> = []
+  const completeHandlers: Array<() => void> = []
   const update = vi.fn()
   const createCanvasFootprintLayer = vi.fn(() => ({ update, destroy }))
 
@@ -80,6 +81,7 @@ async function renderFootprintCanvas({
     on = vi.fn((eventName: string, callback: () => void) => {
       if (eventName === 'moveend') moveEndHandlers.push(callback)
       if (eventName === 'zoomend') zoomEndHandlers.push(callback)
+      if (eventName === 'complete') completeHandlers.push(callback)
     })
     off = vi.fn()
     getZoom = vi.fn(() => 10)
@@ -129,6 +131,7 @@ async function renderFootprintCanvas({
 
   return {
     createCanvasFootprintLayer,
+    completeHandlers,
     destroy,
     moveEndHandlers,
     renderResult,
@@ -158,6 +161,30 @@ describe('AmapCanvas footprint layer wiring', () => {
     })
 
     moveEndHandlers[0]()
+    await vi.advanceTimersByTimeAsync(159)
+
+    expect(update).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(1)
+
+    expect(update).toHaveBeenCalledWith(loadedPoints, expect.any(Object), expect.any(HTMLElement))
+  })
+
+  it('updates the canvas footprint layer after the AMap complete event settles', async () => {
+    const loadFootprints = createDeferred<FootprintPoint[]>()
+    const { completeHandlers, update } = await renderFootprintCanvas({
+      loadFootprintsPromise: loadFootprints.promise,
+    })
+
+    vi.useFakeTimers()
+    await act(async () => {
+      loadFootprints.resolve(loadedPoints)
+      await Promise.resolve()
+    })
+    await vi.advanceTimersByTimeAsync(160)
+    update.mockClear()
+
+    completeHandlers[0]()
     await vi.advanceTimersByTimeAsync(159)
 
     expect(update).not.toHaveBeenCalled()
