@@ -95,4 +95,17 @@ describe('aggregateFootprintPoints', () => {
     expect(result[0].count).toBe(1)
     expect(result[0].longitude).toBeCloseTo(121.511383, 5)
   })
+
+  it('keeps an antimeridian bucket representative near the wrapped world edge', () => {
+    const result = aggregateFootprintPoints({
+      points: [point('1', 179.999, 0), point('2', -179.999, 0)],
+      zoom: 10,
+      cellSizePx: 10,
+      viewportBounds: { west: 179.99, south: -1, east: -179.99, north: 1 },
+    })
+
+    expect(result).toHaveLength(1)
+    expect(result[0].count).toBe(2)
+    expect(Math.abs(Math.abs(result[0].longitude) - 180)).toBeLessThan(0.01)
+  })
 })
