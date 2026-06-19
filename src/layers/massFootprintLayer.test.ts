@@ -67,13 +67,18 @@ describe('createMassFootprintLayer', () => {
       zIndex: 20,
     })
     const options = runtime.MassMarks.mock.calls[0]?.[1]
-    expect(options?.style.size.width).toBe(2)
-    expect(options?.style.size.height).toBe(2)
-    expect(options?.style.anchor.x).toBe(1)
-    expect(options?.style.anchor.y).toBe(1)
+    expect(options?.style.size.width).toBe(1.5)
+    expect(options?.style.size.height).toBe(1.5)
+    expect(options?.style.anchor.x).toBe(0.75)
+    expect(options?.style.anchor.y).toBe(0.75)
     const iconSvg = decodeURIComponent(options?.style.url ?? '')
     expect(iconSvg).toContain('#b8544c')
+    expect(iconSvg).toContain('width="1.5"')
+    expect(iconSvg).toContain('height="1.5"')
     expect(iconSvg).toContain('<circle')
+    expect(iconSvg).toContain('cx="0.75"')
+    expect(iconSvg).toContain('cy="0.75"')
+    expect(iconSvg).toContain('r="0.75"')
     expect(iconSvg).not.toContain('<rect')
     expect(runtime.setMap).toHaveBeenCalledWith(map)
 

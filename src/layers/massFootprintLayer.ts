@@ -6,7 +6,7 @@ type MassFootprintLayerOptions = {
 }
 
 const DEFAULT_COLOR = '#b8544c'
-const DEFAULT_PIXEL_SIZE = 2
+const DEFAULT_PIXEL_SIZE = 1.5
 
 export function createMassFootprintLayer(
   AMapRuntime: Pick<typeof AMap, 'MassMarks' | 'Pixel' | 'Size'>,
