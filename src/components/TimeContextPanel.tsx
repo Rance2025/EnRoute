@@ -1,4 +1,8 @@
-import type { CSSProperties } from 'react'
+import {
+  useState,
+  type CSSProperties,
+  type TransitionEvent,
+} from 'react'
 
 import type { AppView } from '../App'
 import { SegmentedControl, type SegmentedOption } from './SegmentedControl'
@@ -161,52 +165,12 @@ function renderModeContent(
 ) {
   if (selection.mode === 'day') {
     return (
-      <section className="time-calendar-shell" aria-label="日历选择">
-        <div className="time-mode-section-head">
-          <strong>按日选择</strong>
-          <SegmentedControl
-            ariaLabel="日历显示方式"
-            className="time-calendar-switch"
-            options={calendarModeOptions}
-            value={calendarMode}
-            onChange={setCalendarMode}
-          />
-        </div>
-        <div className="time-calendar-bar">
-          <button
-            type="button"
-            aria-label="上一段时间"
-            onClick={() => onSelectionChange(moveTimeSelection(selection, -1, calendarMode))}
-          >
-            ‹
-          </button>
-          <span>{getCalendarLabel(selection, calendarMode)}</span>
-          <button
-            type="button"
-            aria-label="下一段时间"
-            onClick={() => onSelectionChange(moveTimeSelection(selection, 1, calendarMode))}
-          >
-            ›
-          </button>
-        </div>
-        <div
-          className={`time-calendar-body time-calendar-body--${calendarMode}`}
-          style={
-            {
-              '--time-calendar-visible-rows':
-                calendarMode === 'week'
-                  ? 1
-                  : getVisibleMonthDays(selection.anchorDate).length / 7,
-            } as CSSProperties
-          }
-        >
-          {calendarMode === 'week' ? (
-            <WeekCalendar selection={selection} onSelect={onSelectionChange} />
-          ) : (
-            <MonthCalendar selection={selection} onSelect={onSelectionChange} />
-          )}
-        </div>
-      </section>
+      <DayCalendarSection
+        selection={selection}
+        calendarMode={calendarMode}
+        setCalendarMode={setCalendarMode}
+        onSelectionChange={onSelectionChange}
+      />
     )
   }
 
@@ -381,6 +345,116 @@ function renderModeContent(
         </button>
       </div>
     </section>
+  )
+}
+
+function DayCalendarSection({
+  selection,
+  calendarMode,
+  setCalendarMode,
+  onSelectionChange,
+}: {
+  selection: TimeRangeSelection
+  calendarMode: CalendarDisplayMode
+  setCalendarMode: (mode: CalendarDisplayMode) => void
+  onSelectionChange: (selection: TimeRangeSelection) => void
+}) {
+  const [renderedMode, setRenderedMode] = useState<CalendarDisplayMode>(calendarMode)
+
+  function handleCalendarModeChange(mode: CalendarDisplayMode) {
+    if (mode === 'month') {
+      setRenderedMode('month')
+    }
+
+    setCalendarMode(mode)
+  }
+
+  return (
+    <section className="time-calendar-shell" aria-label="日历选择">
+      <div className="time-mode-section-head">
+        <strong>按日选择</strong>
+        <SegmentedControl
+          ariaLabel="日历显示方式"
+          className="time-calendar-switch"
+          options={calendarModeOptions}
+          value={calendarMode}
+          onChange={handleCalendarModeChange}
+        />
+      </div>
+      <div className="time-calendar-bar">
+        <button
+          type="button"
+          aria-label="上一段时间"
+          onClick={() => onSelectionChange(moveTimeSelection(selection, -1, calendarMode))}
+        >
+          ‹
+        </button>
+        <span>{getCalendarLabel(selection, calendarMode)}</span>
+        <button
+          type="button"
+          aria-label="下一段时间"
+          onClick={() => onSelectionChange(moveTimeSelection(selection, 1, calendarMode))}
+        >
+          ›
+        </button>
+      </div>
+      <AnimatedDayCalendar
+        calendarMode={calendarMode}
+        renderedMode={renderedMode}
+        setRenderedMode={setRenderedMode}
+        selection={selection}
+        onSelect={onSelectionChange}
+      />
+    </section>
+  )
+}
+
+function AnimatedDayCalendar({
+  calendarMode,
+  renderedMode,
+  setRenderedMode,
+  selection,
+  onSelect,
+}: {
+  calendarMode: CalendarDisplayMode
+  renderedMode: CalendarDisplayMode
+  setRenderedMode: (mode: CalendarDisplayMode) => void
+  selection: TimeRangeSelection
+  onSelect: (selection: TimeRangeSelection) => void
+}) {
+  const isCollapsing = renderedMode === 'month' && calendarMode === 'week'
+  const renderedRows =
+    renderedMode === 'week' ? 1 : getVisibleMonthDays(selection.anchorDate).length / 7
+  const visibleRows = calendarMode === 'week' ? 1 : renderedRows
+
+  function handleTransitionEnd(event: TransitionEvent<HTMLDivElement>) {
+    if (event.propertyName === 'max-height' && isCollapsing) {
+      setRenderedMode('week')
+    }
+  }
+
+  return (
+    <div
+      className={[
+        'time-calendar-body',
+        `time-calendar-body--${calendarMode}`,
+        isCollapsing ? 'is-collapsing' : null,
+      ]
+        .filter(Boolean)
+        .join(' ')}
+      style={
+        {
+          '--time-calendar-visible-rows': visibleRows,
+        } as CSSProperties
+      }
+      onTransitionEnd={handleTransitionEnd}
+    >
+      {renderedMode === 'week' ? (
+        <WeekCalendar selection={selection} onSelect={onSelect} />
+      ) : (
+        <MonthCalendar selection={selection} onSelect={onSelect} />
+      )}
+    </div>
   )
 }
 
