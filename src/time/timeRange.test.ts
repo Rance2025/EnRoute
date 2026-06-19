@@ -5,6 +5,7 @@ import {
   createTodaySelection,
   getCurrentRangeActionLabel,
   getTimeRangeDisplay,
+  getVisibleMonthWeekIndex,
   getVisibleMonthDays,
   moveTimeSelection,
   selectDay,
@@ -96,6 +97,12 @@ describe('time range selection model', () => {
     expect(days[0]).toMatchObject({ day: 29, inCurrentMonth: false })
     expect(days[2]).toMatchObject({ day: 1, inCurrentMonth: true })
     expect(days.at(-1)).toMatchObject({ date: '2026-08-02', inCurrentMonth: false })
+  })
+
+  it('locates the active week inside the visible month grid', () => {
+    expect(getVisibleMonthWeekIndex('2026-06-19')).toBe(2)
+    expect(getVisibleMonthWeekIndex('2026-07-14')).toBe(2)
+    expect(getVisibleMonthWeekIndex('2026-08-30')).toBe(4)
   })
 
   it('selects concrete day, week, month, and year ranges', () => {

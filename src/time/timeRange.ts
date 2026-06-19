@@ -297,6 +297,14 @@ export function getVisibleMonthDays(anchorDate: string): DateCell[] {
   })
 }
 
+export function getVisibleMonthWeekIndex(anchorDate: string) {
+  const anchor = parseDate(anchorDate)
+  const firstVisibleDay = startOfWeek(new Date(anchor.getFullYear(), anchor.getMonth(), 1))
+  const dayOffset = Math.round((anchor.getTime() - firstVisibleDay.getTime()) / 86_400_000)
+
+  return Math.floor(dayOffset / 7)
+}
+
 export function getWeekOptions(anchorDate: string): WeekOption[] {
   const currentStart = startOfWeek(parseDate(anchorDate))
 

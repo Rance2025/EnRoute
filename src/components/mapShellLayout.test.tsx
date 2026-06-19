@@ -208,7 +208,8 @@ describe('unified shell layout', () => {
     const weekBody = screen.getByLabelText('日历日期').closest('.time-calendar-body')
 
     expect(weekBody).toHaveClass('time-calendar-body--week')
-    expect(within(weekBody as HTMLElement).getAllByRole('button')).toHaveLength(7)
+    expect(weekBody).toHaveStyle({ '--time-calendar-active-week-index': '2' })
+    expect(within(weekBody as HTMLElement).getAllByRole('button')).toHaveLength(35)
 
     fireEvent.click(screen.getByRole('button', { name: '月历' }))
 
@@ -219,32 +220,58 @@ describe('unified shell layout', () => {
     expect(within(monthBody as HTMLElement).getAllByRole('button')).toHaveLength(35)
   })
 
-  it('keeps the month grid mounted until the collapse transition finishes', () => {
+  it('keeps the same date cells mounted when the active week moves into the month grid', () => {
+    render(<App amapConfig={configuredAmap} />)
+
+    const weekDateGrid = screen.getByLabelText('日历日期')
+    const weekButtons = within(weekDateGrid).getAllByRole('button')
+
+    expect(weekDateGrid).toHaveClass('time-calendar-grid--month')
+    expect(weekButtons).toHaveLength(35)
+    expect(weekButtons.slice(14, 21).map((button) => button.textContent)).toEqual([
+      '15',
+      '16',
+      '17',
+      '18',
+      '19',
+      '20',
+      '21',
+    ])
+
+    fireEvent.click(screen.getByRole('button', { name: '月历' }))
+
+    const monthDateGrid = screen.getByLabelText('日历日期')
+    const monthButtons = within(monthDateGrid).getAllByRole('button')
+
+    expect(monthDateGrid).toBe(weekDateGrid)
+    expect(monthButtons[14]).toBe(weekButtons[14])
+    expect(monthButtons[20]).toBe(weekButtons[20])
+  })
+
+  it('keeps the same date cells mounted when the month grid collapses to a week', () => {
     render(<App amapConfig={configuredAmap} />)
 
     fireEvent.click(screen.getByRole('button', { name: '月历' }))
 
     const expandedBody = screen.getByLabelText('日历日期').closest('.time-calendar-body')
+    const expandedDateGrid = screen.getByLabelText('日历日期')
+    const expandedButtons = within(expandedDateGrid).getAllByRole('button')
 
     expect(expandedBody).toHaveClass('time-calendar-body--month')
-    expect(within(expandedBody as HTMLElement).getAllByRole('button')).toHaveLength(35)
+    expect(expandedButtons).toHaveLength(35)
 
     fireEvent.click(screen.getByRole('button', { name: '周历' }))
 
-    const collapsingBody = screen.getByLabelText('日历日期').closest('.time-calendar-body')
+    const collapsedDateGrid = screen.getByLabelText('日历日期')
+    const collapsedBody = collapsedDateGrid.closest('.time-calendar-body')
+    const collapsedButtons = within(collapsedDateGrid).getAllByRole('button')
 
-    expect(collapsingBody).toHaveClass('time-calendar-body--week')
-    expect(collapsingBody).toHaveClass('is-collapsing')
-    expect(collapsingBody).toHaveStyle({ '--time-calendar-visible-rows': '1' })
-    expect(within(collapsingBody as HTMLElement).getAllByRole('button')).toHaveLength(35)
-
-    fireEvent.transitionEnd(collapsingBody as HTMLElement, { propertyName: 'max-height' })
-
-    const collapsedBody = screen.getByLabelText('日历日期').closest('.time-calendar-body')
-
+    expect(collapsedDateGrid).toBe(expandedDateGrid)
     expect(collapsedBody).toHaveClass('time-calendar-body--week')
-    expect(collapsedBody).not.toHaveClass('is-collapsing')
-    expect(within(collapsedBody as HTMLElement).getAllByRole('button')).toHaveLength(7)
+    expect(collapsedBody).toHaveStyle({ '--time-calendar-visible-rows': '1' })
+    expect(collapsedBody).toHaveStyle({ '--time-calendar-active-week-index': '2' })
+    expect(collapsedButtons).toHaveLength(35)
+    expect(collapsedButtons[14]).toBe(expandedButtons[14])
   })
 
   it('applies concrete selections from every time panel button group', () => {

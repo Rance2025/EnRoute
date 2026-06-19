@@ -1,8 +1,4 @@
-import {
-  useState,
-  type CSSProperties,
-  type TransitionEvent,
-} from 'react'
+import { type CSSProperties } from 'react'
 
 import type { AppView } from '../App'
 import { SegmentedControl, type SegmentedOption } from './SegmentedControl'
@@ -12,8 +8,8 @@ import {
   getCalendarLabel,
   getCurrentRangeActionLabel,
   getTimeRangeDisplay,
+  getVisibleMonthWeekIndex,
   getVisibleMonthDays,
-  getVisibleWeekDays,
   getWeekOptions,
   isSelectionActive,
   moveTimeSelection,
@@ -359,16 +355,6 @@ function DayCalendarSection({
   setCalendarMode: (mode: CalendarDisplayMode) => void
   onSelectionChange: (selection: TimeRangeSelection) => void
 }) {
-  const [renderedMode, setRenderedMode] = useState<CalendarDisplayMode>(calendarMode)
-
-  function handleCalendarModeChange(mode: CalendarDisplayMode) {
-    if (mode === 'month') {
-      setRenderedMode('month')
-    }
-
-    setCalendarMode(mode)
-  }
-
   return (
     <section className="time-calendar-shell" aria-label="日历选择">
       <div className="time-mode-section-head">
@@ -378,7 +364,7 @@ function DayCalendarSection({
           className="time-calendar-switch"
           options={calendarModeOptions}
           value={calendarMode}
-          onChange={handleCalendarModeChange}
+          onChange={setCalendarMode}
         />
       </div>
       <div className="time-calendar-bar">
@@ -400,8 +386,6 @@ function DayCalendarSection({
       </div>
       <AnimatedDayCalendar
         calendarMode={calendarMode}
-        renderedMode={renderedMode}
-        setRenderedMode={setRenderedMode}
         selection={selection}
         onSelect={onSelectionChange}
       />
@@ -411,77 +395,33 @@ function DayCalendarSection({
 
 function AnimatedDayCalendar({
   calendarMode,
-  renderedMode,
-  setRenderedMode,
   selection,
   onSelect,
 }: {
   calendarMode: CalendarDisplayMode
-  renderedMode: CalendarDisplayMode
-  setRenderedMode: (mode: CalendarDisplayMode) => void
   selection: TimeRangeSelection
   onSelect: (selection: TimeRangeSelection) => void
 }) {
-  const isCollapsing = renderedMode === 'month' && calendarMode === 'week'
-  const renderedRows =
-    renderedMode === 'week' ? 1 : getVisibleMonthDays(selection.anchorDate).length / 7
+  const renderedRows = getVisibleMonthDays(selection.anchorDate).length / 7
   const visibleRows = calendarMode === 'week' ? 1 : renderedRows
-
-  function handleTransitionEnd(event: TransitionEvent<HTMLDivElement>) {
-    if (event.propertyName === 'max-height' && isCollapsing) {
-      setRenderedMode('week')
-    }
-  }
+  const activeWeekIndex = getVisibleMonthWeekIndex(selection.anchorDate)
 
   return (
     <div
       className={[
         'time-calendar-body',
         `time-calendar-body--${calendarMode}`,
-        isCollapsing ? 'is-collapsing' : null,
       ]
         .filter(Boolean)
         .join(' ')}
       style={
         {
           '--time-calendar-visible-rows': visibleRows,
+          '--time-calendar-active-week-index': activeWeekIndex,
         } as CSSProperties
       }
-      onTransitionEnd={handleTransitionEnd}
     >
-      {renderedMode === 'week' ? (
-        <WeekCalendar selection={selection} onSelect={onSelect} />
-      ) : (
-        <MonthCalendar selection={selection} onSelect={onSelect} />
-      )}
-    </div>
-  )
-}
-
-function WeekCalendar({
-  selection,
-  onSelect,
-}: {
-  selection: TimeRangeSelection
-  onSelect: (selection: TimeRangeSelection) => void
-}) {
-  return (
-    <div className="time-calendar-grid time-calendar-grid--week" aria-label="日历日期">
-      {weekdayLabels.map((label) => (
-        <span key={label} className="time-calendar-weekday">
-          {label}
-        </span>
-      ))}
-      {getVisibleWeekDays(selection.anchorDate).map((date) => (
-        <button
-          type="button"
-          key={date.date}
-          className={selection.start === date.date ? 'is-active' : undefined}
-          onClick={() => onSelect(selectDay(date.date))}
-        >
-          {date.day}
-        </button>
-      ))}
+      <MonthCalendar selection={selection} onSelect={onSelect} />
     </div>
   )
 }
