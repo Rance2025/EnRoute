@@ -82,6 +82,7 @@ describe('map chrome layout', () => {
 
   it('lets segmented sliders drag from the switch surface with drag cursors', () => {
     expect(cssRule('.segmented-control')).toContain('cursor: grab')
+    expect(cssRule('.segmented-control')).toContain('user-select: none')
     expect(cssRule('.segmented-control.is-dragging')).toContain('cursor: grabbing')
     expect(cssRule('.segmented-control button')).toContain('cursor: inherit')
     expect(cssRule('.segmented-control__thumb')).toContain('cursor: grab')
@@ -91,6 +92,13 @@ describe('map chrome layout', () => {
     expect(cssRule(".segmented-control button[aria-pressed='true']")).toContain(
       'pointer-events: none',
     )
+  })
+
+  it('lays month aggregation out as two compact rows', () => {
+    expect(cssRule('.time-grid-selector--months')).toContain(
+      'grid-template-columns: repeat(6, minmax(0, 1fr))',
+    )
+    expect(cssRule('.time-grid-selector--months button')).toContain('min-height: 46px')
   })
 
   it('keeps the accounting page fixed while ledger internals scroll', () => {

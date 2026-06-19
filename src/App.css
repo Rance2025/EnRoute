@@ -54,6 +54,7 @@
   position: relative;
   isolation: isolate;
   cursor: grab;
+  user-select: none;
 }
 
 .segmented-control.is-dragging {
@@ -562,6 +563,10 @@
   gap: 8px;
 }
 
+.time-grid-selector--months {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
 .time-grid-selector button {
   min-height: 54px;
   border: 1px solid rgba(23, 35, 31, 0.08);
@@ -570,6 +575,10 @@
   background: rgba(255, 255, 255, 0.62);
   font-size: 13px;
   font-weight: 850;
+}
+
+.time-grid-selector--months button {
+  min-height: 46px;
 }
 
 .time-grid-selector button span {

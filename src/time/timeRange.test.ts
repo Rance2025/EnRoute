@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  createCurrentSelection,
   createTodaySelection,
+  getCurrentRangeActionLabel,
   getTimeRangeDisplay,
   getVisibleMonthDays,
   moveTimeSelection,
@@ -26,6 +28,37 @@ describe('time range selection model', () => {
       detail: '2026年6月19日 · 发生时间',
       accountingLabel: '日',
     })
+  })
+
+  it('creates current-period selections and labels for each top-level mode', () => {
+    expect(createCurrentSelection('day')).toMatchObject({
+      mode: 'day',
+      start: '2026-06-19',
+      end: '2026-06-19',
+    })
+
+    expect(createCurrentSelection('week')).toMatchObject({
+      mode: 'week',
+      start: '2026-06-15',
+      end: '2026-06-21',
+    })
+
+    expect(createCurrentSelection('month')).toMatchObject({
+      mode: 'month',
+      start: '2026-06-01',
+      end: '2026-06-30',
+    })
+
+    expect(createCurrentSelection('year')).toMatchObject({
+      mode: 'year',
+      start: '2026-01-01',
+      end: '2026-12-31',
+    })
+
+    expect(getCurrentRangeActionLabel('day')).toBe('回到今天')
+    expect(getCurrentRangeActionLabel('week')).toBe('回到本周')
+    expect(getCurrentRangeActionLabel('month')).toBe('回到本月')
+    expect(getCurrentRangeActionLabel('year')).toBe('回到今年')
   })
 
   it('moves day and month calendar selections by one visible period', () => {

@@ -1,9 +1,10 @@
 import type { AppView } from '../App'
 import { SegmentedControl, type SegmentedOption } from './SegmentedControl'
 import {
-  createTodaySelection,
+  createCurrentSelection,
   formatTimeRangeDate,
   getCalendarLabel,
+  getCurrentRangeActionLabel,
   getTimeRangeDisplay,
   getVisibleMonthDays,
   getVisibleWeekDays,
@@ -83,6 +84,7 @@ export function TimeContextPanel({
   onSelectionChange,
 }: TimeContextPanelProps) {
   const heading = getTimeRangeDisplay(selection)
+  const resetLabel = getCurrentRangeActionLabel(selection.mode)
 
   function handleModeChange(range: TimeRangeMode) {
     if (range === 'day') onSelectionChange(selectDay(selection.anchorDate))
@@ -111,10 +113,10 @@ export function TimeContextPanel({
             <button
               type="button"
               className="time-context-card__today"
-              aria-label="回到今天"
-              onClick={() => onSelectionChange(createTodaySelection())}
+              aria-label={resetLabel}
+              onClick={() => onSelectionChange(createCurrentSelection(selection.mode))}
             >
-              回到今天
+              {resetLabel}
             </button>
           </div>
 
@@ -230,9 +232,8 @@ function renderModeContent(
       <section className="time-selector-shell" aria-label="月份聚合选择">
         <div className="time-mode-section-head">
           <strong>按月聚合</strong>
-          <span>选择月份</span>
         </div>
-        <div className="time-grid-selector">
+        <div className="time-grid-selector time-grid-selector--months">
           {monthOptions.map((option) => (
             <button
               type="button"
@@ -249,15 +250,6 @@ function renderModeContent(
               onClick={() => onSelectionChange(selectMonth(selectedYear, option))}
             >
               {option}月
-              <span>
-                {isSelectionActive(
-                  selection,
-                  'month',
-                  `${selectedYear}-${String(option).padStart(2, '0')}-01`,
-                )
-                  ? '当前'
-                  : '选择'}
-              </span>
             </button>
           ))}
         </div>

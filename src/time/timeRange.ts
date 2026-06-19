@@ -36,6 +36,30 @@ export function createTodaySelection(): TimeRangeSelection {
   return selectDay(today)
 }
 
+export function createCurrentSelection(mode: TimeRangeMode): TimeRangeSelection {
+  const currentDate = parseDate(today)
+
+  if (mode === 'day') return selectDay(today)
+  if (mode === 'week') return selectWeek(today)
+  if (mode === 'month') {
+    return selectMonth(currentDate.getFullYear(), currentDate.getMonth() + 1)
+  }
+  if (mode === 'year') return selectYear(currentDate.getFullYear())
+  if (mode === 'all') return selectPresetRange('all')
+
+  return selectPresetRange('recent30')
+}
+
+export function getCurrentRangeActionLabel(mode: TimeRangeMode) {
+  if (mode === 'day') return '回到今天'
+  if (mode === 'week') return '回到本周'
+  if (mode === 'month') return '回到本月'
+  if (mode === 'year') return '回到今年'
+  if (mode === 'all') return '回到全部'
+
+  return '回到近30天'
+}
+
 export function selectDay(date: string): TimeRangeSelection {
   return {
     mode: 'day',
