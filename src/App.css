@@ -574,18 +574,29 @@
 }
 
 .time-calendar-grid-window {
+  --time-picker-shadow-buffer: 12px;
+
   height: calc(
     var(--time-calendar-visible-rows) * var(--time-calendar-day-height) +
-    (var(--time-calendar-visible-rows) - 1) * var(--time-calendar-grid-gap)
+    (var(--time-calendar-visible-rows) - 1) * var(--time-calendar-grid-gap) +
+    var(--time-picker-shadow-buffer) * 2
   );
-  margin-top: var(--time-calendar-grid-gap);
+  margin: var(--time-calendar-grid-gap) calc(var(--time-picker-shadow-buffer) * -1)
+    calc(var(--time-picker-shadow-buffer) * -1);
   overflow: hidden;
+  padding: var(--time-picker-shadow-buffer);
+  width: calc(100% + var(--time-picker-shadow-buffer) * 2);
   transition: height 260ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .time-picker-grid-window {
-  margin-top: 10px;
+  --time-picker-shadow-buffer: 12px;
+
+  margin: 10px calc(var(--time-picker-shadow-buffer) * -1)
+    calc(var(--time-picker-shadow-buffer) * -1);
   overflow: hidden;
+  padding: var(--time-picker-shadow-buffer);
+  width: calc(100% + var(--time-picker-shadow-buffer) * 2);
 }
 
 .time-calendar-grid-motion {
@@ -641,6 +652,11 @@
 
 .time-calendar-body--week .time-calendar-grid {
   transition: none;
+}
+
+.time-calendar-body--week .time-calendar-grid button:not(.is-visible-week) {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .time-picker-grid--days {
@@ -751,11 +767,6 @@
   transform: translateY(-0.5px);
 }
 
-.time-calendar-grid button:hover {
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.68);
-  transform: none;
-}
-
 .time-calendar-grid button:active,
 .time-picker-grid button:active {
 }
@@ -772,12 +783,6 @@
   border-color: transparent;
   background: #123f35;
   box-shadow: 0 9px 20px rgba(18, 63, 53, 0.22);
-}
-
-.time-calendar-grid button.is-active {
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.16),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.08);
 }
 
 .time-picker-grid button.is-active small {

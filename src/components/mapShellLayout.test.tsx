@@ -340,6 +340,11 @@ describe('unified shell layout', () => {
       '20',
       '21',
     ])
+    expect(weekButtons.slice(14, 21).every((button) => button.classList.contains('is-visible-week'))).toBe(
+      true,
+    )
+    expect(weekButtons[13]).not.toHaveClass('is-visible-week')
+    expect(weekButtons[21]).not.toHaveClass('is-visible-week')
     expect(within(weekGrid).getByRole('button', { name: '19' })).toHaveClass('is-active')
 
     fireEvent.click(screen.getByRole('button', { name: '月历' }))
