@@ -189,6 +189,59 @@ describe('unified shell layout', () => {
     expect(screen.getByRole('button', { name: '回到今年' })).toBeInTheDocument()
   })
 
+  it('moves day week month and year ranges through the same directional navigator', () => {
+    render(<App amapConfig={configuredAmap} />)
+
+    expect(screen.getByLabelText('时间范围内容')).not.toHaveClass(
+      'time-panel-content__stage--previous',
+    )
+    expect(screen.getByLabelText('时间范围内容')).not.toHaveClass(
+      'time-panel-content__stage--next',
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '上一段时间' }))
+
+    let stage = screen.getByLabelText('时间范围内容')
+    expect(screen.getByRole('heading', { name: '6月12日' })).toBeInTheDocument()
+    expect(stage).toHaveClass('time-panel-content__stage--previous')
+
+    fireEvent.click(screen.getByRole('button', { name: '下一段时间' }))
+
+    stage = screen.getByLabelText('时间范围内容')
+    expect(screen.getByRole('heading', { name: '今天' })).toBeInTheDocument()
+    expect(stage).toHaveClass('time-panel-content__stage--next')
+
+    fireEvent.click(screen.getByRole('button', { name: '周' }))
+    fireEvent.click(screen.getByRole('button', { name: '下一页' }))
+
+    stage = screen.getByLabelText('时间范围内容')
+    expect(screen.getByRole('heading', { name: '第29周' })).toBeInTheDocument()
+    expect(screen.getByText('7月13日 - 7月19日 · 按周聚合')).toBeInTheDocument()
+    expect(stage).toHaveClass('time-panel-content__stage--next')
+
+    fireEvent.click(screen.getByRole('button', { name: '月' }))
+    fireEvent.click(screen.getByRole('button', { name: '上一页' }))
+
+    stage = screen.getByLabelText('时间范围内容')
+    expect(screen.getByRole('heading', { name: '7月' })).toBeInTheDocument()
+    expect(screen.getByText('2025年7月 · 按月聚合')).toBeInTheDocument()
+    expect(stage).toHaveClass('time-panel-content__stage--previous')
+
+    fireEvent.click(screen.getByRole('button', { name: '年' }))
+    fireEvent.click(screen.getByRole('button', { name: '下一页' }))
+
+    stage = screen.getByLabelText('时间范围内容')
+    expect(screen.getByRole('heading', { name: '2035年' })).toBeInTheDocument()
+    expect(stage).toHaveClass('time-panel-content__stage--next')
+
+    fireEvent.click(screen.getByRole('button', { name: '全部' }))
+
+    expect(screen.queryByRole('button', { name: '上一段时间' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '下一段时间' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '上一页' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '下一页' })).not.toBeInTheDocument()
+  })
+
   it('renders month aggregation as a compact two-row picker without helper copy', () => {
     render(<App amapConfig={configuredAmap} />)
 

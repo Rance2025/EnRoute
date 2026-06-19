@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react'
+import { useState, type CSSProperties } from 'react'
 
 import type { AppView } from '../App'
 import { SegmentedControl, type SegmentedOption } from './SegmentedControl'
@@ -78,6 +78,8 @@ type TimeContextPanelProps = {
   onSelectionChange: (selection: TimeRangeSelection) => void
 }
 
+type TimeNavigationDirection = 'previous' | 'next'
+
 export function TimeContextPanel({
   view,
   selection,
@@ -85,22 +87,53 @@ export function TimeContextPanel({
   onCalendarModeChange,
   onSelectionChange,
 }: TimeContextPanelProps) {
+  const [navigationState, setNavigationState] = useState<{
+    direction: TimeNavigationDirection | null
+    sequence: number
+  }>({ direction: null, sequence: 0 })
   const heading = getTimeRangeDisplay(selection)
   const resetLabel = getCurrentRangeActionLabel(selection.mode)
 
+  function handleSelectionChange(nextSelection: TimeRangeSelection) {
+    setNavigationState((current) => ({ ...current, direction: null }))
+    onSelectionChange(nextSelection)
+  }
+
+  function handlePeriodNavigate(
+    direction: TimeNavigationDirection,
+    nextSelection: TimeRangeSelection,
+  ) {
+    setNavigationState((current) => ({
+      direction,
+      sequence: current.sequence + 1,
+    }))
+    onSelectionChange(nextSelection)
+  }
+
   function handleModeChange(range: TimeRangeMode) {
-    if (range === 'day') onSelectionChange(selectDay(selection.anchorDate))
-    if (range === 'week') onSelectionChange(selectWeek(selection.anchorDate))
+    if (range === 'day') handleSelectionChange(selectDay(selection.anchorDate))
+    if (range === 'week') handleSelectionChange(selectWeek(selection.anchorDate))
     if (range === 'month') {
       const anchor = new Date(`${selection.anchorDate}T00:00:00`)
-      onSelectionChange(selectMonth(anchor.getFullYear(), anchor.getMonth() + 1))
+      handleSelectionChange(selectMonth(anchor.getFullYear(), anchor.getMonth() + 1))
     }
     if (range === 'year') {
-      onSelectionChange(selectYear(new Date(`${selection.anchorDate}T00:00:00`).getFullYear()))
+      handleSelectionChange(
+        selectYear(new Date(`${selection.anchorDate}T00:00:00`).getFullYear()),
+      )
     }
-    if (range === 'all') onSelectionChange(selectPresetRange('all'))
-    if (range === 'custom') onSelectionChange(selectPresetRange('recent30'))
+    if (range === 'all') handleSelectionChange(selectPresetRange('all'))
+    if (range === 'custom') handleSelectionChange(selectPresetRange('recent30'))
   }
+
+  const stageClassName = [
+    'time-panel-content__stage',
+    navigationState.direction
+      ? `time-panel-content__stage--${navigationState.direction}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(' ')
 
   return (
     <aside className="time-context-panel" aria-label="时间范围面板">
@@ -116,7 +149,7 @@ export function TimeContextPanel({
               type="button"
               className="time-context-card__today"
               aria-label={resetLabel}
-              onClick={() => onSelectionChange(createCurrentSelection(selection.mode))}
+              onClick={() => handleSelectionChange(createCurrentSelection(selection.mode))}
             >
               {resetLabel}
             </button>
@@ -132,12 +165,19 @@ export function TimeContextPanel({
         </header>
 
         <div className="time-panel-content">
-          {renderModeContent(
-            selection,
-            calendarMode,
-            onCalendarModeChange,
-            onSelectionChange,
-          )}
+          <div
+            key={`${navigationState.sequence}-${selection.mode}-${selection.start}-${selection.end}`}
+            className={stageClassName}
+            aria-label="时间范围内容"
+          >
+            {renderModeContent(
+              selection,
+              calendarMode,
+              onCalendarModeChange,
+              handleSelectionChange,
+              handlePeriodNavigate,
+            )}
+          </div>
         </div>
 
         <footer className="time-context-summary" aria-label="当前范围摘要">
@@ -172,6 +212,10 @@ function renderModeContent(
   calendarMode: CalendarDisplayMode,
   onCalendarModeChange: (mode: CalendarDisplayMode) => void,
   onSelectionChange: (selection: TimeRangeSelection) => void,
+  onPeriodNavigate: (
+    direction: TimeNavigationDirection,
+    selection: TimeRangeSelection,
+  ) => void,
 ) {
   if (selection.mode === 'day') {
     return (
@@ -180,6 +224,7 @@ function renderModeContent(
         calendarMode={calendarMode}
         onCalendarModeChange={onCalendarModeChange}
         onSelectionChange={onSelectionChange}
+        onPeriodNavigate={onPeriodNavigate}
       />
     )
   }
@@ -194,7 +239,12 @@ function renderModeContent(
     return (
       <TimePickerPage
         page={page}
-        onMove={(direction) => onSelectionChange(movePickerPage(selection, direction))}
+        onMove={(direction) =>
+          onPeriodNavigate(
+            direction === -1 ? 'previous' : 'next',
+            movePickerPage(selection, direction),
+          )
+        }
         onSelect={(option) =>
           onSelectionChange(createSelectionFromPickerOption(page.mode, option))
         }
@@ -288,11 +338,16 @@ function DayCalendarSection({
   calendarMode,
   onCalendarModeChange,
   onSelectionChange,
+  onPeriodNavigate,
 }: {
   selection: TimeRangeSelection
   calendarMode: CalendarDisplayMode
   onCalendarModeChange: (mode: CalendarDisplayMode) => void
   onSelectionChange: (selection: TimeRangeSelection) => void
+  onPeriodNavigate: (
+    direction: TimeNavigationDirection,
+    selection: TimeRangeSelection,
+  ) => void
 }) {
   return (
     <section className="time-calendar-shell" aria-label="日历选择">
@@ -311,7 +366,10 @@ function DayCalendarSection({
           type="button"
           aria-label="上一段时间"
           onClick={() =>
-            onSelectionChange(moveDayCalendarPage(selection, -1, calendarMode))
+            onPeriodNavigate(
+              'previous',
+              moveDayCalendarPage(selection, -1, calendarMode),
+            )
           }
         >
           ‹
@@ -321,7 +379,10 @@ function DayCalendarSection({
           type="button"
           aria-label="下一段时间"
           onClick={() =>
-            onSelectionChange(moveDayCalendarPage(selection, 1, calendarMode))
+            onPeriodNavigate(
+              'next',
+              moveDayCalendarPage(selection, 1, calendarMode),
+            )
           }
         >
           ›
