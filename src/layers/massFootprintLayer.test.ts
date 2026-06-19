@@ -149,6 +149,30 @@ describe('createMassFootprintLayer', () => {
     layer.destroy()
   })
 
+  it('clamps custom point size to the supported 0.3 to 3.5 range', () => {
+    const smallRuntime = createMassMarksRuntime()
+    const largeRuntime = createMassMarksRuntime()
+
+    const smallLayer = createMassFootprintLayer(smallRuntime, {} as AMap.Map, {
+      pixelSize: 0.1,
+    })
+    const largeLayer = createMassFootprintLayer(largeRuntime, {} as AMap.Map, {
+      pixelSize: 4.2,
+    })
+
+    const smallOptions = smallRuntime.MassMarks.mock.calls[0]?.[1]
+    const largeOptions = largeRuntime.MassMarks.mock.calls[0]?.[1]
+    expect(smallOptions?.style.size.width).toBe(0.3)
+    expect(smallOptions?.style.anchor.x).toBe(0.15)
+    expect(decodeURIComponent(smallOptions?.style.url ?? '')).toContain('width="0.3"')
+    expect(largeOptions?.style.size.width).toBe(3.5)
+    expect(largeOptions?.style.anchor.x).toBe(1.75)
+    expect(decodeURIComponent(largeOptions?.style.url ?? '')).toContain('width="3.5"')
+
+    smallLayer.destroy()
+    largeLayer.destroy()
+  })
+
   it('updates MassMarks with raw footprint lnglat data and lets AMap own projection during map motion', () => {
     const runtime = createMassMarksRuntime()
     const layer = createMassFootprintLayer(runtime, {} as AMap.Map)

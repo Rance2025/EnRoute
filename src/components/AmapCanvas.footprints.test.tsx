@@ -42,6 +42,12 @@ const loadedPoints: FootprintPoint[] = [
   },
 ]
 
+const localStorageMock = createLocalStorageMock()
+Object.defineProperty(window, 'localStorage', {
+  configurable: true,
+  value: localStorageMock,
+})
+
 type Deferred<T> = {
   promise: Promise<T>
   resolve: (value: T) => void
@@ -155,6 +161,7 @@ async function renderFootprintMassMarks({
 
 afterEach(() => {
   cleanup()
+  window.localStorage.clear()
   vi.useRealTimers()
   vi.restoreAllMocks()
   vi.resetModules()
@@ -288,15 +295,14 @@ describe('AmapCanvas footprint layer wiring', () => {
     expect(layerRecords[2].update).toHaveBeenCalledWith(loadedPoints)
   })
 
-  it('keeps the existing footprint style when the size input receives an invalid value', async () => {
+  it('restores valid stored footprint style settings before creating the native layer', async () => {
+    window.localStorage.setItem(
+      'enroute.footprintStyle',
+      JSON.stringify({ color: '#4f7cff', pixelSize: 2.7 }),
+    )
     const loadFootprints = createDeferred<FootprintPoint[]>()
     const { createMassFootprintLayer } = await renderFootprintMassMarks({
       loadFootprintsPromise: loadFootprints.promise,
-    })
-
-    fireEvent.click(screen.getByRole('button', { name: '足迹显示设置' }))
-    fireEvent.change(screen.getByLabelText('足迹点大小数值'), {
-      target: { value: 'not-a-number' },
     })
 
     await act(async () => {
@@ -309,9 +315,48 @@ describe('AmapCanvas footprint layer wiring', () => {
       expect.objectContaining({ MassMarks: expect.any(Function) }),
       expect.any(Object),
       {
+        color: '#4f7cff',
+        pixelSize: 2.7,
+      },
+    )
+  })
+
+  it('normalizes invalid stored footprint style settings before creating the native layer', async () => {
+    window.localStorage.setItem(
+      'enroute.footprintStyle',
+      JSON.stringify({ color: 'javascript:alert(1)', pixelSize: 9 }),
+    )
+    const loadFootprints = createDeferred<FootprintPoint[]>()
+    const { createMassFootprintLayer } = await renderFootprintMassMarks({
+      loadFootprintsPromise: loadFootprints.promise,
+    })
+
+    expect(createMassFootprintLayer).toHaveBeenLastCalledWith(
+      expect.objectContaining({ MassMarks: expect.any(Function) }),
+      expect.any(Object),
+      {
         color: '#123f35',
-        pixelSize: 1.5,
+        pixelSize: 3.5,
       },
     )
   })
 })
+
+function createLocalStorageMock() {
+  const store = new Map<string, string>()
+
+  return {
+    clear() {
+      store.clear()
+    },
+    getItem(key: string) {
+      return store.get(key) ?? null
+    },
+    removeItem(key: string) {
+      store.delete(key)
+    },
+    setItem(key: string, value: string) {
+      store.set(key, value)
+    },
+  }
+}

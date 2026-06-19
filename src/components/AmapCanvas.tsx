@@ -15,8 +15,13 @@ import { calculateBoundedZoomCenter, installBoundedMapZoom, zoomByStep } from '.
 import { loadFootprintPoints } from '../layers/footprintDataSource'
 import { createMassFootprintLayer } from '../layers/massFootprintLayer'
 import type { FootprintPoint } from '../layers/footprintTypes'
+import {
+  DEFAULT_FOOTPRINT_STYLE,
+  normalizeFootprintStyle,
+  type FootprintStyle,
+} from '../layers/footprintStyle'
 import { loadAmap, type AMapNamespace } from '../services/amapLoader'
-import { MapControls, type FootprintStyle } from './MapControls'
+import { MapControls } from './MapControls'
 
 type AmapCanvasProps = {
   config: AmapConfig
@@ -25,10 +30,7 @@ type AmapCanvasProps = {
 
 type MapStatus = 'missing-config' | 'loading' | 'ready' | 'error'
 
-const DEFAULT_FOOTPRINT_STYLE: FootprintStyle = {
-  pixelSize: 1.5,
-  color: '#123f35',
-}
+const FOOTPRINT_STYLE_STORAGE_KEY = 'enroute.footprintStyle'
 
 export function AmapCanvas({ config, onPanelWidthChange }: AmapCanvasProps) {
   const mapNodeRef = useRef<HTMLDivElement | null>(null)
@@ -45,7 +47,7 @@ export function AmapCanvas({ config, onPanelWidthChange }: AmapCanvasProps) {
     config.isConfigured ? 'loading' : 'missing-config',
   )
   const [errorMessage, setErrorMessage] = useState('')
-  const [footprintStyle, setFootprintStyle] = useState<FootprintStyle>(DEFAULT_FOOTPRINT_STYLE)
+  const [footprintStyle, setFootprintStyle] = useState<FootprintStyle>(readStoredFootprintStyle)
 
   const themes = config.themes.length ? config.themes : AMAP_THEMES
   const mapTheme = themes[0]
@@ -238,6 +240,10 @@ export function AmapCanvas({ config, onPanelWidthChange }: AmapCanvasProps) {
   }, [destroyFootprintLayer, footprintStyle, status])
 
   useEffect(() => {
+    writeStoredFootprintStyle(footprintStyle)
+  }, [footprintStyle])
+
+  useEffect(() => {
     function updateLayoutAfterResize() {
       if (!mapRef.current || !mapNodeRef.current) return
       updatePaneLayout(mapRef.current, mapNodeRef.current)
@@ -306,5 +312,27 @@ export function AmapCanvas({ config, onPanelWidthChange }: AmapCanvasProps) {
 
 function toAmapBounds(AMap: AMapNamespace, bounds: MapBounds) {
   return new AMap.Bounds(bounds.southWest, bounds.northEast)
+}
+
+function readStoredFootprintStyle() {
+  try {
+    const storedStyle = window.localStorage.getItem(FOOTPRINT_STYLE_STORAGE_KEY)
+    if (!storedStyle) return DEFAULT_FOOTPRINT_STYLE
+
+    return normalizeFootprintStyle(JSON.parse(storedStyle) as Partial<FootprintStyle>)
+  } catch {
+    return DEFAULT_FOOTPRINT_STYLE
+  }
+}
+
+function writeStoredFootprintStyle(footprintStyle: FootprintStyle) {
+  try {
+    window.localStorage.setItem(
+      FOOTPRINT_STYLE_STORAGE_KEY,
+      JSON.stringify(normalizeFootprintStyle(footprintStyle)),
+    )
+  } catch {
+    // Storage can be unavailable in privacy modes; the live map style should still work.
+  }
 }
 
