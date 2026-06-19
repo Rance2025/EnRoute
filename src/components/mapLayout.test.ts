@@ -165,6 +165,17 @@ describe('map chrome layout', () => {
     expect(pickerActiveRule).toContain('0 9px 20px')
   })
 
+  it('keeps day calendar hover feedback inside dense grid cells', () => {
+    const calendarHoverRule = cssRule('.time-calendar-grid button:hover')
+    const pickerHoverRule = cssRule('.time-picker-grid button:hover')
+
+    expect(calendarHoverRule).toContain('box-shadow: inset')
+    expect(calendarHoverRule).toContain('transform: none')
+    expect(calendarHoverRule).not.toContain('0 8px 16px')
+    expect(pickerHoverRule).toContain('0 8px 16px')
+    expect(pickerHoverRule).toContain('transform: translateY(-0.5px)')
+  })
+
   it('lets segmented sliders drag from the switch surface with drag cursors', () => {
     expect(cssRule('.segmented-control')).toContain('cursor: grab')
     expect(cssRule('.segmented-control')).toContain('user-select: none')

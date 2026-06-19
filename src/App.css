@@ -670,6 +670,11 @@
   transform: translateY(-0.5px);
 }
 
+.time-calendar-grid button:hover {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.68);
+  transform: none;
+}
+
 .time-calendar-grid button:active,
 .time-picker-grid button:active {
 }
