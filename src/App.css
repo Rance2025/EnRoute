@@ -46,6 +46,63 @@
   gap: 2px;
 }
 
+.segmented-control {
+  --segmented-padding: 4px;
+  --segmented-thumb-bg: #123f35;
+  --segmented-thumb-shadow: 0 8px 22px rgba(31, 52, 48, 0.2);
+
+  position: relative;
+  isolation: isolate;
+}
+
+.segmented-control__thumb {
+  position: absolute;
+  z-index: 0;
+  top: var(--segmented-padding);
+  bottom: var(--segmented-padding);
+  left: calc(
+    var(--segmented-padding) +
+      (100% - var(--segmented-padding) * 2) / var(--segment-count) *
+      var(--segment-index)
+  );
+  width: calc((100% - var(--segmented-padding) * 2) / var(--segment-count));
+  border-radius: 999px;
+  background: var(--segmented-thumb-bg);
+  box-shadow: var(--segmented-thumb-shadow);
+  cursor: grab;
+  touch-action: none;
+  transition:
+    left 190ms ease,
+    width 190ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.segmented-control__thumb.is-dragging {
+  cursor: grabbing;
+  transform: scale(0.98);
+  transition:
+    background 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.segmented-control__thumb:focus-visible {
+  outline: 2px solid rgba(248, 251, 250, 0.74);
+  outline-offset: -3px;
+}
+
+.segmented-control button {
+  position: relative;
+  z-index: 1;
+}
+
+.segmented-control button[aria-pressed='true'] {
+  pointer-events: none;
+}
+
+
 .app-nav button {
   height: 34px;
   padding: 0 14px;
@@ -69,6 +126,12 @@
   color: #f8fbfa;
   background: #1f3430;
   box-shadow: 0 8px 22px rgba(31, 52, 48, 0.2);
+}
+
+.app-nav .segmented-control button[aria-pressed='true'] {
+  color: #f8fbfa;
+  background: transparent;
+  box-shadow: none;
 }
 
 .app-nav button:disabled {
@@ -165,6 +228,9 @@
 }
 
 .time-mode-tabs {
+  --segmented-thumb-bg: rgba(255, 255, 255, 0.94);
+  --segmented-thumb-shadow: 0 8px 18px rgba(0, 0, 0, 0.13);
+
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 3px;
@@ -195,6 +261,11 @@
   color: #123f35;
   background: rgba(255, 255, 255, 0.94);
   box-shadow: 0 8px 18px rgba(0, 0, 0, 0.13);
+}
+
+.time-mode-tabs.segmented-control button[aria-pressed='true'] {
+  background: transparent;
+  box-shadow: none;
 }
 
 .time-panel-content {
@@ -287,6 +358,10 @@
 }
 
 .time-calendar-switch {
+  --segmented-thumb-bg: #123f35;
+  --segmented-thumb-shadow: 0 7px 17px rgba(18, 63, 53, 0.18);
+  --segmented-padding: 3px;
+
   display: inline-grid;
   grid-template-columns: repeat(2, auto);
   gap: 3px;
@@ -311,6 +386,10 @@
   background: #123f35;
 }
 
+.time-calendar-switch.segmented-control button[aria-pressed='true'] {
+  background: transparent;
+}
+
 .time-calendar-grid {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
@@ -329,12 +408,40 @@
 
 .time-calendar-grid button {
   min-height: 37px;
-  border: 0;
+  border: 1px solid transparent;
   border-radius: 13px;
   color: rgba(17, 40, 35, 0.66);
   background: rgba(17, 40, 35, 0.055);
   font-size: 12px;
   font-weight: 820;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.58);
+  transition:
+    border-color 150ms ease,
+    background 150ms ease,
+    box-shadow 150ms ease,
+    color 150ms ease,
+    transform 150ms ease;
+}
+
+.time-calendar-grid button:hover {
+  color: #123f35;
+  border-color: rgba(18, 63, 53, 0.16);
+  background: rgba(18, 63, 53, 0.105);
+  box-shadow:
+    0 8px 16px rgba(18, 63, 53, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.68);
+  transform: translateY(-1px);
+}
+
+.time-calendar-grid button:active {
+  transform: translateY(1px) scale(0.98);
+  box-shadow: inset 0 2px 6px rgba(18, 63, 53, 0.12);
+}
+
+.time-calendar-grid button:focus-visible {
+  outline: 2px solid rgba(18, 63, 53, 0.34);
+  outline-offset: 2px;
 }
 
 .time-calendar-grid--month button {
@@ -343,8 +450,18 @@
 
 .time-calendar-grid button.is-active {
   color: #f8fbfa;
+  border-color: transparent;
   background: #123f35;
   box-shadow: 0 9px 20px rgba(18, 63, 53, 0.22);
+}
+
+.time-calendar-grid button.is-outside-month {
+  color: rgba(17, 40, 35, 0.32);
+  background: rgba(17, 40, 35, 0.032);
+}
+
+.time-calendar-grid button.is-outside-month:hover {
+  color: rgba(17, 40, 35, 0.58);
 }
 
 .time-selector-list {
@@ -708,6 +825,9 @@
 }
 
 .accounting-mode-tabs {
+  --segmented-thumb-bg: var(--accounting-accent);
+  --segmented-thumb-shadow: 0 7px 17px rgba(18, 63, 53, 0.2);
+
   display: flex;
   gap: 3px;
   padding: 4px;
@@ -740,6 +860,11 @@
   color: #f8fbfa;
   background: var(--accounting-accent);
   box-shadow: 0 7px 17px rgba(18, 63, 53, 0.2);
+}
+
+.accounting-mode-tabs.segmented-control button[aria-pressed='true'] {
+  background: transparent;
+  box-shadow: none;
 }
 
 .accounting-overview {
@@ -999,6 +1124,9 @@
 }
 
 .transaction-type-switch {
+  --segmented-thumb-bg: var(--accounting-accent);
+  --segmented-thumb-shadow: 0 7px 16px rgba(18, 63, 53, 0.16);
+
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 3px;
@@ -1021,6 +1149,10 @@
 .transaction-type-switch button[aria-pressed='true'] {
   color: #f8fbfa;
   background: var(--accounting-accent);
+}
+
+.transaction-type-switch.segmented-control button[aria-pressed='true'] {
+  background: transparent;
 }
 
 .transaction-editor label,

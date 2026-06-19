@@ -46,6 +46,15 @@ describe('unified shell layout', () => {
       'aria-pressed',
       'true',
     )
+    expect(screen.getByRole('slider', { name: '页面滑块' })).toBeInTheDocument()
+    expect(screen.getByRole('slider', { name: '时间模式滑块' })).toHaveAttribute(
+      'aria-valuetext',
+      '日',
+    )
+    expect(screen.getByRole('slider', { name: '日历显示方式滑块' })).toHaveAttribute(
+      'aria-valuetext',
+      '周历',
+    )
     expect(screen.getByRole('button', { name: '回到今天' })).toHaveTextContent(
       '回到今天',
     )
@@ -104,6 +113,14 @@ describe('unified shell layout', () => {
     expect(shell).toHaveClass('has-data-panel')
     expect(shell).not.toHaveStyle({ '--data-panel-width': '0px' })
     expect(screen.getByLabelText('在途 EnRoute 主工作区')).toBeInTheDocument()
+    expect(screen.getByRole('slider', { name: '记账工作区滑块' })).toHaveAttribute(
+      'aria-valuetext',
+      '流水',
+    )
+    expect(screen.getByRole('slider', { name: '交易类型选择滑块' })).toHaveAttribute(
+      'aria-valuetext',
+      '支出',
+    )
   })
 
   it('switches the shared time panel between top-level range modes', () => {
