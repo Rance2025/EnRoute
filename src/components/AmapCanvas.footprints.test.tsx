@@ -85,12 +85,21 @@ function createDeferred<T>(): Deferred<T> {
 
 async function renderFootprintCanvas({
   aggregate = vi.fn(async () => aggregatedPoints),
+  containerSize = { width: 1024, height: 768 },
   dispose = vi.fn(),
   loadFootprintsPromise,
+  mapZoom = 10,
+  containerToLngLat = ({ x, y }: { x: number; y: number }) => ({
+    getLng: () => 121 + x / 1000,
+    getLat: () => 31 - y / 1000,
+  }),
 }: {
   aggregate?: (input: unknown) => Promise<AggregatedFootprintPoint[]>
+  containerSize?: { width: number; height: number }
   dispose?: () => void
   loadFootprintsPromise: Promise<FootprintPoint[]>
+  mapZoom?: number
+  containerToLngLat?: (point: { x: number; y: number }) => { getLng: () => number; getLat: () => number }
 }) {
   const moveEndHandlers: Array<() => void> = []
   const zoomEndHandlers: Array<() => void> = []
@@ -110,14 +119,11 @@ async function renderFootprintCanvas({
       if (eventName === 'zoomend') zoomEndHandlers.push(callback)
     })
     off = vi.fn()
-    getZoom = vi.fn(() => 10)
+    getZoom = vi.fn(() => mapZoom)
     getCenter = vi.fn(() => ({ getLng: () => 121.5, getLat: () => 31.2 }))
     lnglatToPixel = vi.fn(() => ({ x: 0, y: 0 }))
     lngLatToContainer = vi.fn(() => ({ x: 0, y: 0 }))
-    containerToLngLat = vi.fn(({ x, y }: { x: number; y: number }) => ({
-      getLng: () => 121 + x / 1000,
-      getLat: () => 31 - y / 1000,
-    }))
+    containerToLngLat = vi.fn(containerToLngLat)
     setCenter = vi.fn()
     setZoomAndCenter = vi.fn()
     setPitch = vi.fn()
@@ -153,6 +159,16 @@ async function renderFootprintCanvas({
 
   const { AmapCanvas } = await import('./AmapCanvas')
   const renderResult = render(<AmapCanvas config={configuredAmap} />)
+  const mapSurface = renderResult.container.querySelector('.amap-surface') as HTMLElement
+
+  Object.defineProperty(mapSurface, 'clientWidth', {
+    configurable: true,
+    value: containerSize.width,
+  })
+  Object.defineProperty(mapSurface, 'clientHeight', {
+    configurable: true,
+    value: containerSize.height,
+  })
 
   await waitFor(() => expect(moveEndHandlers).toHaveLength(1), { timeout: 1000 })
   await waitFor(() => expect(aggregate).not.toHaveBeenCalled())
@@ -202,12 +218,46 @@ describe('AmapCanvas footprint layer wiring', () => {
     expect(aggregate).toHaveBeenCalledWith({
       points: loadedPoints,
       zoom: 10,
-      cellSizePx: 8,
+      cellSizePx: 1,
       viewportBounds: expect.objectContaining({
         east: expect.any(Number),
         north: expect.any(Number),
         south: expect.any(Number),
         west: expect.any(Number),
+      }),
+    })
+  })
+
+  it('requests a full-world longitude viewport when the padded map spans one wrapped world', async () => {
+    const aggregate = vi.fn(async () => aggregatedPoints)
+    const loadFootprints = createDeferred<FootprintPoint[]>()
+    const { moveEndHandlers } = await renderFootprintCanvas({
+      aggregate,
+      containerSize: { width: 1024, height: 768 },
+      containerToLngLat: ({ y }) => ({
+        getLng: () => -75.804603,
+        getLat: () => (y < 0 ? 84.453846 : -68.986288),
+      }),
+      loadFootprintsPromise: loadFootprints.promise,
+      mapZoom: 2,
+    })
+
+    vi.useFakeTimers()
+    await act(async () => {
+      loadFootprints.resolve(loadedPoints)
+      await Promise.resolve()
+    })
+
+    moveEndHandlers[0]()
+    await vi.advanceTimersByTimeAsync(160)
+
+    expect(aggregate).toHaveBeenCalledWith({
+      points: loadedPoints,
+      zoom: 2,
+      cellSizePx: 1,
+      viewportBounds: expect.objectContaining({
+        east: 180,
+        west: -180,
       }),
     })
   })

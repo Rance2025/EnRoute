@@ -66,4 +66,17 @@ describe('aggregateFootprintPoints', () => {
     expect(result).toHaveLength(1)
     expect(result[0].count).toBe(1)
   })
+
+  it('keeps points inside a viewport that wraps across the world edge', () => {
+    const result = aggregateFootprintPoints({
+      points: [point('1', 121.511383, 31.296564), point('2', -30, 31.296564)],
+      zoom: 2,
+      cellSizePx: 8,
+      viewportBounds: { west: 60, south: 20, east: -160, north: 45 },
+    })
+
+    expect(result).toHaveLength(1)
+    expect(result[0].count).toBe(1)
+    expect(result[0].longitude).toBeCloseTo(121.511383, 5)
+  })
 })

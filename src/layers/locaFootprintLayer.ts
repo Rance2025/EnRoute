@@ -32,7 +32,7 @@ export function createLocaFootprintLayer(LocaRuntime: typeof Loca, map: AMap.Map
   pointLayer.setSource(new LocaRuntime.GeoJSONSource({ data: createFootprintGeoJson([]) }))
   pointLayer.setStyle({
     unit: 'px',
-    radius: 2,
+    radius: 1,
     color: 'rgba(184, 84, 76, 0.92)',
     borderWidth: 0,
     blurWidth: 0,

@@ -8,6 +8,7 @@ import {
 } from '../config/mapDragBounds'
 import { DEFAULT_MAP_CAMERA, resetMapCamera, type MapBounds } from '../config/mapCamera'
 import {
+  calculateWorldPixelWidthAtZoom,
   calculateSingleWorldMapPaneLayout,
   measureAmapWorldPixelWidthAtZoom,
 } from '../config/mapPaneLayout'
@@ -120,7 +121,7 @@ export function AmapCanvas({ config, onPanelWidthChange }: AmapCanvasProps) {
         ?.aggregate({
           points: footprintPointsRef.current,
           zoom: map.getZoom(),
-          cellSizePx: 8,
+          cellSizePx: 1,
           viewportBounds,
         })
         .then((points) => {
@@ -353,6 +354,8 @@ function getPaddedViewportBounds(
 ): LngLatBounds {
   const paddingX = container.clientWidth * paddingRatio
   const paddingY = container.clientHeight * paddingRatio
+  const viewportWidth = container.clientWidth + paddingX * 2
+  const worldWidth = calculateWorldPixelWidthAtZoom(map.getZoom())
   const corners = [
     map.containerToLngLat({ x: -paddingX, y: -paddingY }),
     map.containerToLngLat({
@@ -362,11 +365,12 @@ function getPaddedViewportBounds(
   ]
   const lngs = corners.map((corner) => corner.getLng())
   const lats = corners.map((corner) => corner.getLat())
+  const spansFullWorld = viewportWidth >= worldWidth - 1
 
   return {
-    west: Math.min(...lngs),
+    west: spansFullWorld ? -180 : lngs[0],
     south: Math.min(...lats),
-    east: Math.max(...lngs),
+    east: spansFullWorld ? 180 : lngs[1],
     north: Math.max(...lats),
   }
 }
