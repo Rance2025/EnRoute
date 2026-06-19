@@ -99,10 +99,10 @@ describe('createLocaFootprintLayer', () => {
     })
     expect(setStyle).toHaveBeenCalledWith({
       unit: 'px',
-      radius: expect.any(Function),
-      color: 'rgba(255, 225, 154, 0.92)',
+      radius: 2,
+      color: 'rgba(184, 84, 76, 0.92)',
       borderWidth: 0,
-      blurWidth: 5,
+      blurWidth: 0,
     })
     expect(container.add).toHaveBeenCalledWith(pointLayer)
   })
