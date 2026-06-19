@@ -164,6 +164,44 @@ describe('unified shell layout', () => {
     expect(screen.queryByLabelText('日历选择')).not.toBeInTheDocument()
   })
 
+  it('uses the current range granularity for the reset action', () => {
+    render(<App amapConfig={configuredAmap} />)
+
+    fireEvent.click(screen.getByRole('button', { name: '周' }))
+
+    expect(screen.getByRole('button', { name: '回到本周' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '月' }))
+
+    expect(screen.getByRole('button', { name: '回到本月' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /7月/ }))
+
+    expect(screen.getByRole('heading', { name: '7月' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '回到本月' }))
+
+    expect(screen.getByRole('heading', { name: '6月' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '年' }))
+
+    expect(screen.getByRole('button', { name: '回到今年' })).toBeInTheDocument()
+  })
+
+  it('renders month aggregation as a compact two-row picker without helper copy', () => {
+    render(<App amapConfig={configuredAmap} />)
+
+    fireEvent.click(screen.getByRole('button', { name: '月' }))
+
+    const monthSelector = screen.getByLabelText('月份聚合选择')
+
+    expect(within(monthSelector).getByText('按月聚合')).toBeInTheDocument()
+    expect(within(monthSelector).getAllByRole('button')).toHaveLength(12)
+    expect(within(monthSelector).queryByText('选择月份')).not.toBeInTheDocument()
+    expect(within(monthSelector).queryByText('选择')).not.toBeInTheDocument()
+    expect(within(monthSelector).queryByText('当前')).not.toBeInTheDocument()
+  })
+
   it('applies concrete selections from every time panel button group', () => {
     render(<App amapConfig={configuredAmap} />)
 
