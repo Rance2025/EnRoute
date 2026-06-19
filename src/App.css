@@ -639,6 +639,10 @@
   transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+.time-calendar-body--week .time-calendar-grid {
+  transition: none;
+}
+
 .time-picker-grid--days {
   grid-template-columns: repeat(7, minmax(0, 1fr));
 }

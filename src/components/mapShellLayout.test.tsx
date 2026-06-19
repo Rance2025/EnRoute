@@ -396,6 +396,51 @@ describe('unified shell layout', () => {
     expect(collapsedButtons[20]).toBe(weekButtons[20])
   })
 
+  it('keeps the same week row steady when selecting adjacent days across month end', () => {
+    render(<App amapConfig={configuredAmap} />)
+
+    fireEvent.click(screen.getByRole('button', { name: '月历' }))
+    fireEvent.click(screen.getByRole('button', { name: '下一段时间' }))
+    fireEvent.click(screen.getByRole('button', { name: '31' }))
+    fireEvent.click(screen.getByRole('button', { name: '周历' }))
+
+    const julyWeekGrid = screen.getByLabelText('日历日期')
+    const julyWeekBody = julyWeekGrid.closest('.time-calendar-body')
+    const julyWeekButtons = within(julyWeekGrid).getAllByRole('button')
+
+    expect(screen.getByRole('heading', { name: '7月31日' })).toBeInTheDocument()
+    expect(julyWeekBody).toHaveStyle({ '--time-calendar-visible-rows': '1' })
+    expect(julyWeekBody).toHaveStyle({ '--time-calendar-active-week-index': '4' })
+    expect(julyWeekButtons.slice(28, 35).map((button) => button.textContent)).toEqual([
+      '27',
+      '28',
+      '29',
+      '30',
+      '31',
+      '1',
+      '2',
+    ])
+
+    fireEvent.click(julyWeekButtons[33])
+
+    const augustWeekGrid = screen.getByLabelText('日历日期')
+    const augustWeekBody = augustWeekGrid.closest('.time-calendar-body')
+    const augustWeekButtons = within(augustWeekGrid).getAllByRole('button')
+
+    expect(screen.getByRole('heading', { name: '8月1日' })).toBeInTheDocument()
+    expect(augustWeekBody).toHaveStyle({ '--time-calendar-visible-rows': '1' })
+    expect(augustWeekBody).toHaveStyle({ '--time-calendar-active-week-index': '0' })
+    expect(augustWeekButtons.slice(0, 7).map((button) => button.textContent)).toEqual([
+      '27',
+      '28',
+      '29',
+      '30',
+      '31',
+      '1',
+      '2',
+    ])
+  })
+
   it('applies concrete selections from every time panel button group', () => {
     render(<App amapConfig={configuredAmap} />)
 
