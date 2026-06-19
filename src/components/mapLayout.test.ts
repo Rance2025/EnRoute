@@ -155,6 +155,16 @@ describe('map chrome layout', () => {
     )
   })
 
+  it('keeps day calendar active cells from casting clipped edge shadows', () => {
+    const calendarActiveRule = cssRule('.time-calendar-grid button.is-active')
+    const pickerActiveRule = cssRule('.time-picker-grid button.is-active')
+
+    expect(calendarActiveRule).toContain('box-shadow:')
+    expect(calendarActiveRule).toContain('inset')
+    expect(calendarActiveRule).not.toContain('0 9px 20px')
+    expect(pickerActiveRule).toContain('0 9px 20px')
+  })
+
   it('lets segmented sliders drag from the switch surface with drag cursors', () => {
     expect(cssRule('.segmented-control')).toContain('cursor: grab')
     expect(cssRule('.segmented-control')).toContain('user-select: none')
