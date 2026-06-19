@@ -202,6 +202,23 @@ describe('unified shell layout', () => {
     expect(within(monthSelector).queryByText('当前')).not.toBeInTheDocument()
   })
 
+  it('wraps week and month day calendars in animated mode-specific bodies', () => {
+    render(<App amapConfig={configuredAmap} />)
+
+    const weekBody = screen.getByLabelText('日历日期').closest('.time-calendar-body')
+
+    expect(weekBody).toHaveClass('time-calendar-body--week')
+    expect(within(weekBody as HTMLElement).getAllByRole('button')).toHaveLength(7)
+
+    fireEvent.click(screen.getByRole('button', { name: '月历' }))
+
+    const monthBody = screen.getByLabelText('日历日期').closest('.time-calendar-body')
+
+    expect(monthBody).toHaveClass('time-calendar-body--month')
+    expect(monthBody).toHaveStyle({ '--time-calendar-visible-rows': '5' })
+    expect(within(monthBody as HTMLElement).getAllByRole('button')).toHaveLength(35)
+  })
+
   it('applies concrete selections from every time panel button group', () => {
     render(<App amapConfig={configuredAmap} />)
 
