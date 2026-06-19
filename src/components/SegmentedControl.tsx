@@ -24,6 +24,7 @@ export function SegmentedControl<Value extends string>({
   const controlRef = useRef<HTMLDivElement>(null)
   const isDraggingRef = useRef(false)
   const [isDragging, setIsDragging] = useState(false)
+  const [dragIndex, setDragIndex] = useState<number | null>(null)
   const selectedIndex = Math.max(
     options.findIndex((option) => option.value === value),
     0,
@@ -39,33 +40,64 @@ export function SegmentedControl<Value extends string>({
     }
   }
 
-  function commitPointerPosition(clientX: number) {
+  function getPointerPosition(clientX: number) {
     const rect = controlRef.current?.getBoundingClientRect()
 
-    if (!rect || rect.width <= 0) return
+    if (!rect || rect.width <= 0) return undefined
 
-    const boundedRatio = Math.min(Math.max((clientX - rect.left) / rect.width, 0), 0.999)
-    const index = Math.floor(boundedRatio * options.length)
+    const boundedRatio = Math.min(Math.max((clientX - rect.left) / rect.width, 0), 1)
+    const previewIndex = boundedRatio * options.length - 0.5
+    const index = Math.min(
+      Math.max(Math.round(previewIndex), 0),
+      options.length - 1,
+    )
 
-    commitIndex(index)
+    return {
+      index,
+      previewIndex: Math.min(Math.max(previewIndex, 0), options.length - 1),
+    }
+  }
+
+  function previewPointerPosition(clientX: number) {
+    const position = getPointerPosition(clientX)
+
+    if (!position) return
+
+    setDragIndex(position.previewIndex)
+  }
+
+  function commitPointerPosition(clientX: number) {
+    const position = getPointerPosition(clientX)
+
+    if (!position) return
+
+    commitIndex(position.index)
   }
 
   function handlePointerDown(event: PointerEvent<HTMLSpanElement>) {
     isDraggingRef.current = true
     setIsDragging(true)
-    event.currentTarget.setPointerCapture?.(event.pointerId)
-    commitPointerPosition(event.clientX)
+    controlRef.current?.setPointerCapture?.(event.pointerId)
+    previewPointerPosition(event.clientX)
   }
 
-  function handlePointerMove(event: PointerEvent<HTMLSpanElement>) {
+  function handlePointerMove(event: PointerEvent<HTMLDivElement>) {
     if (!isDraggingRef.current) return
-    commitPointerPosition(event.clientX)
+    previewPointerPosition(event.clientX)
   }
 
-  function endDrag(event: PointerEvent<HTMLSpanElement>) {
+  function endDrag(event: PointerEvent<HTMLDivElement | HTMLSpanElement>) {
+    if (isDraggingRef.current) {
+      commitPointerPosition(event.clientX)
+    }
+
     isDraggingRef.current = false
     setIsDragging(false)
-    event.currentTarget.releasePointerCapture?.(event.pointerId)
+    setDragIndex(null)
+
+    if (controlRef.current?.hasPointerCapture?.(event.pointerId)) {
+      controlRef.current.releasePointerCapture(event.pointerId)
+    }
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLSpanElement>) {
@@ -97,13 +129,19 @@ export function SegmentedControl<Value extends string>({
   return (
     <div
       ref={controlRef}
-      className={['segmented-control', className].filter(Boolean).join(' ')}
+      className={['segmented-control', isDragging ? 'is-dragging' : null, className]
+        .filter(Boolean)
+        .join(' ')}
       role="group"
       aria-label={ariaLabel}
+      onPointerMove={handlePointerMove}
+      onPointerUp={endDrag}
+      onPointerCancel={endDrag}
       style={
         {
           '--segment-count': options.length,
           '--segment-index': selectedIndex,
+          ...(dragIndex === null ? {} : { '--segment-thumb-index': dragIndex }),
         } as CSSProperties
       }
     >
@@ -117,9 +155,6 @@ export function SegmentedControl<Value extends string>({
         aria-valuenow={selectedIndex}
         aria-valuetext={selectedOption?.label}
         onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={endDrag}
-        onPointerCancel={endDrag}
         onKeyDown={handleKeyDown}
       />
       {options.map((option) => (

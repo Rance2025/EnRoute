@@ -59,8 +59,33 @@ describe('map chrome layout', () => {
     expect(rule).toContain('line-height: 1')
   })
 
-  it('lets segmented sliders receive drag gestures above the active button', () => {
+  it('gives calendar arrows a clear press state', () => {
+    const buttonRule = cssRule('.time-calendar-bar button')
+    const activeRule = cssRule('.time-calendar-bar button:active')
+
+    expect(buttonRule).toContain('cursor: pointer')
+    expect(buttonRule).toContain('transform')
+    expect(buttonRule).toContain('box-shadow')
+    expect(activeRule).toContain('transform: scale(0.94)')
+    expect(activeRule).toContain('box-shadow')
+  })
+
+  it('keeps calendar date buttons from stacking hover lift and click press motion', () => {
+    const hoverRule = cssRule('.time-calendar-grid button:hover')
+    const activeRule = cssRule('.time-calendar-grid button:active')
+
+    expect(hoverRule).not.toContain('transform')
+    expect(activeRule).toContain('transform: scale(0.98)')
+  })
+
+  it('lets segmented sliders drag from the switch surface with drag cursors', () => {
+    expect(cssRule('.segmented-control')).toContain('cursor: grab')
+    expect(cssRule('.segmented-control.is-dragging')).toContain('cursor: grabbing')
+    expect(cssRule('.segmented-control button')).toContain('cursor: inherit')
     expect(cssRule('.segmented-control__thumb')).toContain('cursor: grab')
+    expect(cssRule('.segmented-control__thumb')).toContain(
+      'var(--segment-thumb-index, var(--segment-index))',
+    )
     expect(cssRule(".segmented-control button[aria-pressed='true']")).toContain(
       'pointer-events: none',
     )
