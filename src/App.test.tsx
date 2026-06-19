@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import App from './App'
@@ -138,7 +138,7 @@ describe('App', () => {
     expect(screen.getByText('总余额')).toBeInTheDocument()
   })
 
-  it('renders accounting accounts, transactions, category trees, tag trees, and editor fields', async () => {
+  it('renders the ledger page as transaction list plus quick record rail', async () => {
     render(
       <App
         amapConfig={{
@@ -161,18 +161,86 @@ describe('App', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '记账' }))
 
+    const ledgerWorkspace = screen.getByLabelText('交易流水工作区')
+
+    expect(ledgerWorkspace).toBeInTheDocument()
+    expect(within(ledgerWorkspace).getByRole('heading', { name: '快速记录' })).toBeInTheDocument()
+    expect(within(ledgerWorkspace).getAllByText('秒思 5月实习').length).toBeGreaterThan(0)
+    expect(within(ledgerWorkspace).getAllByText('鲜旺发牛肉火锅').length).toBeGreaterThan(0)
+    expect(within(ledgerWorkspace).getAllByText('餐饮 / 晚餐').length).toBeGreaterThan(0)
+    expect(within(ledgerWorkspace).getByLabelText('交易类型')).toBeInTheDocument()
+    expect(within(ledgerWorkspace).getByLabelText('金额')).toBeInTheDocument()
+    expect(within(ledgerWorkspace).getByLabelText('发生时间')).toBeInTheDocument()
+    expect(within(ledgerWorkspace).getByLabelText('备注')).toBeInTheDocument()
+    expect(screen.queryByText('分类与标签管理')).not.toBeInTheDocument()
+  })
+
+  it('renders stacked account cards on the account page', async () => {
+    render(
+      <App
+        amapConfig={{
+          key: '',
+          securityJsCode: '',
+          isConfigured: false,
+          missingKeys: ['VITE_AMAP_KEY', 'VITE_AMAP_SECURITY_CODE'],
+          defaultCenter: [104.195397, 35.86166],
+          defaultZoom: 4.2,
+          defaultBounds: {
+            southWest: [73.3, 17.8],
+            northEast: [135.1, 53.7],
+          },
+          themes: [],
+          features: ['bg', 'road', 'building'],
+          showLabel: false,
+        }}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '记账' }))
+    fireEvent.click(screen.getByRole('button', { name: '账户' }))
+
+    expect(screen.getByLabelText('账户堆叠卡片')).toBeInTheDocument()
     expect(screen.getAllByText('微信 - 日常').length).toBeGreaterThan(0)
     expect(screen.getAllByText('花呗').length).toBeGreaterThan(0)
-    expect(screen.getByText('秒思 5月实习')).toBeInTheDocument()
-    expect(screen.getByText('鲜旺发牛肉火锅')).toBeInTheDocument()
-    expect(screen.getByText('支出分类')).toBeInTheDocument()
-    expect(screen.getAllByText('餐饮 / 晚餐').length).toBeGreaterThan(0)
-    expect(screen.getByText('全局标签')).toBeInTheDocument()
-    expect(screen.getAllByText('旅行 / 青岛之行').length).toBeGreaterThan(0)
-    expect(screen.getByLabelText('交易类型')).toBeInTheDocument()
-    expect(screen.getByLabelText('金额')).toBeInTheDocument()
-    expect(screen.getByLabelText('发生时间')).toBeInTheDocument()
-    expect(screen.getByLabelText('备注')).toBeInTheDocument()
+    expect(screen.getByText('开账余额')).toBeInTheDocument()
+    expect(screen.getByText('账户规则')).toBeInTheDocument()
+  })
+
+  it('keeps category and tag management on the report page', async () => {
+    render(
+      <App
+        amapConfig={{
+          key: '',
+          securityJsCode: '',
+          isConfigured: false,
+          missingKeys: ['VITE_AMAP_KEY', 'VITE_AMAP_SECURITY_CODE'],
+          defaultCenter: [104.195397, 35.86166],
+          defaultZoom: 4.2,
+          defaultBounds: {
+            southWest: [73.3, 17.8],
+            northEast: [135.1, 53.7],
+          },
+          themes: [],
+          features: ['bg', 'road', 'building'],
+          showLabel: false,
+        }}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '记账' }))
+    fireEvent.click(screen.getByRole('button', { name: '统计' }))
+
+    const reportWorkspace = screen.getByLabelText('统计报告工作区')
+
+    expect(within(reportWorkspace).getByText('统计报告')).toBeInTheDocument()
+    expect(within(reportWorkspace).getByText('分类与标签管理')).toBeInTheDocument()
+    expect(within(reportWorkspace).getByRole('button', { name: '新建分类' })).toBeInTheDocument()
+    expect(within(reportWorkspace).getByRole('button', { name: '编辑标签' })).toBeInTheDocument()
+    expect(within(reportWorkspace).getByText('收入分类')).toBeInTheDocument()
+    expect(within(reportWorkspace).getAllByText('支出分类').length).toBeGreaterThan(1)
+    expect(within(reportWorkspace).getByText('转账分类')).toBeInTheDocument()
+    expect(within(reportWorkspace).getByText('全局标签')).toBeInTheDocument()
+    expect(within(reportWorkspace).getAllByText('旅行 / 青岛之行').length).toBeGreaterThan(0)
   })
 
   it('switches the whole accounting workspace between account, ledger, and report modes', async () => {
