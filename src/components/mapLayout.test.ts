@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 const appCss = readFileSync('src/App.css', 'utf8')
 const amapCanvasSource = readFileSync('src/components/AmapCanvas.tsx', 'utf8')
 const amapLoaderSource = readFileSync('src/services/amapLoader.ts', 'utf8')
+const segmentedControlSource = readFileSync('src/components/SegmentedControl.tsx', 'utf8')
 
 function cssRule(selector: string) {
   const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -131,16 +132,20 @@ describe('map chrome layout', () => {
 
   it('keeps segmented labels readable while the slider crosses each segment', () => {
     expect(cssRule('.segmented-control')).toContain(
-      '--segmented-label-contrast-color: #ffffff',
+      '--segmented-label-color: rgba(23, 35, 31, 0.62)',
     )
     expect(cssRule('.segmented-control button')).toContain(
-      'color: var(--segmented-label-contrast-color)',
+      'color: var(--segmented-label-color)',
     )
-    expect(cssRule('.segmented-control button')).toContain(
-      'mix-blend-mode: difference',
+    expect(cssRule('.segmented-control button')).not.toContain('mix-blend-mode')
+    expect(segmentedControlSource).toContain('segmented-control__thumb-label')
+    expect(cssRule('.segmented-control__thumb-label')).toContain(
+      'color: var(--segmented-active-label-color)',
     )
+    expect(cssRule('.segmented-control__thumb-label')).toContain('pointer-events: none')
+    expect(cssRule('.time-mode-tabs')).toContain('--segmented-active-label-color: #123f35')
     expect(lastCssRule(".segmented-control button[aria-pressed='true']")).toContain(
-      'color: var(--segmented-label-contrast-color)',
+      'color: transparent',
     )
     expect(lastCssRule(".segmented-control button[aria-pressed='true']")).toContain(
       'background: transparent',
@@ -149,7 +154,7 @@ describe('map chrome layout', () => {
       'box-shadow: none',
     )
     expect(lastCssRule('.segmented-control button:hover')).toContain(
-      'color: var(--segmented-label-contrast-color)',
+      'color: var(--segmented-label-color)',
     )
   })
 
