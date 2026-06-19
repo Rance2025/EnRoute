@@ -26,6 +26,11 @@ dist-ssr
 .playwright-mcp/
 .superpowers/
 .worktrees/
+output/
+
+# Local personal data samples
+external/
+public/local/
 
 # Local design/debug screenshots
 enroute-*.png
