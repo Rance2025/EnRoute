@@ -23,7 +23,6 @@ declare namespace Loca {
 
   class PointLayer {
     constructor(options: {
-      loca: Container
       zIndex?: number
       opacity?: number
       visible?: boolean

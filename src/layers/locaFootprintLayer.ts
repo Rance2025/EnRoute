@@ -23,13 +23,13 @@ export function createFootprintGeoJson(points: AggregatedFootprintPoint[]): Foot
 export function createLocaFootprintLayer(LocaRuntime: typeof Loca, map: AMap.Map) {
   const container = new LocaRuntime.Container({ map })
   const pointLayer = new LocaRuntime.PointLayer({
-    loca: container,
     zIndex: 20,
     opacity: 0.9,
     visible: true,
     blend: 'lighter',
   })
 
+  pointLayer.setSource(new LocaRuntime.GeoJSONSource({ data: createFootprintGeoJson([]) }))
   pointLayer.setStyle({
     unit: 'px',
     radius: (_index, feature) => Math.min(5, 1.5 + Math.log2((feature.properties.count ?? 1) + 1)),
@@ -37,7 +37,7 @@ export function createLocaFootprintLayer(LocaRuntime: typeof Loca, map: AMap.Map
     borderWidth: 0,
     blurWidth: 5,
   })
-  pointLayer.setSource(new LocaRuntime.GeoJSONSource({ data: createFootprintGeoJson([]) }))
+  container.add(pointLayer)
 
   return {
     update(points: AggregatedFootprintPoint[]) {
