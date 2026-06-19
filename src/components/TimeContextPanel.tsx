@@ -5,9 +5,13 @@ import { SegmentedControl, type SegmentedOption } from './SegmentedControl'
 import {
   createCurrentSelection,
   formatTimeRangeDate,
+  getCalendarLabel,
   getCurrentRangeActionLabel,
   getPickerPage,
   getTimeRangeDisplay,
+  getVisibleMonthDays,
+  getVisibleMonthWeekIndex,
+  moveDayCalendarPage,
   movePickerPage,
   selectDay,
   selectMonth,
@@ -15,6 +19,7 @@ import {
   selectWeek,
   selectYear,
   setCustomRangeBoundary,
+  type CalendarDisplayMode,
   type PickerPage,
   type PickerPageOption,
   type TimeRangeMode,
@@ -30,6 +35,11 @@ const timeModeOptions: Array<SegmentedOption<TimeRangeMode>> = [
   { value: 'year', label: '年' },
   { value: 'all', label: '全部' },
   { value: 'custom', label: '自定义' },
+]
+
+const calendarModeOptions: Array<SegmentedOption<CalendarDisplayMode>> = [
+  { value: 'week', label: '周历' },
+  { value: 'month', label: '月历' },
 ]
 
 const weekdayLabels = ['一', '二', '三', '四', '五', '六', '日']
@@ -63,12 +73,16 @@ const moduleSummaries: Record<
 type TimeContextPanelProps = {
   view: AppView
   selection: TimeRangeSelection
+  calendarMode: CalendarDisplayMode
+  onCalendarModeChange: (mode: CalendarDisplayMode) => void
   onSelectionChange: (selection: TimeRangeSelection) => void
 }
 
 export function TimeContextPanel({
   view,
   selection,
+  calendarMode,
+  onCalendarModeChange,
   onSelectionChange,
 }: TimeContextPanelProps) {
   const heading = getTimeRangeDisplay(selection)
@@ -118,7 +132,12 @@ export function TimeContextPanel({
         </header>
 
         <div className="time-panel-content">
-          {renderModeContent(selection, onSelectionChange)}
+          {renderModeContent(
+            selection,
+            calendarMode,
+            onCalendarModeChange,
+            onSelectionChange,
+          )}
         </div>
 
         <footer className="time-context-summary" aria-label="当前范围摘要">
@@ -150,10 +169,22 @@ function createSelectionFromPickerOption(
 
 function renderModeContent(
   selection: TimeRangeSelection,
+  calendarMode: CalendarDisplayMode,
+  onCalendarModeChange: (mode: CalendarDisplayMode) => void,
   onSelectionChange: (selection: TimeRangeSelection) => void,
 ) {
+  if (selection.mode === 'day') {
+    return (
+      <DayCalendarSection
+        selection={selection}
+        calendarMode={calendarMode}
+        onCalendarModeChange={onCalendarModeChange}
+        onSelectionChange={onSelectionChange}
+      />
+    )
+  }
+
   if (
-    selection.mode === 'day' ||
     selection.mode === 'week' ||
     selection.mode === 'month' ||
     selection.mode === 'year'
@@ -252,6 +283,111 @@ function renderModeContent(
   )
 }
 
+function DayCalendarSection({
+  selection,
+  calendarMode,
+  onCalendarModeChange,
+  onSelectionChange,
+}: {
+  selection: TimeRangeSelection
+  calendarMode: CalendarDisplayMode
+  onCalendarModeChange: (mode: CalendarDisplayMode) => void
+  onSelectionChange: (selection: TimeRangeSelection) => void
+}) {
+  return (
+    <section className="time-calendar-shell" aria-label="日历选择">
+      <div className="time-mode-section-head">
+        <strong>按日选择</strong>
+        <SegmentedControl
+          ariaLabel="日历显示方式"
+          className="time-calendar-switch"
+          options={calendarModeOptions}
+          value={calendarMode}
+          onChange={onCalendarModeChange}
+        />
+      </div>
+      <div className="time-calendar-bar">
+        <button
+          type="button"
+          aria-label="上一段时间"
+          onClick={() =>
+            onSelectionChange(moveDayCalendarPage(selection, -1, calendarMode))
+          }
+        >
+          ‹
+        </button>
+        <span>{getCalendarLabel(selection, calendarMode)}</span>
+        <button
+          type="button"
+          aria-label="下一段时间"
+          onClick={() =>
+            onSelectionChange(moveDayCalendarPage(selection, 1, calendarMode))
+          }
+        >
+          ›
+        </button>
+      </div>
+      <AnimatedDayCalendar
+        calendarMode={calendarMode}
+        selection={selection}
+        onSelectionChange={onSelectionChange}
+      />
+    </section>
+  )
+}
+
+function AnimatedDayCalendar({
+  calendarMode,
+  selection,
+  onSelectionChange,
+}: {
+  calendarMode: CalendarDisplayMode
+  selection: TimeRangeSelection
+  onSelectionChange: (selection: TimeRangeSelection) => void
+}) {
+  const days = getVisibleMonthDays(selection.anchorDate)
+  const renderedRows = days.length / 7
+  const visibleRows = calendarMode === 'week' ? 1 : renderedRows
+  const activeWeekIndex = getVisibleMonthWeekIndex(selection.anchorDate)
+
+  return (
+    <div
+      className={`time-calendar-body time-calendar-body--${calendarMode}`}
+      style={
+        {
+          '--time-calendar-visible-rows': visibleRows,
+          '--time-calendar-active-week-index': activeWeekIndex,
+        } as CSSProperties
+      }
+    >
+      <div className="time-calendar-weekdays">
+        {weekdayLabels.map((label) => (
+          <span key={label} className="time-calendar-weekday">
+            {label}
+          </span>
+        ))}
+      </div>
+      <div className="time-calendar-grid" aria-label="日历日期">
+        {days.map((day) => (
+          <button
+            type="button"
+            key={day.date}
+            className={[
+              selection.start === day.date ? 'is-active' : null,
+              day.inCurrentMonth ? null : 'is-outside-month',
+            ]
+              .filter(Boolean)
+              .join(' ')}
+            onClick={() => onSelectionChange(selectDay(day.date))}
+          >
+            {day.day}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function TimePickerPage({
   page,
   onMove,
@@ -261,21 +397,7 @@ function TimePickerPage({
   onMove: (direction: -1 | 1) => void
   onSelect: (option: PickerPageOption) => void
 }) {
-  const isCalendarGrid = page.mode === 'day' || page.mode === 'week'
-  const gridClassName = [
-    'time-picker-grid',
-    page.gridClassName,
-    isCalendarGrid ? 'time-picker-grid--calendar' : null,
-  ]
-    .filter(Boolean)
-    .join(' ')
-  const calendarFrameStyle = isCalendarGrid
-    ? ({
-        '--time-picker-visible-rows': page.visibleRows,
-        '--time-picker-active-week-index': page.activeWeekIndex,
-        '--time-picker-grid-offset': page.mode === 'week' ? page.activeWeekIndex * -1 : 0,
-      } as CSSProperties)
-    : undefined
+  const gridClassName = ['time-picker-grid', page.gridClassName].join(' ')
   const optionButtons = page.options.map((option) => (
     <button
       type="button"
@@ -307,20 +429,7 @@ function TimePickerPage({
           ›
         </button>
       </div>
-      {isCalendarGrid ? (
-        <div className="time-picker-calendar-frame" style={calendarFrameStyle}>
-          <div className="time-picker-calendar-weekdays">
-            {weekdayLabels.map((label) => (
-              <span key={label} className="time-calendar-weekday">
-                {label}
-              </span>
-            ))}
-          </div>
-          <div className={gridClassName}>{optionButtons}</div>
-        </div>
-      ) : (
-        <div className={gridClassName}>{optionButtons}</div>
-      )}
+      <div className={gridClassName}>{optionButtons}</div>
     </section>
   )
 }

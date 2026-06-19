@@ -100,21 +100,48 @@ describe('map chrome layout', () => {
     expect(gridActiveRule).not.toContain('box-shadow')
   })
 
-  it('keeps unified time picker grids compact across day week month and year modes', () => {
-    expect(cssRule('.time-picker-grid')).toContain('gap: 6px')
-    expect(cssRule('.time-picker-calendar-frame')).toContain('overflow: hidden')
-    expect(cssRule('.time-picker-calendar-frame')).toContain(
-      'transition: max-height 260ms cubic-bezier(0.22, 1, 0.36, 1)',
+  it('animates the day calendar by clipping and translating one stable month grid', () => {
+    const shellRule = cssRule('.time-calendar-shell')
+    const switchRule = cssRule('.time-calendar-switch')
+    const bodyRule = cssRule('.time-calendar-body')
+    const weekBodyRule = cssRule('.time-calendar-body--week')
+    const monthBodyRule = cssRule('.time-calendar-body--month')
+    const weekdaysRule = cssRule('.time-calendar-weekdays')
+    const gridRule = cssRule('.time-calendar-grid')
+    const buttonRule = cssRule('.time-calendar-grid button')
+
+    expect(shellRule).toContain('--time-calendar-day-height: 37px')
+    expect(shellRule).toContain('--time-calendar-weekday-height: 17px')
+    expect(shellRule).toContain('--time-calendar-grid-gap: 5px')
+    expect(switchRule).toContain('grid-template-columns: repeat(2, auto)')
+    expect(bodyRule).toContain('overflow: hidden')
+    expect(bodyRule).toContain(
+      'max-height 260ms cubic-bezier(0.22, 1, 0.36, 1)',
     )
-    expect(cssRule('.time-picker-calendar-weekdays')).toContain(
-      'grid-template-columns: repeat(7, minmax(0, 1fr))',
+    expect(weekBodyRule).toContain('--time-calendar-visible-rows: 1')
+    expect(weekBodyRule).toContain(
+      '--time-calendar-grid-offset: calc(var(--time-calendar-active-week-index) * -1)',
     )
-    expect(cssRule('.time-picker-grid--calendar')).toContain('transform: translateY(')
-    expect(cssRule('.time-picker-grid--calendar')).toContain(
+    expect(monthBodyRule).toContain('--time-calendar-grid-offset: 0')
+    expect(weekdaysRule).toContain('grid-template-columns: repeat(7, minmax(0, 1fr))')
+    expect(weekdaysRule).toContain('margin-top: var(--time-calendar-grid-top-gap)')
+    expect(gridRule).toContain('grid-template-columns: repeat(7, minmax(0, 1fr))')
+    expect(gridRule).toContain('margin-top: var(--time-calendar-grid-gap)')
+    expect(gridRule).toContain('transform: translateY(')
+    expect(gridRule).toContain(
       'transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1)',
     )
+    expect(buttonRule).toContain('height: var(--time-calendar-day-height)')
+    expect(buttonRule).toContain('min-height: var(--time-calendar-day-height)')
+  })
+
+  it('keeps unified top-level time picker grids compact across week month and year modes', () => {
+    expect(cssRule('.time-picker-grid')).toContain('gap: 6px')
     expect(cssRule('.time-picker-grid--days')).toContain(
       'grid-template-columns: repeat(7, minmax(0, 1fr))',
+    )
+    expect(cssRule('.time-picker-grid--weeks')).toContain(
+      'grid-template-columns: repeat(2, minmax(0, 1fr))',
     )
     expect(cssRule('.time-picker-grid--months')).toContain(
       'grid-template-columns: repeat(6, minmax(0, 1fr))',

@@ -1,4 +1,5 @@
 export type TimeRangeMode = 'day' | 'week' | 'month' | 'year' | 'all' | 'custom'
+export type CalendarDisplayMode = 'week' | 'month'
 export type TimePresetKey = 'all' | 'imported' | 'recent30' | 'qingdao' | 'quarter'
 
 export type TimeRangeSelection = {
@@ -41,13 +42,13 @@ type PickerPageBase = {
 }
 
 export type CalendarPickerPage = PickerPageBase & {
-  mode: Extract<PickerPageMode, 'day' | 'week'>
+  mode: 'day'
   visibleRows: number
   activeWeekIndex: number
 }
 
 export type AggregatePickerPage = PickerPageBase & {
-  mode: Extract<PickerPageMode, 'month' | 'year'>
+  mode: Extract<PickerPageMode, 'week' | 'month' | 'year'>
   visibleRows?: never
   activeWeekIndex?: never
 }
@@ -280,6 +281,26 @@ export function movePickerPage(
   return selectDay(formatDateKey(addMonths(anchor, direction)))
 }
 
+export function moveDayCalendarPage(
+  selection: TimeRangeSelection,
+  direction: -1 | 1,
+  calendarMode: CalendarDisplayMode,
+): TimeRangeSelection {
+  const anchor = parseDate(selection.anchorDate)
+
+  if (calendarMode === 'week') {
+    return selectDay(formatDateKey(addDays(anchor, direction * 7)))
+  }
+
+  return selectDay(formatDateKey(addMonths(anchor, direction)))
+}
+
+export function getCalendarLabel(selection: TimeRangeSelection, calendarMode: CalendarDisplayMode) {
+  void calendarMode
+
+  return formatYearMonth(selection.anchorDate)
+}
+
 export function getVisibleMonthDays(anchorDate: string): DateCell[] {
   const anchor = parseDate(anchorDate)
   const year = anchor.getFullYear()
@@ -331,23 +352,33 @@ function getDayPickerPage(selection: TimeRangeSelection): PickerPage {
 }
 
 function getWeekPickerPage(selection: TimeRangeSelection): PickerPage {
-  const days = getVisibleMonthDays(selection.anchorDate)
+  const anchor = parseDate(selection.anchorDate)
+  const firstVisibleWeek = startOfWeek(new Date(anchor.getFullYear(), anchor.getMonth(), 1))
+  const lastMonthDay = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0)
+  const lastVisibleWeek = startOfWeek(lastMonthDay)
+  const weekCount =
+    Math.round((lastVisibleWeek.getTime() - firstVisibleWeek.getTime()) / (86_400_000 * 7)) +
+    1
 
   return {
     mode: 'week',
     title: formatYearMonth(selection.anchorDate),
     label: '按周聚合',
-    gridClassName: 'time-picker-grid--days',
-    visibleRows: 1,
-    activeWeekIndex: getVisibleMonthWeekIndex(selection.anchorDate),
-    options: days.map((day) => ({
-      key: day.date,
-      label: String(day.day),
-      start: day.date,
-      end: day.date,
-      active: selection.start <= day.date && day.date <= selection.end,
-      outsidePage: day.inCurrentMonth ? false : true,
-    })),
+    gridClassName: 'time-picker-grid--weeks',
+    options: Array.from({ length: weekCount }, (_, index) => {
+      const start = addDays(firstVisibleWeek, index * 7)
+      const startKey = formatDateKey(start)
+      const endKey = formatDateKey(addDays(start, 6))
+
+      return {
+        key: startKey,
+        label: `第${getWeekNumber(startKey)}周`,
+        detail: `${formatMonthDay(startKey)} - ${formatMonthDay(endKey)}`,
+        start: startKey,
+        end: endKey,
+        active: selection.mode === 'week' && selection.start === startKey,
+      }
+    }),
   }
 }
 
