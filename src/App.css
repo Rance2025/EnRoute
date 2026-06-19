@@ -382,30 +382,7 @@
 }
 
 .time-panel-content__stage {
-  --time-range-enter-x: 0px;
-
-  animation: timeRangeStageIn 220ms cubic-bezier(0.22, 1, 0.36, 1);
-  will-change: transform, opacity;
-}
-
-.time-panel-content__stage--previous {
-  --time-range-enter-x: -12px;
-}
-
-.time-panel-content__stage--next {
-  --time-range-enter-x: 12px;
-}
-
-@keyframes timeRangeStageIn {
-  from {
-    opacity: 0.72;
-    transform: translateX(var(--time-range-enter-x));
-  }
-
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
+  min-width: 0;
 }
 
 .time-panel-content::-webkit-scrollbar {
@@ -564,7 +541,6 @@
 .time-picker-grid {
   display: grid;
   gap: 6px;
-  margin-top: 10px;
 }
 
 .time-calendar-body {
@@ -605,6 +581,49 @@
   margin-top: var(--time-calendar-grid-gap);
   overflow: hidden;
   transition: height 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.time-picker-grid-window {
+  margin-top: 10px;
+  overflow: hidden;
+}
+
+.time-calendar-grid-motion {
+  --time-range-enter-x: 0px;
+
+  width: 100%;
+}
+
+.time-picker-grid-motion {
+  --time-range-enter-x: 0px;
+
+  width: 100%;
+}
+
+.time-range-grid-motion--previous {
+  --time-range-enter-x: -14px;
+
+  animation: timeRangeGridIn 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform, opacity;
+}
+
+.time-range-grid-motion--next {
+  --time-range-enter-x: 14px;
+
+  animation: timeRangeGridIn 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform, opacity;
+}
+
+@keyframes timeRangeGridIn {
+  from {
+    opacity: 0.72;
+    transform: translateX(var(--time-range-enter-x));
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 .time-calendar-grid {
