@@ -49,6 +49,7 @@ function AmapCanvasComponent({ config, onPanelWidthChange }: AmapCanvasProps) {
   )
   const [errorMessage, setErrorMessage] = useState('')
   const [footprintStyle, setFootprintStyle] = useState<FootprintStyle>(readStoredFootprintStyle)
+  const footprintStyleRef = useRef(footprintStyle)
 
   const themes = config.themes.length ? config.themes : AMAP_THEMES
   const mapTheme = themes[0]
@@ -56,6 +57,15 @@ function AmapCanvasComponent({ config, onPanelWidthChange }: AmapCanvasProps) {
   const destroyFootprintLayer = useCallback(() => {
     footprintLayerRef.current?.destroy()
     footprintLayerRef.current = null
+  }, [])
+
+  const updateFootprintStyle = useCallback((nextFootprintStyle: FootprintStyle) => {
+    const normalizedFootprintStyle = normalizeFootprintStyle(nextFootprintStyle)
+    if (areFootprintStylesEqual(footprintStyleRef.current, normalizedFootprintStyle)) return
+
+    footprintStyleRef.current = normalizedFootprintStyle
+    writeStoredFootprintStyle(normalizedFootprintStyle)
+    setFootprintStyle(normalizedFootprintStyle)
   }, [])
 
   const clearZoomClampTimers = useCallback(() => {
@@ -249,10 +259,6 @@ function AmapCanvasComponent({ config, onPanelWidthChange }: AmapCanvasProps) {
   }, [destroyFootprintLayer, footprintStyle, status])
 
   useEffect(() => {
-    writeStoredFootprintStyle(footprintStyle)
-  }, [footprintStyle])
-
-  useEffect(() => {
     function updateLayoutAfterResize() {
       if (!mapRef.current || !mapNodeRef.current) return
       updatePaneLayout(mapRef.current, mapNodeRef.current)
@@ -299,7 +305,7 @@ function AmapCanvasComponent({ config, onPanelWidthChange }: AmapCanvasProps) {
             onZoomIn={zoomIn}
             onZoomOut={zoomOut}
             footprintStyle={footprintStyle}
-            onFootprintStyleChange={setFootprintStyle}
+            onFootprintStyleChange={updateFootprintStyle}
           />
           {status === 'error' ? (
             <div className="map-message" role="alert">
@@ -345,5 +351,11 @@ function writeStoredFootprintStyle(footprintStyle: FootprintStyle) {
   } catch {
     // Storage can be unavailable in privacy modes; the live map style should still work.
   }
+}
+
+function areFootprintStylesEqual(left: FootprintStyle, right: FootprintStyle) {
+  return left.pixelSize === right.pixelSize &&
+    left.color === right.color &&
+    left.opacity === right.opacity
 }
 

@@ -206,6 +206,17 @@ describe('createMassFootprintLayer', () => {
     ])
   })
 
+  it('reuses converted native data for the same raw footprint point array', () => {
+    const runtime = createMassMarksRuntime()
+    const layer = createMassFootprintLayer(runtime, {} as AMap.Map)
+
+    layer.update(points)
+    layer.update(points)
+
+    expect(runtime.setData).toHaveBeenCalledTimes(2)
+    expect(runtime.setData.mock.calls[1]?.[0]).toBe(runtime.setData.mock.calls[0]?.[0])
+  })
+
   it('clears and detaches the native MassMarks layer on destroy', () => {
     const runtime = createMassMarksRuntime()
     const layer = createMassFootprintLayer(runtime, {} as AMap.Map)

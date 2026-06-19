@@ -40,6 +40,20 @@ const loadedPoints: FootprintPoint[] = [
     isBackForeground: 1,
     stepType: 0,
   },
+  {
+    id: '2',
+    timestampSeconds: 2,
+    longitude: 121.500001,
+    latitude: 31.200001,
+    accuracy: 5,
+    speed: -1,
+    distance: 0,
+    heading: 0,
+    altitude: 0,
+    locType: 1,
+    isBackForeground: 1,
+    stepType: 0,
+  },
 ]
 
 const localStorageMock = createLocalStorageMock()
@@ -203,6 +217,8 @@ describe('AmapCanvas footprint layer wiring', () => {
       },
     )
     expect(layerRecords[0].update).toHaveBeenCalledWith(loadedPoints)
+    expect(layerRecords[0].update.mock.calls[0]?.[0]).toHaveLength(2)
+    expect(layerRecords[0].update.mock.calls[0]?.[0].map((point) => point.id)).toEqual(['1', '2'])
 
     layerRecords[0].update.mockClear()
 
@@ -319,7 +335,7 @@ describe('AmapCanvas footprint layer wiring', () => {
     expect(layerRecords[0].destroy).toHaveBeenCalledTimes(1)
   })
 
-  it('recreates the native footprint layer with loaded points when toolbar style settings change', async () => {
+  it('defers native footprint style recreation until toolbar edits settle', async () => {
     const loadFootprints = createDeferred<FootprintPoint[]>()
     const { createMassFootprintLayer, layerRecords } = await renderFootprintMassMarks({
       loadFootprintsPromise: loadFootprints.promise,
@@ -329,29 +345,80 @@ describe('AmapCanvas footprint layer wiring', () => {
       loadFootprints.resolve(loadedPoints)
       await Promise.resolve()
     })
+    await waitFor(() => expect(createMassFootprintLayer).toHaveBeenCalledTimes(1))
+    vi.useFakeTimers()
 
     fireEvent.click(screen.getByRole('button', { name: '足迹显示设置' }))
-    fireEvent.change(screen.getByLabelText('足迹点大小'), {
+    const sizeInput = screen.getByLabelText('足迹点大小')
+    const opacityInput = screen.getByLabelText('足迹点透明度')
+    const colorInput = screen.getByLabelText('足迹点颜色')
+
+    fireEvent.change(sizeInput, {
       target: { value: '2.4' },
     })
-    fireEvent.change(screen.getByLabelText('足迹点颜色'), {
+    fireEvent.change(opacityInput, {
+      target: { value: '0.64' },
+    })
+    fireEvent.change(colorInput, {
       target: { value: '#4f7cff' },
     })
 
-    await waitFor(() => expect(createMassFootprintLayer).toHaveBeenCalledTimes(3))
+    expect(sizeInput).toHaveValue('2.4')
+    expect(opacityInput).toHaveValue('0.64')
+    expect(colorInput).toHaveValue('#4f7cff')
+    expect(createMassFootprintLayer).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      vi.advanceTimersByTime(179)
+      await Promise.resolve()
+    })
+
+    expect(createMassFootprintLayer).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      vi.advanceTimersByTime(1)
+      await Promise.resolve()
+    })
+
+    expect(createMassFootprintLayer).toHaveBeenCalledTimes(2)
 
     expect(layerRecords[0].destroy).toHaveBeenCalled()
-    expect(layerRecords[1].destroy).toHaveBeenCalled()
     expect(createMassFootprintLayer).toHaveBeenLastCalledWith(
       expect.objectContaining({ MassMarks: expect.any(Function) }),
       expect.any(Object),
       {
         color: '#4f7cff',
-        opacity: 0.82,
+        opacity: 0.64,
         pixelSize: 2.4,
       },
     )
-    expect(layerRecords[2].update).toHaveBeenCalledWith(loadedPoints)
+    expect(layerRecords[1].update).toHaveBeenCalledWith(loadedPoints)
+  })
+
+  it('skips native footprint layer recreation for equivalent style commits', async () => {
+    const loadFootprints = createDeferred<FootprintPoint[]>()
+    const setItemSpy = vi.spyOn(window.localStorage, 'setItem')
+    const { createMassFootprintLayer } = await renderFootprintMassMarks({
+      loadFootprintsPromise: loadFootprints.promise,
+    })
+
+    await act(async () => {
+      loadFootprints.resolve(loadedPoints)
+      await Promise.resolve()
+    })
+    await waitFor(() => expect(createMassFootprintLayer).toHaveBeenCalledTimes(1))
+    vi.useFakeTimers()
+
+    fireEvent.click(screen.getByRole('button', { name: '足迹显示设置' }))
+    fireEvent.click(screen.getByRole('button', { name: '选择足迹点颜色 #123f35' }))
+
+    await act(async () => {
+      vi.advanceTimersByTime(180)
+      await Promise.resolve()
+    })
+
+    expect(setItemSpy).not.toHaveBeenCalled()
+    expect(createMassFootprintLayer).toHaveBeenCalledTimes(1)
   })
 
   it('restores valid stored footprint style settings before creating the native layer', async () => {
