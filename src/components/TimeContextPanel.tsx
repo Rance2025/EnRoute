@@ -3,21 +3,18 @@ import { SegmentedControl, type SegmentedOption } from './SegmentedControl'
 import {
   createCurrentSelection,
   formatTimeRangeDate,
-  getCalendarLabel,
   getCurrentRangeActionLabel,
+  getPickerPage,
   getTimeRangeDisplay,
-  getVisibleMonthDays,
-  getVisibleWeekDays,
-  getWeekOptions,
-  isSelectionActive,
-  moveTimeSelection,
+  movePickerPage,
   selectDay,
   selectMonth,
   selectPresetRange,
   selectWeek,
   selectYear,
   setCustomRangeBoundary,
-  type CalendarDisplayMode,
+  type PickerPage,
+  type PickerPageOption,
   type TimeRangeMode,
   type TimeRangeSelection,
 } from '../time/timeRange'
@@ -33,14 +30,7 @@ const timeModeOptions: Array<SegmentedOption<TimeRangeMode>> = [
   { value: 'custom', label: '自定义' },
 ]
 
-const calendarModeOptions: Array<SegmentedOption<CalendarDisplayMode>> = [
-  { value: 'week', label: '周历' },
-  { value: 'month', label: '月历' },
-]
-
 const weekdayLabels = ['一', '二', '三', '四', '五', '六', '日']
-const monthOptions = Array.from({ length: 12 }, (_, index) => index + 1)
-const yearOptions = [2022, 2023, 2024, 2025, 2026, 2027]
 
 const moduleSummaries: Record<
   AppView,
@@ -71,16 +61,12 @@ const moduleSummaries: Record<
 type TimeContextPanelProps = {
   view: AppView
   selection: TimeRangeSelection
-  calendarMode: CalendarDisplayMode
-  onCalendarModeChange: (mode: CalendarDisplayMode) => void
   onSelectionChange: (selection: TimeRangeSelection) => void
 }
 
 export function TimeContextPanel({
   view,
   selection,
-  calendarMode,
-  onCalendarModeChange,
   onSelectionChange,
 }: TimeContextPanelProps) {
   const heading = getTimeRangeDisplay(selection)
@@ -130,12 +116,7 @@ export function TimeContextPanel({
         </header>
 
         <div className="time-panel-content">
-          {renderModeContent(
-            selection,
-            calendarMode,
-            onCalendarModeChange,
-            onSelectionChange,
-          )}
+          {renderModeContent(selection, onSelectionChange)}
         </div>
 
         <footer className="time-context-summary" aria-label="当前范围摘要">
@@ -151,141 +132,40 @@ export function TimeContextPanel({
   )
 }
 
+function createSelectionFromPickerOption(
+  mode: PickerPage['mode'],
+  option: PickerPageOption,
+): TimeRangeSelection {
+  if (mode === 'day') return selectDay(option.start)
+  if (mode === 'week') return selectWeek(option.start)
+  if (mode === 'month') {
+    const date = new Date(`${option.start}T00:00:00`)
+    return selectMonth(date.getFullYear(), date.getMonth() + 1)
+  }
+
+  return selectYear(new Date(`${option.start}T00:00:00`).getFullYear())
+}
+
 function renderModeContent(
   selection: TimeRangeSelection,
-  calendarMode: CalendarDisplayMode,
-  setCalendarMode: (mode: CalendarDisplayMode) => void,
   onSelectionChange: (selection: TimeRangeSelection) => void,
 ) {
-  if (selection.mode === 'day') {
-    return (
-      <section className="time-calendar-shell" aria-label="日历选择">
-        <div className="time-mode-section-head">
-          <strong>按日选择</strong>
-          <SegmentedControl
-            ariaLabel="日历显示方式"
-            className="time-calendar-switch"
-            options={calendarModeOptions}
-            value={calendarMode}
-            onChange={setCalendarMode}
-          />
-        </div>
-        <div className="time-calendar-bar">
-          <button
-            type="button"
-            aria-label="上一段时间"
-            onClick={() => onSelectionChange(moveTimeSelection(selection, -1, calendarMode))}
-          >
-            ‹
-          </button>
-          <span>{getCalendarLabel(selection, calendarMode)}</span>
-          <button
-            type="button"
-            aria-label="下一段时间"
-            onClick={() => onSelectionChange(moveTimeSelection(selection, 1, calendarMode))}
-          >
-            ›
-          </button>
-        </div>
-        {calendarMode === 'week' ? (
-          <WeekCalendar selection={selection} onSelect={onSelectionChange} />
-        ) : (
-          <MonthCalendar selection={selection} onSelect={onSelectionChange} />
-        )}
-      </section>
-    )
-  }
-
-  if (selection.mode === 'week') {
-    return (
-      <section className="time-selector-shell" aria-label="周聚合选择">
-        <div className="time-mode-section-head">
-          <strong>按周聚合</strong>
-          <span>选择一周</span>
-        </div>
-        <div className="time-selector-list">
-          {getWeekOptions(selection.anchorDate).map((option) => (
-            <button
-              type="button"
-              key={option.label}
-              className={
-                isSelectionActive(selection, 'week', option.date) ? 'is-active' : undefined
-              }
-              onClick={() => onSelectionChange(selectWeek(option.date))}
-            >
-              <span>
-                <strong>{option.label}</strong>
-                <small>{option.detail}</small>
-              </span>
-              <em>{option.value}</em>
-            </button>
-          ))}
-        </div>
-      </section>
-    )
-  }
-
-  if (selection.mode === 'month') {
-    const selectedYear = new Date(`${selection.anchorDate}T00:00:00`).getFullYear()
+  if (
+    selection.mode === 'day' ||
+    selection.mode === 'week' ||
+    selection.mode === 'month' ||
+    selection.mode === 'year'
+  ) {
+    const page = getPickerPage(selection)
 
     return (
-      <section className="time-selector-shell" aria-label="月份聚合选择">
-        <div className="time-mode-section-head">
-          <strong>按月聚合</strong>
-        </div>
-        <div className="time-grid-selector time-grid-selector--months">
-          {monthOptions.map((option) => (
-            <button
-              type="button"
-              key={option}
-              className={
-                isSelectionActive(
-                  selection,
-                  'month',
-                  `${selectedYear}-${String(option).padStart(2, '0')}-01`,
-                )
-                  ? 'is-active'
-                  : undefined
-              }
-              onClick={() => onSelectionChange(selectMonth(selectedYear, option))}
-            >
-              {option}月
-            </button>
-          ))}
-        </div>
-      </section>
-    )
-  }
-
-  if (selection.mode === 'year') {
-    return (
-      <section className="time-selector-shell" aria-label="年份聚合选择">
-        <div className="time-mode-section-head">
-          <strong>按年聚合</strong>
-          <span>选择年份</span>
-        </div>
-        <div className="time-grid-selector time-grid-selector--years">
-          {yearOptions.map((option) => (
-            <button
-              type="button"
-              key={option}
-              className={
-                isSelectionActive(selection, 'year', `${option}-01-01`)
-                  ? 'is-active'
-                  : undefined
-              }
-              onClick={() => onSelectionChange(selectYear(option))}
-            >
-              {option}
-              <span>
-                {isSelectionActive(selection, 'year', `${option}-01-01`)
-                  ? '当前'
-                  : '年度'}
-              </span>
-            </button>
-          ))}
-        </div>
-      </section>
+      <TimePickerPage
+        page={page}
+        onMove={(direction) => onSelectionChange(movePickerPage(selection, direction))}
+        onSelect={(option) =>
+          onSelectionChange(createSelectionFromPickerOption(page.mode, option))
+        }
+      />
     )
   }
 
@@ -370,63 +250,53 @@ function renderModeContent(
   )
 }
 
-function WeekCalendar({
-  selection,
+function TimePickerPage({
+  page,
+  onMove,
   onSelect,
 }: {
-  selection: TimeRangeSelection
-  onSelect: (selection: TimeRangeSelection) => void
+  page: PickerPage
+  onMove: (direction: -1 | 1) => void
+  onSelect: (option: PickerPageOption) => void
 }) {
   return (
-    <div className="time-calendar-grid time-calendar-grid--week">
-      {weekdayLabels.map((label) => (
-        <span key={label} className="time-calendar-weekday">
-          {label}
-        </span>
-      ))}
-      {getVisibleWeekDays(selection.anchorDate).map((date) => (
-        <button
-          type="button"
-          key={date.date}
-          className={selection.start === date.date ? 'is-active' : undefined}
-          onClick={() => onSelect(selectDay(date.date))}
-        >
-          {date.day}
+    <section className="time-selector-shell" aria-label="时间选择页">
+      <div className="time-mode-section-head">
+        <strong>{page.label}</strong>
+      </div>
+      <div className="time-picker-bar">
+        <button type="button" aria-label="上一页" onClick={() => onMove(-1)}>
+          ‹
         </button>
-      ))}
-    </div>
-  )
-}
-
-function MonthCalendar({
-  selection,
-  onSelect,
-}: {
-  selection: TimeRangeSelection
-  onSelect: (selection: TimeRangeSelection) => void
-}) {
-  return (
-    <div className="time-calendar-grid time-calendar-grid--month">
-      {weekdayLabels.map((label) => (
-        <span key={label} className="time-calendar-weekday">
-          {label}
-        </span>
-      ))}
-      {getVisibleMonthDays(selection.anchorDate).map((day) => (
-        <button
-          type="button"
-          key={day.date}
-          className={[
-            selection.start === day.date ? 'is-active' : null,
-            day.inCurrentMonth ? null : 'is-outside-month',
-          ]
-            .filter(Boolean)
-            .join(' ')}
-          onClick={() => onSelect(selectDay(day.date))}
-        >
-          {day.day}
+        <span>{page.title}</span>
+        <button type="button" aria-label="下一页" onClick={() => onMove(1)}>
+          ›
         </button>
-      ))}
-    </div>
+      </div>
+      <div className={['time-picker-grid', page.gridClassName].join(' ')}>
+        {page.mode === 'day' &&
+          weekdayLabels.map((label) => (
+            <span key={label} className="time-calendar-weekday">
+              {label}
+            </span>
+          ))}
+        {page.options.map((option) => (
+          <button
+            type="button"
+            key={option.key}
+            className={[
+              option.active ? 'is-active' : null,
+              option.outsidePage ? 'is-outside-page' : null,
+            ]
+              .filter(Boolean)
+              .join(' ')}
+            onClick={() => onSelect(option)}
+          >
+            <span>{option.label}</span>
+            {option.detail ? <small>{option.detail}</small> : null}
+          </button>
+        ))}
+      </div>
+    </section>
   )
 }

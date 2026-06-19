@@ -51,17 +51,17 @@ describe('map chrome layout', () => {
     expect(rule).toContain('font-size: 11px')
   })
 
-  it('centers calendar arrow glyphs inside circular buttons', () => {
-    const rule = cssRule('.time-calendar-bar button')
+  it('centers time picker arrow glyphs inside circular buttons', () => {
+    const rule = cssRule('.time-picker-bar button')
 
     expect(rule).toContain('display: grid')
     expect(rule).toContain('place-items: center')
     expect(rule).toContain('line-height: 1')
   })
 
-  it('gives calendar arrows a clear press state', () => {
-    const buttonRule = cssRule('.time-calendar-bar button')
-    const activeRule = cssRule('.time-calendar-bar button:active')
+  it('gives time picker arrows a clear press state', () => {
+    const buttonRule = cssRule('.time-picker-bar button')
+    const activeRule = cssRule('.time-picker-bar button:active')
 
     expect(buttonRule).toContain('cursor: pointer')
     expect(buttonRule).toContain('transform')
@@ -70,9 +70,9 @@ describe('map chrome layout', () => {
     expect(activeRule).toContain('box-shadow')
   })
 
-  it('keeps calendar date hover lift restrained and removes click press motion', () => {
-    const hoverRule = cssRule('.time-calendar-grid button:hover')
-    const activeRule = cssRule('.time-calendar-grid button:active')
+  it('keeps time picker item hover lift restrained and removes click press motion', () => {
+    const hoverRule = cssRule('.time-picker-grid button:hover')
+    const activeRule = cssRule('.time-picker-grid button:active')
 
     expect(hoverRule).toContain('transform: translateY(-0.5px)')
     expect(hoverRule).not.toContain('translateY(-1px)')
@@ -80,19 +80,10 @@ describe('map chrome layout', () => {
     expect(activeRule).not.toContain('box-shadow')
   })
 
-  it('applies the same restrained hover-only motion to week month and year selectors', () => {
-    const weekRule = cssRule('.time-selector-list button')
-    const weekHoverRule = cssRule('.time-selector-list button:hover')
-    const weekActiveRule = cssRule('.time-selector-list button:active')
-    const gridRule = cssRule('.time-grid-selector button')
-    const gridHoverRule = cssRule('.time-grid-selector button:hover')
-    const gridActiveRule = cssRule('.time-grid-selector button:active')
-
-    expect(weekRule).toContain('transform 150ms ease')
-    expect(weekHoverRule).toContain('transform: translateY(-0.5px)')
-    expect(weekHoverRule).not.toContain('translateY(-1px)')
-    expect(weekActiveRule).not.toContain('transform')
-    expect(weekActiveRule).not.toContain('box-shadow')
+  it('applies the same restrained hover-only motion to all time picker grids', () => {
+    const gridRule = cssRule('.time-picker-grid button')
+    const gridHoverRule = cssRule('.time-picker-grid button:hover')
+    const gridActiveRule = cssRule('.time-picker-grid button:active')
 
     expect(gridRule).toContain('transform 150ms ease')
     expect(gridHoverRule).toContain('transform: translateY(-0.5px)')
@@ -116,10 +107,25 @@ describe('map chrome layout', () => {
   })
 
   it('lays month aggregation out as two compact rows', () => {
-    expect(cssRule('.time-grid-selector--months')).toContain(
+    expect(cssRule('.time-picker-grid--months')).toContain(
       'grid-template-columns: repeat(6, minmax(0, 1fr))',
     )
-    expect(cssRule('.time-grid-selector--months button')).toContain('min-height: 46px')
+    expect(cssRule('.time-picker-grid--months button')).toContain('min-height: 46px')
+  })
+
+  it('keeps decade year cells on one readable line', () => {
+    const gridRule = cssRule('.time-picker-grid--years')
+    const rule = cssRule('.time-picker-grid--years button')
+    const labelRule = cssRule('.time-picker-grid--years button span')
+
+    expect(gridRule).toContain('gap: 3px')
+    expect(rule).toContain('font-size: 9px')
+    expect(rule).toContain('font-weight: 720')
+    expect(rule).toContain('white-space: nowrap')
+    expect(labelRule).toContain('white-space: nowrap')
+    expect(appCss.indexOf('.time-picker-grid--years button')).toBeGreaterThan(
+      appCss.indexOf('.time-picker-grid button {'),
+    )
   })
 
   it('keeps the accounting page fixed while ledger internals scroll', () => {

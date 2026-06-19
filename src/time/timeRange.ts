@@ -1,5 +1,4 @@
 export type TimeRangeMode = 'day' | 'week' | 'month' | 'year' | 'all' | 'custom'
-export type CalendarDisplayMode = 'week' | 'month'
 export type TimePresetKey = 'all' | 'imported' | 'recent30' | 'qingdao' | 'quarter'
 
 export type TimeRangeSelection = {
@@ -20,13 +19,6 @@ export type DateCell = {
   date: string
   day: number
   inCurrentMonth: boolean
-}
-
-export type WeekOption = {
-  label: string
-  detail: string
-  value: string
-  date: string
 }
 
 export type PickerPageMode = Extract<TimeRangeMode, 'day' | 'week' | 'month' | 'year'>
@@ -187,32 +179,6 @@ export function setCustomRangeBoundary(
   return normalizeCustomSelection(next)
 }
 
-export function moveTimeSelection(
-  selection: TimeRangeSelection,
-  direction: -1 | 1,
-  calendarMode: CalendarDisplayMode,
-): TimeRangeSelection {
-  if (selection.mode === 'week') {
-    return selectWeek(formatDateKey(addDays(parseDate(selection.anchorDate), direction * 7)))
-  }
-
-  if (selection.mode === 'month') {
-    const anchor = parseDate(selection.anchorDate)
-    return selectMonth(anchor.getFullYear(), anchor.getMonth() + 1 + direction)
-  }
-
-  if (selection.mode === 'year') {
-    return selectYear(parseDate(selection.anchorDate).getFullYear() + direction)
-  }
-
-  const anchor = parseDate(selection.anchorDate)
-  if (calendarMode === 'month') {
-    return selectDay(formatDateKey(addMonths(anchor, direction)))
-  }
-
-  return selectDay(formatDateKey(addDays(anchor, direction * 7)))
-}
-
 export function getTimeRangeDisplay(selection: TimeRangeSelection): TimeRangeDisplay {
   if (selection.mode === 'day') {
     const title = selection.start === today ? '今天' : formatShortDate(selection.start)
@@ -271,16 +237,6 @@ export function formatTimeRangeDate(value: string) {
   return formatFullDate(value)
 }
 
-export function getCalendarLabel(
-  selection: TimeRangeSelection,
-  calendarMode: CalendarDisplayMode,
-) {
-  const anchor = parseDate(selection.anchorDate)
-  const suffix = calendarMode === 'week' ? '本周' : '本月'
-
-  return `${anchor.getFullYear()}年${anchor.getMonth() + 1}月 · ${suffix}`
-}
-
 export function getPickerPage(selection: TimeRangeSelection): PickerPage {
   if (selection.mode === 'week') return getWeekPickerPage(selection)
   if (selection.mode === 'month') return getMonthPickerPage(selection)
@@ -311,21 +267,6 @@ export function movePickerPage(
   return selectDay(formatDateKey(addMonths(anchor, direction)))
 }
 
-export function getVisibleWeekDays(anchorDate: string): DateCell[] {
-  const start = startOfWeek(parseDate(anchorDate))
-  const anchorMonth = parseDate(anchorDate).getMonth()
-
-  return Array.from({ length: 7 }, (_, index) => {
-    const date = addDays(start, index)
-
-    return {
-      date: formatDateKey(date),
-      day: date.getDate(),
-      inCurrentMonth: date.getMonth() === anchorMonth,
-    }
-  })
-}
-
 export function getVisibleMonthDays(anchorDate: string): DateCell[] {
   const anchor = parseDate(anchorDate)
   const year = anchor.getFullYear()
@@ -345,33 +286,6 @@ export function getVisibleMonthDays(anchorDate: string): DateCell[] {
       inCurrentMonth: date.getMonth() === month,
     }
   })
-}
-
-export function getWeekOptions(anchorDate: string): WeekOption[] {
-  const currentStart = startOfWeek(parseDate(anchorDate))
-
-  return [-7, 0, 7].map((offset) => {
-    const start = addDays(currentStart, offset)
-    const startKey = formatDateKey(start)
-    const endKey = formatDateKey(addDays(start, 6))
-    const diff = offset / 7
-    const value = diff === 0 ? '当前' : diff < 0 ? `${Math.abs(diff)}周前` : `${diff}周后`
-
-    return {
-      label: `${start.getMonth() + 1}月第${getWeekNumber(startKey)}周`,
-      detail: `${formatDotMonthDay(startKey)} - ${formatDotMonthDay(endKey)} · 按周聚合`,
-      value,
-      date: startKey,
-    }
-  })
-}
-
-export function isSelectionActive(
-  selection: TimeRangeSelection,
-  mode: TimeRangeMode,
-  start: string,
-) {
-  return selection.mode === mode && selection.start === start
 }
 
 function getDayPickerPage(selection: TimeRangeSelection): PickerPage {
@@ -504,9 +418,15 @@ function addDays(date: Date, days: number) {
 }
 
 function addMonths(date: Date, months: number) {
-  const next = new Date(date)
-  next.setMonth(date.getMonth() + months)
-  return next
+  const targetMonthStart = new Date(date.getFullYear(), date.getMonth() + months, 1)
+  const targetMonthLastDay = new Date(
+    targetMonthStart.getFullYear(),
+    targetMonthStart.getMonth() + 1,
+    0,
+  ).getDate()
+  const targetDay = Math.min(date.getDate(), targetMonthLastDay)
+
+  return new Date(targetMonthStart.getFullYear(), targetMonthStart.getMonth(), targetDay)
 }
 
 function parseDate(value: string) {
@@ -539,11 +459,6 @@ function formatMonthDay(value: string) {
 function formatYearMonth(value: string) {
   const date = parseDate(value)
   return `${date.getFullYear()}年${date.getMonth() + 1}月`
-}
-
-function formatDotMonthDay(value: string) {
-  const date = parseDate(value)
-  return `${date.getMonth() + 1}.${String(date.getDate()).padStart(2, '0')}`
 }
 
 function formatMonthDot(value: string) {

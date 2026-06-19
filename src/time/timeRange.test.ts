@@ -8,7 +8,6 @@ import {
   getTimeRangeDisplay,
   getVisibleMonthDays,
   movePickerPage,
-  moveTimeSelection,
   selectDay,
   selectMonth,
   selectPresetRange,
@@ -61,24 +60,6 @@ describe('time range selection model', () => {
     expect(getCurrentRangeActionLabel('week')).toBe('回到本周')
     expect(getCurrentRangeActionLabel('month')).toBe('回到本月')
     expect(getCurrentRangeActionLabel('year')).toBe('回到今年')
-  })
-
-  it('moves day and month calendar selections by one visible period', () => {
-    const day = createTodaySelection()
-
-    expect(moveTimeSelection(day, -1, 'week')).toMatchObject({
-      mode: 'day',
-      anchorDate: '2026-06-12',
-      start: '2026-06-12',
-      end: '2026-06-12',
-    })
-
-    expect(moveTimeSelection(day, 1, 'month')).toMatchObject({
-      mode: 'day',
-      anchorDate: '2026-07-19',
-      start: '2026-07-19',
-      end: '2026-07-19',
-    })
   })
 
   it('lays out month calendars against the real weekday grid', () => {
@@ -208,6 +189,20 @@ describe('time range selection model', () => {
       anchorDate: '2016-06-30',
       start: '2016-01-01',
       end: '2016-12-31',
+    })
+  })
+
+  it('keeps day page movement inside the target month at month ends', () => {
+    expect(movePickerPage(selectDay('2026-01-31'), 1)).toMatchObject({
+      mode: 'day',
+      anchorDate: '2026-02-28',
+      start: '2026-02-28',
+    })
+
+    expect(movePickerPage(selectDay('2026-03-31'), -1)).toMatchObject({
+      mode: 'day',
+      anchorDate: '2026-02-28',
+      start: '2026-02-28',
     })
   })
 

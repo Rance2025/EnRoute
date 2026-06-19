@@ -41,26 +41,18 @@ describe('unified shell layout', () => {
       'aria-pressed',
       'true',
     )
-    expect(screen.getByLabelText('日历选择')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '周历' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    )
+    expect(screen.getByLabelText('时间选择页')).toBeInTheDocument()
+    expect(screen.getByText('2026年6月')).toBeInTheDocument()
+    expect(screen.queryByRole('group', { name: '日历显示方式' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '周历' })).not.toBeInTheDocument()
     expect(screen.getByRole('slider', { name: '页面滑块' })).toBeInTheDocument()
     expect(screen.getByRole('slider', { name: '时间模式滑块' })).toHaveAttribute(
       'aria-valuetext',
       '日',
     )
-    expect(screen.getByRole('slider', { name: '日历显示方式滑块' })).toHaveAttribute(
-      'aria-valuetext',
-      '周历',
-    )
     expect(screen.getByRole('button', { name: '回到今天' })).toHaveTextContent(
       '回到今天',
     )
-    expect(
-      screen.getByRole('group', { name: '日历显示方式' }).parentElement,
-    ).toHaveClass('time-mode-section-head')
     expect(screen.getByText('足迹 18')).toBeInTheDocument()
     expect(screen.getByLabelText('在途 EnRoute 地图工作区')).toBeInTheDocument()
   })
@@ -68,19 +60,16 @@ describe('unified shell layout', () => {
   it('uses project-facing time panel copy without implementation notes', () => {
     render(<App amapConfig={configuredAmap} />)
 
-    const calendarHead = screen
-      .getByRole('group', { name: '日历显示方式' })
-      .closest('.time-mode-section-head')
+    const pickerHead = screen.getByLabelText('时间选择页').querySelector('.time-mode-section-head')
 
-    expect(calendarHead).not.toBeNull()
-    expect(
-      within(calendarHead as HTMLElement).queryByText('只在日模式显示日历'),
-    ).not.toBeInTheDocument()
+    expect(pickerHead).not.toBeNull()
+    expect(within(pickerHead as HTMLElement).queryByText('只在日模式显示日历')).not.toBeInTheDocument()
     expect(screen.queryByText('只在日模式显示日历')).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '周' }))
 
-    expect(screen.getByText('选择一周')).toBeInTheDocument()
+    expect(screen.getByText('按周聚合')).toBeInTheDocument()
+    expect(screen.queryByText('选择一周')).not.toBeInTheDocument()
     expect(screen.queryByText('选择一整周')).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '自定义' }))
@@ -89,7 +78,8 @@ describe('unified shell layout', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '年' }))
 
-    expect(screen.getByText('选择年份')).toBeInTheDocument()
+    expect(screen.getByText('按年聚合')).toBeInTheDocument()
+    expect(screen.queryByText('选择年份')).not.toBeInTheDocument()
     expect(screen.queryByText('年度级别')).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '全部' }))
@@ -139,18 +129,18 @@ describe('unified shell layout', () => {
       'true',
     )
     expect(screen.getByRole('heading', { name: '第25周' })).toBeInTheDocument()
-    expect(screen.getByLabelText('周聚合选择')).toBeInTheDocument()
+    expect(screen.getByLabelText('时间选择页')).toBeInTheDocument()
     expect(screen.queryByLabelText('日历选择')).not.toBeInTheDocument()
     expect(screen.getByLabelText('当前账目范围')).toHaveTextContent('周')
 
     fireEvent.click(screen.getByRole('button', { name: '月' }))
 
-    expect(screen.getByLabelText('月份聚合选择')).toBeInTheDocument()
+    expect(screen.getByLabelText('时间选择页')).toBeInTheDocument()
     expect(screen.queryByLabelText('日历选择')).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '年' }))
 
-    expect(screen.getByLabelText('年份聚合选择')).toBeInTheDocument()
+    expect(screen.getByLabelText('时间选择页')).toBeInTheDocument()
     expect(screen.queryByLabelText('日历选择')).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '全部' }))
@@ -193,13 +183,47 @@ describe('unified shell layout', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '月' }))
 
-    const monthSelector = screen.getByLabelText('月份聚合选择')
+    const monthSelector = screen.getByLabelText('时间选择页')
 
     expect(within(monthSelector).getByText('按月聚合')).toBeInTheDocument()
-    expect(within(monthSelector).getAllByRole('button')).toHaveLength(12)
+    expect(within(monthSelector).getAllByRole('button')).toHaveLength(14)
     expect(within(monthSelector).queryByText('选择月份')).not.toBeInTheDocument()
     expect(within(monthSelector).queryByText('选择')).not.toBeInTheDocument()
     expect(within(monthSelector).queryByText('当前')).not.toBeInTheDocument()
+  })
+
+  it('renders day, week, month, and year with the same paged picker shell', () => {
+    render(<App amapConfig={configuredAmap} />)
+
+    const dayPicker = screen.getByLabelText('时间选择页')
+
+    expect(within(dayPicker).getByText('按日选择')).toBeInTheDocument()
+    expect(within(dayPicker).getByText('2026年6月')).toBeInTheDocument()
+    expect(within(dayPicker).getByLabelText('上一页')).toBeInTheDocument()
+    expect(within(dayPicker).getByLabelText('下一页')).toBeInTheDocument()
+    expect(within(dayPicker).getAllByRole('button')).toHaveLength(37)
+
+    fireEvent.click(screen.getByRole('button', { name: '周' }))
+
+    const weekPicker = screen.getByLabelText('时间选择页')
+    expect(within(weekPicker).getByText('按周聚合')).toBeInTheDocument()
+    expect(within(weekPicker).getByText('2026年6月')).toBeInTheDocument()
+    expect(within(weekPicker).getByRole('button', { name: /第25周/ })).toBeInTheDocument()
+    expect(screen.queryByText('选择一周')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '月' }))
+
+    const monthPicker = screen.getByLabelText('时间选择页')
+    expect(within(monthPicker).getByText('2026年')).toBeInTheDocument()
+    expect(within(monthPicker).getAllByRole('button')).toHaveLength(14)
+    expect(within(monthPicker).getByRole('button', { name: '12月' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '年' }))
+
+    const yearPicker = screen.getByLabelText('时间选择页')
+    expect(within(yearPicker).getByText('2020 - 2029')).toBeInTheDocument()
+    expect(within(yearPicker).getAllByRole('button')).toHaveLength(12)
+    expect(within(yearPicker).getByRole('button', { name: '2029年' })).toBeInTheDocument()
   })
 
   it('applies concrete selections from every time panel button group', () => {
@@ -210,17 +234,20 @@ describe('unified shell layout', () => {
     expect(screen.getByRole('heading', { name: '6月21日' })).toBeInTheDocument()
     expect(screen.getByText('2026年6月21日 · 发生时间')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: '上一段时间' }))
+    fireEvent.click(screen.getByRole('button', { name: '上一页' }))
 
-    expect(screen.getByRole('heading', { name: '6月14日' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '5月21日' })).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: '月历' }))
-    fireEvent.click(screen.getByRole('button', { name: '下一段时间' }))
+    fireEvent.click(screen.getByRole('button', { name: '下一页' }))
 
-    expect(screen.getByRole('heading', { name: '7月14日' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '6月21日' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '下一页' }))
+
+    expect(screen.getByRole('heading', { name: '7月21日' })).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '周' }))
-    fireEvent.click(screen.getByRole('button', { name: /7月第30周/ }))
+    fireEvent.click(screen.getByRole('button', { name: /第30周/ }))
 
     expect(screen.getByRole('heading', { name: '第30周' })).toBeInTheDocument()
     expect(screen.getByText('7月20日 - 7月26日 · 按周聚合')).toBeInTheDocument()
