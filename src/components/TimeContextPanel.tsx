@@ -132,7 +132,7 @@ export function TimeContextPanel({
               aria-label="回到今天"
               onClick={() => handleModeChange('day')}
             >
-              今天
+              回到今天
             </button>
           </div>
 
@@ -177,7 +177,26 @@ function renderModeContent(
       <section className="time-calendar-shell" aria-label="日历选择">
         <div className="time-mode-section-head">
           <strong>按日选择</strong>
-          <span>只在日模式显示日历</span>
+          <div
+            className="time-calendar-switch"
+            role="group"
+            aria-label="日历显示方式"
+          >
+            <button
+              type="button"
+              aria-pressed={calendarMode === 'week'}
+              onClick={() => setCalendarMode('week')}
+            >
+              周历
+            </button>
+            <button
+              type="button"
+              aria-pressed={calendarMode === 'month'}
+              onClick={() => setCalendarMode('month')}
+            >
+              月历
+            </button>
+          </div>
         </div>
         <div className="time-calendar-bar">
           <button type="button" aria-label="上一段时间">
@@ -186,26 +205,6 @@ function renderModeContent(
           <span>2026年6月 · {calendarMode === 'week' ? '本周' : '本月'}</span>
           <button type="button" aria-label="下一段时间">
             ›
-          </button>
-        </div>
-        <div
-          className="time-calendar-switch"
-          role="group"
-          aria-label="日历显示方式"
-        >
-          <button
-            type="button"
-            aria-pressed={calendarMode === 'week'}
-            onClick={() => setCalendarMode('week')}
-          >
-            周历
-          </button>
-          <button
-            type="button"
-            aria-pressed={calendarMode === 'month'}
-            onClick={() => setCalendarMode('month')}
-          >
-            月历
           </button>
         </div>
         {calendarMode === 'week' ? <WeekCalendar /> : <MonthCalendar />}
@@ -218,7 +217,7 @@ function renderModeContent(
       <section className="time-selector-shell" aria-label="周聚合选择">
         <div className="time-mode-section-head">
           <strong>按周聚合</strong>
-          <span>选择一整周</span>
+          <span>选择一周</span>
         </div>
         <div className="time-selector-list">
           {weekOptions.map((option) => (
@@ -267,7 +266,7 @@ function renderModeContent(
       <section className="time-selector-shell" aria-label="年份聚合选择">
         <div className="time-mode-section-head">
           <strong>按年聚合</strong>
-          <span>年度级别</span>
+          <span>选择年份</span>
         </div>
         <div className="time-grid-selector time-grid-selector--years">
           {yearOptions.map((option) => (
@@ -302,10 +301,10 @@ function renderModeContent(
           </button>
           <button type="button">
             <span>
-              <strong>外部导入段</strong>
-              <small>后续导入旧数据后补齐</small>
+              <strong>导入数据</strong>
+              <small>外部位置、日程和账目数据</small>
             </span>
-            <em>预留</em>
+            <em>待导入</em>
           </button>
         </div>
       </section>
@@ -316,7 +315,6 @@ function renderModeContent(
     <section className="time-custom-shell" aria-label="自定义时间范围">
       <div className="time-mode-section-head">
         <strong>自定义范围</strong>
-        <span>和日周月年同级</span>
       </div>
       <div className="time-range-fields">
         <button type="button">

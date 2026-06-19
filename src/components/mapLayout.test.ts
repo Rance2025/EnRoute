@@ -36,6 +36,29 @@ describe('map chrome layout', () => {
     expect(stageRule).toContain('width: calc(100vw - var(--data-panel-width))')
   })
 
+  it('keeps the shared time panel high in the left rail without a fake top spacer', () => {
+    const scrollRule = cssRule('.time-context-panel__scroll')
+
+    expect(scrollRule).toContain('padding: 16px 16px 16px')
+    expect(scrollRule).not.toContain('padding: 88px')
+  })
+
+  it('keeps the today action secondary and compact', () => {
+    const rule = cssRule('.time-context-card__today')
+
+    expect(rule).toContain('min-height: 24px')
+    expect(rule).toContain('padding: 0 8px')
+    expect(rule).toContain('font-size: 11px')
+  })
+
+  it('centers calendar arrow glyphs inside circular buttons', () => {
+    const rule = cssRule('.time-calendar-bar button')
+
+    expect(rule).toContain('display: grid')
+    expect(rule).toContain('place-items: center')
+    expect(rule).toContain('line-height: 1')
+  })
+
   it('keeps the accounting page fixed while ledger internals scroll', () => {
     expect(cssRule('.accounting-page')).toContain('overflow: hidden')
     expect(cssRule('.accounting-workspace')).toContain('overflow: hidden')

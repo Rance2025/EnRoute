@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import App from '../App'
@@ -46,8 +46,47 @@ describe('unified shell layout', () => {
       'aria-pressed',
       'true',
     )
+    expect(screen.getByRole('button', { name: '回到今天' })).toHaveTextContent(
+      '回到今天',
+    )
+    expect(
+      screen.getByRole('group', { name: '日历显示方式' }).parentElement,
+    ).toHaveClass('time-mode-section-head')
     expect(screen.getByText('足迹 18')).toBeInTheDocument()
     expect(screen.getByLabelText('在途 EnRoute 地图工作区')).toBeInTheDocument()
+  })
+
+  it('uses project-facing time panel copy without implementation notes', () => {
+    render(<App amapConfig={configuredAmap} />)
+
+    const calendarHead = screen
+      .getByRole('group', { name: '日历显示方式' })
+      .closest('.time-mode-section-head')
+
+    expect(calendarHead).not.toBeNull()
+    expect(
+      within(calendarHead as HTMLElement).queryByText('只在日模式显示日历'),
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText('只在日模式显示日历')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '周' }))
+
+    expect(screen.getByText('选择一周')).toBeInTheDocument()
+    expect(screen.queryByText('选择一整周')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '自定义' }))
+
+    expect(screen.queryByText('和日周月年同级')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '年' }))
+
+    expect(screen.getByText('选择年份')).toBeInTheDocument()
+    expect(screen.queryByText('年度级别')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '全部' }))
+
+    expect(screen.queryByText(/后续/)).not.toBeInTheDocument()
+    expect(screen.queryByText('预留')).not.toBeInTheDocument()
   })
 
   it('keeps the shared time panel when switching to accounting', () => {
