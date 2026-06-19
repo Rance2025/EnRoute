@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 const appCss = readFileSync('src/App.css', 'utf8')
+const appSource = readFileSync('src/App.tsx', 'utf8')
 const amapCanvasSource = readFileSync('src/components/AmapCanvas.tsx', 'utf8')
 const amapLoaderSource = readFileSync('src/services/amapLoader.ts', 'utf8')
 const segmentedControlSource = readFileSync('src/components/SegmentedControl.tsx', 'utf8')
@@ -50,6 +51,14 @@ describe('map chrome layout', () => {
 
     expect(scrollRule).toContain('padding: 16px 16px 16px')
     expect(scrollRule).not.toContain('padding: 88px')
+  })
+
+  it('keeps calendar display mode local to the time panel to avoid map rerenders', () => {
+    const timePanelSource = readFileSync('src/components/TimeContextPanel.tsx', 'utf8')
+
+    expect(appSource).not.toContain('calendarMode')
+    expect(appSource).not.toContain('setCalendarMode')
+    expect(timePanelSource).toContain("useState<CalendarDisplayMode>('week')")
   })
 
   it('keeps the today action secondary and compact', () => {
@@ -178,7 +187,7 @@ describe('map chrome layout', () => {
     expect(timeContextPanelSource).toContain('function handleCalendarModeChange')
     expect(timeContextPanelSource).toContain("calendarMode === 'month' && mode === 'week'")
     expect(timeContextPanelSource).toContain('handleCalendarModeChange,')
-    expect(timeContextPanelSource).toContain('onChange={onCalendarModeChange}')
+    expect(timeContextPanelSource).toContain('if (mode !== calendarMode) onCalendarModeChange(mode)')
     expect(timeContextPanelSource).not.toContain('previousCalendarModeRef')
   })
 
@@ -470,5 +479,8 @@ describe('map chrome layout', () => {
     expect(zoomSource).toContain('keyboardEnable: false')
     expect(zoomSource).toContain("container.addEventListener('wheel'")
     expect(zoomSource).toContain('calculateBoundedZoomCenter')
+    expect(zoomSource).toContain('window.requestAnimationFrame')
+    expect(zoomSource).not.toContain('ZOOM_ANIMATION_FRAME_MS')
+    expect(zoomSource).not.toContain('window.setTimeout(tick')
   })
 })

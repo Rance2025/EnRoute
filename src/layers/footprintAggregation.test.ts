@@ -37,6 +37,22 @@ describe('aggregateFootprintPoints', () => {
     expect(result[0].count).toBe(2)
   })
 
+  it('buckets by the current viewport screen-pixel origin instead of global world-pixel origin', () => {
+    const result = aggregateFootprintPoints({
+      points: [point('1', -179.998764038, 0), point('2', -179.998352051, 0)],
+      zoom: 10,
+      cellSizePx: 1,
+      viewportBounds: { west: -180, south: -1, east: -179, north: 1 },
+      viewportNorthWestWorldPixel: {
+        x: 0.6,
+        y: 131071,
+      },
+    })
+
+    expect(result).toHaveLength(1)
+    expect(result[0].count).toBe(2)
+  })
+
   it('returns more or equal representatives when zoom increases', () => {
     const points = [point('1', 121.511383, 31.296564), point('2', 121.5122, 31.2973)]
     const lowZoom = aggregateFootprintPoints({

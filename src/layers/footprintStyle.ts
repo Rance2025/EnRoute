@@ -10,7 +10,7 @@ export const DEFAULT_FOOTPRINT_STYLE: FootprintStyle = {
   opacity: 0.82,
 }
 
-export const FOOTPRINT_PIXEL_SIZE_MIN = 0.3
+export const FOOTPRINT_PIXEL_SIZE_MIN = 0.8
 export const FOOTPRINT_PIXEL_SIZE_MAX = 3.5
 export const FOOTPRINT_PIXEL_SIZE_STEP = 0.1
 export const FOOTPRINT_OPACITY_MIN = 0.3

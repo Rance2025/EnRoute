@@ -56,9 +56,8 @@ const WHEEL_ZOOM_MAX_STEP = 0.72
 const TOOLBAR_ZOOM_STEP = 0.5
 const WHEEL_ZOOM_ANIMATION_DURATION_MS = 180
 const TOOLBAR_ZOOM_ANIMATION_DURATION_MS = 260
-const ZOOM_ANIMATION_FRAME_MS = 16
 const MINIMUM_CENTER_BLEND_ZOOM_RANGE = 1
-const zoomAnimationTimers = new WeakMap<BoundedZoomMap, number>()
+const zoomAnimationFrames = new WeakMap<BoundedZoomMap, number>()
 
 export function calculateBoundedZoomCenter({
   center,
@@ -279,9 +278,9 @@ function animateZoom({
     }
 
     if (progress < 1) {
-      zoomAnimationTimers.set(map, window.setTimeout(tick, ZOOM_ANIMATION_FRAME_MS))
+      zoomAnimationFrames.set(map, window.requestAnimationFrame(tick))
     } else {
-      zoomAnimationTimers.delete(map)
+      zoomAnimationFrames.delete(map)
     }
   }
 
@@ -289,11 +288,11 @@ function animateZoom({
 }
 
 function cancelZoomAnimation(map: BoundedZoomMap) {
-  const timer = zoomAnimationTimers.get(map)
+  const animationFrame = zoomAnimationFrames.get(map)
 
-  if (timer !== undefined) {
-    window.clearTimeout(timer)
-    zoomAnimationTimers.delete(map)
+  if (animationFrame !== undefined) {
+    window.cancelAnimationFrame(animationFrame)
+    zoomAnimationFrames.delete(map)
   }
 }
 

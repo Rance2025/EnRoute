@@ -181,9 +181,9 @@ describe('createMassFootprintLayer', () => {
 
     const smallOptions = smallRuntime.MassMarks.mock.calls[0]?.[1]
     const largeOptions = largeRuntime.MassMarks.mock.calls[0]?.[1]
-    expect(smallOptions?.style.size.width).toBe(0.3)
-    expect(smallOptions?.style.anchor.x).toBe(0.15)
-    expect(decodeURIComponent(smallOptions?.style.url ?? '')).toContain('width="0.3"')
+    expect(smallOptions?.style.size.width).toBe(0.8)
+    expect(smallOptions?.style.anchor.x).toBe(0.4)
+    expect(decodeURIComponent(smallOptions?.style.url ?? '')).toContain('width="0.8"')
     expect(decodeURIComponent(smallOptions?.style.url ?? '')).toContain('fill-opacity="0.3"')
     expect(largeOptions?.style.size.width).toBe(3.5)
     expect(largeOptions?.style.anchor.x).toBe(1.75)

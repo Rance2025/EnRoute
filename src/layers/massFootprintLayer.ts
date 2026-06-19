@@ -1,4 +1,3 @@
-import type { FootprintPoint } from './footprintTypes'
 import {
   normalizeFootprintColor,
   normalizeFootprintOpacity,
@@ -9,6 +8,12 @@ type MassFootprintLayerOptions = {
   color?: string
   opacity?: number
   pixelSize?: number
+}
+
+export type MassFootprintPoint = {
+  id: string
+  longitude: number
+  latitude: number
 }
 
 export function createMassFootprintLayer(
@@ -36,7 +41,7 @@ export function createMassFootprintLayer(
   massMarks.setMap(map)
 
   return {
-    update(points: FootprintPoint[]) {
+    update(points: MassFootprintPoint[]) {
       massMarks.setData(
         points.map((point) => ({
           id: point.id,

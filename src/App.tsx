@@ -10,7 +10,6 @@ import { getAmapConfig, type AmapConfig } from './config/amap'
 import { calculateFallbackSingleWorldPaneLayout } from './config/mapPaneLayout'
 import {
   createTodaySelection,
-  type CalendarDisplayMode,
   type TimeRangeSelection,
 } from './time/timeRange'
 
@@ -44,7 +43,6 @@ function App({ amapConfig }: AppProps) {
   const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRangeSelection>(
     createTodaySelection,
   )
-  const [calendarMode, setCalendarMode] = useState<CalendarDisplayMode>('week')
   const [mapPanelWidth, setMapPanelWidth] = useState(0)
   const [viewportSize, setViewportSize] = useState(getViewportSize)
   const fallbackLayout = useMemo(
@@ -111,8 +109,6 @@ function App({ amapConfig }: AppProps) {
       <TimeContextPanel
         view={view}
         selection={selectedTimeRange}
-        calendarMode={calendarMode}
-        onCalendarModeChange={setCalendarMode}
         onSelectionChange={setSelectedTimeRange}
       />
 

@@ -87,7 +87,7 @@ describe('unified shell layout', () => {
     const opacityValue = within(popover).getByText('0.82')
 
     expect(sizeInput).toHaveAttribute('type', 'range')
-    expect(sizeInput).toHaveAttribute('min', '0.3')
+    expect(sizeInput).toHaveAttribute('min', '0.8')
     expect(sizeInput).toHaveAttribute('max', '3.5')
     expect(sizeInput).toHaveAttribute('step', '0.1')
     expect(sizeInput).toHaveValue('1.5')
@@ -469,6 +469,22 @@ describe('unified shell layout', () => {
     expect(weekBody).toHaveClass('time-calendar-body--week')
     expect(weekBody).not.toHaveClass('time-calendar-body--collapsing-week')
     expect(weekBody).toHaveStyle({ '--time-calendar-visible-rows': '1' })
+  })
+
+  it('keeps calendar display mode local across parent rerenders', () => {
+    const { rerender } = render(<App amapConfig={configuredAmap} />)
+
+    fireEvent.click(screen.getByRole('button', { name: '月历' }))
+
+    expect(screen.getByLabelText('日历日期').closest('.time-calendar-body')).toHaveClass(
+      'time-calendar-body--month',
+    )
+
+    rerender(<App amapConfig={configuredAmap} />)
+
+    expect(screen.getByLabelText('日历日期').closest('.time-calendar-body')).toHaveClass(
+      'time-calendar-body--month',
+    )
   })
 
   it('renders top-level week, month, and year with paged aggregation grids', () => {

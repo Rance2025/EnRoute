@@ -1,11 +1,17 @@
-import { projectLngLat, unprojectWorldPoint } from '../config/mercator'
-import type { AggregatedFootprintPoint, FootprintPoint, LngLatBounds } from './footprintTypes'
+import { projectLngLat, TILE_SIZE, unprojectWorldPoint } from '../config/mercator'
+import type {
+  AggregatedFootprintPoint,
+  FootprintPoint,
+  LngLatBounds,
+  WorldPixelPoint,
+} from './footprintTypes'
 
 type AggregateFootprintPointsInput = {
   points: FootprintPoint[]
   zoom: number
   cellSizePx: number
   viewportBounds: LngLatBounds
+  viewportNorthWestWorldPixel?: WorldPixelPoint
 }
 
 type Bucket = {
@@ -22,15 +28,20 @@ export function aggregateFootprintPoints({
   zoom,
   cellSizePx,
   viewportBounds,
+  viewportNorthWestWorldPixel = projectLngLat([viewportBounds.west, viewportBounds.north], zoom),
 }: AggregateFootprintPointsInput): AggregatedFootprintPoint[] {
   const buckets = new Map<string, Bucket>()
+  const worldWidthPx = TILE_SIZE * 2 ** zoom
 
   for (const point of points) {
     if (!isPointInsideBounds(point, viewportBounds)) continue
 
     const projected = projectLngLat([point.longitude, point.latitude], zoom)
-    const bucketX = Math.floor(projected.x / cellSizePx)
-    const bucketY = Math.floor(projected.y / cellSizePx)
+    const bucketX = Math.floor(
+      normalizeViewportRelativeWorldX(projected.x, viewportNorthWestWorldPixel.x, worldWidthPx) /
+        cellSizePx,
+    )
+    const bucketY = Math.floor((projected.y - viewportNorthWestWorldPixel.y) / cellSizePx)
     const bucketKey = `${bucketX}:${bucketY}`
     const bucket = buckets.get(bucketKey)
 
@@ -89,4 +100,10 @@ function isLongitudeInsideBounds(longitude: number, bounds: LngLatBounds) {
   }
 
   return longitude >= bounds.west || longitude <= bounds.east
+}
+
+function normalizeViewportRelativeWorldX(projectedX: number, originX: number, worldWidthPx: number) {
+  const relativeX = projectedX - originX
+
+  return relativeX < 0 ? relativeX + worldWidthPx : relativeX
 }

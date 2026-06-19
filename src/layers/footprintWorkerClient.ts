@@ -1,10 +1,25 @@
-import type { AggregatedFootprintPoint, FootprintPoint, LngLatBounds } from './footprintTypes'
+import type {
+  AggregatedFootprintPoint,
+  FootprintPoint,
+  LngLatBounds,
+  WorldPixelPoint,
+} from './footprintTypes'
 
 type AggregateInput = {
-  points: FootprintPoint[]
   zoom: number
   cellSizePx: number
   viewportBounds: LngLatBounds
+  viewportNorthWestWorldPixel: WorldPixelPoint
+}
+
+type SetPointsRequest = {
+  type: 'set-points'
+  points: FootprintPoint[]
+}
+
+type AggregateRequest = AggregateInput & {
+  type: 'aggregate'
+  requestId: number
 }
 
 type WorkerResponse = {
@@ -21,13 +36,20 @@ type PendingRequest = {
 export class FootprintWorkerClient {
   private nextRequestId = 1
   private pendingRequest: PendingRequest | null = null
-  private readonly worker: Worker
+  private storedPoints: FootprintPoint[] = []
+  private readonly workerFactory: () => Worker
+  private worker: Worker
 
   constructor(
     workerFactory: () => Worker = () =>
       new Worker(new URL('./footprintAggregation.worker.ts', import.meta.url), { type: 'module' }),
   ) {
-    this.worker = workerFactory()
+    this.workerFactory = workerFactory
+    this.worker = this.workerFactory()
+    this.installWorkerHandlers()
+  }
+
+  private installWorkerHandlers() {
     this.worker.onmessage = (event: MessageEvent<WorkerResponse>) => {
       if (!this.pendingRequest || event.data.requestId !== this.pendingRequest.requestId) return
 
@@ -40,15 +62,32 @@ export class FootprintWorkerClient {
     }
   }
 
+  setPoints(points: FootprintPoint[]) {
+    this.storedPoints = points
+    this.worker.postMessage({
+      type: 'set-points',
+      points,
+    } satisfies SetPointsRequest)
+  }
+
   aggregate(input: AggregateInput): Promise<AggregatedFootprintPoint[]> {
-    this.rejectPending(new Error('Footprint aggregation request superseded'))
+    if (this.pendingRequest) {
+      this.rejectPending(new Error('Footprint aggregation request superseded'))
+      this.worker.terminate()
+      this.worker = this.workerFactory()
+      this.installWorkerHandlers()
+      this.worker.postMessage({
+        type: 'set-points',
+        points: this.storedPoints,
+      } satisfies SetPointsRequest)
+    }
 
     const requestId = this.nextRequestId
     this.nextRequestId += 1
 
     return new Promise((resolve, reject) => {
       this.pendingRequest = { requestId, resolve, reject }
-      this.worker.postMessage({ requestId, ...input })
+      this.worker.postMessage({ type: 'aggregate', requestId, ...input } satisfies AggregateRequest)
     })
   }
 

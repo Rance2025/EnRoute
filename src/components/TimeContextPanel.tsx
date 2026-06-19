@@ -75,8 +75,6 @@ const moduleSummaries: Record<
 type TimeContextPanelProps = {
   view: AppView
   selection: TimeRangeSelection
-  calendarMode: CalendarDisplayMode
-  onCalendarModeChange: (mode: CalendarDisplayMode) => void
   onSelectionChange: (selection: TimeRangeSelection) => void
 }
 
@@ -90,10 +88,9 @@ type TimeNavigationState = {
 export function TimeContextPanel({
   view,
   selection,
-  calendarMode,
-  onCalendarModeChange,
   onSelectionChange,
 }: TimeContextPanelProps) {
+  const [calendarMode, setCalendarMode] = useState<CalendarDisplayMode>('week')
   const [isDayCalendarCollapsingWeek, setIsDayCalendarCollapsingWeek] = useState(false)
   const [dayCalendarCollapseSequence, setDayCalendarCollapseSequence] = useState(0)
   const [navigationState, setNavigationState] = useState<TimeNavigationState>({
@@ -116,11 +113,17 @@ export function TimeContextPanel({
   }, [dayCalendarCollapseSequence, isDayCalendarCollapsingWeek])
 
   function handleSelectionChange(nextSelection: TimeRangeSelection) {
-    setNavigationState((current) => ({ ...current, direction: null }))
+    if (timeSelectionsAreEqual(selection, nextSelection)) return
+
+    setNavigationState((current) => (
+      current.direction === null ? current : { ...current, direction: null }
+    ))
     onSelectionChange(nextSelection)
   }
 
   function handleCalendarModeChange(mode: CalendarDisplayMode) {
+    if (mode === calendarMode) return
+
     if (calendarMode === 'month' && mode === 'week') {
       setIsDayCalendarCollapsingWeek(true)
       setDayCalendarCollapseSequence((current) => current + 1)
@@ -128,7 +131,7 @@ export function TimeContextPanel({
       setIsDayCalendarCollapsingWeek(false)
     }
 
-    onCalendarModeChange(mode)
+    setCalendarMode(mode)
   }
 
   function handlePeriodNavigate(
@@ -143,6 +146,8 @@ export function TimeContextPanel({
   }
 
   function handleModeChange(range: TimeRangeMode) {
+    if (range === selection.mode) return
+
     setIsDayCalendarCollapsingWeek(false)
 
     if (range === 'day') handleSelectionChange(selectDay(selection.anchorDate))
@@ -216,6 +221,19 @@ export function TimeContextPanel({
         </footer>
       </div>
     </aside>
+  )
+}
+
+function timeSelectionsAreEqual(
+  currentSelection: TimeRangeSelection,
+  nextSelection: TimeRangeSelection,
+) {
+  return (
+    currentSelection.mode === nextSelection.mode &&
+    currentSelection.start === nextSelection.start &&
+    currentSelection.end === nextSelection.end &&
+    currentSelection.anchorDate === nextSelection.anchorDate &&
+    currentSelection.label === nextSelection.label
   )
 }
 
@@ -393,7 +411,9 @@ function DayCalendarSection({
           className="time-calendar-switch"
           options={calendarModeOptions}
           value={calendarMode}
-          onChange={onCalendarModeChange}
+          onChange={(mode) => {
+            if (mode !== calendarMode) onCalendarModeChange(mode)
+          }}
         />
       </div>
       <div className="time-calendar-bar">

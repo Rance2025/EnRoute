@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   calculateBoundedZoomCenter,
@@ -14,6 +14,11 @@ const renderBounds: MapBounds = {
   southWest: [-180, -85.05112878],
   northEast: [180, 85.05112878],
 }
+
+afterEach(() => {
+  vi.restoreAllMocks()
+  vi.useRealTimers()
+})
 
 function makeMercatorProjection(options: {
   center: [number, number]
@@ -115,6 +120,8 @@ describe('bounded map zooming', () => {
 
   it('animates toolbar zoom steps with eased intermediate frames', () => {
     vi.useFakeTimers()
+    const requestAnimationFrame = vi.spyOn(window, 'requestAnimationFrame')
+    const setTimeoutSpy = vi.spyOn(window, 'setTimeout')
     let zoom = 5
     let center: [number, number] = [120, 30]
     const zooms: number[] = []
@@ -134,6 +141,10 @@ describe('bounded map zooming', () => {
     })
 
     zoomByStep(map, container, renderBounds, 1)
+
+    expect(requestAnimationFrame).toHaveBeenCalled()
+    expect(setTimeoutSpy).not.toHaveBeenCalled()
+
     vi.runAllTimers()
 
     expect(zooms.length).toBeGreaterThan(4)
@@ -147,6 +158,7 @@ describe('bounded map zooming', () => {
 
   it('cancels stale toolbar zoom animations when clicking repeatedly', () => {
     vi.useFakeTimers()
+    const cancelAnimationFrame = vi.spyOn(window, 'cancelAnimationFrame')
     let zoom = 5
     let center: [number, number] = [104, 35]
     const zooms: number[] = []
@@ -169,6 +181,9 @@ describe('bounded map zooming', () => {
     vi.advanceTimersByTime(32)
     const zoomAfterFirstClick = zoom
     zoomByStep(map, container, renderBounds, 1)
+
+    expect(cancelAnimationFrame).toHaveBeenCalled()
+
     vi.runAllTimers()
 
     expect(zoomAfterFirstClick).toBeGreaterThan(5)
