@@ -169,6 +169,7 @@ describe('map chrome layout', () => {
     expect(cssRule('.segmented-control')).toContain(
       '--segmented-label-color: rgba(23, 35, 31, 0.62)',
     )
+    expect(cssRule('.segmented-control')).toContain('--segmented-gap: 0px')
     expect(cssRule('.segmented-control')).toContain('--segmented-active-label-color: #f8fbfa')
     expect(cssRule('.segmented-control')).toContain('--segmented-thumb-shadow: none')
     expect(cssRule('.segmented-control')).toContain(
@@ -180,9 +181,35 @@ describe('map chrome layout', () => {
     expect(cssRule('.segmented-control button')).not.toContain('mix-blend-mode')
     expect(segmentedControlSource).not.toContain('segmented-control__thumb-label')
     expect(cssRule('.segmented-control__thumb-label')).toBe('')
+    expect(segmentedControlSource).toContain('segmented-control__active-labels')
+    expect(cssRule('.segmented-control__thumb')).toContain('overflow: hidden')
+    expect(cssRule('.segmented-control__thumb.is-dragging')).not.toContain('transform')
+    expect(cssRule('.segmented-control__active-labels')).toContain(
+      'width: calc(100% * var(--segment-count))',
+    )
+    expect(cssRule('.segmented-control__active-labels')).toContain(
+      'grid-template-columns: repeat(var(--segment-count), minmax(0, 1fr))',
+    )
+    expect(cssRule('.segmented-control__active-labels')).toContain(
+      'gap: var(--segmented-gap)',
+    )
+    expect(cssRule('.segmented-control__active-labels')).toContain(
+      'color: var(--segmented-active-label-color)',
+    )
+    expect(cssRule('.segmented-control__active-labels')).toContain(
+      'var(--segment-thumb-index, var(--segment-index))',
+    )
+    expect(cssRule('.segmented-control__active-labels')).toContain(
+      'transition: transform 190ms ease',
+    )
+    expect(
+      cssRule('.segmented-control__thumb.is-dragging .segmented-control__active-labels'),
+    ).toContain('transition: none')
+    expect(cssRule('.segmented-control__active-label')).toContain('place-items: center')
     expect(cssRule('.time-mode-tabs')).toContain(
       '--segmented-label-color: rgba(255, 255, 255, 0.66)',
     )
+    expect(cssRule('.time-mode-tabs')).toContain('--segmented-gap: 3px')
     expect(cssRule('.time-mode-tabs')).not.toContain('--segmented-thumb-shadow')
     expect(cssRule('.accounting-mode-tabs')).not.toContain('--segmented-thumb-shadow')
     expect(cssRule('.transaction-type-switch')).not.toContain('--segmented-thumb-shadow')
@@ -190,17 +217,9 @@ describe('map chrome layout', () => {
     expect(cssRule(".app-nav .segmented-control button[aria-pressed='true']")).toContain(
       'color: var(--segmented-label-color)',
     )
-    expect(cssRule('.segmented-control button::after')).toContain(
-      'color: var(--segmented-active-label-color)',
-    )
-    expect(cssRule('.segmented-control button::after')).toContain(
-      'content: attr(data-segment-label)',
-    )
-    expect(cssRule('.segmented-control button::after')).toContain('clip-path')
-    expect(cssRule('.segmented-control button::after')).toContain(
-      'var(--segmented-active-start, 0%)',
-    )
-    expect(cssRule('.segmented-control button::after')).toContain('pointer-events: none')
+    expect(cssRule('.segmented-control button::after')).toBe('')
+    expect(segmentedControlSource).not.toContain('--segmented-active-start')
+    expect(segmentedControlSource).not.toContain('--segmented-active-end')
     expect(lastCssRule(".segmented-control button[aria-pressed='true']")).toContain(
       'color: var(--segmented-label-color)',
     )
