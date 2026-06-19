@@ -396,12 +396,45 @@
   margin-top: 10px;
 }
 
-.time-picker-grid--days {
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+.time-picker-calendar-frame {
+  --time-picker-day-height: 37px;
+  --time-picker-weekday-height: 17px;
+  --time-picker-visible-rows: 5;
+  --time-picker-active-week-index: 0;
+  --time-picker-grid-offset: 0;
+  --time-picker-grid-gap: 6px;
+
+  margin-top: 10px;
+  max-height: calc(
+    var(--time-picker-weekday-height) +
+    var(--time-picker-grid-gap) +
+    var(--time-picker-visible-rows) * var(--time-picker-day-height) +
+    (var(--time-picker-visible-rows) - 1) * var(--time-picker-grid-gap)
+  );
+  overflow: hidden;
+  transition: max-height 260ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.time-picker-grid--weeks {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+.time-picker-calendar-weekdays {
+  height: var(--time-picker-weekday-height);
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: var(--time-picker-grid-gap);
+}
+
+.time-picker-grid--calendar {
+  margin-top: var(--time-picker-grid-gap);
+  transform: translateY(
+    calc(
+      var(--time-picker-grid-offset, 0) *
+      (var(--time-picker-day-height) + var(--time-picker-grid-gap))
+    )
+  );
+  transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.time-picker-grid--days {
+  grid-template-columns: repeat(7, minmax(0, 1fr));
 }
 
 .time-picker-grid--months {
@@ -449,12 +482,7 @@
 }
 
 .time-picker-grid--days button {
-  min-height: 31px;
-}
-
-.time-picker-grid--weeks button {
-  min-height: 52px;
-  align-content: center;
+  min-height: var(--time-picker-day-height, 37px);
 }
 
 .time-picker-grid--years button {
