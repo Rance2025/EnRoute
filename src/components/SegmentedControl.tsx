@@ -31,6 +31,7 @@ export function SegmentedControl<Value extends string>({
   )
   const selectedOption = options[selectedIndex] ?? options[0]
   const enabledOptions = options.filter((option) => !option.disabled)
+  const thumbIndex = dragIndex ?? selectedIndex
 
   function commitIndex(index: number) {
     const option = getClosestEnabledOption(options, index)
@@ -156,24 +157,32 @@ export function SegmentedControl<Value extends string>({
         aria-valuetext={selectedOption?.label}
         onPointerDown={handlePointerDown}
         onKeyDown={handleKeyDown}
-      >
-        <span className="segmented-control__thumb-label" aria-hidden="true">
-          {selectedOption?.label}
-        </span>
-      </span>
-      {options.map((option) => (
+      />
+      {options.map((option, index) => (
         <button
           type="button"
           key={option.value}
           aria-pressed={option.value === value}
           disabled={option.disabled}
           onClick={() => onChange(option.value)}
+          data-segment-label={option.label}
+          style={getSegmentLabelStyle(thumbIndex, index)}
         >
-          {option.label}
+          <span className="segmented-control__label">{option.label}</span>
         </button>
       ))}
     </div>
   )
+}
+
+function getSegmentLabelStyle(thumbIndex: number, optionIndex: number) {
+  const activeStart = Math.min(Math.max(thumbIndex - optionIndex, 0), 1) * 100
+  const activeEnd = Math.min(Math.max(thumbIndex + 1 - optionIndex, 0), 1) * 100
+
+  return {
+    '--segmented-active-start': `${activeStart}%`,
+    '--segmented-active-end': `${activeEnd}%`,
+  } as CSSProperties
 }
 
 function getClosestEnabledOption<Value extends string>(

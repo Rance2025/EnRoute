@@ -66,6 +66,18 @@ describe('SegmentedControl', () => {
     )
   })
 
+  it('keeps the visible segment label in the fixed button cell', () => {
+    render(<DemoSegmentedControl />)
+
+    const slider = screen.getByRole('slider')
+    const selectedButton = screen.getByRole('button', { pressed: true })
+
+    expect(slider).toBeEmptyDOMElement()
+    expect(slider.querySelector('.segmented-control__thumb-label')).toBeNull()
+    expect(selectedButton.querySelectorAll('.segmented-control__label')).toHaveLength(1)
+    expect(selectedButton).toHaveAttribute('data-segment-label', selectedButton.textContent)
+  })
+
   it('previews a middle slider position while dragging and snaps on release', () => {
     render(<DemoSegmentedControl />)
     mockControlRect()

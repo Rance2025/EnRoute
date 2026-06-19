@@ -104,26 +104,48 @@
   outline-offset: -3px;
 }
 
-.segmented-control__thumb-label {
-  position: absolute;
-  inset: 0;
+.segmented-control button {
+  position: relative;
+  z-index: 1;
   display: grid;
   place-items: center;
   overflow: hidden;
-  color: var(--segmented-active-label-color);
+  color: var(--segmented-label-color);
+  cursor: inherit;
+}
+
+.segmented-control__label {
+  grid-area: 1 / 1;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  color: inherit;
   font-size: var(--segmented-label-font-size);
   font-weight: var(--segmented-label-font-weight);
   line-height: 1;
   pointer-events: none;
   text-align: center;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.segmented-control button {
-  position: relative;
-  z-index: 1;
-  color: var(--segmented-label-color);
-  cursor: inherit;
+.segmented-control button::after {
+  grid-area: 1 / 1;
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--segmented-active-label-color);
+  content: attr(data-segment-label);
+  font-size: var(--segmented-label-font-size);
+  font-weight: var(--segmented-label-font-weight);
+  line-height: 1;
+  clip-path: inset(
+    0 calc(100% - var(--segmented-active-end, 0%)) 0
+    var(--segmented-active-start, 0%)
+  );
+  pointer-events: none;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .segmented-control button[aria-pressed='true'] {
@@ -157,7 +179,7 @@
 }
 
 .app-nav .segmented-control button[aria-pressed='true'] {
-  color: #f8fbfa;
+  color: var(--segmented-label-color);
   background: transparent;
   box-shadow: none;
 }
@@ -258,7 +280,9 @@
 .time-mode-tabs {
   --segmented-thumb-bg: rgba(255, 255, 255, 0.94);
   --segmented-thumb-shadow: 0 8px 18px rgba(0, 0, 0, 0.13);
+  --segmented-label-color: rgba(255, 255, 255, 0.66);
   --segmented-active-label-color: #123f35;
+  --segmented-disabled-label-color: rgba(255, 255, 255, 0.34);
   --segmented-label-font-size: 12px;
   --segmented-label-font-weight: 860;
 
@@ -1222,7 +1246,7 @@
 }
 
 .segmented-control button[aria-pressed='true'] {
-  color: transparent;
+  color: var(--segmented-label-color);
   background: transparent;
   box-shadow: none;
 }
