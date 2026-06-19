@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "prepare:footprints": "node scripts/prepare-local-footprints.mjs",
     "test": "vitest",
     "preview": "vite preview"
   },
