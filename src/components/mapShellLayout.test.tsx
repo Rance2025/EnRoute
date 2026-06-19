@@ -188,15 +188,60 @@ describe('unified shell layout', () => {
     expect(screen.getByRole('button', { name: '回到今年' })).toBeInTheDocument()
   })
 
+  it('moves day week month and year ranges through the same directional navigator', () => {
+    render(<App amapConfig={configuredAmap} />)
+
+    fireEvent.click(screen.getByRole('button', { name: '上一段时间' }))
+
+    let stage = screen.getByLabelText('时间范围内容')
+    expect(screen.getByRole('heading', { name: '6月12日' })).toBeInTheDocument()
+    expect(stage).toHaveClass('time-panel-content__stage--previous')
+
+    fireEvent.click(screen.getByRole('button', { name: '下一段时间' }))
+
+    stage = screen.getByLabelText('时间范围内容')
+    expect(screen.getByRole('heading', { name: '今天' })).toBeInTheDocument()
+    expect(stage).toHaveClass('time-panel-content__stage--next')
+
+    fireEvent.click(screen.getByRole('button', { name: '周' }))
+    fireEvent.click(screen.getByRole('button', { name: '下一段时间' }))
+
+    stage = screen.getByLabelText('时间范围内容')
+    expect(screen.getByRole('heading', { name: '第26周' })).toBeInTheDocument()
+    expect(screen.getByText('6月22日 - 6月28日 · 按周聚合')).toBeInTheDocument()
+    expect(stage).toHaveClass('time-panel-content__stage--next')
+
+    fireEvent.click(screen.getByRole('button', { name: '月' }))
+    fireEvent.click(screen.getByRole('button', { name: '上一段时间' }))
+
+    stage = screen.getByLabelText('时间范围内容')
+    expect(screen.getByRole('heading', { name: '5月' })).toBeInTheDocument()
+    expect(stage).toHaveClass('time-panel-content__stage--previous')
+
+    fireEvent.click(screen.getByRole('button', { name: '年' }))
+    fireEvent.click(screen.getByRole('button', { name: '下一段时间' }))
+
+    stage = screen.getByLabelText('时间范围内容')
+    expect(screen.getByRole('heading', { name: '2027年' })).toBeInTheDocument()
+    expect(stage).toHaveClass('time-panel-content__stage--next')
+
+    fireEvent.click(screen.getByRole('button', { name: '全部' }))
+
+    expect(screen.queryByRole('button', { name: '上一段时间' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '下一段时间' })).not.toBeInTheDocument()
+  })
+
   it('renders month aggregation as a compact two-row picker without helper copy', () => {
     render(<App amapConfig={configuredAmap} />)
 
     fireEvent.click(screen.getByRole('button', { name: '月' }))
 
     const monthSelector = screen.getByLabelText('月份聚合选择')
+    const monthGrid = monthSelector.querySelector('.time-grid-selector--months')
 
     expect(within(monthSelector).getByText('按月聚合')).toBeInTheDocument()
-    expect(within(monthSelector).getAllByRole('button')).toHaveLength(12)
+    expect(monthGrid).not.toBeNull()
+    expect(within(monthGrid as HTMLElement).getAllByRole('button')).toHaveLength(12)
     expect(within(monthSelector).queryByText('选择月份')).not.toBeInTheDocument()
     expect(within(monthSelector).queryByText('选择')).not.toBeInTheDocument()
     expect(within(monthSelector).queryByText('当前')).not.toBeInTheDocument()

@@ -1,4 +1,4 @@
-import { type CSSProperties } from 'react'
+import { useState, type CSSProperties } from 'react'
 
 import type { AppView } from '../App'
 import { SegmentedControl, type SegmentedOption } from './SegmentedControl'
@@ -78,6 +78,8 @@ type TimeContextPanelProps = {
   onSelectionChange: (selection: TimeRangeSelection) => void
 }
 
+type TimeNavigationDirection = 'previous' | 'next'
+
 export function TimeContextPanel({
   view,
   selection,
@@ -85,22 +87,52 @@ export function TimeContextPanel({
   onCalendarModeChange,
   onSelectionChange,
 }: TimeContextPanelProps) {
+  const [navigationState, setNavigationState] = useState<{
+    direction: TimeNavigationDirection | null
+    sequence: number
+  }>({ direction: null, sequence: 0 })
   const heading = getTimeRangeDisplay(selection)
   const resetLabel = getCurrentRangeActionLabel(selection.mode)
 
+  function handleSelectionChange(nextSelection: TimeRangeSelection) {
+    setNavigationState((current) => ({ ...current, direction: null }))
+    onSelectionChange(nextSelection)
+  }
+
+  function handlePeriodNavigate(direction: TimeNavigationDirection) {
+    const offset = direction === 'previous' ? -1 : 1
+
+    setNavigationState((current) => ({
+      direction,
+      sequence: current.sequence + 1,
+    }))
+    onSelectionChange(moveTimeSelection(selection, offset, calendarMode))
+  }
+
   function handleModeChange(range: TimeRangeMode) {
-    if (range === 'day') onSelectionChange(selectDay(selection.anchorDate))
-    if (range === 'week') onSelectionChange(selectWeek(selection.anchorDate))
+    if (range === 'day') handleSelectionChange(selectDay(selection.anchorDate))
+    if (range === 'week') handleSelectionChange(selectWeek(selection.anchorDate))
     if (range === 'month') {
       const anchor = new Date(`${selection.anchorDate}T00:00:00`)
-      onSelectionChange(selectMonth(anchor.getFullYear(), anchor.getMonth() + 1))
+      handleSelectionChange(selectMonth(anchor.getFullYear(), anchor.getMonth() + 1))
     }
     if (range === 'year') {
-      onSelectionChange(selectYear(new Date(`${selection.anchorDate}T00:00:00`).getFullYear()))
+      handleSelectionChange(
+        selectYear(new Date(`${selection.anchorDate}T00:00:00`).getFullYear()),
+      )
     }
-    if (range === 'all') onSelectionChange(selectPresetRange('all'))
-    if (range === 'custom') onSelectionChange(selectPresetRange('recent30'))
+    if (range === 'all') handleSelectionChange(selectPresetRange('all'))
+    if (range === 'custom') handleSelectionChange(selectPresetRange('recent30'))
   }
+
+  const stageClassName = [
+    'time-panel-content__stage',
+    navigationState.direction
+      ? `time-panel-content__stage--${navigationState.direction}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(' ')
 
   return (
     <aside className="time-context-panel" aria-label="时间范围面板">
@@ -116,7 +148,7 @@ export function TimeContextPanel({
               type="button"
               className="time-context-card__today"
               aria-label={resetLabel}
-              onClick={() => onSelectionChange(createCurrentSelection(selection.mode))}
+              onClick={() => handleSelectionChange(createCurrentSelection(selection.mode))}
             >
               {resetLabel}
             </button>
@@ -132,12 +164,19 @@ export function TimeContextPanel({
         </header>
 
         <div className="time-panel-content">
-          {renderModeContent(
-            selection,
-            calendarMode,
-            onCalendarModeChange,
-            onSelectionChange,
-          )}
+          <div
+            key={`${navigationState.sequence}-${selection.mode}-${selection.start}-${selection.end}`}
+            className={stageClassName}
+            aria-label="时间范围内容"
+          >
+            {renderModeContent(
+              selection,
+              calendarMode,
+              onCalendarModeChange,
+              handleSelectionChange,
+              handlePeriodNavigate,
+            )}
+          </div>
         </div>
 
         <footer className="time-context-summary" aria-label="当前范围摘要">
@@ -158,6 +197,7 @@ function renderModeContent(
   calendarMode: CalendarDisplayMode,
   setCalendarMode: (mode: CalendarDisplayMode) => void,
   onSelectionChange: (selection: TimeRangeSelection) => void,
+  onPeriodNavigate: (direction: TimeNavigationDirection) => void,
 ) {
   if (selection.mode === 'day') {
     return (
@@ -166,6 +206,7 @@ function renderModeContent(
         calendarMode={calendarMode}
         setCalendarMode={setCalendarMode}
         onSelectionChange={onSelectionChange}
+        onPeriodNavigate={onPeriodNavigate}
       />
     )
   }
@@ -177,6 +218,10 @@ function renderModeContent(
           <strong>按周聚合</strong>
           <span>选择一周</span>
         </div>
+        <PeriodNavigationBar
+          label={getTimeRangeDisplay(selection).title}
+          onNavigate={onPeriodNavigate}
+        />
         <div className="time-selector-list">
           {getWeekOptions(selection.anchorDate).map((option) => (
             <button
@@ -207,6 +252,10 @@ function renderModeContent(
         <div className="time-mode-section-head">
           <strong>按月聚合</strong>
         </div>
+        <PeriodNavigationBar
+          label={getTimeRangeDisplay(selection).title}
+          onNavigate={onPeriodNavigate}
+        />
         <div className="time-grid-selector time-grid-selector--months">
           {monthOptions.map((option) => (
             <button
@@ -238,6 +287,10 @@ function renderModeContent(
           <strong>按年聚合</strong>
           <span>选择年份</span>
         </div>
+        <PeriodNavigationBar
+          label={getTimeRangeDisplay(selection).title}
+          onNavigate={onPeriodNavigate}
+        />
         <div className="time-grid-selector time-grid-selector--years">
           {yearOptions.map((option) => (
             <button
@@ -349,11 +402,13 @@ function DayCalendarSection({
   calendarMode,
   setCalendarMode,
   onSelectionChange,
+  onPeriodNavigate,
 }: {
   selection: TimeRangeSelection
   calendarMode: CalendarDisplayMode
   setCalendarMode: (mode: CalendarDisplayMode) => void
   onSelectionChange: (selection: TimeRangeSelection) => void
+  onPeriodNavigate: (direction: TimeNavigationDirection) => void
 }) {
   return (
     <section className="time-calendar-shell" aria-label="日历选择">
@@ -367,23 +422,10 @@ function DayCalendarSection({
           onChange={setCalendarMode}
         />
       </div>
-      <div className="time-calendar-bar">
-        <button
-          type="button"
-          aria-label="上一段时间"
-          onClick={() => onSelectionChange(moveTimeSelection(selection, -1, calendarMode))}
-        >
-          ‹
-        </button>
-        <span>{getCalendarLabel(selection, calendarMode)}</span>
-        <button
-          type="button"
-          aria-label="下一段时间"
-          onClick={() => onSelectionChange(moveTimeSelection(selection, 1, calendarMode))}
-        >
-          ›
-        </button>
-      </div>
+      <PeriodNavigationBar
+        label={getCalendarLabel(selection, calendarMode)}
+        onNavigate={onPeriodNavigate}
+      />
       <AnimatedDayCalendar
         calendarMode={calendarMode}
         selection={selection}
@@ -422,6 +464,34 @@ function AnimatedDayCalendar({
       }
     >
       <MonthCalendar selection={selection} onSelect={onSelect} />
+    </div>
+  )
+}
+
+function PeriodNavigationBar({
+  label,
+  onNavigate,
+}: {
+  label: string
+  onNavigate: (direction: TimeNavigationDirection) => void
+}) {
+  return (
+    <div className="time-calendar-bar time-period-navigation">
+      <button
+        type="button"
+        aria-label="上一段时间"
+        onClick={() => onNavigate('previous')}
+      >
+        ‹
+      </button>
+      <span>{label}</span>
+      <button
+        type="button"
+        aria-label="下一段时间"
+        onClick={() => onNavigate('next')}
+      >
+        ›
+      </button>
     </div>
   )
 }

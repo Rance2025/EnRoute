@@ -51,6 +51,23 @@ describe('map chrome layout', () => {
     expect(rule).toContain('font-size: 11px')
   })
 
+  it('gives the current-period reset action a clear click feedback state', () => {
+    const rule = cssRule('.time-context-card__today')
+    const hoverRule = cssRule('.time-context-card__today:hover')
+    const activeRule = cssRule('.time-context-card__today:active')
+    const focusRule = cssRule('.time-context-card__today:focus-visible')
+
+    expect(rule).toContain('cursor: pointer')
+    expect(rule).toContain('transition:')
+    expect(rule).toContain('transform')
+    expect(rule).toContain('box-shadow')
+    expect(hoverRule).toContain('background:')
+    expect(hoverRule).toContain('box-shadow')
+    expect(activeRule).toContain('transform: scale(0.96)')
+    expect(activeRule).toContain('box-shadow')
+    expect(focusRule).toContain('outline:')
+  })
+
   it('centers calendar arrow glyphs inside circular buttons', () => {
     const rule = cssRule('.time-calendar-bar button')
 
@@ -121,6 +138,18 @@ describe('map chrome layout', () => {
     expect(buttonRule).toContain('height: var(--time-calendar-day-height)')
     expect(buttonRule).toContain('min-height: var(--time-calendar-day-height)')
     expect(monthButtonRule).not.toContain('min-height: 31px')
+  })
+
+  it('animates period navigation content with directional entry classes', () => {
+    const stageRule = cssRule('.time-panel-content__stage')
+    const previousRule = cssRule('.time-panel-content__stage--previous')
+    const nextRule = cssRule('.time-panel-content__stage--next')
+
+    expect(stageRule).toContain('animation:')
+    expect(stageRule).toContain('timeRangeStageIn')
+    expect(previousRule).toContain('--time-range-enter-x: -')
+    expect(nextRule).toContain('--time-range-enter-x: ')
+    expect(appCss).toContain('@keyframes timeRangeStageIn')
   })
 
   it('lets segmented sliders drag from the switch surface with drag cursors', () => {
