@@ -2080,12 +2080,31 @@
   border: 1px solid rgba(23, 31, 29, 0.18);
   border-radius: 999px;
   background: transparent;
+  --footprint-color: #123f35;
+  overflow: hidden;
 }
 
-.footprint-style-popover__number {
+.footprint-style-popover__row input[type='color']::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.footprint-style-popover__row input[type='color']::-webkit-color-swatch {
+  border: 0;
+  border-radius: 999px;
+  background: var(--footprint-color);
+}
+
+.footprint-style-popover__row input[type='color']::-moz-color-swatch {
+  border: 0;
+  border-radius: 999px;
+  background: var(--footprint-color);
+}
+
+.footprint-style-popover__value {
+  display: grid;
   width: 54px;
   height: 24px;
-  padding: 0 6px;
+  place-items: center;
   border: 1px solid rgba(23, 31, 29, 0.12);
   border-radius: 999px;
   color: #17211f;
@@ -2099,14 +2118,22 @@
 }
 
 .footprint-style-popover__swatch {
+  position: relative;
   width: 22px;
   height: 22px;
   min-width: 22px;
   padding: 0;
   border: 1px solid rgba(23, 31, 29, 0.14);
   border-radius: 999px;
+  background: transparent;
+}
+
+.footprint-style-popover__swatch::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
   background: var(--swatch-color);
-  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.62);
 }
 
 .map-message {

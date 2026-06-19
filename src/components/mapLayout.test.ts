@@ -400,8 +400,17 @@ describe('map chrome layout', () => {
     expect(popoverRule).toContain('width: 218px')
     expect(popoverRule).toContain('max-width: calc(100vw - 28px)')
     expect(rowRule).toContain('grid-template-columns:')
+    expect(cssRule('.footprint-style-popover__value')).toContain('display: grid')
     expect(swatchRule).toContain('border-radius: 999px')
-    expect(swatchRule).toContain('background: var(--swatch-color)')
+    expect(swatchRule).toContain('background: transparent')
+    const swatchFillRule = cssRule('.footprint-style-popover__swatch::before')
+    expect(swatchFillRule).toContain('inset: 0')
+    expect(swatchFillRule).toContain(
+      'background: var(--swatch-color)',
+    )
+    expect(cssRule('.footprint-style-popover__row input[type=\'color\']::-webkit-color-swatch')).toContain(
+      'background: var(--footprint-color)',
+    )
   })
 
   it('removes the AMap compass and limits map dragging to configured bounds', () => {

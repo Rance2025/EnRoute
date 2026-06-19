@@ -1,11 +1,16 @@
 import type { CSSProperties } from 'react'
 import { useId, useState } from 'react'
 import { Crosshair, LocateFixed, Minus, Plus, Settings2 } from 'lucide-react'
+import {
+  FOOTPRINT_PIXEL_SIZE_MAX,
+  FOOTPRINT_PIXEL_SIZE_MIN,
+  FOOTPRINT_PIXEL_SIZE_STEP,
+  normalizeFootprintColor,
+  normalizeFootprintPixelSize,
+  type FootprintStyle,
+} from '../layers/footprintStyle'
 
-export type FootprintStyle = {
-  pixelSize: number
-  color: string
-}
+export type { FootprintStyle }
 
 type MapControlsProps = {
   onLocate: () => void
@@ -17,10 +22,6 @@ type MapControlsProps = {
 }
 
 const FOOTPRINT_COLOR_SWATCHES = ['#123f35', '#4f7cff', '#b8544c']
-const MAX_FOOTPRINT_PIXEL_SIZE = 5
-const MIN_FOOTPRINT_PIXEL_SIZE = 1
-const FOOTPRINT_PIXEL_SIZE_PRECISION = 10
-const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/
 
 export function MapControls({
   onLocate,
@@ -40,16 +41,16 @@ export function MapControls({
 
     onFootprintStyleChange({
       ...footprintStyle,
-      pixelSize: normalizePixelSize(nextPixelSize),
+      pixelSize: normalizeFootprintPixelSize(nextPixelSize),
     })
   }
 
   function updateColor(color: string) {
-    if (!HEX_COLOR_PATTERN.test(color)) return
+    const nextColor = normalizeFootprintColor(color)
 
     onFootprintStyleChange({
       ...footprintStyle,
-      color: color.toLowerCase(),
+      color: nextColor,
     })
   }
 
@@ -59,22 +60,13 @@ export function MapControls({
         <div className="footprint-style-popover" role="dialog" aria-label="足迹显示设置">
           <div className="footprint-style-popover__row">
             <label htmlFor={sizeInputId}>足迹点大小</label>
-            <input
-              className="footprint-style-popover__number"
-              type="number"
-              aria-label="足迹点大小数值"
-              min="1"
-              max="5"
-              step="0.1"
-              value={footprintStyle.pixelSize}
-              onChange={(event) => updatePixelSize(event.target.value)}
-            />
+            <span className="footprint-style-popover__value">{footprintStyle.pixelSize}</span>
             <input
               id={sizeInputId}
               type="range"
-              min="1"
-              max="5"
-              step="0.1"
+              min={FOOTPRINT_PIXEL_SIZE_MIN}
+              max={FOOTPRINT_PIXEL_SIZE_MAX}
+              step={FOOTPRINT_PIXEL_SIZE_STEP}
               value={footprintStyle.pixelSize}
               onChange={(event) => updatePixelSize(event.target.value)}
             />
@@ -85,6 +77,7 @@ export function MapControls({
               id={colorInputId}
               type="color"
               value={footprintStyle.color}
+              style={{ '--footprint-color': footprintStyle.color } as CSSProperties}
               onChange={(event) => updateColor(event.target.value)}
             />
           </div>
@@ -126,14 +119,4 @@ export function MapControls({
       </button>
     </div>
   )
-}
-
-function normalizePixelSize(pixelSize: number) {
-  const clampedPixelSize = Math.min(
-    Math.max(pixelSize, MIN_FOOTPRINT_PIXEL_SIZE),
-    MAX_FOOTPRINT_PIXEL_SIZE,
-  )
-
-  return Math.round(clampedPixelSize * FOOTPRINT_PIXEL_SIZE_PRECISION) /
-    FOOTPRINT_PIXEL_SIZE_PRECISION
 }
