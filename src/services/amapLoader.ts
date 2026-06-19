@@ -12,7 +12,9 @@ declare global {
 
 export type AMapNamespace = typeof AMap
 
-export async function loadAmap(config: AmapConfig): Promise<AMapNamespace> {
+let amapLoadPromise: Promise<AMapNamespace> | null = null
+
+export function loadAmap(config: AmapConfig): Promise<AMapNamespace> {
   if (!config.isConfigured) {
     throw new Error(`Missing AMap config: ${config.missingKeys.join(', ')}`)
   }
@@ -21,12 +23,21 @@ export async function loadAmap(config: AmapConfig): Promise<AMapNamespace> {
     securityJsCode: config.securityJsCode,
   }
 
-  return AMapLoader.load({
+  if (amapLoadPromise) {
+    return amapLoadPromise
+  }
+
+  amapLoadPromise = (AMapLoader.load({
     key: config.key,
     version: '2.0',
     plugins: ['AMap.Geolocation', 'AMap.Scale'],
     Loca: {
       version: '2.0.0',
     },
-  }) as Promise<AMapNamespace>
+  }) as Promise<AMapNamespace>).catch((error: unknown) => {
+    amapLoadPromise = null
+    throw error
+  })
+
+  return amapLoadPromise
 }
