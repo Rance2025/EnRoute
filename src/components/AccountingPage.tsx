@@ -4,9 +4,14 @@ import {
   ArrowUpRight,
   BarChart3,
   BookOpen,
+  CalendarClock,
   CircleDollarSign,
-  Landmark,
+  Pencil,
+  Plus,
+  ReceiptText,
+  Settings2,
   Tags,
+  WalletCards,
 } from 'lucide-react'
 import { useMemo, useState, type ComponentType, type CSSProperties } from 'react'
 
@@ -138,16 +143,15 @@ export function AccountingPage({ timeRange }: AccountingPageProps) {
       </header>
 
       <section className="accounting-overview" aria-label="记账概览">
-        <Metric label="总余额" value={`¥${formatCnyFromCents(totalBalance)}`} />
-        <Metric label="本月收入" value={`¥${formatCnyFromCents(monthIncome)}`} />
-        <Metric label="本月支出" value={`¥${formatCnyFromCents(monthExpense)}`} />
-        <Metric label="账户数" value={String(demoAccounts.length)} />
+        <Metric label="总余额" value={`¥${formatCnyFromCents(totalBalance)}`} tone="balance" />
+        <Metric label="本月收入" value={`¥${formatCnyFromCents(monthIncome)}`} tone="income" />
+        <Metric label="本月支出" value={`¥${formatCnyFromCents(monthExpense)}`} tone="expense" />
+        <Metric label="账户数" value={String(demoAccounts.length)} tone="neutral" />
       </section>
 
       {mode === 'ledger' ? (
         <LedgerWorkspace
           draft={draft}
-          balances={balances}
           categoriesForType={categoriesForType}
           selectedCategoryBelongsToType={selectedCategoryBelongsToType}
           updateDraft={updateDraft}
@@ -170,14 +174,12 @@ export function AccountingPage({ timeRange }: AccountingPageProps) {
 
 function LedgerWorkspace({
   draft,
-  balances,
   categoriesForType,
   selectedCategoryBelongsToType,
   updateDraft,
   toggleTag,
 }: {
   draft: Draft
-  balances: Record<string, number>
   categoriesForType: Category[]
   selectedCategoryBelongsToType: boolean
   updateDraft: DraftUpdater
@@ -185,23 +187,20 @@ function LedgerWorkspace({
 }) {
   return (
     <div className="accounting-workspace accounting-workspace--ledger" aria-label="交易流水工作区">
-      <section className="ledger-panel ledger-panel--accounts" aria-labelledby="accounts-title">
-        <PanelTitle icon={Landmark} title="账户" />
-        <h2 id="accounts-title" className="sr-only">
-          账户
-        </h2>
-        <div className="account-list">
-          {demoAccounts.map((account) => (
-            <AccountRow key={account.id} account={account} balance={balances[account.id]} />
-          ))}
-        </div>
-      </section>
-
-      <section className="ledger-panel ledger-panel--transactions" aria-labelledby="tx-title">
-        <PanelTitle icon={BookOpen} title="交易流水" />
+      <section className="accounting-panel ledger-feed-panel" aria-labelledby="tx-title">
+        <WorkspacePanelHead
+          icon={BookOpen}
+          title="交易流水"
+          detail={`${demoTransactions.length} 笔 · 按发生时间`}
+        />
         <h2 id="tx-title" className="sr-only">
           交易流水
         </h2>
+        <div className="ledger-mini-summary" aria-label="流水摘要">
+          <MiniStat label="最近收入" value="秒思 5月实习" />
+          <MiniStat label="最大支出" value="鲜旺发牛肉火锅" />
+          <MiniStat label="标签样本" value="旅行 / 青岛之行" />
+        </div>
         <div className="transaction-list">
           {demoTransactions.map((transaction) => (
             <TransactionRow key={transaction.id} transaction={transaction} />
@@ -209,30 +208,30 @@ function LedgerWorkspace({
         </div>
       </section>
 
-      <section className="ledger-panel ledger-panel--editor" aria-labelledby="editor-title">
-        <PanelTitle icon={CircleDollarSign} title="新增记录" />
-        <h2 id="editor-title" className="sr-only">
-          新增记录
-        </h2>
-        <TransactionEditor
-          draft={draft}
-          categoriesForType={categoriesForType}
-          selectedCategoryBelongsToType={selectedCategoryBelongsToType}
-          updateDraft={updateDraft}
-          toggleTag={toggleTag}
-        />
-      </section>
+      <aside className="ledger-side-rail" aria-label="流水侧栏">
+        <section className="accounting-panel quick-record-panel" aria-labelledby="quick-record-title">
+          <WorkspacePanelHead icon={CircleDollarSign} title="快速记录" detail="MVP 表单" />
+          <h2 id="quick-record-title" className="sr-only">
+            快速记录
+          </h2>
+          <TransactionEditor
+            draft={draft}
+            categoriesForType={categoriesForType}
+            selectedCategoryBelongsToType={selectedCategoryBelongsToType}
+            updateDraft={updateDraft}
+            toggleTag={toggleTag}
+          />
+        </section>
 
-      <section className="ledger-panel ledger-panel--trees" aria-labelledby="trees-title">
-        <PanelTitle icon={Tags} title="分类与标签" />
-        <h2 id="trees-title" className="sr-only">
-          分类与标签
-        </h2>
-        <TreeGroup title="收入分类" items={demoCategories.filter((item) => item.type === 'income')} />
-        <TreeGroup title="支出分类" items={demoCategories.filter((item) => item.type === 'expense')} />
-        <TreeGroup title="转账分类" items={demoCategories.filter((item) => item.type === 'transfer')} />
-        <TreeGroup title="全局标签" items={demoTags} />
-      </section>
+        <section className="accounting-panel ledger-context-panel">
+          <WorkspacePanelHead icon={CalendarClock} title="发生时间" detail="默认等于记录时间" />
+          <div className="ledger-context-list">
+            <ContextRow label="默认" value="用户不选择时使用创建时间" />
+            <ContextRow label="外显" value="所有流水优先展示发生时间" />
+            <ContextRow label="导入" value="外部数据映射到发生时间" />
+          </div>
+        </section>
+      </aside>
     </div>
   )
 }
@@ -243,22 +242,45 @@ function AccountsWorkspace({ balances }: { balances: Record<string, number> }) {
       className="accounting-workspace accounting-workspace--accounts"
       aria-label="账户管理工作区"
     >
-      <section className="ledger-panel account-management-panel">
-        <PanelTitle icon={Landmark} title="账户管理" />
-        <div className="account-management-list">
-          {demoAccounts.map((account) => (
-            <AccountManagementRow key={account.id} account={account} balance={balances[account.id]} />
+      <section className="accounting-panel account-stack-panel">
+        <WorkspacePanelHead icon={WalletCards} title="账户" detail="余额由流水自动计算" />
+        <div className="account-card-stack" aria-label="账户堆叠卡片">
+          {demoAccounts.map((account, index) => (
+            <AccountStackCard
+              key={account.id}
+              account={account}
+              balance={balances[account.id]}
+              index={index}
+            />
           ))}
         </div>
       </section>
 
-      <section className="ledger-panel account-settings-panel">
-        <PanelTitle icon={CircleDollarSign} title="账户规则" />
-        <div className="account-settings-grid">
-          <SettingNote title="初始余额" value="跟随开账时间，用于承接无法追溯的历史余额" />
-          <SettingNote title="归档与隐藏" value="账户可归档、可隐藏，但 MVP 不做删除" />
-          <SettingNote title="余额范围" value="所有账户允许负值，不区分资产或负债类型" />
-          <SettingNote title="转账约束" value="转出和转入账户必须不同" />
+      <section className="accounting-panel account-rules-panel">
+        <WorkspacePanelHead icon={Settings2} title="账户规则" detail="创建后可归档、隐藏" />
+        <div className="account-rules-grid">
+          <SettingNote
+            title="开账余额"
+            value="跟随开账时间，用于承接无法追溯到最初的历史余额。"
+          />
+          <SettingNote
+            title="开账时间"
+            value="导入历史流水后，可以调整到最早一笔可追溯交易的发生时间。"
+          />
+          <SettingNote
+            title="允许负值"
+            value="不区分资产类和负债类账户，所有账户余额都允许低于 0。"
+          />
+          <SettingNote title="转账约束" value="转账必须选择两个不同账户，分类可以为空。" />
+        </div>
+        <div className="account-activity-list" aria-label="账户近期活动">
+          {demoAccounts.map((account) => (
+            <AccountActivityRow
+              key={account.id}
+              account={account}
+              balance={balances[account.id]}
+            />
+          ))}
         </div>
       </section>
     </div>
@@ -288,28 +310,57 @@ function ReportWorkspace({
 
   return (
     <div className="accounting-workspace accounting-workspace--report" aria-label="统计报告工作区">
-      <section className="ledger-panel report-summary-panel">
-        <PanelTitle icon={BarChart3} title="统计报告" />
-        <div className="report-metrics">
-          <Metric label="总余额" value={`¥${formatCnyFromCents(totalBalance)}`} />
-          <Metric label="收入" value={`¥${formatCnyFromCents(monthIncome)}`} />
-          <Metric label="支出" value={`¥${formatCnyFromCents(monthExpense)}`} />
-          <Metric label="净流入" value={`¥${formatCnyFromCents(monthIncome - monthExpense)}`} />
+      <section className="accounting-panel report-dashboard-panel">
+        <WorkspacePanelHead icon={BarChart3} title="统计报告" detail="按当前左侧时间范围聚合" />
+        <div className="report-focus">
+          <div>
+            <span>净流入</span>
+            <strong>¥{formatCnyFromCents(monthIncome - monthExpense)}</strong>
+          </div>
+          <div className="report-focus__track" aria-hidden="true">
+            <i style={{ '--report-fill': 0.74 } as CSSProperties} />
+          </div>
         </div>
+        <div className="report-metrics">
+          <Metric label="总余额" value={`¥${formatCnyFromCents(totalBalance)}`} tone="balance" />
+          <Metric label="收入" value={`¥${formatCnyFromCents(monthIncome)}`} tone="income" />
+          <Metric label="支出" value={`¥${formatCnyFromCents(monthExpense)}`} tone="expense" />
+        </div>
+        <section className="report-category-panel" aria-label="支出分类统计">
+          <PanelTitle icon={ReceiptText} title="支出分类" />
+          <div className="report-bar-list">
+            {expenseByCategory.map((item) => (
+              <div className="report-bar-row" key={item.category.id}>
+                <span>{getCategoryPath(demoCategories, item.category.id)}</span>
+                <div>
+                  <i style={{ '--bar-size': item.amount / maxExpense } as CSSProperties} />
+                </div>
+                <b>¥{formatCnyFromCents(item.amount)}</b>
+              </div>
+            ))}
+          </div>
+        </section>
       </section>
 
-      <section className="ledger-panel report-category-panel">
-        <PanelTitle icon={Tags} title="支出分类" />
-        <div className="report-bar-list">
-          {expenseByCategory.map((item) => (
-            <div className="report-bar-row" key={item.category.id}>
-              <span>{getCategoryPath(demoCategories, item.category.id)}</span>
-              <div>
-                <i style={{ '--bar-size': item.amount / maxExpense } as CSSProperties} />
-              </div>
-              <b>¥{formatCnyFromCents(item.amount)}</b>
-            </div>
-          ))}
+      <section className="accounting-panel taxonomy-management-panel">
+        <div className="taxonomy-management-head">
+          <PanelTitle icon={Tags} title="分类与标签管理" />
+          <div>
+            <button type="button">
+              <Plus size={14} strokeWidth={2.2} />
+              新建分类
+            </button>
+            <button type="button">
+              <Pencil size={14} strokeWidth={2.1} />
+              编辑标签
+            </button>
+          </div>
+        </div>
+        <div className="taxonomy-scroll">
+          <TreeGroup title="收入分类" items={demoCategories.filter((item) => item.type === 'income')} />
+          <TreeGroup title="支出分类" items={demoCategories.filter((item) => item.type === 'expense')} />
+          <TreeGroup title="转账分类" items={demoCategories.filter((item) => item.type === 'transfer')} />
+          <TreeGroup title="全局标签" items={demoTags} />
         </div>
       </section>
     </div>
@@ -330,8 +381,21 @@ function TransactionEditor({
   toggleTag: (tagId: string) => void
 }) {
   return (
-    <form className="transaction-editor">
-      <label>
+    <form className="transaction-editor" onSubmit={(event) => event.preventDefault()}>
+      <div className="transaction-type-switch" role="group" aria-label="交易类型选择">
+        {(['expense', 'income', 'transfer'] as TransactionType[]).map((type) => (
+          <button
+            type="button"
+            key={type}
+            aria-pressed={draft.type === type}
+            onClick={() => updateDraft('type', type)}
+          >
+            {typeLabels[type]}
+          </button>
+        ))}
+      </div>
+
+      <label className="sr-only">
         <span>交易类型</span>
         <select
           aria-label="交易类型"
@@ -344,7 +408,7 @@ function TransactionEditor({
         </select>
       </label>
 
-      <label>
+      <label className="amount-field">
         <span>金额</span>
         <input
           aria-label="金额"
@@ -431,7 +495,7 @@ function TransactionEditor({
       <fieldset>
         <legend>标签</legend>
         <div className="tag-picker">
-          {demoTags.map((tag) => (
+          {demoTags.slice(0, 4).map((tag) => (
             <button
               type="button"
               key={tag.id}
@@ -452,13 +516,60 @@ function TransactionEditor({
           onChange={(event) => updateDraft('note', event.currentTarget.value)}
         />
       </label>
+
+      <button className="transaction-submit" type="submit">
+        保存记录
+      </button>
     </form>
   )
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+function WorkspacePanelHead({
+  icon,
+  title,
+  detail,
+}: {
+  icon: ComponentType<{ size?: number; strokeWidth?: number }>
+  title: string
+  detail: string
+}) {
   return (
-    <div className="metric">
+    <div className="workspace-panel-head">
+      <PanelTitle icon={icon} title={title} />
+      <span>{detail}</span>
+    </div>
+  )
+}
+
+function Metric({
+  label,
+  value,
+  tone = 'neutral',
+}: {
+  label: string
+  value: string
+  tone?: 'balance' | 'income' | 'expense' | 'neutral'
+}) {
+  return (
+    <div className={`metric metric--${tone}`}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  )
+}
+
+function MiniStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="mini-stat">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  )
+}
+
+function ContextRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="context-row">
       <span>{label}</span>
       <strong>{value}</strong>
     </div>
@@ -480,29 +591,46 @@ function PanelTitle({
   )
 }
 
-function AccountRow({ account, balance }: { account: Account; balance: number }) {
+function AccountStackCard({
+  account,
+  balance,
+  index,
+}: {
+  account: Account
+  balance: number
+  index: number
+}) {
   return (
-    <article className="account-row">
-      <div>
-        <strong>{account.name}</strong>
-        <span>开账 {formatDateTime(account.openingBalanceAt)}</span>
+    <article
+      className={`account-stack-card account-stack-card--${index + 1}`}
+      style={{ '--stack-index': index } as CSSProperties}
+    >
+      <div className="account-stack-card__top">
+        <span>{getAccountStateLabel(account)}</span>
+        <b>{formatDate(account.openingBalanceAt)}</b>
       </div>
-      <b className={balance < 0 ? 'is-negative' : ''}>¥{formatCnyFromCents(balance)}</b>
+      <div className="account-stack-card__main">
+        <strong>{account.name}</strong>
+        <span className={balance < 0 ? 'is-negative' : ''}>
+          ¥{formatCnyFromCents(balance)}
+        </span>
+      </div>
+      <div className="account-stack-card__bottom">
+        <span>开账余额 ¥{formatCnyFromCents(account.openingBalanceInCents)}</span>
+        <span>{getAccountTransactionCount(account.id)} 笔流水</span>
+      </div>
     </article>
   )
 }
 
-function AccountManagementRow({ account, balance }: { account: Account; balance: number }) {
+function AccountActivityRow({ account, balance }: { account: Account; balance: number }) {
   return (
-    <article className="account-management-row">
+    <article className="account-activity-row">
       <div>
         <strong>{account.name}</strong>
-        <span>开账余额 ¥{formatCnyFromCents(account.openingBalanceInCents)}</span>
+        <span>开账 {formatDate(account.openingBalanceAt)}</span>
       </div>
-      <div>
-        <b className={balance < 0 ? 'is-negative' : ''}>¥{formatCnyFromCents(balance)}</b>
-        <span>{account.hidden ? '隐藏' : account.archivedAt ? '归档' : '启用'}</span>
-      </div>
+      <b className={balance < 0 ? 'is-negative' : ''}>¥{formatCnyFromCents(balance)}</b>
     </article>
   )
 }
@@ -592,6 +720,21 @@ function getTransactionAccountLabel(transaction: Transaction) {
   return accountById.get(transaction.accountId) ?? '未知账户'
 }
 
+function getAccountTransactionCount(accountId: string) {
+  return demoTransactions.filter((transaction) => {
+    if (transaction.type === 'transfer') {
+      return transaction.fromAccountId === accountId || transaction.toAccountId === accountId
+    }
+    return transaction.accountId === accountId
+  }).length
+}
+
+function getAccountStateLabel(account: Account) {
+  if (account.hidden) return '隐藏'
+  if (account.archivedAt) return '归档'
+  return '启用'
+}
+
 function formatTransactionAmount(transaction: Transaction) {
   const prefix = transaction.type === 'income' ? '+' : transaction.type === 'expense' ? '-' : ''
   return `${prefix}¥${formatCnyFromCents(transaction.amountInCents)}`
@@ -604,5 +747,12 @@ function formatDateTime(value: string) {
     hour: '2-digit',
     minute: '2-digit',
     hour12: false,
+  }).format(new Date(value))
+}
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
   }).format(new Date(value))
 }
