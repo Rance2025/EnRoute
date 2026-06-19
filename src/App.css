@@ -565,6 +565,10 @@
   --time-calendar-grid-offset: 0;
 }
 
+.time-calendar-body--collapsing-week {
+  --time-calendar-grid-offset: calc(var(--time-calendar-active-week-index) * -1);
+}
+
 .time-calendar-weekdays {
   height: var(--time-calendar-weekday-height);
   display: grid;
