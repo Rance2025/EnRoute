@@ -81,6 +81,7 @@ describe('unified shell layout', () => {
     expect(within(mapMetricStrip).getByText('足迹总数')).toBeInTheDocument()
     expect(within(mapMetricStrip).getByText('总距离')).toBeInTheDocument()
     expect(within(mapMetricStrip).getByText('日均距离')).toBeInTheDocument()
+    expect(within(mapMetricStrip).getByText('0 m/day')).toBeInTheDocument()
     expect(within(mapMetricStrip).queryByText('当前足迹')).not.toBeInTheDocument()
     expect(within(mapMetricStrip).queryByText('全部足迹')).not.toBeInTheDocument()
     expect(within(mapMetricStrip).queryByText('活跃天数')).not.toBeInTheDocument()
@@ -306,11 +307,15 @@ describe('unified shell layout', () => {
     expect(screen.queryByRole('slider', { name: '记账工作区滑块' })).not.toBeInTheDocument()
     expect(screen.getByLabelText('账户与流水工作台')).toBeInTheDocument()
     const accountingMetricStrip = screen.getByLabelText('全局范围指标')
-    expect(within(accountingMetricStrip).getByText('净流入')).toBeInTheDocument()
+    expect(within(accountingMetricStrip).getByText('收入')).toBeInTheDocument()
     expect(within(accountingMetricStrip).getByText('支出')).toBeInTheDocument()
     expect(within(accountingMetricStrip).getByText('流水')).toBeInTheDocument()
-    expect(within(accountingMetricStrip).getByText('账户')).toBeInTheDocument()
+    expect(within(accountingMetricStrip).queryByText('净流入')).not.toBeInTheDocument()
+    expect(within(accountingMetricStrip).queryByText('账户')).not.toBeInTheDocument()
     expect(within(accountingMetricStrip).queryByText('足迹总数')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('记账控制栏')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('记账时间范围')).not.toBeInTheDocument()
+    expect(screen.queryByText('6 笔流水')).not.toBeInTheDocument()
   })
 
   it('switches the shared time panel between top-level range modes', () => {
@@ -334,8 +339,8 @@ describe('unified shell layout', () => {
     expect(screen.queryByLabelText('日历选择')).not.toBeInTheDocument()
     expect(screen.queryByRole('group', { name: '日历显示方式' })).not.toBeInTheDocument()
     expect(
-      within(screen.getByLabelText('iOS 记账工作台')).getByText('第25周'),
-    ).toBeInTheDocument()
+      within(screen.getByLabelText('iOS 记账工作台')).queryByText('第25周'),
+    ).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '月' }))
 
@@ -388,7 +393,7 @@ describe('unified shell layout', () => {
     })
 
     expect(screen.getByRole('heading', { name: '自定义' })).toBeInTheDocument()
-    expect(screen.getByText('2026年6月10日 - 2026年6月12日')).toBeInTheDocument()
+    expect(screen.getByText('2026年 6月10日 - 6月12日')).toBeInTheDocument()
   })
 
   it('uses the current range granularity for the reset action', () => {
@@ -461,7 +466,7 @@ describe('unified shell layout', () => {
     expect(screen.getByRole('heading', { name: '第29周' })).toBeInTheDocument()
     const timeCardTop = screen.getByRole('heading', { name: '第29周' }).closest('.time-context-card__top')
     expect(timeCardTop).not.toBeNull()
-    expect(within(timeCardTop as HTMLElement).getByText('2026年7月13日 - 2026年7月19日')).toBeInTheDocument()
+    expect(within(timeCardTop as HTMLElement).getByText('2026年 7月13日 - 7月19日')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '月' }))
     fireEvent.click(screen.getByRole('button', { name: '上一页' }))
@@ -626,7 +631,13 @@ describe('unified shell layout', () => {
     expect(within(weekPicker).getByText('2026年6月')).toBeInTheDocument()
     expect(within(weekPicker).getByLabelText('上一页')).toBeInTheDocument()
     expect(within(weekPicker).getByLabelText('下一页')).toBeInTheDocument()
-    expect(within(weekPicker).getByRole('button', { name: /第25周/ })).toBeInTheDocument()
+    const currentWeekButton = within(weekPicker).getByRole('button', { name: /第25周/ })
+    expect(currentWeekButton).toBeInTheDocument()
+    expect(within(currentWeekButton).getByText('6月15日-6月21日')).toBeInTheDocument()
+    expect(within(currentWeekButton).queryByText('2026年 6月15日 - 6月21日')).not.toBeInTheDocument()
+    const currentWeekCardTop = screen.getByRole('heading', { name: '第25周' }).closest('.time-context-card__top')
+    expect(currentWeekCardTop).not.toBeNull()
+    expect(within(currentWeekCardTop as HTMLElement).getByText('2026年 6月15日 - 6月21日')).toBeInTheDocument()
     expect(weekPicker.querySelector('.time-picker-grid')).toHaveClass('time-picker-grid--weeks')
     expect(weekPicker.querySelector('.time-picker-calendar-frame')).not.toBeInTheDocument()
     expect(screen.queryByRole('group', { name: '日历显示方式' })).not.toBeInTheDocument()
@@ -759,7 +770,7 @@ describe('unified shell layout', () => {
     expect(screen.getByRole('heading', { name: '第30周' })).toBeInTheDocument()
     const selectedWeekCardTop = screen.getByRole('heading', { name: '第30周' }).closest('.time-context-card__top')
     expect(selectedWeekCardTop).not.toBeNull()
-    expect(within(selectedWeekCardTop as HTMLElement).getByText('2026年7月20日 - 2026年7月26日')).toBeInTheDocument()
+    expect(within(selectedWeekCardTop as HTMLElement).getByText('2026年 7月20日 - 7月26日')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '月' }))
     fireEvent.click(screen.getByRole('button', { name: /7月/ }))
@@ -777,14 +788,14 @@ describe('unified shell layout', () => {
     fireEvent.click(screen.getByRole('button', { name: '最近一月' }))
 
     expect(screen.getByRole('heading', { name: '最近一月' })).toBeInTheDocument()
-    expect(screen.getByText('2026年5月21日 - 2026年6月19日')).toBeInTheDocument()
+    expect(screen.getByText('2026年 5月21日 - 6月19日')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '记账' }))
 
     expect(screen.getByLabelText('iOS 记账工作台')).toBeInTheDocument()
     expect(
-      within(screen.getByLabelText('iOS 记账工作台')).getByText('最近一月'),
-    ).toBeInTheDocument()
+      within(screen.getByLabelText('iOS 记账工作台')).queryByText('最近一月'),
+    ).not.toBeInTheDocument()
     expect(screen.queryByLabelText('当前账目范围')).not.toBeInTheDocument()
   })
 })

@@ -7,7 +7,7 @@ export function formatDistanceMeters(value: number) {
 }
 
 export function formatAverageDistanceMeters(value: number) {
-  return formatDistance(value, 1, 1)
+  return `${formatDistance(value, value <= 0 ? 0 : 1, 1)}/day`
 }
 
 function formatDistance(value: number, minimumFractionDigits: number, maximumFractionDigits: number) {
