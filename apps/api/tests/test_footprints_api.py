@@ -222,6 +222,57 @@ def test_imports_footprints_into_sqlite_rtree_viewport_index(tmp_path: Path):
     assert spatial_count == (4,)
 
 
+def test_serves_snapshot_from_existing_database_when_source_csv_was_removed(tmp_path: Path):
+    data_path = write_csv(tmp_path, SNAPSHOT_CSV)
+    db_path = tmp_path / "footprints.sqlite"
+    client = create_test_client(data_path=data_path, db_path=db_path)
+
+    first_response = client.post(
+        "/api/footprints/snapshot",
+        json={
+            "timeRange": {
+                "startTimestampSeconds": 1781798400,
+                "endTimestampSeconds": 1781884799,
+                "dayCount": 1,
+            },
+            "zoom": 16,
+            "cellSizePx": 0.5,
+            "viewportBounds": {"west": 121, "south": 31, "east": 122, "north": 32},
+            "viewportNorthWestWorldPixel": {"x": 0, "y": 0},
+        },
+    )
+    assert first_response.status_code == 200
+
+    data_path.unlink()
+
+    second_response = client.post(
+        "/api/footprints/snapshot",
+        json={
+            "timeRange": {
+                "startTimestampSeconds": 1781798400,
+                "endTimestampSeconds": 1781884799,
+                "dayCount": 1,
+            },
+            "zoom": 16,
+            "cellSizePx": 0.5,
+            "viewportBounds": {"west": 121, "south": 31, "east": 122, "north": 32},
+            "viewportNorthWestWorldPixel": {"x": 0, "y": 0},
+        },
+    )
+
+    assert second_response.status_code == 200
+    assert second_response.json()["metrics"]["selectedCount"] == 3
+    connection = sqlite3.connect(db_path)
+    try:
+        stored_count = connection.execute("SELECT COUNT(*) FROM footprints").fetchone()
+        spatial_count = connection.execute("SELECT COUNT(*) FROM footprint_spatial").fetchone()
+    finally:
+        connection.close()
+
+    assert stored_count == (4,)
+    assert spatial_count == (4,)
+
+
 def test_snapshot_import_streams_csv_without_reading_entire_file(tmp_path: Path, monkeypatch):
     data_path = write_csv(tmp_path, SNAPSHOT_CSV)
     original_read_text = Path.read_text
