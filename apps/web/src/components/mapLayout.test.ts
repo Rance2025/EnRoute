@@ -411,7 +411,8 @@ describe('map chrome layout', () => {
     const shellRule = cssRule('.time-custom-shell')
     const fieldRule = cssRule('.time-date-field')
     const buttonRule = cssRule('.time-date-button')
-    const buttonHoverRule = cssRule('.time-date-button:hover,\n.time-date-button.is-open')
+    const buttonHoverRule =
+      appCss.match(/\.time-date-button:hover,\s*\.time-date-button\.is-open\s*\{[^}]*\}/)?.[0] ?? ''
 
     expect(shellRule).toContain('border: 1px solid')
     expect(shellRule).toContain('border-radius: 22px')
