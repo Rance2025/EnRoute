@@ -30,6 +30,7 @@ Then run:
 ```bash
 npm install
 npm run install:api
+npm run prepare:footprints
 python start.py start
 ```
 
@@ -44,7 +45,8 @@ and `npm run dev`.
 
 `npm install` installs the frontend application dependencies. `npm run
 install:api` installs the Python backend service in editable mode with its test
-dependencies from `apps/api/pyproject.toml`.
+dependencies from `apps/api/pyproject.toml`. `npm run prepare:footprints`
+imports the local CSV export into the ignored SQLite database before startup.
 
 Keep personal footprint exports in `external/`, which is ignored by git. The
 Python API reads `FOOTPRINT_DATA_PATH=external/backUpData-all.csv`, streams it
@@ -53,9 +55,9 @@ viewport snapshots from `POST /api/footprints/snapshot`. The compatibility
 `GET /api/footprints` route remains available for small/debug payloads, but the
 map no longer loads all raw points into browser memory. Footprint CSV
 coordinates default to WGS84 and are converted by the API to GCJ-02 for AMap; set
-`FOOTPRINT_COORDINATE_SYSTEM=gcj02` when the source CSV is already GCJ-02. Run
-`npm run prepare:footprints` to check that the local export exists before
-starting the API. Loaded footprint samples render through AMap `MassMarks`, so
+`FOOTPRINT_COORDINATE_SYSTEM=gcj02` when the source CSV is already GCJ-02. The
+API also checks the CSV signature at query time and refreshes SQLite when the
+source export changes. Loaded footprint samples render through AMap `MassMarks`, so
 AMap owns point projection during drag and zoom instead of a React or custom
 canvas overlay.
 
