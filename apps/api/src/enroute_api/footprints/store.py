@@ -98,6 +98,8 @@ def ensure_imported(
 
     if stored_signature == source_signature and stored_count > 0 and stored_spatial_count == stored_count:
         return
+    if not data_path.exists() and stored_count > 0 and stored_spatial_count == stored_count:
+        return
 
     with connection:
         connection.execute("DELETE FROM footprint_spatial")

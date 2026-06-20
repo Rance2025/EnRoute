@@ -57,7 +57,9 @@ map no longer loads all raw points into browser memory. Footprint CSV
 coordinates default to WGS84 and are converted by the API to GCJ-02 for AMap; set
 `FOOTPRINT_COORDINATE_SYSTEM=gcj02` when the source CSV is already GCJ-02. The
 API also checks the CSV signature at query time and refreshes SQLite when the
-source export changes. Loaded footprint samples render through AMap `MassMarks`, so
+source export changes. After a successful import, the local SQLite database can
+serve footprint queries even if the original CSV export is removed. Loaded
+footprint samples render through AMap `MassMarks`, so
 AMap owns point projection during drag and zoom instead of a React or custom
 canvas overlay.
 
