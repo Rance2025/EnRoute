@@ -194,7 +194,7 @@ describe('bounded map zooming', () => {
     vi.useRealTimers()
   })
 
-  it('preserves longitude while locking latitude at minimum AMap zoom', () => {
+  it('preserves longitude and latitude while zooming to minimum AMap zoom', () => {
     vi.useFakeTimers()
     const container = document.createElement('div')
     Object.defineProperties(container, {
@@ -219,7 +219,7 @@ describe('bounded map zooming', () => {
     const lastCall = map.setZoomAndCenter.mock.calls.at(-1)
     expect(lastCall?.[0]).toBeCloseTo(2.02)
     expect(lastCall?.[1][0]).toBeCloseTo(104)
-    expect(lastCall?.[1][1]).toBeCloseTo(0)
+    expect(lastCall?.[1][1]).toBeCloseTo(35)
 
     vi.useRealTimers()
   })
@@ -346,12 +346,10 @@ describe('bounded map zooming', () => {
     vi.useRealTimers()
   })
 
-  it('moves toward the minimum zoom midpoint before the final zoom frame', () => {
+  it('preserves the current latitude when approaching the minimum zoom', () => {
     const nextCenter = calculateIntermediateZoomCenter({
-      startCenter: [104, 35],
       currentCenter: [104, 35],
       currentZoom: 2.55,
-      startZoom: 2.55,
       frameZoom: 2.1,
       focalPoint: { x: 716, y: 407.5 },
       viewportSize: { width: 1432, height: 815 },
@@ -359,8 +357,73 @@ describe('bounded map zooming', () => {
     })
 
     expect(nextCenter[0]).toBeCloseTo(104)
-    expect(nextCenter[1]).toBeLessThan(4)
-    expect(nextCenter[1]).toBeGreaterThan(1)
+    expect(nextCenter[1]).toBeCloseTo(35)
+  })
+
+  it('does not jump toward the world midpoint on the first near-polar minimum zoom frame', () => {
+    vi.useFakeTimers()
+    let zoom = 2.52
+    let center: [number, number] = [104, 60]
+    const centers: Array<[number, number]> = []
+    const container = document.createElement('div')
+    Object.defineProperties(container, {
+      clientWidth: { value: 1432 },
+      clientHeight: { value: 815 },
+    })
+    const map = {
+      getZoom: () => zoom,
+      getCenter: () => lngLat(center),
+      setZoomAndCenter: (nextZoom: number, nextCenter: [number, number]) => {
+        zoom = nextZoom
+        center = nextCenter
+        centers.push(nextCenter)
+      },
+    }
+
+    zoomByStep(map, container, renderBounds, -1)
+    vi.advanceTimersByTime(16)
+
+    expect(centers[0][0]).toBeCloseTo(104)
+    expect(centers[0][1]).toBeGreaterThan(45)
+
+    vi.runAllTimers()
+
+    expect(centers.at(-1)?.[0]).toBeCloseTo(104)
+    expect(centers.at(-1)?.[1]).toBeGreaterThan(30)
+    vi.useRealTimers()
+  })
+
+  it('prepares the center before the rounded minimum zoom step reaches hard AMap minimum', () => {
+    vi.useFakeTimers()
+    let zoom = 2.52
+    let center: [number, number] = [104, 60]
+    const centers: Array<[number, number]> = []
+    const container = document.createElement('div')
+    Object.defineProperties(container, {
+      clientWidth: { value: 1024 },
+      clientHeight: { value: 720 },
+    })
+    const map = {
+      getZoom: () => zoom,
+      getCenter: () => lngLat(center),
+      setZoomAndCenter: (nextZoom: number, nextCenter: [number, number]) => {
+        zoom = nextZoom
+        center = nextCenter
+        centers.push(nextCenter)
+      },
+    }
+
+    zoomByStep(map, container, renderBounds, -1)
+    vi.advanceTimersByTime(16)
+
+    expect(centers[0][1]).toBeGreaterThan(45)
+
+    vi.runAllTimers()
+
+    expect(zoom).toBeCloseTo(2.02)
+    expect(centers.at(-1)?.[0]).toBeCloseTo(104)
+    expect(centers.at(-1)?.[1]).toBeGreaterThan(45)
+    vi.useRealTimers()
   })
 
   it('disables native wheel zoom and handles wheel zoom through a bounded listener', () => {

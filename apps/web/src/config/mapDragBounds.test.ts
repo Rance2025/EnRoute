@@ -1,9 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import {
   calculateMinimumZoomForLatitudeCoverage,
   calculateBoundedCenterForViewport,
   calculateNextBoundedDragCenter,
+  clampMapCenterToLatitudeBounds,
   installBoundedMapDrag,
   type BoundedDragMap,
   type ContainerPoint,
@@ -196,6 +197,39 @@ describe('bounded map dragging', () => {
 
     expect(nextCenter[0]).toBeCloseTo(94)
     expect(nextCenter[1]).toBeCloseTo(0)
+  })
+
+  it('keeps zoomend latitude clamping from recentering at minimum zoom', () => {
+    const container = document.createElement('div')
+    Object.defineProperties(container, {
+      clientWidth: { value: 1432 },
+      clientHeight: { value: 815 },
+    })
+    const center: [number, number] = [104, 0]
+    const mercatorBounds: MapBounds = {
+      southWest: [-180, -85.05112878],
+      northEast: [180, 85.05112878],
+    }
+    const setCenter = vi.fn()
+    const map: BoundedDragMap = {
+      setStatus: vi.fn(),
+      getZoom: () => 2.02,
+      getCenter: () => lngLat(center),
+      setCenter,
+      lngLatToContainer: ([, lat]) => {
+        if (lat === mercatorBounds.northEast[1]) return { x: 716, y: 30 }
+        if (lat === mercatorBounds.southWest[1]) return { x: 716, y: 780 }
+        return { x: 716, y: 407.5 }
+      },
+      containerToLngLat: ({ y }) => {
+        if (y > 407.5) return [104, 48.2]
+        return center
+      },
+    }
+
+    clampMapCenterToLatitudeBounds(map, container, mercatorBounds)
+
+    expect(setCenter).toHaveBeenCalledWith([104, 48.2], true)
   })
 
   it('disables native map dragging and handles bounded pointer dragging without rebound debt', () => {
