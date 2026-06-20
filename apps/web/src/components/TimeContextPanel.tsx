@@ -424,6 +424,7 @@ function CustomRangeSection({
           onInputChange={(value) => handleBoundaryInput('start', value)}
           onOpen={() => openPicker('start')}
         />
+        <span className="time-range-separator" aria-hidden="true" />
         <CustomDateField
           boundary="end"
           label="结束"

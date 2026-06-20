@@ -194,4 +194,25 @@ describe('TimeContextPanel', () => {
     expect(within(dateFields).queryByText('2026年6月10日')).not.toBeInTheDocument()
     expect(within(dateFields).queryByText('2026年6月12日')).not.toBeInTheDocument()
   })
+
+  it('places a decorative dash between custom start and end date fields', () => {
+    render(
+      <TimeContextPanel
+        view="map"
+        selection={setCustomDateRange('2026-06-10', '2026-06-12')}
+        onSelectionChange={vi.fn()}
+      />,
+    )
+
+    const dateFields = screen.getByLabelText('自定义日期字段')
+    const separator = dateFields.querySelector('.time-range-separator')
+    const children = Array.from(dateFields.children)
+
+    expect(separator).toBeInTheDocument()
+    expect(separator).toHaveAttribute('aria-hidden', 'true')
+    expect(children).toHaveLength(3)
+    expect(children[0]).toContainElement(screen.getByLabelText('开始日期'))
+    expect(children[1]).toBe(separator)
+    expect(children[2]).toContainElement(screen.getByLabelText('结束日期'))
+  })
 })
