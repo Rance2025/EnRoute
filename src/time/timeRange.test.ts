@@ -120,6 +120,24 @@ describe('time range selection model', () => {
     }
   })
 
+  it('formats same-year custom range details with one leading year', () => {
+    expect(getTimeRangeDisplay(setCustomDateRange('2026-06-15', '2026-06-21'))).toMatchObject({
+      title: '自定义',
+      detail: '2026年 6月15日 - 6月21日',
+      accountingLabel: '自定义',
+    })
+
+    expect(getTimeRangeDisplay(setCustomDateRange('2026-05-21', '2026-06-19'))).toMatchObject({
+      title: '自定义',
+      detail: '2026年 5月21日 - 6月19日',
+    })
+
+    expect(getTimeRangeDisplay(setCustomDateRange('2025-12-29', '2026-01-04'))).toMatchObject({
+      title: '自定义',
+      detail: '2025年12月29日 - 2026年1月4日',
+    })
+  })
+
   it('creates current-period selections and labels for each top-level mode', () => {
     expect(createCurrentSelection('day')).toMatchObject({
       mode: 'day',
@@ -403,7 +421,7 @@ describe('time range selection model', () => {
 
     expect(getTimeRangeDisplay(selectPresetRange('qingdao'))).toMatchObject({
       title: '青岛之行',
-      detail: '2026年6月15日 - 2026年6月19日',
+      detail: '2026年 6月15日 - 6月19日',
       accountingLabel: '自定义',
     })
   })

@@ -48,6 +48,7 @@ function App({ amapConfig }: AppProps) {
     displayedCount: 0,
     totalCount: 0,
     activeDayCount: 0,
+    totalDistanceMeters: 0,
   })
   const [mapPanelWidth, setMapPanelWidth] = useState(0)
   const [viewportSize, setViewportSize] = useState(getViewportSize)
@@ -110,7 +111,19 @@ function App({ amapConfig }: AppProps) {
     { label: '当前足迹', value: formatMetricCount(footprintMetrics.displayedCount) },
     { label: '全部足迹', value: formatMetricCount(footprintMetrics.totalCount) },
     { label: '活跃天数', value: formatMetricCount(footprintMetrics.activeDayCount) },
-  ], [footprintMetrics.activeDayCount, footprintMetrics.displayedCount, footprintMetrics.totalCount])
+    {
+      label: '日均距离',
+      value: formatDailyDistance(
+        footprintMetrics.totalDistanceMeters,
+        footprintMetrics.activeDayCount,
+      ),
+    },
+  ], [
+    footprintMetrics.activeDayCount,
+    footprintMetrics.displayedCount,
+    footprintMetrics.totalCount,
+    footprintMetrics.totalDistanceMeters,
+  ])
 
   return (
     <main
@@ -158,6 +171,18 @@ export default App
 
 function formatMetricCount(value: number) {
   return new Intl.NumberFormat('zh-CN').format(value)
+}
+
+function formatDailyDistance(totalDistanceMeters: number, activeDayCount: number) {
+  if (activeDayCount <= 0 || totalDistanceMeters <= 0) return '0 m/day'
+
+  const dailyMeters = totalDistanceMeters / activeDayCount
+  if (dailyMeters < 1000) return `${Math.round(dailyMeters).toLocaleString('zh-CN')} m/day`
+
+  return `${(dailyMeters / 1000).toLocaleString('zh-CN', {
+    maximumFractionDigits: 1,
+    minimumFractionDigits: 1,
+  })} km/day`
 }
 
 function timeSelectionsAreEqual(

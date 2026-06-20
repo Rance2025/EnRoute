@@ -98,6 +98,7 @@ async function renderFootprintMassMarks({
     displayedCount: number
     totalCount: number
     activeDayCount: number
+    totalDistanceMeters: number
   }) => void
   timeRange?: TimeRangeSelection
 }) {
@@ -303,9 +304,9 @@ describe('AmapCanvas footprint layer wiring', () => {
 
   it('reports total displayed and active-day footprint metrics for the shared time card', async () => {
     const timedPoints: FootprintPoint[] = [
-      { ...loadedPoints[0], id: 'selected-a', timestampSeconds: 1781798400 },
-      { ...loadedPoints[1], id: 'selected-b', timestampSeconds: 1781884799 },
-      { ...loadedPoints[1], id: 'after', timestampSeconds: 1781884800 },
+      { ...loadedPoints[0], id: 'selected-a', timestampSeconds: 1781798400, distance: 120 },
+      { ...loadedPoints[1], id: 'selected-b', timestampSeconds: 1781884799, distance: 180 },
+      { ...loadedPoints[1], id: 'after', timestampSeconds: 1781884800, distance: 900 },
     ]
     const onFootprintMetricsChange = vi.fn()
     const loadFootprints = createDeferred<FootprintPoint[]>()
@@ -324,6 +325,7 @@ describe('AmapCanvas footprint layer wiring', () => {
       displayedCount: 2,
       totalCount: 3,
       activeDayCount: 1,
+      totalDistanceMeters: 300,
     })
 
     rerenderWithTimeRange(selectPresetRange('all'))
@@ -333,6 +335,7 @@ describe('AmapCanvas footprint layer wiring', () => {
         displayedCount: 3,
         totalCount: 3,
         activeDayCount: 2,
+        totalDistanceMeters: 1200,
       })
     })
   })

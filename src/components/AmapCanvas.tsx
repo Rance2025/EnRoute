@@ -39,6 +39,7 @@ export type FootprintMetrics = {
   displayedCount: number
   totalCount: number
   activeDayCount: number
+  totalDistanceMeters: number
 }
 
 type MapStatus = 'missing-config' | 'loading' | 'ready' | 'error'
@@ -93,6 +94,7 @@ function AmapCanvasComponent({
       displayedCount: nextDisplayedPoints.length,
       totalCount: points?.length ?? 0,
       activeDayCount: countActiveShanghaiDays(nextDisplayedPoints),
+      totalDistanceMeters: sumFootprintDistanceMeters(nextDisplayedPoints),
     })
   }, [onFootprintMetricsChange])
 
@@ -259,6 +261,7 @@ function AmapCanvasComponent({
         displayedCount: 0,
         totalCount: 0,
         activeDayCount: 0,
+        totalDistanceMeters: 0,
       })
       if (import.meta.env.DEV) {
         delete window.__ENROUTE_MAP__
@@ -416,6 +419,14 @@ function countActiveShanghaiDays(points: FootprintPoint[]) {
   }
 
   return dayKeys.size
+}
+
+function sumFootprintDistanceMeters(points: FootprintPoint[]) {
+  return points.reduce((total, point) => (
+    Number.isFinite(point.distance) && point.distance > 0
+      ? total + point.distance
+      : total
+  ), 0)
 }
 
 function formatShanghaiDateKey(timestampSeconds: number) {

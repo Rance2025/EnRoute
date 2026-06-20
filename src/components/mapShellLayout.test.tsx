@@ -80,6 +80,8 @@ describe('unified shell layout', () => {
     expect(within(mapMetricStrip).getByText('当前足迹')).toBeInTheDocument()
     expect(within(mapMetricStrip).getByText('全部足迹')).toBeInTheDocument()
     expect(within(mapMetricStrip).getByText('活跃天数')).toBeInTheDocument()
+    expect(within(mapMetricStrip).getByText('日均距离')).toBeInTheDocument()
+    expect(within(mapMetricStrip).getByText('0 m/day')).toBeInTheDocument()
     expect(within(mapMetricStrip).queryByText('净流入')).not.toBeInTheDocument()
     expect(screen.queryByText('足迹 18')).not.toBeInTheDocument()
     expect(screen.getByLabelText('在途 EnRoute 地图工作区')).toBeInTheDocument()
@@ -383,7 +385,7 @@ describe('unified shell layout', () => {
     })
 
     expect(screen.getByRole('heading', { name: '自定义' })).toBeInTheDocument()
-    expect(screen.getByText('2026年6月10日 - 2026年6月12日')).toBeInTheDocument()
+    expect(screen.getByText('2026年 6月10日 - 6月12日')).toBeInTheDocument()
   })
 
   it('uses the current range granularity for the reset action', () => {
@@ -605,12 +607,15 @@ describe('unified shell layout', () => {
     fireEvent.click(screen.getByRole('button', { name: '周' }))
 
     const weekPicker = screen.getByLabelText('时间选择页')
+    const currentWeekButton = within(weekPicker).getByRole('button', { name: /第25周/ })
 
     expect(within(weekPicker).getByText('按周聚合')).toBeInTheDocument()
     expect(within(weekPicker).getByText('2026年6月')).toBeInTheDocument()
     expect(within(weekPicker).getByLabelText('上一页')).toBeInTheDocument()
     expect(within(weekPicker).getByLabelText('下一页')).toBeInTheDocument()
-    expect(within(weekPicker).getByRole('button', { name: /第25周/ })).toBeInTheDocument()
+    expect(currentWeekButton).toBeInTheDocument()
+    expect(within(currentWeekButton).getByText('6月15日 - 6月21日')).toBeInTheDocument()
+    expect(within(currentWeekButton).queryByText('2026年 6月15日 - 6月21日')).not.toBeInTheDocument()
     expect(weekPicker.querySelector('.time-picker-grid')).toHaveClass('time-picker-grid--weeks')
     expect(weekPicker.querySelector('.time-picker-calendar-frame')).not.toBeInTheDocument()
     expect(screen.queryByRole('group', { name: '日历显示方式' })).not.toBeInTheDocument()
@@ -761,7 +766,7 @@ describe('unified shell layout', () => {
     fireEvent.click(screen.getByRole('button', { name: '最近一月' }))
 
     expect(screen.getByRole('heading', { name: '最近一月' })).toBeInTheDocument()
-    expect(screen.getByText('2026年5月21日 - 2026年6月19日')).toBeInTheDocument()
+    expect(screen.getByText('2026年 5月21日 - 6月19日')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '记账' }))
 

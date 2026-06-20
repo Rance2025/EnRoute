@@ -317,7 +317,7 @@ export function getTimeRangeDisplay(selection: TimeRangeSelection): TimeRangeDis
     title: selection.label ?? '自定义',
     detail: selection.label === '全部'
       ? `${formatMonthDot(selection.start)} 至今`
-      : `${formatFullDate(selection.start)} - ${formatFullDate(selection.end)}`,
+      : formatRangeDetail(selection.start, selection.end),
     accountingLabel: '自定义',
   }
 }
@@ -578,6 +578,17 @@ function formatDateKey(date: Date) {
 function formatFullDate(value: string) {
   const date = parseDate(value)
   return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`
+}
+
+function formatRangeDetail(start: string, end: string) {
+  const startDate = parseDate(start)
+  const endDate = parseDate(end)
+
+  if (startDate.getFullYear() !== endDate.getFullYear()) {
+    return `${formatFullDate(start)} - ${formatFullDate(end)}`
+  }
+
+  return `${startDate.getFullYear()}年 ${formatMonthDay(start)} - ${formatMonthDay(end)}`
 }
 
 function formatShortDate(value: string) {
