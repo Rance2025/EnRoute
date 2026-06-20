@@ -21,7 +21,7 @@ import {
   selectPresetRange,
   selectWeek,
   selectYear,
-  setCustomRangeBoundary,
+  updateCustomDateBoundary,
   type CalendarDisplayMode,
   type PickerPage,
   type PickerPageOption,
@@ -38,8 +38,14 @@ const timeModeOptions: Array<SegmentedOption<TimeRangeMode>> = [
   { value: 'week', label: '周' },
   { value: 'month', label: '月' },
   { value: 'year', label: '年' },
-  { value: 'all', label: '全部' },
   { value: 'custom', label: '自定义' },
+]
+
+const customPresetOptions: Array<{ value: 'all' | 'recent365' | 'recent30' | 'recent7'; label: string }> = [
+  { value: 'all', label: '全部' },
+  { value: 'recent365', label: '最近一年' },
+  { value: 'recent30', label: '最近一月' },
+  { value: 'recent7', label: '最近一周' },
 ]
 
 const calendarModeOptions: Array<SegmentedOption<CalendarDisplayMode>> = [
@@ -160,8 +166,7 @@ export function TimeContextPanel({
         selectYear(new Date(`${selection.anchorDate}T00:00:00`).getFullYear()),
       )
     }
-    if (range === 'all') handleSelectionChange(selectPresetRange('all'))
-    if (range === 'custom') handleSelectionChange(selectPresetRange('recent30'))
+    if (range === 'custom') handleSelectionChange(selectPresetRange('all'))
   }
 
   return (
@@ -318,82 +323,48 @@ function renderModeContent(
     )
   }
 
-  if (selection.mode === 'all') {
-    return (
-      <section className="time-all-shell" aria-label="全部时间摘要">
-        <div className="time-all-total">
-          <strong>4年3个月</strong>
-          <span>2022.03 至今</span>
-        </div>
-        <div className="time-selector-list">
-          <button
-            type="button"
-            className={selection.label !== '导入数据' ? 'is-active' : undefined}
-            onClick={() => onSelectionChange(selectPresetRange('all'))}
-          >
-            <span>
-              <strong>完整人生数据</strong>
-              <small>位置、时间、金钱统一按全量统计</small>
-            </span>
-            <em>全局</em>
-          </button>
-          <button
-            type="button"
-            className={selection.label === '导入数据' ? 'is-active' : undefined}
-            onClick={() => onSelectionChange(selectPresetRange('imported'))}
-          >
-            <span>
-              <strong>导入数据</strong>
-              <small>外部位置、日程和账目数据</small>
-            </span>
-            <em>待导入</em>
-          </button>
-        </div>
-      </section>
-    )
-  }
-
   return (
     <section className="time-custom-shell" aria-label="自定义时间范围">
       <div className="time-mode-section-head">
         <strong>自定义范围</strong>
       </div>
+      <div className="time-custom-presets" aria-label="常用自定义范围">
+        {customPresetOptions.map((preset) => (
+          <button
+            key={preset.value}
+            type="button"
+            className={selection.label === preset.label ? 'is-active' : undefined}
+            onClick={() => onSelectionChange(selectPresetRange(preset.value))}
+          >
+            {preset.label}
+          </button>
+        ))}
+      </div>
       <div className="time-range-fields">
-        <button
-          type="button"
-          onClick={() => onSelectionChange(setCustomRangeBoundary(selection, 'start'))}
-        >
+        <label>
           <span>开始</span>
+          <input
+            aria-label="开始日期"
+            type="date"
+            value={selection.start}
+            onChange={(event) =>
+              onSelectionChange(updateCustomDateBoundary(selection, 'start', event.target.value))
+            }
+          />
           <strong>{formatTimeRangeDate(selection.start)}</strong>
-        </button>
-        <button
-          type="button"
-          onClick={() => onSelectionChange(setCustomRangeBoundary(selection, 'end'))}
-        >
+        </label>
+        <label>
           <span>结束</span>
+          <input
+            aria-label="结束日期"
+            type="date"
+            value={selection.end}
+            onChange={(event) =>
+              onSelectionChange(updateCustomDateBoundary(selection, 'end', event.target.value))
+            }
+          />
           <strong>{formatTimeRangeDate(selection.end)}</strong>
-        </button>
-      </div>
-      <div className="time-range-rail" aria-hidden="true">
-        <i />
-        <i />
-      </div>
-      <div className="time-preset-grid">
-        <button type="button" onClick={() => onSelectionChange(selectPresetRange('recent30'))}>
-          近30天
-        </button>
-        <button type="button" onClick={() => onSelectionChange(selectPresetRange('qingdao'))}>
-          青岛之行
-        </button>
-        <button type="button" onClick={() => onSelectionChange(selectPresetRange('quarter'))}>
-          本季度
-        </button>
-        <button
-          type="button"
-          onClick={() => onSelectionChange(setCustomRangeBoundary(selection, 'start'))}
-        >
-          手动选择
-        </button>
+        </label>
       </div>
     </section>
   )

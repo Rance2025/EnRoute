@@ -265,7 +265,8 @@ describe('unified shell layout', () => {
     expect(screen.queryByText('选择年份')).not.toBeInTheDocument()
     expect(screen.queryByText('年度级别')).not.toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: '全部' }))
+    fireEvent.click(screen.getByRole('button', { name: '自定义' }))
+    fireEvent.click(within(screen.getByLabelText('常用自定义范围')).getByRole('button', { name: '全部' }))
 
     expect(screen.queryByText(/后续/)).not.toBeInTheDocument()
     expect(screen.queryByText('预留')).not.toBeInTheDocument()
@@ -298,9 +299,10 @@ describe('unified shell layout', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '记账' }))
 
-    for (const range of ['日', '周', '月', '年', '全部', '自定义']) {
+    for (const range of ['日', '周', '月', '年', '自定义']) {
       expect(screen.getByRole('button', { name: range })).toBeInTheDocument()
     }
+    expect(screen.queryByRole('button', { name: '全部' })).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '周' }))
 
@@ -324,15 +326,48 @@ describe('unified shell layout', () => {
     expect(screen.getByLabelText('时间选择页')).toBeInTheDocument()
     expect(screen.queryByLabelText('日历选择')).not.toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: '全部' }))
-
-    expect(screen.getByLabelText('全部时间摘要')).toBeInTheDocument()
-    expect(screen.queryByLabelText('日历选择')).not.toBeInTheDocument()
-
     fireEvent.click(screen.getByRole('button', { name: '自定义' }))
 
     expect(screen.getByLabelText('自定义时间范围')).toBeInTheDocument()
     expect(screen.queryByLabelText('日历选择')).not.toBeInTheDocument()
+  })
+
+  it('keeps all-time inside custom presets and supports real editable custom dates', () => {
+    render(<App amapConfig={configuredAmap} />)
+
+    expect(screen.getByRole('group', { name: '时间模式' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '全部' })).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '自定义' }))
+
+    const customPanel = screen.getByLabelText('自定义时间范围')
+
+    for (const preset of ['全部', '最近一年', '最近一月', '最近一周']) {
+      expect(within(customPanel).getByRole('button', { name: preset })).toBeInTheDocument()
+    }
+    expect(customPanel.querySelector('.time-range-rail')).toBeNull()
+
+    fireEvent.click(within(customPanel).getByRole('button', { name: '全部' }))
+
+    expect(screen.getByRole('heading', { name: '全部' })).toBeInTheDocument()
+    expect(within(customPanel).getByLabelText('开始日期')).toHaveValue('2022-03-01')
+    expect(within(customPanel).getByLabelText('结束日期')).toHaveValue('2026-06-19')
+
+    fireEvent.click(within(customPanel).getByRole('button', { name: '最近一年' }))
+
+    expect(screen.getByRole('heading', { name: '最近一年' })).toBeInTheDocument()
+    expect(within(customPanel).getByLabelText('开始日期')).toHaveValue('2025-06-20')
+    expect(within(customPanel).getByLabelText('结束日期')).toHaveValue('2026-06-19')
+
+    fireEvent.change(within(customPanel).getByLabelText('开始日期'), {
+      target: { value: '2026-06-10' },
+    })
+    fireEvent.change(within(customPanel).getByLabelText('结束日期'), {
+      target: { value: '2026-06-12' },
+    })
+
+    expect(screen.getByRole('heading', { name: '自定义' })).toBeInTheDocument()
+    expect(screen.getByText('2026年6月10日 - 2026年6月12日')).toBeInTheDocument()
   })
 
   it('uses the current range granularity for the reset action', () => {
@@ -416,7 +451,7 @@ describe('unified shell layout', () => {
     expect(stage).not.toHaveClass('time-panel-content__stage--next')
     expect(getActiveGridMotion()).toHaveClass('time-range-grid-motion--next')
 
-    fireEvent.click(screen.getByRole('button', { name: '全部' }))
+    fireEvent.click(screen.getByRole('button', { name: '自定义' }))
 
     expect(screen.queryByRole('button', { name: '上一段时间' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '下一段时间' })).not.toBeInTheDocument()
@@ -703,9 +738,9 @@ describe('unified shell layout', () => {
     expect(screen.getByText('2025年 · 年度聚合')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '自定义' }))
-    fireEvent.click(screen.getByRole('button', { name: '近30天' }))
+    fireEvent.click(screen.getByRole('button', { name: '最近一月' }))
 
-    expect(screen.getByRole('heading', { name: '近30天' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '最近一月' })).toBeInTheDocument()
     expect(screen.getByText('2026年5月21日 - 2026年6月19日')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '记账' }))

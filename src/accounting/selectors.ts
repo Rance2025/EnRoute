@@ -18,7 +18,7 @@ export function filterTransactionsByTimeRange(
   return transactions
     .filter((transaction) => {
       const date = transaction.occurredAt.slice(0, 10)
-      return date >= range.start && date <= range.end
+      return date >= range.start && (range.isOpenEnded || date <= range.end)
     })
     .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt))
 }
