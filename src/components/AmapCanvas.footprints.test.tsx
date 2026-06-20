@@ -105,6 +105,12 @@ async function renderFootprintMassMarks({
     scheduleStyleUpdate: ReturnType<typeof vi.fn>
     update: ReturnType<typeof vi.fn>
   }> = []
+  const geolocationGetCurrentPosition = vi.fn()
+  const geolocationConstructor = vi.fn(function Geolocation(this: {
+    getCurrentPosition: typeof geolocationGetCurrentPosition
+  }) {
+    this.getCurrentPosition = geolocationGetCurrentPosition
+  })
   const createMassFootprintLayer = vi.fn(() => {
     const layer = {
       destroy: vi.fn(),
@@ -162,6 +168,7 @@ async function renderFootprintMassMarks({
       Size: class Size {},
       Map: MockMap,
       Scale: class Scale {},
+      Geolocation: geolocationConstructor,
       Bounds: class Bounds {
         constructor(
           public southWest: [number, number],
@@ -192,6 +199,8 @@ async function renderFootprintMassMarks({
   return {
     createMassFootprintLayer,
     completeHandlers,
+    geolocationConstructor,
+    geolocationGetCurrentPosition,
     layerRecords,
     mapMoveHandlers,
     moveEndHandlers,
@@ -326,6 +335,29 @@ describe('AmapCanvas footprint layer wiring', () => {
       false,
       900,
     )
+  })
+
+  it('keeps the current-location toolbar action wired to AMap Geolocation', async () => {
+    const loadFootprints = createDeferred<FootprintPoint[]>()
+    const { geolocationConstructor, geolocationGetCurrentPosition } = await renderFootprintMassMarks({
+      loadFootprintsPromise: loadFootprints.promise,
+    })
+
+    await waitFor(() => expect(geolocationConstructor).toHaveBeenCalledTimes(1))
+
+    expect(geolocationConstructor).toHaveBeenCalledWith({
+      enableHighAccuracy: true,
+      timeout: 8000,
+      zoomToAccuracy: true,
+      position: {
+        right: '24px',
+        bottom: '136px',
+      },
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: '定位当前位置' }))
+
+    expect(geolocationGetCurrentPosition).toHaveBeenCalledTimes(1)
   })
 
   it('does not reproject footprints after AMap complete because MassMarks follows map motion natively', async () => {

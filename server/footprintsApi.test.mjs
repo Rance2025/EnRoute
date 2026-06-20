@@ -58,6 +58,29 @@ describe('footprints API', () => {
     })
   })
 
+  it('skips rows with invalid numeric fields instead of emitting null JSON fields', async () => {
+    const dataPath = await writeTempCsv([
+      'dataTime,locType,longitude,latitude,heading,accuracy,speed,distance,isBackForeground,stepType,altitude',
+      '1768144456,1,121.511383,31.296564,0.000000,,not-a-number,0.000000,1,0,10.146956',
+      '1768144457,1,121.511384,31.296565,0.000000,5.729415,-1.000000,0.000000,1,0,10.146956',
+    ].join('\n'))
+
+    await expect(
+      loadFootprintPayload({
+        dataPath,
+        coordinateSystem: 'gcj02',
+      }),
+    ).resolves.toEqual({
+      points: [
+        expect.objectContaining({
+          id: '1768144457-1',
+          accuracy: 5.729415,
+          speed: -1,
+        }),
+      ],
+    })
+  })
+
   it('serves GET /api/footprints as JSON', async () => {
     const dataPath = await writeTempCsv()
     const server = createServer(
@@ -96,10 +119,10 @@ describe('footprints API', () => {
   })
 })
 
-async function writeTempCsv() {
+async function writeTempCsv(content = csv) {
   const directory = await mkdtemp(join(tmpdir(), 'enroute-footprints-'))
   const dataPath = join(directory, 'backUpData-all.csv')
-  await writeFile(dataPath, csv, 'utf8')
+  await writeFile(dataPath, content, 'utf8')
 
   return dataPath
 }
