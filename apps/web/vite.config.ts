@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react'
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-loadLocalEnv()
+loadLocalEnv(resolve('../..', '.env.local'))
 
 // https://vite.dev/config/
 export default defineConfig({

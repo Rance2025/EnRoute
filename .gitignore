@@ -13,12 +13,15 @@ vite-dev-*.pid
 
 # Dependencies
 node_modules
+.venv/
 __pycache__/
 *.py[cod]
+*.egg-info/
 
 # Build output
 dist
 dist-ssr
+.pytest_cache/
 
 # Local environment
 .env

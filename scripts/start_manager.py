@@ -113,8 +113,8 @@ def build_service_specs(
   config: StartConfig,
   *,
   base_env: Mapping[str, str],
-  node_command: str | None = None,
   npm_command: str | None = None,
+  python_command: str | None = None,
 ) -> list[ServiceSpec]:
   service_env = {str(key): str(value) for key, value in base_env.items()}
   service_env.update(
@@ -124,15 +124,19 @@ def build_service_specs(
       "ENROUTE_FRONTEND_PORT": str(config.frontend_port),
     },
   )
+  service_env["PYTHONPATH"] = join_python_path(
+    config.root_dir / "apps" / "api" / "src",
+    service_env.get("PYTHONPATH"),
+  )
 
   display_host = to_display_host(config.host)
-  node = node_command or "node"
   npm = npm_command or default_npm_command()
+  python = python_command or sys.executable
 
   return [
     ServiceSpec(
       name="api",
-      command=[node, "server/dev-server.mjs"],
+      command=[python, "scripts/api_server.py"],
       cwd=config.root_dir,
       env=service_env.copy(),
       pid_file=config.runtime_dir / "api.pid",
@@ -154,7 +158,7 @@ def build_service_specs(
         "--port",
         str(config.frontend_port),
       ],
-      cwd=config.root_dir,
+      cwd=config.root_dir / "apps" / "web",
       env=service_env.copy(),
       pid_file=config.runtime_dir / "frontend.pid",
       stdout_log=config.runtime_dir / "frontend.log",
@@ -423,6 +427,14 @@ def validate_port(port: int) -> int:
 
 def default_npm_command() -> str:
   return "npm.cmd" if os.name == "nt" else "npm"
+
+
+def join_python_path(path: Path, existing_path: str | None) -> str:
+  resolved_path = str(path)
+  if not existing_path:
+    return resolved_path
+
+  return os.pathsep.join([resolved_path, existing_path])
 
 
 def to_connect_host(host: str) -> str:

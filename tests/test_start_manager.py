@@ -85,18 +85,20 @@ class StartManagerTests(unittest.TestCase):
         specs = build_service_specs(
             config,
             base_env={"FOOTPRINT_DATA_PATH": "external/sample.csv"},
-            node_command="node",
             npm_command="npm",
+            python_command="python",
         )
         by_name = {spec.name: spec for spec in specs}
 
-        self.assertEqual(by_name["api"].command, ["node", "server/dev-server.mjs"])
+        self.assertEqual(by_name["api"].command, ["python", "scripts/api_server.py"])
         self.assertEqual(
             by_name["frontend"].command,
             ["npm", "run", "dev", "--", "--host", "127.0.0.1", "--port", "5313"],
         )
+        self.assertEqual(by_name["frontend"].cwd, root_dir / "apps" / "web")
         self.assertEqual(by_name["api"].env["ENROUTE_API_HOST"], "127.0.0.1")
         self.assertEqual(by_name["api"].env["ENROUTE_API_PORT"], "5318")
+        self.assertTrue(by_name["api"].env["PYTHONPATH"].endswith("apps\\api\\src"))
         self.assertEqual(by_name["frontend"].env["ENROUTE_API_PORT"], "5318")
         self.assertEqual(by_name["frontend"].url, "http://127.0.0.1:5313")
         self.assertEqual(by_name["api"].url, "http://127.0.0.1:5318")
@@ -114,8 +116,8 @@ class StartManagerTests(unittest.TestCase):
             spec = build_service_specs(
                 config,
                 base_env={},
-                node_command="node",
                 npm_command="npm",
+                python_command="python",
             )[0]
             spec.pid_file.write_text("12345", encoding="utf-8")
 
