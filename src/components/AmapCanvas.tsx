@@ -44,6 +44,7 @@ type MapStatus = 'missing-config' | 'loading' | 'ready' | 'error'
 const FOOTPRINT_STYLE_STORAGE_KEY = 'enroute.footprintStyle'
 const MAP_CAMERA_DURATION_MS = 900
 const FIT_FOOTPRINT_AVOID: [number, number, number, number] = [72, 72, 72, 72]
+const FULL_WORLD_VIEWPORT_TOLERANCE_PX = 1
 
 function AmapCanvasComponent({
   config,
@@ -484,13 +485,16 @@ function calculateCurrentViewportSampleInput(map: AMap.Map, container: HTMLEleme
   })
   const northWestLngLat: [number, number] = [northWest.getLng(), northWest.getLat()]
   const southEastLngLat: [number, number] = [southEast.getLng(), southEast.getLat()]
+  const viewportCoversFullWorld =
+    container.clientWidth >=
+    measureAmapWorldPixelWidthAtZoom(map, zoom) - FULL_WORLD_VIEWPORT_TOLERANCE_PX
 
   return {
     zoom,
     bounds: {
-      west: northWestLngLat[0],
+      west: viewportCoversFullWorld ? -180 : northWestLngLat[0],
       north: northWestLngLat[1],
-      east: southEastLngLat[0],
+      east: viewportCoversFullWorld ? 180 : southEastLngLat[0],
       south: southEastLngLat[1],
     },
     northWestWorldPixel: projectLngLat(northWestLngLat, zoom),

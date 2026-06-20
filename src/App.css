@@ -824,24 +824,11 @@
   white-space: nowrap;
 }
 
-.time-picker-grid--weeks button small {
-  display: grid;
-  justify-items: center;
-  gap: 1px;
-  line-height: 1.25;
-  text-overflow: clip;
-  white-space: normal;
-}
-
 .time-picker-grid--weeks button small > span {
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.time-picker-grid--weeks button small span[aria-hidden='true'] {
-  display: none;
 }
 
 .time-calendar-grid button:hover,

@@ -452,7 +452,7 @@ function getWeekPickerPage(selection: TimeRangeSelection): PickerPage {
       return {
         key: startKey,
         label: `第${getWeekNumberForContext(startKey, endKey, anchorDate)}周`,
-        detail: `${formatFullDate(startKey)} - ${formatFullDate(endKey)}`,
+        detail: `${formatShortDate(startKey)}-${formatShortDate(endKey)}`,
         start: startKey,
         end: endKey,
         anchorDate,
