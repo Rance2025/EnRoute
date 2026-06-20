@@ -1,8 +1,6 @@
-import { Activity, CircleDollarSign, ReceiptText, WalletCards } from 'lucide-react'
 import { useMemo, useState } from 'react'
 
 import { ledgerAtlasDataset } from '../accounting/ledgerAtlasData'
-import { formatCnyFromCents } from '../accounting/money'
 import {
   filterTransactionsByTimeRange,
   getAccountPeriodSummaries,
@@ -49,34 +47,9 @@ export function AccountingPage({ timeRange }: AccountingPageProps) {
   return (
     <section className="accounting-page" aria-label="iOS 记账工作台">
       <div className="accounting-dock" aria-label="记账控制栏">
-        <section className="ios-summary-strip" aria-label="记账概览摘要">
-          <SummaryPill
-            icon={CircleDollarSign}
-            label="净现金流"
-            value={formatSignedCurrency(metrics.netInCents)}
-            tone={metrics.netInCents >= 0 ? 'income' : 'expense'}
-          />
-          <SummaryPill
-            icon={Activity}
-            label="本期支出"
-            value={`¥${formatCnyFromCents(metrics.expenseInCents)}`}
-            tone="expense"
-          />
-          <SummaryPill
-            icon={ReceiptText}
-            label="本期流水"
-            value={`${metrics.transactionCount} 笔`}
-          />
-          <SummaryPill
-            icon={WalletCards}
-            label="活跃账户"
-            value={`${metrics.activeAccountCount} 个`}
-            tone="income"
-          />
-          <div className="ios-summary-scope">
-            <span>{display.accountingLabel}</span>
-            <strong>{display.title}</strong>
-          </div>
+        <section className="accounting-range-chip" aria-label="记账时间范围">
+          <span>{display.accountingLabel}</span>
+          <strong>{display.title}</strong>
         </section>
 
         <div className="accounting-actions" aria-label="记账快捷操作">
@@ -126,30 +99,4 @@ export function AccountingPage({ timeRange }: AccountingPageProps) {
       ) : null}
     </section>
   )
-}
-
-function SummaryPill({
-  icon: Icon,
-  label,
-  value,
-  tone = 'neutral',
-}: {
-  icon: typeof CircleDollarSign
-  label: string
-  value: string
-  tone?: 'income' | 'expense' | 'neutral'
-}) {
-  return (
-    <div className={`ios-summary-pill ios-summary-pill--${tone}`}>
-      <Icon size={14} strokeWidth={2} />
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  )
-}
-
-function formatSignedCurrency(amountInCents: number) {
-  if (amountInCents === 0) return '¥0.00'
-
-  return `${amountInCents > 0 ? '+' : '-'}¥${formatCnyFromCents(Math.abs(amountInCents))}`
 }

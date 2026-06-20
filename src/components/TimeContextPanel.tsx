@@ -49,27 +49,6 @@ const calendarModeOptions: Array<SegmentedOption<CalendarDisplayMode>> = [
 
 const weekdayLabels = ['一', '二', '三', '四', '五', '六', '日']
 
-const staticModuleSummaries: Record<
-  Exclude<AppView, 'accounting'>,
-  Array<{ label: string; value: string }>
-> = {
-  overview: [
-    { label: '位置', value: '待汇总' },
-    { label: '金钱', value: '待汇总' },
-    { label: '时间', value: '待汇总' },
-  ],
-  map: [
-    { label: '地图', value: '足迹 18' },
-    { label: '记账', value: '账目 3' },
-    { label: '日程', value: '事件 2' },
-  ],
-  schedule: [
-    { label: '日程', value: '2' },
-    { label: '待办', value: '6' },
-    { label: '事件', value: '待整理' },
-  ],
-}
-
 type TimeContextPanelProps = {
   view: AppView
   selection: TimeRangeSelection
@@ -97,7 +76,9 @@ export function TimeContextPanel({
   })
   const heading = getTimeRangeDisplay(selection)
   const resetLabel = getCurrentRangeActionLabel(selection.mode)
-  const moduleSummaries = getModuleSummaries(view, selection)
+  const accountingSummary = view === 'accounting'
+    ? getAccountingSummary(selection)
+    : null
 
   useEffect(() => {
     if (!isDayCalendarCollapsingWeek) return undefined
@@ -184,6 +165,22 @@ export function TimeContextPanel({
             </button>
           </div>
 
+          {accountingSummary ? (
+            <section
+              className="time-context-accounting-summary"
+              aria-label="记账概览卡片"
+            >
+              {accountingSummary.map((item) => (
+                <div key={item.label}>
+                  <span>{item.label}</span>
+                  <strong className={item.tone ? `is-${item.tone}` : undefined}>
+                    {item.value}
+                  </strong>
+                </div>
+              ))}
+            </section>
+          ) : null}
+
           <SegmentedControl
             ariaLabel="时间模式"
             className="time-mode-tabs"
@@ -209,29 +206,27 @@ export function TimeContextPanel({
             )}
           </div>
         </div>
-
-        <footer className="time-context-summary" aria-label="当前范围摘要">
-          {moduleSummaries.map((item) => (
-            <div key={item.label}>
-              <b>{item.label}</b>
-              <span>{item.value}</span>
-            </div>
-          ))}
-        </footer>
       </div>
     </aside>
   )
 }
 
-function getModuleSummaries(view: AppView, selection: TimeRangeSelection) {
-  if (view !== 'accounting') return staticModuleSummaries[view]
-
+function getAccountingSummary(selection: TimeRangeSelection) {
   const metrics = getPeriodMetrics(ledgerAtlasDataset, selection)
 
   return [
-    { label: '流水', value: String(metrics.transactionCount) },
-    { label: '支出', value: formatAccountingCurrency(metrics.expenseInCents) },
-    { label: '净入', value: formatAccountingCurrency(metrics.netInCents) },
+    {
+      label: '净流入',
+      value: formatSignedAccountingCurrency(metrics.netInCents),
+      tone: metrics.netInCents >= 0 ? 'income' : 'expense',
+    },
+    {
+      label: '支出',
+      value: formatAccountingCurrency(metrics.expenseInCents),
+      tone: 'expense',
+    },
+    { label: '流水', value: `${metrics.transactionCount} 笔` },
+    { label: '账户', value: `${metrics.activeAccountCount} 个` },
   ]
 }
 
@@ -239,6 +234,12 @@ function formatAccountingCurrency(amountInCents: number) {
   const prefix = amountInCents < 0 ? '-¥' : '¥'
 
   return `${prefix}${formatCnyFromCents(Math.abs(amountInCents))}`
+}
+
+function formatSignedAccountingCurrency(amountInCents: number) {
+  if (amountInCents === 0) return '¥0.00'
+
+  return `${amountInCents > 0 ? '+' : '-'}¥${formatCnyFromCents(Math.abs(amountInCents))}`
 }
 
 function timeSelectionsAreEqual(

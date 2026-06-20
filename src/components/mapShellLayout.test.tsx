@@ -69,7 +69,7 @@ describe('unified shell layout', () => {
     expect(screen.getByRole('button', { name: '回到今天' })).toHaveTextContent(
       '回到今天',
     )
-    expect(screen.getByText('足迹 18')).toBeInTheDocument()
+    expect(screen.queryByText('足迹 18')).not.toBeInTheDocument()
     expect(screen.getByLabelText('在途 EnRoute 地图工作区')).toBeInTheDocument()
   })
 

@@ -146,14 +146,19 @@ describe('App', () => {
     expect(screen.getByText('查看统计')).toBeInTheDocument()
     expect(screen.queryByRole('group', { name: '记账工作区' })).not.toBeInTheDocument()
 
-    const accountingWorkspace = screen.getByLabelText('iOS 记账工作台')
-    const currentRangeSummary = within(accountingWorkspace).getByLabelText('记账概览摘要')
+    const timePanel = screen.getByLabelText('时间范围面板')
+    const timeCardSummary = within(timePanel).getByLabelText('记账概览卡片')
 
-    expect(within(currentRangeSummary).getByText('本期流水')).toBeInTheDocument()
-    expect(within(currentRangeSummary).getByText('6 笔')).toBeInTheDocument()
-    expect(within(currentRangeSummary).getByText('¥481.18')).toBeInTheDocument()
-    expect(within(currentRangeSummary).getByText('+¥4691.23')).toBeInTheDocument()
-    expect(within(currentRangeSummary).queryByText('¥420')).not.toBeInTheDocument()
+    expect(within(timeCardSummary).getByText('净流入')).toBeInTheDocument()
+    expect(within(timeCardSummary).getByText('+¥4691.23')).toBeInTheDocument()
+    expect(within(timeCardSummary).getByText('支出')).toBeInTheDocument()
+    expect(within(timeCardSummary).getByText('¥481.18')).toBeInTheDocument()
+    expect(within(timeCardSummary).getByText('流水')).toBeInTheDocument()
+    expect(within(timeCardSummary).getByText('6 笔')).toBeInTheDocument()
+    expect(within(timeCardSummary).queryByText('¥420')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('当前范围摘要')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('记账概览摘要')).not.toBeInTheDocument()
+    expect(screen.queryByText('本期流水')).not.toBeInTheDocument()
   })
 
   it('renders accounts and ledger together with account filtering and ledger actions', async () => {
@@ -181,13 +186,21 @@ describe('App', () => {
 
     const workspace = screen.getByLabelText('账户与流水工作台')
     const accountFilter = within(workspace).getByLabelText('账户筛选卡片')
+    const accountStack = accountFilter.querySelector('.ios-account-filter-stack')
 
     expect(workspace).toBeInTheDocument()
     expect(accountFilter).toBeInTheDocument()
-    expect(within(accountFilter).getByRole('button', { name: /全部账户/ })).toHaveAttribute(
+    expect(accountStack).not.toBeNull()
+
+    const allFilter = within(accountFilter).getByRole('button', { name: /全部流水/ })
+    expect(allFilter).toHaveAttribute(
       'aria-pressed',
       'true',
     )
+    expect(allFilter).toHaveClass('ios-account-all-filter')
+    expect(allFilter).not.toHaveClass('ios-account-filter-card')
+    expect(within(accountStack as HTMLElement).queryByRole('button', { name: /全部账户|全部流水/ })).not.toBeInTheDocument()
+    expect(accountStack?.querySelectorAll('.ios-account-filter-card')).toHaveLength(4)
     expect(within(workspace).getByText('流水明细')).toBeInTheDocument()
     expect(within(workspace).getByLabelText('流水列表')).toBeInTheDocument()
     expect(within(workspace).getByText('新增流水')).toBeInTheDocument()
@@ -201,14 +214,26 @@ describe('App', () => {
     expect(within(workspace).queryByText('选中流水')).not.toBeInTheDocument()
     expect(workspace.querySelector('.accounting-scroll--ledger')).not.toBeNull()
 
-    fireEvent.click(within(accountFilter).getByRole('button', { name: /花呗/ }))
+    const huabeiCard = within(accountFilter).getByRole('button', { name: /花呗/ })
 
-    expect(within(accountFilter).getByRole('button', { name: /花呗/ })).toHaveAttribute(
+    fireEvent.click(huabeiCard)
+
+    expect(huabeiCard).toHaveAttribute(
       'aria-pressed',
       'true',
     )
+    expect(huabeiCard).toHaveClass('is-pulled')
+    expect(allFilter).toHaveAttribute('aria-pressed', 'false')
     expect(within(workspace).getByText('筛选后流水')).toBeInTheDocument()
     expect(within(workspace).queryByText('青岛住宿')).not.toBeInTheDocument()
+
+    fireEvent.click(huabeiCard)
+
+    expect(allFilter).toHaveAttribute('aria-pressed', 'true')
+    expect(huabeiCard).toHaveAttribute('aria-pressed', 'false')
+    expect(huabeiCard).not.toHaveClass('is-pulled')
+    expect(within(allFilter).getByText('全部流水')).toBeInTheDocument()
+    expect(within(workspace).getAllByText('青岛住宿').length).toBeGreaterThan(0)
   })
 
   it('opens transaction and new-ledger modals from the accounting workspace', async () => {
