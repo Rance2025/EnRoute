@@ -407,17 +407,24 @@ describe('map chrome layout', () => {
     expect(monthButtonRule).toContain('height: 34px')
   })
 
-  it('keeps custom date fields to one visible input surface', () => {
+  it('frames custom date ranges with the outer shell instead of inner date buttons', () => {
+    const shellRule = cssRule('.time-custom-shell')
     const fieldRule = cssRule('.time-date-field')
     const buttonRule = cssRule('.time-date-button')
+    const buttonHoverRule = cssRule('.time-date-button:hover,\n.time-date-button.is-open')
 
+    expect(shellRule).toContain('border: 1px solid')
+    expect(shellRule).toContain('border-radius: 22px')
     expect(fieldRule).toContain('padding: 0')
     expect(fieldRule).toContain('border: 0')
     expect(fieldRule).toContain('border-radius: 0')
     expect(fieldRule).toContain('background: transparent')
     expect(fieldRule).toContain('box-shadow: none')
-    expect(buttonRule).toContain('border: 1px solid')
-    expect(buttonRule).toContain('background:')
+    expect(buttonRule).toContain('border: 0')
+    expect(buttonRule).toContain('background: transparent')
+    expect(buttonRule).toContain('box-shadow: none')
+    expect(buttonHoverRule).toContain('background: transparent')
+    expect(buttonHoverRule).toContain('box-shadow: none')
   })
 
   it('lets segmented sliders drag from the switch surface with drag cursors', () => {
