@@ -26,6 +26,12 @@ SNAPSHOT_CSV = "\n".join(
 )
 
 
+def test_defaults_to_data_directory_for_footprint_database():
+    settings = Settings()
+
+    assert settings.footprint_db_path == Path("data/footprints.sqlite")
+
+
 def test_loads_footprint_points_from_configured_csv_path(tmp_path: Path):
     data_path = write_csv(tmp_path, CSV)
 
@@ -107,6 +113,25 @@ def test_serves_get_footprints_as_json(tmp_path: Path):
             "stepType": 0,
         },
     ]
+
+
+def test_get_footprints_imports_and_serves_from_sqlite(tmp_path: Path):
+    data_path = write_csv(tmp_path, CSV)
+    db_path = tmp_path / "footprints.sqlite"
+    client = create_test_client(data_path=data_path, db_path=db_path)
+
+    response = client.get("/api/footprints")
+
+    assert response.status_code == 200
+    connection = sqlite3.connect(db_path)
+    try:
+        stored_count = connection.execute("SELECT COUNT(*) FROM footprints").fetchone()
+        spatial_count = connection.execute("SELECT COUNT(*) FROM footprint_spatial").fetchone()
+    finally:
+        connection.close()
+
+    assert stored_count == (1,)
+    assert spatial_count == (1,)
 
 
 def test_serves_snapshot_from_database_backed_viewport_query(tmp_path: Path):

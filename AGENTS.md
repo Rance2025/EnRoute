@@ -39,7 +39,8 @@ docs/
 scripts/             仓库级启动、检查脚本
 tests/               仓库级工具测试
 external/            本地原始导入数据，不提交
-output/              本地数据库、日志和运行输出，不提交
+data/                本地 SQLite 数据库和持久应用数据，不提交
+output/              本地日志、PID、截图和运行输出，不提交
 ```
 
 ## 常用命令

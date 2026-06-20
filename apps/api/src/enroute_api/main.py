@@ -4,7 +4,6 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from .config import Settings
-from .footprints.csv_loader import load_footprint_payload
 from .footprints.store import FootprintStore
 
 
@@ -23,10 +22,7 @@ def create_app(*, settings: Settings | None = None) -> FastAPI:
 
     @app.get("/api/footprints")
     def get_footprints() -> dict[str, object]:
-        return load_footprint_payload(
-            data_path=resolved_settings.footprint_data_path,
-            coordinate_system=resolved_settings.footprint_coordinate_system,
-        )
+        return store.get_all_points()
 
     @app.post("/api/footprints/snapshot")
     async def post_snapshot(request: Request) -> dict[str, object]:

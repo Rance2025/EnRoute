@@ -12,7 +12,8 @@ docs/         Design notes and implementation plans.
 scripts/      Repository-level development helpers.
 tests/        Repository-level tests for development tooling.
 external/     Local personal source exports, ignored by git.
-output/       Local database, logs, and runtime output, ignored by git.
+data/         Local SQLite databases and persisted app data, ignored by git.
+output/       Local logs, PID files, screenshots, and runtime output, ignored by git.
 ```
 
 ## Local setup
@@ -47,7 +48,7 @@ dependencies from `apps/api/pyproject.toml`.
 
 Keep personal footprint exports in `external/`, which is ignored by git. The
 Python API reads `FOOTPRINT_DATA_PATH=external/backUpData-all.csv`, streams it
-into SQLite at `FOOTPRINT_DB_PATH=output/footprints.sqlite`, and serves
+into SQLite at `FOOTPRINT_DB_PATH=data/footprints.sqlite`, and serves
 viewport snapshots from `POST /api/footprints/snapshot`. The compatibility
 `GET /api/footprints` route remains available for small/debug payloads, but the
 map no longer loads all raw points into browser memory. Footprint CSV

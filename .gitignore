@@ -35,6 +35,9 @@ dist-ssr
 output/
 test-results/
 
+# Local persistent application data
+data/
+
 # Local personal data samples
 external/
 public/local/
