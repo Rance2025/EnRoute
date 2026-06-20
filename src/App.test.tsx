@@ -215,24 +215,43 @@ describe('App', () => {
     expect(within(workspace).queryByText('选中流水')).not.toBeInTheDocument()
     expect(workspace.querySelector('.accounting-scroll--ledger')).not.toBeNull()
 
+    const initialAccountCards = Array.from(
+      (accountStack as HTMLElement).querySelectorAll('.ios-account-filter-card'),
+    )
+    const initialFirstAccountText = initialAccountCards[0]?.textContent
     const huabeiCard = within(accountFilter).getByRole('button', { name: /花呗/ })
 
     fireEvent.click(huabeiCard)
+
+    const selectedAccountCards = Array.from(
+      (accountStack as HTMLElement).querySelectorAll('.ios-account-filter-card'),
+    )
 
     expect(huabeiCard).toHaveAttribute(
       'aria-pressed',
       'true',
     )
-    expect(huabeiCard).toHaveClass('is-pulled')
+    expect(huabeiCard).toHaveClass('is-active')
+    expect(huabeiCard).toHaveClass('is-stack-primary')
+    expect(huabeiCard).not.toHaveClass('is-pulled')
+    expect(selectedAccountCards[0]).toBe(huabeiCard)
+    expect(selectedAccountCards[0]).toHaveClass('ios-account-filter-card--rank-0')
+    expect(
+      selectedAccountCards.some((card) => card.classList.contains('is-pulled')),
+    ).toBe(false)
     expect(allFilter).toHaveAttribute('aria-pressed', 'false')
     expect(within(workspace).getByText('筛选后流水')).toBeInTheDocument()
     expect(within(workspace).queryByText('青岛住宿')).not.toBeInTheDocument()
 
-    fireEvent.click(huabeiCard)
+    fireEvent.click(selectedAccountCards[0])
 
     expect(allFilter).toHaveAttribute('aria-pressed', 'true')
     expect(huabeiCard).toHaveAttribute('aria-pressed', 'false')
     expect(huabeiCard).not.toHaveClass('is-pulled')
+    expect(huabeiCard).not.toHaveClass('is-stack-primary')
+    expect(
+      (accountStack as HTMLElement).querySelector('.ios-account-filter-card')?.textContent,
+    ).toBe(initialFirstAccountText)
     expect(within(allFilter).getByText('全部流水')).toBeInTheDocument()
     expect(within(workspace).getAllByText('青岛住宿').length).toBeGreaterThan(0)
   })
