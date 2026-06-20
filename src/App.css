@@ -1376,6 +1376,20 @@
   padding: 8px 22px 18px 14px;
   overflow: hidden;
   isolation: isolate;
+  transition:
+    gap 260ms ease,
+    padding 260ms ease;
+}
+
+.ios-account-selected-slot {
+  padding: 4px 22px 8px 14px;
+  animation: accountSelectedSlotIn 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.ios-account-filter-stack.is-spread {
+  gap: 8px;
+  padding-top: 2px;
+  animation: accountCardSettleBack 280ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .ios-account-filter-card {
@@ -1390,6 +1404,7 @@
   grid-template-columns: 30px minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
+  width: 100%;
   min-height: 84px;
   padding: 13px;
   overflow: hidden;
@@ -1416,6 +1431,10 @@
 
 .ios-account-filter-card + .ios-account-filter-card {
   margin-top: -21px;
+}
+
+.ios-account-filter-stack.is-spread .ios-account-filter-card + .ios-account-filter-card {
+  margin-top: 0;
 }
 
 .ios-account-filter-card--1 {
@@ -1486,21 +1505,39 @@
   box-shadow: 0 25px 54px rgba(18, 49, 43, 0.24);
 }
 
-.ios-account-filter-card.is-stack-primary {
-  animation: accountCardRollIn 380ms cubic-bezier(0.2, 1, 0.22, 1);
+.ios-account-filter-card.is-detached {
+  --account-card-scale: 1;
+  --account-card-shift-x: 0px;
+  --account-card-lift: 0px;
+  --account-card-z: 6;
+
+  min-height: 92px;
+  animation: accountCardDetachIn 420ms cubic-bezier(0.2, 1, 0.22, 1);
 }
 
-@keyframes accountCardRollIn {
+@keyframes accountSelectedSlotIn {
   from {
-    opacity: 0.84;
-    filter: saturate(0.94);
-    transform: translate3d(-12px, 38px, 0) scale(0.96);
+    opacity: 0;
+    transform: translateY(-18px);
   }
 
-  58% {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes accountCardDetachIn {
+  from {
+    opacity: 0.86;
+    filter: saturate(0.94);
+    transform: translate3d(8px, 42px, 0) scale(0.94);
+  }
+
+  62% {
     opacity: 1;
     filter: saturate(1.08);
-    transform: translate3d(6px, -5px, 0) scale(1.006);
+    transform: translate3d(-4px, -4px, 0) scale(1.012);
   }
 
   to {
@@ -1512,6 +1549,18 @@
         0
       )
       scale(var(--account-card-scale));
+  }
+}
+
+@keyframes accountCardSettleBack {
+  from {
+    opacity: 0.92;
+    transform: translateY(-8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
@@ -2950,7 +2999,8 @@
   }
 
   .ios-transaction-row {
-    grid-template-columns: 34px minmax(0, 1fr) auto;
+    grid-template-columns:
+      34px minmax(142px, 1fr) minmax(86px, 102px);
     min-height: 58px;
     gap: 8px;
     padding: 8px;
@@ -2961,6 +3011,10 @@
     width: 34px;
     height: 34px;
     border-radius: 14px;
+  }
+
+  .ios-transaction-row__tags {
+    display: none;
   }
 
   .ios-transaction-row__body strong,
