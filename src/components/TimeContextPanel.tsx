@@ -1,5 +1,8 @@
 import { useEffect, useState, type CSSProperties } from 'react'
 
+import { ledgerAtlasDataset } from '../accounting/ledgerAtlasData'
+import { formatCnyFromCents } from '../accounting/money'
+import { getPeriodMetrics } from '../accounting/selectors'
 import type { AppView } from '../App'
 import { SegmentedControl, type SegmentedOption } from './SegmentedControl'
 import {
@@ -46,8 +49,8 @@ const calendarModeOptions: Array<SegmentedOption<CalendarDisplayMode>> = [
 
 const weekdayLabels = ['一', '二', '三', '四', '五', '六', '日']
 
-const moduleSummaries: Record<
-  AppView,
+const staticModuleSummaries: Record<
+  Exclude<AppView, 'accounting'>,
   Array<{ label: string; value: string }>
 > = {
   overview: [
@@ -64,11 +67,6 @@ const moduleSummaries: Record<
     { label: '日程', value: '2' },
     { label: '待办', value: '6' },
     { label: '事件', value: '待整理' },
-  ],
-  accounting: [
-    { label: '流水', value: '3' },
-    { label: '支出', value: '¥420' },
-    { label: '净入', value: '¥4,921' },
   ],
 }
 
@@ -99,6 +97,7 @@ export function TimeContextPanel({
   })
   const heading = getTimeRangeDisplay(selection)
   const resetLabel = getCurrentRangeActionLabel(selection.mode)
+  const moduleSummaries = getModuleSummaries(view, selection)
 
   useEffect(() => {
     if (!isDayCalendarCollapsingWeek) return undefined
@@ -212,7 +211,7 @@ export function TimeContextPanel({
         </div>
 
         <footer className="time-context-summary" aria-label="当前范围摘要">
-          {moduleSummaries[view].map((item) => (
+          {moduleSummaries.map((item) => (
             <div key={item.label}>
               <b>{item.label}</b>
               <span>{item.value}</span>
@@ -222,6 +221,24 @@ export function TimeContextPanel({
       </div>
     </aside>
   )
+}
+
+function getModuleSummaries(view: AppView, selection: TimeRangeSelection) {
+  if (view !== 'accounting') return staticModuleSummaries[view]
+
+  const metrics = getPeriodMetrics(ledgerAtlasDataset, selection)
+
+  return [
+    { label: '流水', value: String(metrics.transactionCount) },
+    { label: '支出', value: formatAccountingCurrency(metrics.expenseInCents) },
+    { label: '净入', value: formatAccountingCurrency(metrics.netInCents) },
+  ]
+}
+
+function formatAccountingCurrency(amountInCents: number) {
+  const prefix = amountInCents < 0 ? '-¥' : '¥'
+
+  return `${prefix}${formatCnyFromCents(Math.abs(amountInCents))}`
 }
 
 function timeSelectionsAreEqual(
