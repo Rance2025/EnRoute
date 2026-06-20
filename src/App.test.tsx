@@ -223,32 +223,36 @@ describe('App', () => {
 
     fireEvent.click(huabeiCard)
 
-    const selectedAccountCards = Array.from(
+    const detachedSlot = within(accountFilter).getByLabelText('选中账户卡片')
+    const detachedHuabeiCard = within(detachedSlot).getByRole('button', { name: /花呗/ })
+    const spreadAccountCards = Array.from(
       (accountStack as HTMLElement).querySelectorAll('.ios-account-filter-card'),
     )
 
-    expect(huabeiCard).toHaveAttribute(
+    expect(detachedHuabeiCard).toHaveAttribute(
       'aria-pressed',
       'true',
     )
-    expect(huabeiCard).toHaveClass('is-active')
-    expect(huabeiCard).toHaveClass('is-stack-primary')
-    expect(huabeiCard).not.toHaveClass('is-pulled')
-    expect(selectedAccountCards[0]).toBe(huabeiCard)
-    expect(selectedAccountCards[0]).toHaveClass('ios-account-filter-card--rank-0')
+    expect(detachedHuabeiCard).toHaveClass('is-active')
+    expect(detachedHuabeiCard).toHaveClass('is-detached')
+    expect(detachedHuabeiCard).not.toHaveClass('is-stack-primary')
+    expect(detachedHuabeiCard).not.toHaveClass('is-pulled')
+    expect(accountStack).toHaveClass('is-spread')
+    expect(spreadAccountCards).toHaveLength(3)
+    expect(within(accountStack as HTMLElement).queryByRole('button', { name: /花呗/ })).not.toBeInTheDocument()
     expect(
-      selectedAccountCards.some((card) => card.classList.contains('is-pulled')),
+      spreadAccountCards.some((card) => card.classList.contains('is-pulled')),
     ).toBe(false)
     expect(allFilter).toHaveAttribute('aria-pressed', 'false')
     expect(within(workspace).getByText('筛选后流水')).toBeInTheDocument()
     expect(within(workspace).queryByText('青岛住宿')).not.toBeInTheDocument()
 
-    fireEvent.click(selectedAccountCards[0])
+    fireEvent.click(detachedHuabeiCard)
 
     expect(allFilter).toHaveAttribute('aria-pressed', 'true')
-    expect(huabeiCard).toHaveAttribute('aria-pressed', 'false')
-    expect(huabeiCard).not.toHaveClass('is-pulled')
-    expect(huabeiCard).not.toHaveClass('is-stack-primary')
+    expect(within(accountFilter).queryByLabelText('选中账户卡片')).not.toBeInTheDocument()
+    expect(accountStack).not.toHaveClass('is-spread')
+    expect(accountStack?.querySelectorAll('.ios-account-filter-card')).toHaveLength(4)
     expect(
       (accountStack as HTMLElement).querySelector('.ios-account-filter-card')?.textContent,
     ).toBe(initialFirstAccountText)

@@ -21,6 +21,27 @@ function lastCssRule(selector: string) {
   return matches.at(-1)?.[0] ?? ''
 }
 
+function mediaBlock(queryStart: string) {
+  const start = appCss.indexOf(queryStart)
+  if (start < 0) return ''
+
+  let depth = 0
+  for (let index = start; index < appCss.length; index += 1) {
+    if (appCss[index] === '{') depth += 1
+    if (appCss[index] === '}') {
+      depth -= 1
+      if (depth === 0) return appCss.slice(start, index + 1)
+    }
+  }
+
+  return ''
+}
+
+function cssRuleIn(source: string, selector: string) {
+  const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return source.match(new RegExp(`${escapedSelector}\\s*\\{[^}]*\\}`))?.[0] ?? ''
+}
+
 describe('map chrome layout', () => {
   it('does not render a second map wordmark inside the map chrome', () => {
     expect(amapCanvasSource).not.toContain('className="brand-header"')
@@ -394,21 +415,26 @@ describe('map chrome layout', () => {
     expect(cssRule('.transaction-editor')).toBe('')
   })
 
-  it('keeps all-ledger selection outside the account card stack and rotates selected account cards into the stack front', () => {
+  it('keeps all-ledger selection outside the stack and detaches the selected account before spreading the remaining cards', () => {
     const ledgerSource = readFileSync('src/components/accounting/LedgerWorkspace.tsx', 'utf8')
 
     expect(ledgerSource).toContain('className="ios-account-all-filter"')
     expect(ledgerSource).not.toContain('title="全部账户"')
-    expect(ledgerSource).toContain('getOrderedAccountSummaries')
+    expect(ledgerSource).toContain('selectedSummary ? (')
+    expect(ledgerSource).toContain('visibleStackSummaries')
+    expect(ledgerSource).toContain('aria-label="选中账户卡片"')
     expect(ledgerSource).toContain('ios-account-filter-card--rank-')
     expect(ledgerSource).not.toContain('is-pulled')
     expect(cssRule('.ios-account-all-filter')).not.toContain('linear-gradient(135deg')
     expect(cssRule('.ios-account-filter-card')).not.toContain('--account-pull-x')
     expect(cssRule('.ios-account-filter-card.is-pulled')).toBe('')
-    expect(cssRule('.ios-account-filter-card.is-stack-primary')).toContain(
-      'animation: accountCardRollIn',
+    expect(cssRule('.ios-account-selected-slot')).toContain('animation: accountSelectedSlotIn')
+    expect(cssRule('.ios-account-filter-stack.is-spread')).toContain('gap:')
+    expect(cssRule('.ios-account-filter-card.is-detached')).toContain(
+      'animation: accountCardDetachIn',
     )
-    expect(appCss).toContain('@keyframes accountCardRollIn')
+    expect(appCss).toContain('@keyframes accountCardDetachIn')
+    expect(appCss).toContain('@keyframes accountCardSettleBack')
   })
 
   it('contains ledger rows so amount and date content cannot spill out of the row', () => {
@@ -426,6 +452,20 @@ describe('map chrome layout', () => {
     expect(sideRule).toContain('justify-items: end')
     expect(sideTextRule).toContain('max-width: 100%')
     expect(sideTextRule).toContain('text-overflow: ellipsis')
+  })
+
+  it('keeps compact ledger rows as a single readable line instead of wrapping side content under the icon', () => {
+    const compactMedia = mediaBlock(
+      '@media (min-width: 721px) and (max-width: 1240px), (min-width: 721px) and (max-height: 790px)',
+    )
+    const compactRowRule = cssRuleIn(compactMedia, '.ios-transaction-row')
+    const compactTagsRule = cssRuleIn(compactMedia, '.ios-transaction-row__tags')
+
+    expect(compactRowRule).toContain('grid-template-columns:')
+    expect(compactRowRule).toContain('minmax(86px, 102px)')
+    expect(compactRowRule).not.toContain('34px minmax(0, 1fr) auto')
+    expect(compactRowRule).not.toContain('minmax(0, 0.01fr)')
+    expect(compactTagsRule).toContain('display: none')
   })
 
   it('initializes the map at the single-world minimum zoom', () => {
