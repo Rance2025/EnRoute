@@ -1348,6 +1348,7 @@
 }
 
 .ios-account-ledger-workspace {
+  position: relative;
   grid-column: 2;
   grid-template-columns: minmax(300px, 0.42fr) minmax(0, 1fr) minmax(300px, 0.42fr);
   align-items: start;
@@ -1361,16 +1362,22 @@
 }
 
 .ios-account-filter-panel {
-  grid-column: 3;
+  position: fixed;
+  top: 104px;
+  right: 24px;
+  width: min(372px, calc((100vw - 1200px) / 2 + 300px - 24px));
+  height: calc(100svh - 122px);
   align-self: start;
-  height: 100%;
+  padding-bottom: 16px;
   overflow: hidden;
 }
 
 .ios-account-stack-summary {
   display: grid;
-  gap: 4px;
-  padding: 0 16px 6px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 10px;
+  padding: 0 16px 4px;
 }
 
 .ios-account-stack-summary span {
@@ -1380,9 +1387,11 @@
 }
 
 .ios-account-stack-summary strong {
+  justify-self: end;
   color: var(--accounting-ink);
-  font-size: 27px;
+  font-size: 25px;
   line-height: 1;
+  white-space: nowrap;
 }
 
 .ios-account-all-filter {
@@ -1391,7 +1400,7 @@
   align-items: center;
   gap: 10px;
   min-height: 38px;
-  margin: 0 14px 10px;
+  margin: 0 14px 8px;
   padding: 0 12px;
   overflow: hidden;
   border: 1px solid rgba(23, 35, 31, 0.08);
@@ -1445,9 +1454,9 @@
   position: relative;
   display: block;
   min-height: 0;
-  height: 270px;
-  margin-top: 18px;
-  padding: 8px 20px 28px 14px;
+  height: 470px;
+  margin-top: 0;
+  padding: 4px 20px 16px 14px;
   overflow: visible;
   isolation: isolate;
   perspective: 1100px;
@@ -1524,6 +1533,7 @@
   position: absolute;
   top: var(--account-card-stack-y);
   left: 14px;
+  width: calc(100% - 34px);
   transition:
     top 520ms cubic-bezier(0.16, 1, 0.3, 1),
     width 520ms cubic-bezier(0.16, 1, 0.3, 1);
@@ -1564,7 +1574,7 @@
 .ios-account-filter-card--rank-0 {
   --account-card-scale: 1;
   --account-card-shift-x: 0px;
-  --account-card-stack-y: 174px;
+  --account-card-stack-y: 318px;
   --account-card-z: 5;
 }
 
@@ -1572,7 +1582,7 @@
   --account-card-lift: 0px;
   --account-card-scale: 0.982;
   --account-card-shift-x: 16px;
-  --account-card-stack-y: 116px;
+  --account-card-stack-y: 212px;
   --account-card-tilt: -1.2deg;
   --account-card-z: 4;
 }
@@ -1581,7 +1591,7 @@
   --account-card-lift: 0px;
   --account-card-scale: 0.964;
   --account-card-shift-x: 32px;
-  --account-card-stack-y: 58px;
+  --account-card-stack-y: 106px;
   --account-card-tilt: -1.8deg;
   --account-card-z: 3;
 }
@@ -2848,10 +2858,13 @@
 
   .ios-account-filter-panel {
     grid-column: 1;
-  }
-
-  .ios-account-filter-panel {
+    position: static;
+    top: auto;
+    right: auto;
+    width: auto;
+    height: auto;
     min-height: 0;
+    padding-bottom: 0;
   }
 
   .ios-account-stack-summary {
@@ -3090,6 +3103,13 @@
 
   .ios-account-ledger-workspace {
     grid-template-columns: minmax(276px, 0.44fr) minmax(0, 1fr) minmax(276px, 0.44fr);
+  }
+
+  .ios-account-filter-panel {
+    top: 100px;
+    right: 16px;
+    width: min(300px, calc(100vw - 32px));
+    height: calc(100svh - 114px);
   }
 
   .ios-account-filter-card {
