@@ -1273,15 +1273,6 @@
   z-index: 2;
 }
 
-.app-shell--accounting .time-context-panel {
-  display: none;
-}
-
-.app-shell--accounting .main-workspace {
-  inset: 0;
-  width: 100vw;
-}
-
 .accounting-page {
   --accounting-ink: #17231f;
   --accounting-muted: rgba(23, 35, 31, 0.56);
@@ -1294,10 +1285,12 @@
   --accounting-blue: #315b68;
 
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1200px) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(560px, 1fr) minmax(324px, 390px);
+  column-gap: 28px;
+  align-items: start;
   height: 100%;
   min-height: 0;
-  padding: 104px 24px 18px;
+  padding: 96px 24px 18px;
   overflow: hidden;
   color: var(--accounting-ink);
   background:
@@ -1394,29 +1387,28 @@
 
 .ios-account-ledger-workspace {
   position: relative;
-  grid-column: 2;
-  grid-template-columns: minmax(300px, 0.42fr) minmax(0, 1fr) minmax(300px, 0.42fr);
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(560px, 1fr) minmax(324px, 390px);
   align-items: start;
-  gap: 18px;
+  gap: 28px;
   overflow: hidden;
 }
 
 .ios-ledger-main {
-  grid-column: 2;
-  height: 100%;
+  grid-column: 1;
+  height: calc(100svh - 150px);
   overflow: hidden;
 }
 
 .ios-account-filter-panel {
-  position: fixed;
-  top: 92px;
-  right: 24px;
+  grid-column: 2;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   gap: 14px;
-  width: min(372px, calc((100vw - 1200px) / 2 + 300px - 24px));
-  height: calc(100svh - 110px);
+  width: 100%;
+  height: calc(100svh - 126px);
   align-self: start;
+  margin-top: 0;
   padding: 14px 18px 16px;
   overflow: visible;
   border-radius: 26px;
@@ -2920,6 +2912,7 @@
 
   .accounting-page {
     grid-template-columns: minmax(0, 1fr);
+    column-gap: 0;
     height: 100%;
     padding: 92px 10px 12px;
     overflow: hidden;
@@ -2952,9 +2945,6 @@
 
   .ios-account-filter-panel {
     grid-column: 1;
-    position: static;
-    top: auto;
-    right: auto;
     width: auto;
     height: auto;
     min-height: 0;
@@ -3167,7 +3157,9 @@
 
 @media (min-width: 721px) and (max-width: 1240px), (min-width: 721px) and (max-height: 790px) {
   .accounting-page {
-    padding: 100px 16px 14px;
+    grid-template-columns: minmax(0, 1fr) minmax(460px, 1fr) minmax(276px, 330px);
+    column-gap: 18px;
+    padding: 92px 16px 14px;
   }
 
   .accounting-workspace {
@@ -3183,15 +3175,17 @@
   }
 
   .ios-account-ledger-workspace {
-    grid-template-columns: minmax(276px, 0.44fr) minmax(0, 1fr) minmax(276px, 0.44fr);
-    gap: 16px;
+    grid-template-columns: minmax(460px, 1fr) minmax(276px, 330px);
+    gap: 18px;
+  }
+
+  .ios-ledger-main {
+    height: calc(100svh - 136px);
   }
 
   .ios-account-filter-panel {
-    top: 88px;
-    right: 16px;
-    width: 276px;
-    height: calc(100svh - 102px);
+    width: 100%;
+    height: calc(100svh - 112px);
     padding: 12px 14px 14px;
   }
 
