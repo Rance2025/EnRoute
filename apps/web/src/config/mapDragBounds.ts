@@ -4,7 +4,6 @@ import {
   calculateMinimumZoomForWorldCoverage,
   isAtMinimumWorldZoom,
 } from './mercator'
-import { calculateWorldCenter } from './mapCamera'
 
 export type ContainerPoint = {
   x: number
@@ -174,13 +173,9 @@ export function calculateNextBoundedDragCenter({
     currentZoom !== undefined && isAtMinimumWorldZoom(currentZoom, viewportSize.height)
       ? calculateLatitudeMidpoint(bounds)
       : undefined
-  const lockedLongitude =
-    currentZoom !== undefined && isAtMinimumWorldZoom(currentZoom, viewportSize.height)
-      ? calculateWorldCenter(bounds)[0]
-      : undefined
 
   return [
-    lockedLongitude ?? targetLngLat[0],
+    targetLngLat[0],
     lockedLatitude ??
       (minLatitude > maxLatitude
         ? calculateLatitudeMidpoint(bounds)

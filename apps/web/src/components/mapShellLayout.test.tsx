@@ -238,6 +238,23 @@ describe('unified shell layout', () => {
     )
   })
 
+  it('closes footprint style controls when clicking outside the map toolbar popover', () => {
+    render(<App amapConfig={configuredAmap} />)
+
+    const settingsButton = document.querySelector('.map-toolbar__settings .map-toolbar__button')
+
+    expect(settingsButton).toBeInstanceOf(HTMLButtonElement)
+
+    fireEvent.click(settingsButton as HTMLButtonElement)
+
+    expect(document.querySelector('.footprint-style-popover')).not.toBeNull()
+
+    fireEvent.pointerDown(document.body)
+
+    expect(document.querySelector('.footprint-style-popover')).toBeNull()
+    expect(settingsButton).toHaveAttribute('aria-expanded', 'false')
+  })
+
   it('persists pending footprint style edits when leaving the map view', () => {
     vi.useFakeTimers()
     render(<App amapConfig={configuredAmap} />)
