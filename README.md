@@ -15,13 +15,17 @@ Then run:
 
 ```bash
 npm install
-npm run dev:full
+python start.py start
 ```
 
-`npm run dev:full` starts both the Vite frontend at `http://127.0.0.1:5173`
-and the local footprints API at `http://127.0.0.1:5178`. The frontend calls
-`/api/footprints`, and Vite proxies that route to the API server. You can also
-run them separately with `npm run api` and `npm run dev`.
+`python start.py start` starts both the Vite frontend at
+`http://127.0.0.1:5173` and the local footprints API at
+`http://127.0.0.1:5178`. The frontend calls `/api/footprints`, and Vite proxies
+that route to the API server. Use `python start.py stop`,
+`python start.py restart`, and `python start.py status` to manage both services
+together; PID files and logs are written under `output/start-manager/`. You can
+also use `npm run dev:full`, or run the services separately with `npm run api`
+and `npm run dev`.
 
 Keep personal footprint exports in `external/`, which is ignored by git. The
 API reads `FOOTPRINT_DATA_PATH=external/backUpData-all.csv` and returns parsed
