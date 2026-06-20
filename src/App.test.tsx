@@ -141,11 +141,13 @@ describe('App', () => {
     expect(screen.queryByText('Ledger Atlas')).not.toBeInTheDocument()
     expect(screen.queryByText('记账图谱工作台')).not.toBeInTheDocument()
     expect(screen.queryByLabelText('当前账目范围')).not.toBeInTheDocument()
-    expect(screen.getByText('净现金流')).toBeInTheDocument()
-    expect(screen.getByText('本期流水')).toBeInTheDocument()
+    expect(screen.getByLabelText('账户与流水工作台')).toBeInTheDocument()
+    expect(screen.getByText('新增流水')).toBeInTheDocument()
+    expect(screen.getByText('查看统计')).toBeInTheDocument()
+    expect(screen.queryByRole('group', { name: '记账工作区' })).not.toBeInTheDocument()
 
     const accountingWorkspace = screen.getByLabelText('iOS 记账工作台')
-    const currentRangeSummary = within(accountingWorkspace).getByLabelText('当前范围摘要')
+    const currentRangeSummary = within(accountingWorkspace).getByLabelText('记账概览摘要')
 
     expect(within(currentRangeSummary).getByText('本期流水')).toBeInTheDocument()
     expect(within(currentRangeSummary).getByText('6 笔')).toBeInTheDocument()
@@ -154,7 +156,7 @@ describe('App', () => {
     expect(within(currentRangeSummary).queryByText('¥420')).not.toBeInTheDocument()
   })
 
-  it('renders the ledger page as an iOS workspace with only the flow list scrollable', async () => {
+  it('renders accounts and ledger together with account filtering and ledger actions', async () => {
     render(
       <App
         amapConfig={{
@@ -177,24 +179,39 @@ describe('App', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '记账' }))
 
-    const ledgerWorkspace = screen.getByLabelText('流水工作区')
+    const workspace = screen.getByLabelText('账户与流水工作台')
+    const accountFilter = within(workspace).getByLabelText('账户筛选卡片')
 
-    expect(ledgerWorkspace).toBeInTheDocument()
-    expect(within(ledgerWorkspace).getByText('流水明细')).toBeInTheDocument()
-    expect(within(ledgerWorkspace).getByLabelText('流水列表')).toBeInTheDocument()
-    expect(within(ledgerWorkspace).getByText('选中流水')).toBeInTheDocument()
-    expect(within(ledgerWorkspace).getByText('分类线索')).toBeInTheDocument()
-    expect(within(ledgerWorkspace).getByText('标签线索')).toBeInTheDocument()
-    expect(within(ledgerWorkspace).getAllByText('NIBU 酸奶').length).toBeGreaterThan(0)
-    expect(within(ledgerWorkspace).getAllByText('鲜嗨发牛肉火锅').length).toBeGreaterThan(0)
-    expect(within(ledgerWorkspace).getAllByText('餐饮 / 饮品').length).toBeGreaterThan(0)
-    expect(within(ledgerWorkspace).getAllByText('地点旅行 / 青岛之行').length).toBeGreaterThan(0)
-    expect(within(ledgerWorkspace).getByText('原始分类')).toBeInTheDocument()
-    expect(within(ledgerWorkspace).getByText('归入分类')).toBeInTheDocument()
-    expect(ledgerWorkspace.querySelector('.accounting-scroll--ledger')).not.toBeNull()
+    expect(workspace).toBeInTheDocument()
+    expect(accountFilter).toBeInTheDocument()
+    expect(within(accountFilter).getByRole('button', { name: /全部账户/ })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(within(workspace).getByText('流水明细')).toBeInTheDocument()
+    expect(within(workspace).getByLabelText('流水列表')).toBeInTheDocument()
+    expect(within(workspace).getByText('新增流水')).toBeInTheDocument()
+    expect(within(workspace).getByText('查看统计')).toBeInTheDocument()
+    expect(within(workspace).getAllByText('NIBU 酸奶').length).toBeGreaterThan(0)
+    expect(within(workspace).getAllByText('鲜嗨发牛肉火锅').length).toBeGreaterThan(0)
+    expect(within(workspace).getAllByText('餐饮 / 饮品').length).toBeGreaterThan(0)
+    expect(within(workspace).getAllByText('地点旅行 / 青岛之行').length).toBeGreaterThan(0)
+    expect(within(workspace).queryByText('分类线索')).not.toBeInTheDocument()
+    expect(within(workspace).queryByText('标签线索')).not.toBeInTheDocument()
+    expect(within(workspace).queryByText('选中流水')).not.toBeInTheDocument()
+    expect(workspace.querySelector('.accounting-scroll--ledger')).not.toBeNull()
+
+    fireEvent.click(within(accountFilter).getByRole('button', { name: /花呗/ }))
+
+    expect(within(accountFilter).getByRole('button', { name: /花呗/ })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(within(workspace).getByText('筛选后流水')).toBeInTheDocument()
+    expect(within(workspace).queryByText('青岛住宿')).not.toBeInTheDocument()
   })
 
-  it('renders the account page as stacked iOS account cards', async () => {
+  it('opens transaction and new-ledger modals from the accounting workspace', async () => {
     render(
       <App
         amapConfig={{
@@ -216,17 +233,25 @@ describe('App', () => {
     )
 
     fireEvent.click(screen.getByRole('button', { name: '记账' }))
-    fireEvent.click(screen.getByRole('button', { name: '账户' }))
 
-    const accountWorkspace = screen.getByLabelText('账户工作区')
+    const workspace = screen.getByLabelText('账户与流水工作台')
 
-    expect(accountWorkspace).toBeInTheDocument()
-    expect(within(accountWorkspace).getByLabelText('账户卡片栈')).toBeInTheDocument()
-    expect(within(accountWorkspace).getByText('资金结构')).toBeInTheDocument()
-    expect(within(accountWorkspace).getByText('本期账户流向')).toBeInTheDocument()
-    expect(screen.getAllByText('微信 - 日常').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('花呗').length).toBeGreaterThan(0)
-    expect(screen.queryByLabelText('账户周期卡片')).not.toBeInTheDocument()
+    fireEvent.click(within(workspace).getAllByText('NIBU 酸奶')[0])
+
+    const detailDialog = screen.getByRole('dialog', { name: '流水详情' })
+
+    expect(within(detailDialog).getByText('修改流水')).toBeInTheDocument()
+    expect(within(detailDialog).getByText('删除流水')).toBeInTheDocument()
+    expect(within(detailDialog).getByText('原始分类')).toBeInTheDocument()
+    expect(within(detailDialog).getByText('归入分类')).toBeInTheDocument()
+
+    fireEvent.click(within(detailDialog).getByRole('button', { name: '关闭' }))
+    fireEvent.click(within(workspace).getByRole('button', { name: '新增流水' }))
+
+    const newDialog = screen.getByRole('dialog', { name: '新增流水' })
+
+    expect(within(newDialog).getByText('记录新流水')).toBeInTheDocument()
+    expect(within(newDialog).getByText('保存流水')).toBeInTheDocument()
   })
 
   it('renders analytics with charts plus category and tag tree statistics', async () => {
@@ -251,7 +276,7 @@ describe('App', () => {
     )
 
     fireEvent.click(screen.getByRole('button', { name: '记账' }))
-    fireEvent.click(screen.getByRole('button', { name: '统计' }))
+    fireEvent.click(screen.getByRole('button', { name: '查看统计' }))
 
     const reportWorkspace = screen.getByLabelText('统计工作区')
 
@@ -266,7 +291,7 @@ describe('App', () => {
     expect(reportWorkspace.querySelector('.ios-chart-ring')).not.toBeNull()
   })
 
-  it('switches the whole accounting workspace between account, ledger, and report modes', async () => {
+  it('uses a statistics entrance instead of top-level ledger account report tabs', async () => {
     render(
       <App
         amapConfig={{
@@ -289,20 +314,20 @@ describe('App', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '记账' }))
 
-    expect(screen.getByRole('button', { name: '流水' })).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByLabelText('流水工作区')).toBeInTheDocument()
-    expect(screen.queryByLabelText('账户工作区')).not.toBeInTheDocument()
+    expect(screen.queryByRole('group', { name: '记账工作区' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '流水' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '账户' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '统计' })).not.toBeInTheDocument()
+    expect(screen.getByLabelText('账户与流水工作台')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: '账户' }))
+    fireEvent.click(screen.getByRole('button', { name: '查看统计' }))
 
-    expect(screen.getByRole('button', { name: '账户' })).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByLabelText('账户工作区')).toBeInTheDocument()
-    expect(screen.queryByLabelText('流水工作区')).not.toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: '统计' }))
-
-    expect(screen.getByRole('button', { name: '统计' })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByLabelText('统计工作区')).toBeInTheDocument()
-    expect(screen.queryByLabelText('账户工作区')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '返回流水' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '返回流水' }))
+
+    expect(screen.getByLabelText('账户与流水工作台')).toBeInTheDocument()
+    expect(screen.queryByLabelText('统计工作区')).not.toBeInTheDocument()
   })
 })

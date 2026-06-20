@@ -326,7 +326,6 @@ describe('map chrome layout', () => {
     )
     expect(cssRule('.time-mode-tabs')).toContain('--segmented-gap: 3px')
     expect(cssRule('.time-mode-tabs')).not.toContain('--segmented-thumb-shadow')
-    expect(cssRule('.accounting-mode-tabs')).not.toContain('--segmented-thumb-shadow')
     expect(cssRule('.transaction-type-switch')).not.toContain('--segmented-thumb-shadow')
     expect(cssRule('.time-mode-tabs')).toContain('--segmented-active-label-color: #123f35')
     expect(cssRule(".app-nav .segmented-control button[aria-pressed='true']")).toContain(
@@ -380,7 +379,9 @@ describe('map chrome layout', () => {
     expect(cssRule('.accounting-page *')).toContain('min-width: 0')
     expect(cssRule('.accounting-scroll--ledger')).toContain('overflow-y: auto')
     expect(cssRule('.accounting-scroll--ledger')).toContain('overflow-x: hidden')
-    expect(cssRule('.ios-ledger-detail')).toContain('overflow: hidden')
+    expect(cssRule('.ios-account-ledger-workspace')).toContain('overflow: hidden')
+    expect(cssRule('.ios-ledger-main')).toContain('overflow: hidden')
+    expect(cssRule('.accounting-modal-card')).toContain('overflow: hidden')
     expect(cssRule('.transaction-list')).toBe('')
     expect(cssRule('.transaction-editor')).toBe('')
   })

@@ -10,29 +10,26 @@ import {
   getPeriodMetrics,
   getTagTreeStats,
 } from '../accounting/selectors'
+import type { Transaction } from '../accounting/types'
 import { getTimeRangeDisplay, type TimeRangeSelection } from '../time/timeRange'
-import { AccountsWorkspace } from './accounting/AccountsWorkspace'
 import { AnalyticsWorkspace } from './accounting/AnalyticsWorkspace'
-import { LedgerWorkspace } from './accounting/LedgerWorkspace'
-import { SegmentedControl, type SegmentedOption } from './SegmentedControl'
+import {
+  LedgerDetailDialog,
+  LedgerWorkspace,
+  NewTransactionDialog,
+} from './accounting/LedgerWorkspace'
 
-type AccountingMode = 'ledger' | 'accounts' | 'report'
+type AccountingView = 'workspace' | 'analytics'
 
 type AccountingPageProps = {
   timeRange: TimeRangeSelection
 }
 
-const accountingModes: Array<SegmentedOption<AccountingMode>> = [
-  { value: 'ledger', label: '流水' },
-  { value: 'accounts', label: '账户' },
-  { value: 'report', label: '统计' },
-]
-
 export function AccountingPage({ timeRange }: AccountingPageProps) {
-  const [mode, setMode] = useState<AccountingMode>('ledger')
-  const [selectedTransactionId, setSelectedTransactionId] = useState('tx-yogurt')
-  const [selectedCategoryId, setSelectedCategoryId] = useState('expense-drink')
-  const [selectedTagId, setSelectedTagId] = useState('qingdao-trip')
+  const [view, setView] = useState<AccountingView>('workspace')
+  const [selectedAccountId, setSelectedAccountId] = useState<string>('all')
+  const [activeTransaction, setActiveTransaction] = useState<Transaction | null>(null)
+  const [isNewTransactionOpen, setIsNewTransactionOpen] = useState(false)
   const display = getTimeRangeDisplay(timeRange)
   const transactions = useMemo(
     () => filterTransactionsByTimeRange(ledgerAtlasDataset.transactions, timeRange),
@@ -48,23 +45,11 @@ export function AccountingPage({ timeRange }: AccountingPageProps) {
     [timeRange],
   )
   const tagStats = useMemo(() => getTagTreeStats(ledgerAtlasDataset, timeRange), [timeRange])
-  const selectedTransaction =
-    transactions.find((transaction) => transaction.id === selectedTransactionId) ??
-    transactions[0] ??
-    ledgerAtlasDataset.transactions[0]
-
-  function handleSelectTransaction(transactionId: string) {
-    setSelectedTransactionId(transactionId)
-    const transaction = transactions.find((item) => item.id === transactionId)
-
-    if (transaction?.categoryId) setSelectedCategoryId(transaction.categoryId)
-    if (transaction?.tagIds[0]) setSelectedTagId(transaction.tagIds[0])
-  }
 
   return (
     <section className="accounting-page" aria-label="iOS 记账工作台">
       <div className="accounting-dock" aria-label="记账控制栏">
-        <section className="ios-summary-strip" aria-label="当前范围摘要">
+        <section className="ios-summary-strip" aria-label="记账概览摘要">
           <SummaryPill
             icon={CircleDollarSign}
             label="净现金流"
@@ -94,39 +79,31 @@ export function AccountingPage({ timeRange }: AccountingPageProps) {
           </div>
         </section>
 
-        <SegmentedControl
-          ariaLabel="记账工作区"
-          className="accounting-mode-tabs"
-          options={accountingModes}
-          value={mode}
-          onChange={setMode}
-        />
+        <div className="accounting-actions" aria-label="记账快捷操作">
+          {view === 'analytics' ? (
+            <button type="button" className="accounting-action" onClick={() => setView('workspace')}>
+              返回流水
+            </button>
+          ) : (
+            <span>{transactions.length} 笔流水</span>
+          )}
+        </div>
       </div>
 
-      {mode === 'ledger' ? (
+      {view === 'workspace' ? (
         <LedgerWorkspace
-          dataset={ledgerAtlasDataset}
-          transactions={transactions}
-          selectedTransaction={selectedTransaction}
-          selectedCategoryId={selectedCategoryId}
-          selectedTagId={selectedTagId}
-          categoryStats={categoryStats}
-          tagStats={tagStats}
-          onSelectTransaction={handleSelectTransaction}
-          onSelectCategory={setSelectedCategoryId}
-          onSelectTag={setSelectedTagId}
-        />
-      ) : null}
-
-      {mode === 'accounts' ? (
-        <AccountsWorkspace
           dataset={ledgerAtlasDataset}
           summaries={accountSummaries}
           transactions={transactions}
+          selectedAccountId={selectedAccountId}
+          onSelectAccount={setSelectedAccountId}
+          onSelectTransaction={setActiveTransaction}
+          onCreateTransaction={() => setIsNewTransactionOpen(true)}
+          onOpenAnalytics={() => setView('analytics')}
         />
       ) : null}
 
-      {mode === 'report' ? (
+      {view === 'analytics' ? (
         <AnalyticsWorkspace
           dataset={ledgerAtlasDataset}
           metrics={metrics}
@@ -134,6 +111,18 @@ export function AccountingPage({ timeRange }: AccountingPageProps) {
           categoryStats={categoryStats}
           tagStats={tagStats}
         />
+      ) : null}
+
+      {activeTransaction ? (
+        <LedgerDetailDialog
+          dataset={ledgerAtlasDataset}
+          transaction={activeTransaction}
+          onClose={() => setActiveTransaction(null)}
+        />
+      ) : null}
+
+      {isNewTransactionOpen ? (
+        <NewTransactionDialog onClose={() => setIsNewTransactionOpen(false)} />
       ) : null}
     </section>
   )
