@@ -1,9 +1,9 @@
-import { Landmark, Route, WalletCards } from 'lucide-react'
-import type { ComponentType } from 'react'
+import { ArrowDownLeft, ArrowRightLeft, ArrowUpRight, Landmark } from 'lucide-react'
+import type { CSSProperties } from 'react'
 
 import { formatCnyFromCents } from '../../accounting/money'
 import type { AccountPeriodSummary, AccountingDataset, Transaction } from '../../accounting/types'
-import { formatMonthDay, formatSignedCny, getLegacyFundLabel } from './formatting'
+import { formatMonthDay, getLegacyFundLabel } from './formatting'
 
 type AccountsWorkspaceProps = {
   dataset: AccountingDataset
@@ -16,95 +16,103 @@ export function AccountsWorkspace({
   summaries,
   transactions,
 }: AccountsWorkspaceProps) {
+  const visibleSummaries = summaries.slice(0, 4)
+  const totalBalanceInCents = summaries.reduce(
+    (total, summary) => total + summary.closingInCents,
+    0,
+  )
+
   return (
-    <div className="accounting-workspace accounting-workspace--accounts" aria-label="账户图谱工作区">
-      <section className="accounting-panel account-period-panel" aria-label="账户周期卡片">
-        <WorkspacePanelHead
-          icon={WalletCards}
-          title="账户周期卡片"
-          detail="期末估算"
-        />
-        <div className="account-period-list">
-          {summaries.map((summary) => (
-            <article className="account-period-card" key={summary.account.id}>
-              <div className="account-period-card__top">
+    <div className="accounting-workspace ios-accounts-workspace" aria-label="账户工作区">
+      <section className="ios-panel ios-account-stack-panel" aria-label="账户卡片栈">
+        <header className="ios-panel-head">
+          <strong>账户卡片</strong>
+          <span>{summaries.length} 个账户</span>
+        </header>
+        <div className="ios-account-total">
+          <span>估算净资产</span>
+          <strong>¥{formatCnyFromCents(totalBalanceInCents)}</strong>
+        </div>
+        <div className="ios-account-card-stack">
+          {visibleSummaries.map((summary, index) => (
+            <article
+              className={`ios-account-card ios-account-card--${(index % 4) + 1}`}
+              key={summary.account.id}
+              style={{ '--stack-index': index } as CSSProperties}
+            >
+              <div>
                 <span>{summary.account.sourceFundType ?? 'fund'}</span>
                 <strong>{summary.account.name}</strong>
               </div>
-              <div className="account-period-card__amount">
-                <span>估算余额</span>
-                <strong>¥{formatCnyFromCents(summary.closingInCents)}</strong>
-              </div>
-              <div className="account-period-card__grid">
-                <AccountMetric label="收入" value={formatSignedCny(summary.incomeInCents)} />
-                <AccountMetric label="支出" value={formatSignedCny(-summary.expenseInCents)} />
-                <AccountMetric label="转入" value={formatSignedCny(summary.transferInInCents)} />
-                <AccountMetric label="转出" value={formatSignedCny(-summary.transferOutInCents)} />
-              </div>
+              <b>¥{formatCnyFromCents(summary.closingInCents)}</b>
+              <footer>
+                <span>{summary.transactionCount} 笔</span>
+                <span>{formatSigned(summary.incomeInCents - summary.expenseInCents)}</span>
+              </footer>
             </article>
           ))}
         </div>
       </section>
 
-      <section className="accounts-side-column">
-        <section className="accounting-panel import-fund-panel">
-          <WorkspacePanelHead icon={Landmark} title="导入资金映射" detail="external fund.json" />
-          <div className="import-fund-list">
-            {dataset.accounts.map((account) => (
-              <article className="import-fund-row" key={account.id}>
-                <div>
-                  <strong>{account.name}</strong>
-                  <span>{account.sourceFundId}</span>
-                </div>
-                <em>{account.sourceFundType ?? 'unknown'}</em>
-              </article>
-            ))}
-          </div>
-        </section>
+      <section className="ios-panel ios-account-structure">
+        <header className="ios-panel-head">
+          <strong>资金结构</strong>
+          <span>导入账户</span>
+        </header>
+        <div className="ios-fund-map">
+          {dataset.accounts.map((account) => (
+            <article key={account.id}>
+              <span>
+                <Landmark size={15} strokeWidth={2} />
+                {account.sourceFundType ?? 'unknown'}
+              </span>
+              <strong>{account.name}</strong>
+              <em>{account.sourceFundId}</em>
+            </article>
+          ))}
+        </div>
+      </section>
 
-        <section className="accounting-panel account-movement-panel">
-          <WorkspacePanelHead icon={Route} title="账户流水路径" detail="按当前时间范围" />
-          <div className="account-movement-list">
-            {transactions.map((transaction) => (
-              <article className="account-movement-row" key={transaction.id}>
-                <time>{formatMonthDay(transaction.occurredAt)}</time>
-                <strong>{transaction.note ?? getLegacyFundLabel(transaction)}</strong>
-                <span>{getMovementLabel(dataset, transaction)}</span>
-              </article>
-            ))}
-          </div>
-        </section>
+      <section className="ios-panel ios-account-movement">
+        <header className="ios-panel-head">
+          <strong>本期账户流向</strong>
+          <span>{transactions.length} 笔</span>
+        </header>
+        <div className="ios-account-movement__rows">
+          {transactions.slice(0, 6).map((transaction) => (
+            <MovementRow dataset={dataset} transaction={transaction} key={transaction.id} />
+          ))}
+        </div>
       </section>
     </div>
   )
 }
 
-function WorkspacePanelHead({
-  icon: Icon,
-  title,
-  detail,
+function MovementRow({
+  dataset,
+  transaction,
 }: {
-  icon: ComponentType<{ size?: number; strokeWidth?: number }>
-  title: string
-  detail: string
+  dataset: AccountingDataset
+  transaction: Transaction
 }) {
-  return (
-    <div className="workspace-panel-head">
-      <div className="panel-title">
-        <Icon size={17} strokeWidth={1.9} />
-        <span>{title}</span>
-      </div>
-      <span>{detail}</span>
-    </div>
-  )
-}
+  const Icon =
+    transaction.type === 'income'
+      ? ArrowDownLeft
+      : transaction.type === 'expense'
+        ? ArrowUpRight
+        : ArrowRightLeft
 
-function AccountMetric({ label, value }: { label: string; value: string }) {
   return (
-    <span>
-      <em>{label}</em>
-      <strong>{value}</strong>
-    </span>
+    <article className={`ios-movement-row ios-movement-row--${transaction.type}`}>
+      <span>
+        <Icon size={16} strokeWidth={2} />
+      </span>
+      <div>
+        <strong>{transaction.note ?? getLegacyFundLabel(transaction)}</strong>
+        <em>{getMovementLabel(dataset, transaction)}</em>
+      </div>
+      <time>{formatMonthDay(transaction.occurredAt)}</time>
+    </article>
   )
 }
 
@@ -118,4 +126,10 @@ function getMovementLabel(dataset: AccountingDataset, transaction: Transaction) 
   }
 
   return accountById.get(transaction.accountId) ?? '未知账户'
+}
+
+function formatSigned(amountInCents: number) {
+  if (amountInCents === 0) return '¥0.00'
+
+  return `${amountInCents > 0 ? '+' : '-'}¥${formatCnyFromCents(Math.abs(amountInCents))}`
 }

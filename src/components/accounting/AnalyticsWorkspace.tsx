@@ -1,13 +1,18 @@
-import { BarChart3, Network } from 'lucide-react'
-import type { ComponentType, CSSProperties } from 'react'
+import { BarChart3, CircleDollarSign, Network, Tags } from 'lucide-react'
+import type { CSSProperties } from 'react'
 
 import { formatCnyFromCents } from '../../accounting/money'
 import { getCategoryPath, getTagPath } from '../../accounting/trees'
-import type { AccountingDataset, TaxonomyNodeStat, Transaction } from '../../accounting/types'
-import { TaxonomyTreePanel } from './TaxonomyTreePanel'
+import type {
+  AccountingDataset,
+  PeriodMetrics,
+  TaxonomyNodeStat,
+  Transaction,
+} from '../../accounting/types'
 
 type AnalyticsWorkspaceProps = {
   dataset: AccountingDataset
+  metrics: PeriodMetrics
   transactions: Transaction[]
   categoryStats: TaxonomyNodeStat[]
   tagStats: TaxonomyNodeStat[]
@@ -15,92 +20,179 @@ type AnalyticsWorkspaceProps = {
 
 export function AnalyticsWorkspace({
   dataset,
+  metrics,
   transactions,
   categoryStats,
   tagStats,
 }: AnalyticsWorkspaceProps) {
-  const activeCategoryStats = categoryStats.filter((stat) => stat.transactionCount > 0)
-  const maxCategoryAmount = Math.max(
-    ...activeCategoryStats.map((stat) => stat.amountInCents),
-    1,
-  )
+  const activeCategoryStats = categoryStats
+    .filter((stat) => stat.transactionCount > 0)
+    .sort((a, b) => b.amountInCents - a.amountInCents)
   const tagCrossRows = getTagCrossRows(dataset, transactions)
+  const totalTrackedInCents = metrics.incomeInCents + metrics.expenseInCents
+  const incomeShare =
+    totalTrackedInCents === 0 ? 0.5 : metrics.incomeInCents / totalTrackedInCents
 
   return (
-    <div className="accounting-workspace accounting-workspace--report" aria-label="统计图谱工作区">
-      <section className="accounting-panel analytics-composition-panel">
-        <WorkspacePanelHead
-          icon={BarChart3}
-          title="分类构成"
-          detail={`${activeCategoryStats.length} 个有效分类`}
+    <div className="accounting-workspace ios-analytics-workspace" aria-label="统计工作区">
+      <section className="ios-panel ios-report-overview">
+        <header className="ios-panel-head">
+          <strong>统计总览</strong>
+          <span>{metrics.transactionCount} 笔</span>
+        </header>
+        <div
+          className="ios-chart-ring"
+          role="img"
+          aria-label="收支环形图"
+          style={{ '--income-share': incomeShare } as CSSProperties}
+        >
+          <div>
+            <span>净现金流</span>
+            <strong>{formatSigned(metrics.netInCents)}</strong>
+          </div>
+        </div>
+        <div className="ios-report-kpis">
+          <Metric icon={CircleDollarSign} label="收入" value={`¥${formatCnyFromCents(metrics.incomeInCents)}`} />
+          <Metric icon={BarChart3} label="支出" value={`¥${formatCnyFromCents(metrics.expenseInCents)}`} />
+          <Metric icon={Network} label="转账" value={`¥${formatCnyFromCents(metrics.transferInCents)}`} />
+        </div>
+      </section>
+
+      <section className="ios-panel ios-category-chart">
+        <header className="ios-panel-head">
+          <strong>分类占比</strong>
+          <span>{activeCategoryStats.length} 类</span>
+        </header>
+        <BarRows
+          stats={activeCategoryStats.slice(0, 6)}
+          pathFor={(id) => getCategoryPath(dataset.categories, id)}
         />
-        <div className="analytics-bar-list">
-          {activeCategoryStats.map((stat) => (
-            <article className="analytics-bar-row" key={stat.id}>
-              <span>{getCategoryPath(dataset.categories, stat.id)}</span>
-              <div aria-hidden="true">
-                <i
-                  style={
-                    { '--analytics-share': stat.amountInCents / maxCategoryAmount } as CSSProperties
-                  }
-                />
-              </div>
-              <strong>¥{formatCnyFromCents(stat.amountInCents)}</strong>
+      </section>
+
+      <section className="ios-panel ios-tag-cross">
+        <header className="ios-panel-head">
+          <strong>标签关联</strong>
+          <span>{tagCrossRows.length} 组</span>
+        </header>
+        <div className="ios-tag-cross__rows">
+          {tagCrossRows.slice(0, 5).map((row) => (
+            <article key={`${row.tagPath}-${row.categoryPath}`}>
+              <span>
+                <Tags size={14} strokeWidth={2} />
+                {row.tagPath}
+              </span>
+              <strong>{row.categoryPath}</strong>
+              <em>¥{formatCnyFromCents(row.amountInCents)}</em>
             </article>
           ))}
         </div>
       </section>
 
-      <section className="analytics-right-column">
-        <section className="accounting-panel tag-cross-panel">
-          <WorkspacePanelHead icon={Network} title="标签交叉" detail="标签与分类的共同出现" />
-          <div className="tag-cross-list">
-            {tagCrossRows.map((row) => (
-              <article className="tag-cross-row" key={`${row.tagPath}-${row.categoryPath}`}>
-                <span>{row.tagPath}</span>
-                <strong>{row.categoryPath}</strong>
-                <em>¥{formatCnyFromCents(row.amountInCents)}</em>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <div className="analytics-tree-grid">
-          <TaxonomyTreePanel
-            ariaLabel="统计分类树"
-            title="统计分类树"
-            stats={categoryStats}
-            compact
-          />
-          <TaxonomyTreePanel
-            ariaLabel="统计标签树"
-            title="统计标签树"
-            stats={tagStats}
-            compact
-          />
-        </div>
-      </section>
+      <TreeStatsSection
+        title="分类树统计"
+        ariaLabel="分类树统计"
+        variant="category"
+        stats={categoryStats}
+        pathFor={(id) => getCategoryPath(dataset.categories, id)}
+      />
+      <TreeStatsSection
+        title="标签树统计"
+        ariaLabel="标签树统计"
+        variant="tag"
+        stats={tagStats}
+        pathFor={(id) => getTagPath(dataset.tags, id)}
+      />
     </div>
   )
 }
 
-function WorkspacePanelHead({
+function Metric({
   icon: Icon,
-  title,
-  detail,
+  label,
+  value,
 }: {
-  icon: ComponentType<{ size?: number; strokeWidth?: number }>
-  title: string
-  detail: string
+  icon: typeof CircleDollarSign
+  label: string
+  value: string
 }) {
   return (
-    <div className="workspace-panel-head">
-      <div className="panel-title">
-        <Icon size={17} strokeWidth={1.9} />
-        <span>{title}</span>
-      </div>
-      <span>{detail}</span>
+    <article>
+      <Icon size={15} strokeWidth={2} />
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </article>
+  )
+}
+
+function BarRows({
+  stats,
+  pathFor,
+}: {
+  stats: TaxonomyNodeStat[]
+  pathFor: (id: string) => string
+}) {
+  const maxAmount = Math.max(...stats.map((stat) => stat.amountInCents), 1)
+
+  return (
+    <div className="ios-bar-rows">
+      {stats.map((stat) => (
+        <article
+          key={stat.id}
+          style={{ '--bar-share': stat.amountInCents / maxAmount } as CSSProperties}
+        >
+          <span>{pathFor(stat.id)}</span>
+          <strong>¥{formatCnyFromCents(stat.amountInCents)}</strong>
+          <i aria-hidden="true" />
+        </article>
+      ))}
     </div>
+  )
+}
+
+function TreeStatsSection({
+  title,
+  ariaLabel,
+  variant,
+  stats,
+  pathFor,
+}: {
+  title: string
+  ariaLabel: string
+  variant: 'category' | 'tag'
+  stats: TaxonomyNodeStat[]
+  pathFor: (id: string) => string
+}) {
+  const visibleStats = stats
+    .filter((stat) => stat.transactionCount > 0)
+    .sort((a, b) => b.amountInCents - a.amountInCents)
+    .slice(0, 6)
+  const maxAmount = Math.max(...visibleStats.map((stat) => stat.amountInCents), 1)
+
+  return (
+    <section className={`ios-panel ios-tree-stats ios-tree-stats--${variant}`} aria-label={ariaLabel}>
+      <header className="ios-panel-head">
+        <strong>{title}</strong>
+        <span>{visibleStats.length} 节点</span>
+      </header>
+      <div>
+        {visibleStats.map((stat) => (
+          <article
+            key={stat.id}
+            style={
+              {
+                '--tree-depth': stat.depth,
+                '--bar-share': stat.amountInCents / maxAmount,
+              } as CSSProperties
+            }
+          >
+            <span>{pathFor(stat.id)}</span>
+            <strong>{stat.transactionCount} 笔</strong>
+            <em>¥{formatCnyFromCents(stat.amountInCents)}</em>
+            <i aria-hidden="true" />
+          </article>
+        ))}
+      </div>
+    </section>
   )
 }
 
@@ -131,4 +223,10 @@ function getTagCrossRows(dataset: AccountingDataset, transactions: Transaction[]
   return Array.from(amountByKey.values()).sort(
     (a, b) => b.amountInCents - a.amountInCents,
   )
+}
+
+function formatSigned(amountInCents: number) {
+  if (amountInCents === 0) return '¥0.00'
+
+  return `${amountInCents > 0 ? '+' : '-'}¥${formatCnyFromCents(Math.abs(amountInCents))}`
 }

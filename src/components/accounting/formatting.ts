@@ -3,33 +3,8 @@ import type {
   Category,
   Tag,
   Transaction,
-  TransactionType,
 } from '../../accounting/types'
-import { formatCnyFromCents } from '../../accounting/money'
 import { getCategoryPath, getTagPath } from '../../accounting/trees'
-
-export const transactionTypeLabels: Record<TransactionType, string> = {
-  income: '收入',
-  expense: '支出',
-  transfer: '转账',
-}
-
-export function formatSignedCny(amountInCents: number) {
-  const prefix = amountInCents > 0 ? '+' : amountInCents < 0 ? '-' : ''
-  return `${prefix}¥${formatCnyFromCents(Math.abs(amountInCents))}`
-}
-
-export function formatTransactionAmount(transaction: Transaction) {
-  if (transaction.type === 'income') {
-    return `+¥${formatCnyFromCents(transaction.amountInCents)}`
-  }
-
-  if (transaction.type === 'expense') {
-    return `-¥${formatCnyFromCents(transaction.amountInCents)}`
-  }
-
-  return `¥${formatCnyFromCents(transaction.amountInCents)}`
-}
 
 export function formatMonthDay(value: string) {
   return new Intl.DateTimeFormat('zh-CN', {
