@@ -1082,15 +1082,35 @@
   cursor: pointer;
 }
 
-.time-date-picker__bar span {
+.time-date-picker__title {
   min-width: 0;
+  height: 30px;
+  display: grid;
+  place-items: center;
   overflow: hidden;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 999px;
   color: #12201c;
+  background: rgba(17, 40, 35, 0.055);
   font-size: 12px;
   font-weight: 820;
-  text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background 150ms ease,
+    color 150ms ease,
+    transform 150ms ease;
+}
+
+.time-date-picker__title:hover {
+  color: #123f35;
+  background: rgba(18, 63, 53, 0.105);
+}
+
+.time-date-picker__title:active {
+  transform: scale(0.98);
 }
 
 .time-date-picker__weekdays,
@@ -1098,6 +1118,22 @@
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 5px;
+}
+
+.time-date-picker__grid-window {
+  overflow: hidden;
+}
+
+.time-date-picker__grid-motion {
+  width: 100%;
+}
+
+.time-date-picker__grid--months {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.time-date-picker__grid--months button {
+  height: 34px;
 }
 
 .time-date-picker__weekdays span {

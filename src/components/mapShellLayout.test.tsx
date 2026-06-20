@@ -368,7 +368,7 @@ describe('unified shell layout', () => {
     fireEvent.click(within(customPanel).getByRole('button', { name: '全部' }))
 
     expect(screen.getByRole('heading', { name: '全部' })).toBeInTheDocument()
-    expect(within(customPanel).getByLabelText('开始日期')).toHaveValue('2022-03-01')
+    expect(within(customPanel).getByLabelText('开始日期')).toHaveValue('2026-01-11')
     expect(within(customPanel).getByLabelText('结束日期')).toHaveValue('2026-06-19')
 
     fireEvent.click(within(customPanel).getByRole('button', { name: '最近一年' }))
@@ -386,6 +386,18 @@ describe('unified shell layout', () => {
 
     expect(screen.getByRole('heading', { name: '自定义' })).toBeInTheDocument()
     expect(screen.getByText('2026年 6月10日 - 6月12日')).toBeInTheDocument()
+
+    cleanup()
+    render(<App amapConfig={configuredAmap} />)
+
+    fireEvent.click(screen.getByRole('button', { name: '记账' }))
+    expect(screen.getByRole('heading', { name: '6月' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '自定义' }))
+
+    const accountingCustomPanel = screen.getByLabelText('自定义时间范围')
+    expect(within(accountingCustomPanel).getByLabelText('开始日期')).toHaveValue('2022-03-01')
+    expect(within(accountingCustomPanel).getByLabelText('结束日期')).toHaveValue('2026-06-19')
   })
 
   it('uses the current range granularity for the reset action', () => {

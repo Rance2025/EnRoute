@@ -269,6 +269,8 @@ describe('map chrome layout', () => {
     const dayMotionRule = cssRule('.time-calendar-grid-motion')
     const pickerWindowRule = cssRule('.time-picker-grid-window')
     const pickerMotionRule = cssRule('.time-picker-grid-motion')
+    const customDateWindowRule = cssRule('.time-date-picker__grid-window')
+    const customDateMotionRule = cssRule('.time-date-picker__grid-motion')
     const previousRule = cssRule('.time-range-grid-motion--previous')
     const nextRule = cssRule('.time-range-grid-motion--next')
 
@@ -287,6 +289,8 @@ describe('map chrome layout', () => {
     expect(pickerWindowRule).toContain('calc(var(--time-picker-shadow-buffer) * -1)')
     expect(pickerWindowRule).toContain('overflow: hidden')
     expect(pickerMotionRule).toContain('width: 100%')
+    expect(customDateWindowRule).toContain('overflow: hidden')
+    expect(customDateMotionRule).toContain('width: 100%')
     expect(previousRule).toContain('--time-range-enter-x: -')
     expect(previousRule).toContain('animation:')
     expect(previousRule).toContain('timeRangeGridIn')
@@ -295,6 +299,23 @@ describe('map chrome layout', () => {
     expect(nextRule).toContain('timeRangeGridIn')
     expect(appCss).toContain('@keyframes timeRangeGridIn')
     expect(appCss).not.toContain('@keyframes timeRangeStageIn')
+  })
+
+  it('lets the custom date picker title open a compact month grid that shares navigation motion', () => {
+    const titleRule = cssRule('.time-date-picker__title')
+    const monthGridRule = cssRule('.time-date-picker__grid--months')
+    const monthButtonRule = cssRule('.time-date-picker__grid--months button')
+
+    expect(timeContextPanelSource).toContain("type CustomDatePickerMode = 'day' | 'month'")
+    expect(timeContextPanelSource).toContain("aria-label=\"月份选择\"")
+    expect(timeContextPanelSource).toContain("aria-label={isMonthPicker ? '上一年' : '上个月'}")
+    expect(timeContextPanelSource).toContain("aria-label={isMonthPicker ? '下一年' : '下个月'}")
+    expect(timeContextPanelSource).toContain('time-date-picker__grid-motion')
+    expect(timeContextPanelSource).toContain('time-range-grid-motion--')
+    expect(titleRule).toContain('display: grid')
+    expect(titleRule).toContain('cursor: pointer')
+    expect(monthGridRule).toContain('grid-template-columns: repeat(6, minmax(0, 1fr))')
+    expect(monthButtonRule).toContain('height: 34px')
   })
 
   it('lets segmented sliders drag from the switch surface with drag cursors', () => {

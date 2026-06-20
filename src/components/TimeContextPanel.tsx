@@ -37,6 +37,7 @@ export type TimeContextMetricItem = {
 }
 
 const DAY_CALENDAR_TRANSITION_MS = 260
+const MAP_ALL_TIME_START_DATE = '2026-01-11'
 
 const timeModeOptions: Array<SegmentedOption<TimeRangeMode>> = [
   { value: 'day', label: '日' },
@@ -73,6 +74,8 @@ type TimeNavigationState = {
   direction: TimeNavigationDirection | null
   sequence: number
 }
+
+type CustomDatePickerMode = 'day' | 'month'
 
 export function TimeContextPanel({
   metricItems,
@@ -154,7 +157,7 @@ export function TimeContextPanel({
         selectYear(new Date(`${selection.anchorDate}T00:00:00`).getFullYear()),
       )
     }
-    if (range === 'custom') handleSelectionChange(selectPresetRange('all'))
+    if (range === 'custom') handleSelectionChange(selectPresetRangeForView('all', view))
   }
 
   return (
@@ -171,7 +174,9 @@ export function TimeContextPanel({
               type="button"
               className="time-context-card__today"
               aria-label={resetLabel}
-              onClick={() => handleSelectionChange(createCurrentSelection(selection.mode))}
+              onClick={() =>
+                handleSelectionChange(createCurrentSelectionForView(selection.mode, view))
+              }
             >
               {resetLabel}
             </button>
@@ -215,6 +220,7 @@ export function TimeContextPanel({
               handleCalendarModeChange,
               handleSelectionChange,
               handlePeriodNavigate,
+              view,
             )}
           </div>
         </div>
@@ -281,6 +287,29 @@ function createSelectionFromPickerOption(
   return selectYear(new Date(`${option.start}T00:00:00`).getFullYear())
 }
 
+function createCurrentSelectionForView(
+  mode: TimeRangeMode,
+  view: AppView,
+): TimeRangeSelection {
+  if (mode === 'custom') return selectPresetRangeForView('all', view)
+
+  return createCurrentSelection(mode)
+}
+
+function selectPresetRangeForView(
+  preset: 'all' | 'recent365' | 'recent30' | 'recent7',
+  view: AppView,
+) {
+  const selection = selectPresetRange(preset)
+
+  if (preset !== 'all' || view !== 'map') return selection
+
+  return {
+    ...selection,
+    start: MAP_ALL_TIME_START_DATE,
+  }
+}
+
 function renderModeContent(
   selection: TimeRangeSelection,
   calendarMode: CalendarDisplayMode,
@@ -292,6 +321,7 @@ function renderModeContent(
     direction: TimeNavigationDirection,
     selection: TimeRangeSelection,
   ) => void,
+  view: AppView,
 ) {
   if (selection.mode === 'day') {
     return (
@@ -333,6 +363,7 @@ function renderModeContent(
 
   return (
     <CustomRangeSection
+      view={view}
       selection={selection}
       onSelectionChange={onSelectionChange}
     />
@@ -340,9 +371,11 @@ function renderModeContent(
 }
 
 function CustomRangeSection({
+  view,
   selection,
   onSelectionChange,
 }: {
+  view: AppView
   selection: TimeRangeSelection
   onSelectionChange: (selection: TimeRangeSelection) => void
 }) {
@@ -382,7 +415,7 @@ function CustomRangeSection({
             className={selection.label === preset.label ? 'is-active' : undefined}
             onClick={() => {
               setActiveBoundary(null)
-              onSelectionChange(selectPresetRange(preset.value))
+              onSelectionChange(selectPresetRangeForView(preset.value, view))
             }}
           >
             {preset.label}
@@ -412,7 +445,7 @@ function CustomRangeSection({
           anchorDate={pickerAnchorDate}
           boundary={activeBoundary}
           selectedDate={activeValue}
-          onMove={(direction) => setPickerAnchorDate(moveDateKeyByMonths(pickerAnchorDate, direction))}
+          onAnchorDateChange={setPickerAnchorDate}
           onSelect={handleDatePick}
         />
       ) : null}
@@ -465,50 +498,143 @@ function CustomDatePicker({
   anchorDate,
   boundary,
   selectedDate,
-  onMove,
+  onAnchorDateChange,
   onSelect,
 }: {
   anchorDate: string
   boundary: 'start' | 'end'
   selectedDate: string
-  onMove: (direction: -1 | 1) => void
+  onAnchorDateChange: (date: string) => void
   onSelect: (date: string) => void
 }) {
+  const [pickerMode, setPickerMode] = useState<CustomDatePickerMode>('day')
+  const [navigationState, setNavigationState] = useState<TimeNavigationState>({
+    direction: null,
+    sequence: 0,
+  })
   const days = getVisibleMonthDays(anchorDate)
+  const [anchorYear, anchorMonth] = parseDateKey(anchorDate)
   const dialogLabel = boundary === 'start' ? '开始日期选择' : '结束日期选择'
+  const isMonthPicker = pickerMode === 'month'
+  const title = isMonthPicker ? `${anchorYear}年` : formatPickerMonth(anchorDate)
+  const titleAriaLabel = isMonthPicker
+    ? `返回日期选择，当前${title}`
+    : `切换到月份选择，当前${title}`
+
+  function clearNavigationDirection() {
+    setNavigationState((current) => (
+      current.direction === null ? current : { ...current, direction: null }
+    ))
+  }
+
+  function handleMove(direction: -1 | 1) {
+    setNavigationState((current) => ({
+      direction: direction === -1 ? 'previous' : 'next',
+      sequence: current.sequence + 1,
+    }))
+    onAnchorDateChange(
+      isMonthPicker
+        ? moveDateKeyByYears(anchorDate, direction)
+        : moveDateKeyByMonths(anchorDate, direction),
+    )
+  }
+
+  function handleTitleClick() {
+    clearNavigationDirection()
+    setPickerMode(isMonthPicker ? 'day' : 'month')
+  }
+
+  function handleMonthSelect(month: number) {
+    onAnchorDateChange(moveDateKeyToMonth(anchorDate, month))
+    clearNavigationDirection()
+    setPickerMode('day')
+  }
 
   return (
     <div className="time-date-picker" role="dialog" aria-label={dialogLabel}>
       <div className="time-date-picker__bar">
-        <button type="button" aria-label="上个月" onClick={() => onMove(-1)}>
+        <button
+          type="button"
+          aria-label={isMonthPicker ? '上一年' : '上个月'}
+          onClick={() => handleMove(-1)}
+        >
           ‹
         </button>
-        <span>{formatPickerMonth(anchorDate)}</span>
-        <button type="button" aria-label="下个月" onClick={() => onMove(1)}>
+        <button
+          type="button"
+          className="time-date-picker__title"
+          aria-label={titleAriaLabel}
+          onClick={handleTitleClick}
+        >
+          {title}
+        </button>
+        <button
+          type="button"
+          aria-label={isMonthPicker ? '下一年' : '下个月'}
+          onClick={() => handleMove(1)}
+        >
           ›
         </button>
       </div>
-      <div className="time-date-picker__weekdays" aria-hidden="true">
-        {weekdayLabels.map((label) => (
-          <span key={label}>{label}</span>
-        ))}
-      </div>
-      <div className="time-date-picker__grid">
-        {days.map((day) => (
-          <button
-            key={day.date}
-            type="button"
-            className={[
-              day.date === selectedDate ? 'is-active' : null,
-              day.inCurrentMonth ? null : 'is-outside-month',
-            ]
-              .filter(Boolean)
-              .join(' ')}
-            onClick={() => onSelect(day.date)}
-          >
-            {day.day}
-          </button>
-        ))}
+      {isMonthPicker ? null : (
+        <div className="time-date-picker__weekdays" aria-hidden="true">
+          {weekdayLabels.map((label) => (
+            <span key={label}>{label}</span>
+          ))}
+        </div>
+      )}
+      <div className="time-date-picker__grid-window">
+        <div
+          key={navigationState.sequence}
+          className={[
+            'time-date-picker__grid-motion',
+            navigationState.direction
+              ? `time-range-grid-motion--${navigationState.direction}`
+              : null,
+          ]
+            .filter(Boolean)
+            .join(' ')}
+        >
+          {isMonthPicker ? (
+            <div
+              className="time-date-picker__grid time-date-picker__grid--months"
+              aria-label="月份选择"
+            >
+              {Array.from({ length: 12 }, (_, index) => {
+                const month = index + 1
+
+                return (
+                  <button
+                    key={month}
+                    type="button"
+                    className={month === anchorMonth ? 'is-active' : undefined}
+                    onClick={() => handleMonthSelect(month)}
+                  >
+                    {month}月
+                  </button>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="time-date-picker__grid" aria-label="日期选择">
+              {days.map((day) => (
+                <button
+                  key={day.date}
+                  type="button"
+                  className={[
+                    day.date === selectedDate ? 'is-active' : null,
+                    day.inCurrentMonth ? null : 'is-outside-month',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                  onClick={() => onSelect(day.date)}
+                >
+                  {day.day}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
@@ -533,6 +659,21 @@ function moveDateKeyByMonths(value: string, months: -1 | 1) {
     targetMonthStart.getMonth() + 1,
     targetDay,
   )
+}
+
+function moveDateKeyByYears(value: string, years: -1 | 1) {
+  const [year, month, day] = parseDateKey(value)
+  const targetYear = year + years
+  const targetMonthLastDay = new Date(targetYear, month, 0).getDate()
+
+  return formatDateKey(targetYear, month, Math.min(day, targetMonthLastDay))
+}
+
+function moveDateKeyToMonth(value: string, month: number) {
+  const [year, , day] = parseDateKey(value)
+  const targetMonthLastDay = new Date(year, month, 0).getDate()
+
+  return formatDateKey(year, month, Math.min(day, targetMonthLastDay))
 }
 
 function formatDateButtonValue(value: string) {
