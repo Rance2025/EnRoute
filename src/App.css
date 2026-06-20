@@ -2619,6 +2619,49 @@
   overflow: visible;
 }
 
+.footprint-debug-panel {
+  position: absolute;
+  right: var(--map-chrome-x);
+  bottom: calc(var(--map-chrome-y) + 66px);
+  z-index: 2;
+  display: grid;
+  width: 168px;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid rgba(23, 31, 29, 0.08);
+  border-radius: 10px;
+  color: #17211f;
+  background: rgba(250, 252, 251, 0.74);
+  box-shadow:
+    0 14px 40px rgba(31, 46, 42, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(18px) saturate(1.1);
+}
+
+.footprint-debug-panel__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 10px;
+  white-space: nowrap;
+}
+
+.footprint-debug-panel__row span {
+  min-width: 0;
+  overflow: hidden;
+  color: rgba(23, 35, 31, 0.58);
+  font-size: 11px;
+  font-weight: 680;
+  text-overflow: ellipsis;
+}
+
+.footprint-debug-panel__row strong {
+  color: #162421;
+  font-size: 12px;
+  font-weight: 780;
+  font-variant-numeric: tabular-nums;
+}
+
 .map-toolbar > button {
   display: grid;
   width: 38px;

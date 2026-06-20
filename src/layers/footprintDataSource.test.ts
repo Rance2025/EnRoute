@@ -1,56 +1,150 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { loadFootprintPoints } from './footprintDataSource'
+import { loadFootprintSnapshot } from './footprintDataSource'
 
 afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe('loadFootprintPoints', () => {
-  it('uses the local footprints API when no URL is configured', async () => {
+describe('loadFootprintSnapshot', () => {
+  it('posts viewport sampling input to the local footprints snapshot API', async () => {
     const signal = new AbortController().signal
     const fetchMock = vi.fn(async () => ({
       ok: true,
       json: async () => ({
         points: [],
+        metrics: {
+          selectedCount: 0,
+          totalDistanceMeters: 0,
+          averageDistanceMetersPerDay: 0,
+        },
+        selectedBounds: null,
+        debug: {
+          rawCount: 0,
+          renderedCount: 0,
+          renderRatio: 0,
+        },
       }),
     }))
     vi.stubGlobal('fetch', fetchMock)
 
-    await expect(loadFootprintPoints(undefined, signal)).resolves.toEqual([])
-    expect(fetchMock).toHaveBeenCalledWith('/api/footprints', { signal })
+    await expect(loadFootprintSnapshot(undefined, {
+      timeRange: {
+        startTimestampSeconds: 1,
+        endTimestampSeconds: 2,
+        dayCount: 1,
+      },
+      zoom: 10,
+      cellSizePx: 0.5,
+      viewportBounds: { west: 120, south: 30, east: 122, north: 32 },
+      viewportNorthWestWorldPixel: { x: 10, y: 20 },
+    }, signal)).resolves.toEqual({
+      points: [],
+      metrics: {
+        selectedCount: 0,
+        totalDistanceMeters: 0,
+        averageDistanceMetersPerDay: 0,
+      },
+      selectedBounds: null,
+      debug: {
+        rawCount: 0,
+        renderedCount: 0,
+        renderRatio: 0,
+      },
+    })
+    expect(fetchMock).toHaveBeenCalledWith('/api/footprints/snapshot', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        timeRange: {
+          startTimestampSeconds: 1,
+          endTimestampSeconds: 2,
+          dayCount: 1,
+        },
+        zoom: 10,
+        cellSizePx: 0.5,
+        viewportBounds: { west: 120, south: 30, east: 122, north: 32 },
+        viewportNorthWestWorldPixel: { x: 10, y: 20 },
+      }),
+      signal,
+    })
   })
 
-  it('fetches and validates the configured footprints API URL', async () => {
+  it('serializes open-ended time ranges as a finite API bound instead of JSON null', async () => {
     const signal = new AbortController().signal
-    const apiPoints = [
-      {
-        id: '1768144456-0',
-        timestampSeconds: 1768144456,
-        longitude: 121.511383,
-        latitude: 31.296564,
-        accuracy: 5.729415,
-        speed: -1,
-        distance: 0,
-        heading: 0,
-        altitude: 10.146956,
-        locType: 1,
-        isBackForeground: 1,
-        stepType: 0,
-      },
-    ]
     const fetchMock = vi.fn(async () => ({
       ok: true,
       json: async () => ({
-        points: apiPoints,
+        points: [],
+        metrics: {
+          selectedCount: 0,
+          totalDistanceMeters: 0,
+          averageDistanceMetersPerDay: 0,
+        },
+        selectedBounds: null,
+        debug: {
+          rawCount: 0,
+          renderedCount: 0,
+          renderRatio: 0,
+        },
       }),
     }))
     vi.stubGlobal('fetch', fetchMock)
 
-    const points = await loadFootprintPoints('/api/footprints', signal)
+    await loadFootprintSnapshot(undefined, {
+      timeRange: {
+        startTimestampSeconds: 1,
+        endTimestampSeconds: Number.POSITIVE_INFINITY,
+        dayCount: 1,
+      },
+      zoom: 10,
+      cellSizePx: 0.5,
+      viewportBounds: { west: 120, south: 30, east: 122, north: 32 },
+      viewportNorthWestWorldPixel: { x: 10, y: 20 },
+    }, signal)
 
-    expect(points).toEqual(apiPoints)
-    expect(fetchMock).toHaveBeenCalledWith('/api/footprints', { signal })
+    const requestBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as {
+      timeRange: { endTimestampSeconds: number }
+    }
+
+    expect(Number.isFinite(requestBody.timeRange.endTimestampSeconds)).toBe(true)
+    expect(requestBody.timeRange.endTimestampSeconds).toBe(8_640_000_000_000)
+  })
+
+  it('keeps existing /api/footprints configuration compatible with the snapshot route', async () => {
+    const signal = new AbortController().signal
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        points: [],
+        metrics: {
+          selectedCount: 0,
+          totalDistanceMeters: 0,
+          averageDistanceMetersPerDay: 0,
+        },
+        selectedBounds: null,
+        debug: {
+          rawCount: 0,
+          renderedCount: 0,
+          renderRatio: 0,
+        },
+      }),
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await loadFootprintSnapshot('/api/footprints', {
+      timeRange: {
+        startTimestampSeconds: 1,
+        endTimestampSeconds: 2,
+        dayCount: 1,
+      },
+      zoom: 10,
+      cellSizePx: 0.5,
+      viewportBounds: { west: 120, south: 30, east: 122, north: 32 },
+      viewportNorthWestWorldPixel: { x: 10, y: 20 },
+    }, signal)
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/footprints/snapshot', expect.any(Object))
   })
 
   it('rejects failed footprints API responses', async () => {
@@ -61,7 +155,17 @@ describe('loadFootprintPoints', () => {
     }))
     vi.stubGlobal('fetch', fetchMock)
 
-    await expect(loadFootprintPoints('/api/footprints', signal)).rejects.toThrow(
+    await expect(loadFootprintSnapshot('/api/footprints/snapshot', {
+      timeRange: {
+        startTimestampSeconds: 1,
+        endTimestampSeconds: 2,
+        dayCount: 1,
+      },
+      zoom: 10,
+      cellSizePx: 0.5,
+      viewportBounds: { west: 120, south: 30, east: 122, north: 32 },
+      viewportNorthWestWorldPixel: { x: 10, y: 20 },
+    }, signal)).rejects.toThrow(
       'Failed to load footprint API: 500',
     )
   })
@@ -72,11 +176,32 @@ describe('loadFootprintPoints', () => {
       ok: true,
       json: async () => ({
         points: [{ id: 'missing-numeric-fields' }],
+        metrics: {
+          selectedCount: 0,
+          totalDistanceMeters: 0,
+          averageDistanceMetersPerDay: 0,
+        },
+        selectedBounds: null,
+        debug: {
+          rawCount: 0,
+          renderedCount: 0,
+          renderRatio: 0,
+        },
       }),
     }))
     vi.stubGlobal('fetch', fetchMock)
 
-    await expect(loadFootprintPoints('/api/footprints', signal)).rejects.toThrow(
+    await expect(loadFootprintSnapshot('/api/footprints/snapshot', {
+      timeRange: {
+        startTimestampSeconds: 1,
+        endTimestampSeconds: 2,
+        dayCount: 1,
+      },
+      zoom: 10,
+      cellSizePx: 0.5,
+      viewportBounds: { west: 120, south: 30, east: 122, north: 32 },
+      viewportNorthWestWorldPixel: { x: 10, y: 20 },
+    }, signal)).rejects.toThrow(
       'Invalid footprint API response',
     )
   })
