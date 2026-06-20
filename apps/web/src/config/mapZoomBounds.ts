@@ -1,5 +1,5 @@
 import type { ContainerPoint } from './mapDragBounds'
-import type { MapBounds } from './mapCamera'
+import { calculateWorldCenter, type MapBounds } from './mapCamera'
 import {
   calculateMinimumZoomForWorldCoverage,
   isAtMinimumWorldZoom,
@@ -343,8 +343,11 @@ function clampWorldYToLatitudeBounds({
   const midpointY = (northEdgeWorld + southEdgeWorld) / 2
 
   if (isAtMinimumWorldZoom(zoom, viewportSize.height)) {
+    const worldCenter = calculateWorldCenter(bounds)
+    const worldCenterPoint = projectLngLat(worldCenter, zoom)
+
     return {
-      x: centerWorld.x,
+      x: worldCenterPoint.x,
       y: midpointY,
     }
   }

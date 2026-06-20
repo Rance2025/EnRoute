@@ -194,7 +194,7 @@ describe('bounded map zooming', () => {
     vi.useRealTimers()
   })
 
-  it('locks the center to the vertical render midpoint at minimum AMap zoom', () => {
+  it('locks the center to the render midpoint at minimum AMap zoom', () => {
     vi.useFakeTimers()
     const container = document.createElement('div')
     Object.defineProperties(container, {
@@ -218,7 +218,7 @@ describe('bounded map zooming', () => {
 
     const lastCall = map.setZoomAndCenter.mock.calls.at(-1)
     expect(lastCall?.[0]).toBeCloseTo(2.02)
-    expect(lastCall?.[1][0]).toBeCloseTo(104)
+    expect(lastCall?.[1][0]).toBeCloseTo(0)
     expect(lastCall?.[1][1]).toBeCloseTo(0)
 
     vi.useRealTimers()
@@ -237,7 +237,7 @@ describe('bounded map zooming', () => {
     const map: BoundedZoomMap = {
       setStatus: vi.fn(),
       getZoom: () => 2.02,
-      getCenter: () => lngLat([104, 0]),
+      getCenter: () => lngLat([0, 0]),
       setZoomAndCenter: vi.fn(),
     }
 

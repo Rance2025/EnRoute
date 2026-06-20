@@ -6,7 +6,12 @@ import {
   clampMapCenterToLatitudeBounds,
   installBoundedMapDrag,
 } from '../config/mapDragBounds'
-import { DEFAULT_MAP_CAMERA, resetMapCamera, type MapBounds } from '../config/mapCamera'
+import {
+  calculateWorldCenter,
+  DEFAULT_MAP_CAMERA,
+  resetMapCamera,
+  type MapBounds,
+} from '../config/mapCamera'
 import {
   calculateSingleWorldMapPaneLayout,
   measureAmapWorldPixelWidthAtZoom,
@@ -225,8 +230,9 @@ function AmapCanvasComponent({
 
         amapRef.current = AMap
         const initialZoom = calculateMinimumZoomForLatitudeCoverage(mapNodeRef.current.clientHeight)
+        const initialCenter = calculateWorldCenter(config.renderBounds)
         const map = new AMap.Map(mapNodeRef.current, {
-          center: config.defaultCenter,
+          center: initialCenter,
           zoom: initialZoom,
           zooms: [initialZoom, 20],
           mapStyle: mapTheme.style,
@@ -368,7 +374,7 @@ function AmapCanvasComponent({
     mapRef.current.setRotation(DEFAULT_MAP_CAMERA.rotation, true)
     mapRef.current.setZoomAndCenter(
       minimumZoom,
-      [config.defaultCenter[0], calculateWorldCenterLatitude(config.renderBounds)],
+      calculateWorldCenter(config.renderBounds),
       false,
       MAP_CAMERA_DURATION_MS,
     )
@@ -442,10 +448,6 @@ export const AmapCanvas = memo(AmapCanvasComponent)
 
 function toAmapBounds(AMap: AMapNamespace, bounds: MapBounds) {
   return new AMap.Bounds(bounds.southWest, bounds.northEast)
-}
-
-function calculateWorldCenterLatitude(bounds: MapBounds) {
-  return (bounds.southWest[1] + bounds.northEast[1]) / 2
 }
 
 function readStoredFootprintStyle() {
