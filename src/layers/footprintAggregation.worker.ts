@@ -1,9 +1,11 @@
-import { aggregateFootprintPoints } from './footprintAggregation'
+import { createFootprintRenderSnapshot } from './footprintAggregation'
 import type { FootprintPoint, LngLatBounds, WorldPixelPoint } from './footprintTypes'
+import type { TimeRangeTimestamps } from '../time/timeRange'
 
 type WorkerRequest = {
   type: 'aggregate'
   requestId: number
+  timeRange: TimeRangeTimestamps
   zoom: number
   cellSizePx: number
   viewportBounds: LngLatBounds
@@ -21,12 +23,13 @@ self.onmessage = (event: MessageEvent<WorkerRequest>) => {
     return
   }
 
-  const { requestId, zoom, cellSizePx, viewportBounds, viewportNorthWestWorldPixel } = event.data
+  const { requestId, timeRange, zoom, cellSizePx, viewportBounds, viewportNorthWestWorldPixel } = event.data
 
   self.postMessage({
     requestId,
-    points: aggregateFootprintPoints({
+    snapshot: createFootprintRenderSnapshot({
       points,
+      timeRange,
       zoom,
       cellSizePx,
       viewportBounds,

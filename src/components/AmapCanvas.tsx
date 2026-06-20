@@ -11,21 +11,19 @@ import {
   calculateSingleWorldMapPaneLayout,
   measureAmapWorldPixelWidthAtZoom,
 } from '../config/mapPaneLayout'
+import { projectLngLat } from '../config/mercator'
 import { calculateBoundedZoomCenter, installBoundedMapZoom, zoomByStep } from '../config/mapZoomBounds'
 import { loadFootprintPoints } from '../layers/footprintDataSource'
 import { createMassFootprintLayer } from '../layers/massFootprintLayer'
-import type { FootprintPoint } from '../layers/footprintTypes'
+import type { FootprintLngLatBounds, FootprintPoint } from '../layers/footprintTypes'
+import { FootprintWorkerClient } from '../layers/footprintWorkerClient'
 import {
   DEFAULT_FOOTPRINT_STYLE,
   normalizeFootprintStyle,
   type FootprintStyle,
 } from '../layers/footprintStyle'
-import {
-  calculateFootprintLngLatBounds,
-  filterFootprintPointsByTimeRange,
-} from '../layers/footprintSelectors'
 import { loadAmap, type AMapNamespace } from '../services/amapLoader'
-import type { TimeRangeSelection } from '../time/timeRange'
+import { createTimeRangeTimestamps, type TimeRangeSelection } from '../time/timeRange'
 import { MapControls } from './MapControls'
 
 type AmapCanvasProps = {
@@ -36,9 +34,9 @@ type AmapCanvasProps = {
 }
 
 export type FootprintMetrics = {
-  displayedCount: number
-  totalCount: number
-  activeDayCount: number
+  selectedCount: number
+  totalDistanceMeters: number
+  averageDistanceMetersPerDay: number
 }
 
 type MapStatus = 'missing-config' | 'loading' | 'ready' | 'error'
@@ -61,9 +59,10 @@ function AmapCanvasComponent({
   const disposeZoomRef = useRef<(() => void) | null>(null)
   const disposeZoomClampRef = useRef<(() => void) | null>(null)
   const footprintLayerRef = useRef<ReturnType<typeof createMassFootprintLayer> | null>(null)
+  const footprintWorkerRef = useRef<FootprintWorkerClient | null>(null)
   const footprintAbortControllerRef = useRef<AbortController | null>(null)
   const footprintPointsRef = useRef<FootprintPoint[] | null>(null)
-  const displayedFootprintPointsRef = useRef<FootprintPoint[]>([])
+  const selectedFootprintBoundsRef = useRef<FootprintLngLatBounds | null>(null)
   const timeRangeRef = useRef(timeRange)
   const zoomClampTimersRef = useRef<number[]>([])
   const [status, setStatus] = useState<MapStatus>(
@@ -85,15 +84,45 @@ function AmapCanvasComponent({
     footprintLayerRef.current = null
   }, [])
 
-  const updateDisplayedFootprints = useCallback((points: FootprintPoint[] | null, range: TimeRangeSelection) => {
-    const nextDisplayedPoints = points ? filterFootprintPointsByTimeRange(points, range) : []
-    displayedFootprintPointsRef.current = nextDisplayedPoints
-    footprintLayerRef.current?.update(nextDisplayedPoints)
-    onFootprintMetricsChange?.({
-      displayedCount: nextDisplayedPoints.length,
-      totalCount: points?.length ?? 0,
-      activeDayCount: countActiveShanghaiDays(nextDisplayedPoints),
+  const updateDisplayedFootprints = useCallback((range: TimeRangeSelection) => {
+    if (
+      !footprintPointsRef.current ||
+      !footprintWorkerRef.current ||
+      !mapRef.current ||
+      !mapNodeRef.current
+    ) {
+      selectedFootprintBoundsRef.current = null
+      footprintLayerRef.current?.update([])
+      onFootprintMetricsChange?.({
+        selectedCount: 0,
+        totalDistanceMeters: 0,
+        averageDistanceMetersPerDay: 0,
+      })
+      return
+    }
+
+    const viewport = calculateCurrentViewportSampleInput(mapRef.current, mapNodeRef.current)
+    const worker = footprintWorkerRef.current
+
+    worker.aggregate({
+      timeRange: createTimeRangeTimestamps(range),
+      zoom: viewport.zoom,
+      cellSizePx: Math.max(footprintStyleRef.current.pixelSize, 1),
+      viewportBounds: viewport.bounds,
+      viewportNorthWestWorldPixel: viewport.northWestWorldPixel,
     })
+      .then((snapshot) => {
+        if (worker !== footprintWorkerRef.current) return
+
+        selectedFootprintBoundsRef.current = snapshot.selectedBounds
+        footprintLayerRef.current?.update(snapshot.points)
+        onFootprintMetricsChange?.(snapshot.metrics)
+      })
+      .catch((error: unknown) => {
+        if (import.meta.env.DEV && !(error instanceof Error && error.message.includes('superseded'))) {
+          console.warn(error)
+        }
+      })
   }, [onFootprintMetricsChange])
 
   const updateFootprintStyle = useCallback((nextFootprintStyle: FootprintStyle) => {
@@ -234,7 +263,8 @@ function AmapCanvasComponent({
           .then((points) => {
             if (disposed) return
             footprintPointsRef.current = points
-            updateDisplayedFootprints(points, timeRangeRef.current)
+            footprintWorkerRef.current?.setPoints(points)
+            updateDisplayedFootprints(timeRangeRef.current)
           })
           .catch((error: unknown) => {
             if (!disposed && import.meta.env.DEV) console.warn(error)
@@ -254,11 +284,13 @@ function AmapCanvasComponent({
       clearZoomClampTimers()
       destroyFootprintLayer()
       footprintPointsRef.current = null
-      displayedFootprintPointsRef.current = []
+      selectedFootprintBoundsRef.current = null
+      footprintWorkerRef.current?.dispose()
+      footprintWorkerRef.current = null
       onFootprintMetricsChange?.({
-        displayedCount: 0,
-        totalCount: 0,
-        activeDayCount: 0,
+        selectedCount: 0,
+        totalDistanceMeters: 0,
+        averageDistanceMetersPerDay: 0,
       })
       if (import.meta.env.DEV) {
         delete window.__ENROUTE_MAP__
@@ -294,25 +326,49 @@ function AmapCanvasComponent({
       footprintStyleRef.current,
     )
     footprintLayerRef.current = layer
+    const worker = new FootprintWorkerClient()
+    footprintWorkerRef.current = worker
     if (footprintPointsRef.current) {
-      updateDisplayedFootprints(footprintPointsRef.current, timeRangeRef.current)
+      worker.setPoints(footprintPointsRef.current)
+      updateDisplayedFootprints(timeRangeRef.current)
     }
 
     return () => {
       if (footprintLayerRef.current === layer) {
         destroyFootprintLayer()
       }
+      if (footprintWorkerRef.current === worker) {
+        worker.dispose()
+        footprintWorkerRef.current = null
+      }
     }
   }, [destroyFootprintLayer, status, updateDisplayedFootprints])
 
   useEffect(() => {
-    updateDisplayedFootprints(footprintPointsRef.current, timeRange)
+    updateDisplayedFootprints(timeRange)
   }, [timeRange, updateDisplayedFootprints])
+
+  useEffect(() => {
+    if (status !== 'ready' || !mapRef.current) return
+    const map = mapRef.current
+    const updateAfterViewportSettles = () => {
+      updateDisplayedFootprints(timeRangeRef.current)
+    }
+
+    map.on('moveend', updateAfterViewportSettles)
+    map.on('zoomend', updateAfterViewportSettles)
+
+    return () => {
+      map.off('moveend', updateAfterViewportSettles)
+      map.off('zoomend', updateAfterViewportSettles)
+    }
+  }, [status, updateDisplayedFootprints])
 
   useEffect(() => {
     function updateLayoutAfterResize() {
       if (!mapRef.current || !mapNodeRef.current) return
       updatePaneLayout(mapRef.current, mapNodeRef.current)
+      updateDisplayedFootprints(timeRangeRef.current)
     }
 
     window.addEventListener('resize', updateLayoutAfterResize)
@@ -320,7 +376,7 @@ function AmapCanvasComponent({
     return () => {
       window.removeEventListener('resize', updateLayoutAfterResize)
     }
-  }, [updatePaneLayout])
+  }, [updateDisplayedFootprints, updatePaneLayout])
 
   function showWorldMap() {
     if (!mapRef.current || !mapNodeRef.current) return
@@ -338,7 +394,7 @@ function AmapCanvasComponent({
 
   function fitDisplayedFootprints() {
     if (!mapRef.current || !amapRef.current) return
-    const bounds = calculateFootprintLngLatBounds(displayedFootprintPointsRef.current)
+    const bounds = selectedFootprintBoundsRef.current
     if (!bounds) return
 
     resetMapCamera(
@@ -408,20 +464,6 @@ function calculateWorldCenterLatitude(bounds: MapBounds) {
   return (bounds.southWest[1] + bounds.northEast[1]) / 2
 }
 
-function countActiveShanghaiDays(points: FootprintPoint[]) {
-  const dayKeys = new Set<string>()
-
-  for (const point of points) {
-    dayKeys.add(formatShanghaiDateKey(point.timestampSeconds))
-  }
-
-  return dayKeys.size
-}
-
-function formatShanghaiDateKey(timestampSeconds: number) {
-  return new Date((timestampSeconds + 8 * 60 * 60) * 1000).toISOString().slice(0, 10)
-}
-
 function readStoredFootprintStyle() {
   try {
     const storedStyle = window.localStorage.getItem(FOOTPRINT_STYLE_STORAGE_KEY)
@@ -430,6 +472,28 @@ function readStoredFootprintStyle() {
     return normalizeFootprintStyle(JSON.parse(storedStyle) as Partial<FootprintStyle>)
   } catch {
     return DEFAULT_FOOTPRINT_STYLE
+  }
+}
+
+function calculateCurrentViewportSampleInput(map: AMap.Map, container: HTMLElement) {
+  const zoom = map.getZoom()
+  const northWest = map.containerToLngLat({ x: 0, y: 0 })
+  const southEast = map.containerToLngLat({
+    x: container.clientWidth,
+    y: container.clientHeight,
+  })
+  const northWestLngLat: [number, number] = [northWest.getLng(), northWest.getLat()]
+  const southEastLngLat: [number, number] = [southEast.getLng(), southEast.getLat()]
+
+  return {
+    zoom,
+    bounds: {
+      west: northWestLngLat[0],
+      north: northWestLngLat[1],
+      east: southEastLngLat[0],
+      south: southEastLngLat[1],
+    },
+    northWestWorldPixel: projectLngLat(northWestLngLat, zoom),
   }
 }
 

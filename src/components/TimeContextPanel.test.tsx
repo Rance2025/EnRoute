@@ -21,6 +21,7 @@ describe('TimeContextPanel', () => {
 
     const timeCardSummary = screen.getByLabelText('全局范围指标')
 
+    expect(screen.queryByText('全局时间范围')).not.toBeInTheDocument()
     expect(within(timeCardSummary).getByText('净流入')).toBeInTheDocument()
     expect(within(timeCardSummary).getByText('+¥4691.23')).toBeInTheDocument()
     expect(within(timeCardSummary).getByText('支出')).toBeInTheDocument()
@@ -50,6 +51,7 @@ describe('TimeContextPanel', () => {
 
     const metricStrip = screen.getByLabelText('全局范围指标')
 
+    expect(screen.queryByText('全局时间范围')).not.toBeInTheDocument()
     expect(within(metricStrip).getByText('当前足迹')).toBeInTheDocument()
     expect(within(metricStrip).getByText('12')).toBeInTheDocument()
     expect(within(metricStrip).getByText('全部足迹')).toBeInTheDocument()

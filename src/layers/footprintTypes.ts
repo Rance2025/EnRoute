@@ -23,6 +23,23 @@ export type AggregatedFootprintPoint = {
   endTimestampSeconds: number
 }
 
+export type FootprintMetrics = {
+  selectedCount: number
+  totalDistanceMeters: number
+  averageDistanceMetersPerDay: number
+}
+
+export type FootprintLngLatBounds = {
+  southWest: [number, number]
+  northEast: [number, number]
+}
+
+export type FootprintRenderSnapshot = {
+  points: AggregatedFootprintPoint[]
+  metrics: FootprintMetrics
+  selectedBounds: FootprintLngLatBounds | null
+}
+
 export type LngLatBounds = {
   west: number
   south: number

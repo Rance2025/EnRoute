@@ -75,11 +75,16 @@ describe('unified shell layout', () => {
       '回到今天',
     )
     expect(screen.getByText('2026年6月19日')).toBeInTheDocument()
+    expect(screen.queryByText('全局时间范围')).not.toBeInTheDocument()
     expect(screen.queryByText(/发生时间|按周聚合|按月聚合|年度聚合/)).not.toBeInTheDocument()
     const mapMetricStrip = screen.getByLabelText('全局范围指标')
-    expect(within(mapMetricStrip).getByText('当前足迹')).toBeInTheDocument()
-    expect(within(mapMetricStrip).getByText('全部足迹')).toBeInTheDocument()
-    expect(within(mapMetricStrip).getByText('活跃天数')).toBeInTheDocument()
+    expect(within(mapMetricStrip).getByText('足迹总数')).toBeInTheDocument()
+    expect(within(mapMetricStrip).getByText('总距离')).toBeInTheDocument()
+    expect(within(mapMetricStrip).getByText('日均距离')).toBeInTheDocument()
+    expect(within(mapMetricStrip).queryByText('当前足迹')).not.toBeInTheDocument()
+    expect(within(mapMetricStrip).queryByText('全部足迹')).not.toBeInTheDocument()
+    expect(within(mapMetricStrip).queryByText('活跃天数')).not.toBeInTheDocument()
+    expect(within(mapMetricStrip).queryByText('日均足迹')).not.toBeInTheDocument()
     expect(within(mapMetricStrip).queryByText('净流入')).not.toBeInTheDocument()
     expect(screen.queryByText('足迹 18')).not.toBeInTheDocument()
     expect(screen.getByLabelText('在途 EnRoute 地图工作区')).toBeInTheDocument()
@@ -305,7 +310,7 @@ describe('unified shell layout', () => {
     expect(within(accountingMetricStrip).getByText('支出')).toBeInTheDocument()
     expect(within(accountingMetricStrip).getByText('流水')).toBeInTheDocument()
     expect(within(accountingMetricStrip).getByText('账户')).toBeInTheDocument()
-    expect(within(accountingMetricStrip).queryByText('当前足迹')).not.toBeInTheDocument()
+    expect(within(accountingMetricStrip).queryByText('足迹总数')).not.toBeInTheDocument()
   })
 
   it('switches the shared time panel between top-level range modes', () => {
@@ -439,23 +444,32 @@ describe('unified shell layout', () => {
     expect(getActiveGridMotion()).toHaveClass('time-range-grid-motion--next')
 
     fireEvent.click(screen.getByRole('button', { name: '周' }))
+
+    expect(screen.getByRole('heading', { name: '第25周' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '下一页' }))
 
     stage = screen.getByLabelText('时间范围内容')
-    expect(screen.getByRole('heading', { name: '第29周' })).toBeInTheDocument()
-    const timeCardTop = screen.getByText('全局时间范围').closest('.time-context-card__top')
-    expect(timeCardTop).not.toBeNull()
-    expect(within(timeCardTop as HTMLElement).getByText('7月13日 - 7月19日')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '第25周' })).toBeInTheDocument()
+    expect(screen.getByText('2026年7月')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /第29周/ })).toBeInTheDocument()
     expect(stage).not.toHaveClass('time-panel-content__stage--previous')
     expect(stage).not.toHaveClass('time-panel-content__stage--next')
     expect(getActiveGridMotion()).toHaveClass('time-range-grid-motion--next')
+
+    fireEvent.click(screen.getByRole('button', { name: /第29周/ }))
+
+    expect(screen.getByRole('heading', { name: '第29周' })).toBeInTheDocument()
+    const timeCardTop = screen.getByRole('heading', { name: '第29周' }).closest('.time-context-card__top')
+    expect(timeCardTop).not.toBeNull()
+    expect(within(timeCardTop as HTMLElement).getByText('2026年7月13日 - 2026年7月19日')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '月' }))
     fireEvent.click(screen.getByRole('button', { name: '上一页' }))
 
     stage = screen.getByLabelText('时间范围内容')
     expect(screen.getByRole('heading', { name: '7月' })).toBeInTheDocument()
-    expect(screen.getByText('2025年7月')).toBeInTheDocument()
+    expect(screen.getByText('2026年7月')).toBeInTheDocument()
+    expect(screen.getByText('2025年')).toBeInTheDocument()
     expect(stage).not.toHaveClass('time-panel-content__stage--previous')
     expect(stage).not.toHaveClass('time-panel-content__stage--next')
     expect(getActiveGridMotion()).toHaveClass('time-range-grid-motion--previous')
@@ -464,7 +478,9 @@ describe('unified shell layout', () => {
     fireEvent.click(screen.getByRole('button', { name: '下一页' }))
 
     stage = screen.getByLabelText('时间范围内容')
-    expect(screen.getByRole('heading', { name: '2035年' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '2026年' })).toBeInTheDocument()
+    expect(screen.getAllByText('2026年').length).toBeGreaterThanOrEqual(2)
+    expect(screen.getByText('2030 - 2039')).toBeInTheDocument()
     expect(stage).not.toHaveClass('time-panel-content__stage--previous')
     expect(stage).not.toHaveClass('time-panel-content__stage--next')
     expect(getActiveGridMotion()).toHaveClass('time-range-grid-motion--next')
@@ -741,9 +757,9 @@ describe('unified shell layout', () => {
     fireEvent.click(screen.getByRole('button', { name: /第30周/ }))
 
     expect(screen.getByRole('heading', { name: '第30周' })).toBeInTheDocument()
-    const selectedWeekCardTop = screen.getByText('全局时间范围').closest('.time-context-card__top')
+    const selectedWeekCardTop = screen.getByRole('heading', { name: '第30周' }).closest('.time-context-card__top')
     expect(selectedWeekCardTop).not.toBeNull()
-    expect(within(selectedWeekCardTop as HTMLElement).getByText('7月20日 - 7月26日')).toBeInTheDocument()
+    expect(within(selectedWeekCardTop as HTMLElement).getByText('2026年7月20日 - 2026年7月26日')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '月' }))
     fireEvent.click(screen.getByRole('button', { name: /7月/ }))

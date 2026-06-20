@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 
 import { ledgerAtlasDataset } from '../accounting/ledgerAtlasData'
 import { formatCnyFromCents } from '../accounting/money'
@@ -138,6 +138,13 @@ export function TimeContextPanel({
     onSelectionChange(nextSelection)
   }
 
+  function handlePickerPageNavigate(direction: TimeNavigationDirection) {
+    setNavigationState((current) => ({
+      direction,
+      sequence: current.sequence + 1,
+    }))
+  }
+
   function handleModeChange(range: TimeRangeMode) {
     if (range === selection.mode) return
 
@@ -163,7 +170,6 @@ export function TimeContextPanel({
         <header className="time-context-card">
           <div className="time-context-card__top">
             <div>
-              <span>全局时间范围</span>
               <h2>{heading.title}</h2>
               <p>{heading.detail}</p>
             </div>
@@ -215,6 +221,7 @@ export function TimeContextPanel({
               handleCalendarModeChange,
               handleSelectionChange,
               handlePeriodNavigate,
+              handlePickerPageNavigate,
             )}
           </div>
         </div>
@@ -272,7 +279,7 @@ function createSelectionFromPickerOption(
   option: PickerPageOption,
 ): TimeRangeSelection {
   if (mode === 'day') return selectDay(option.start)
-  if (mode === 'week') return selectWeek(option.start)
+  if (mode === 'week') return selectWeek(option.anchorDate ?? option.start)
   if (mode === 'month') {
     const date = new Date(`${option.start}T00:00:00`)
     return selectMonth(date.getFullYear(), date.getMonth() + 1)
@@ -292,6 +299,7 @@ function renderModeContent(
     direction: TimeNavigationDirection,
     selection: TimeRangeSelection,
   ) => void,
+  onPickerPageNavigate: (direction: TimeNavigationDirection) => void,
 ) {
   if (selection.mode === 'day') {
     return (
@@ -312,21 +320,13 @@ function renderModeContent(
     selection.mode === 'month' ||
     selection.mode === 'year'
   ) {
-    const page = getPickerPage(selection)
-
     return (
       <TimePickerPage
-        page={page}
+        key={`${selection.mode}:${selection.start}:${selection.end}:${selection.anchorDate}`}
+        selection={selection}
         navigationState={navigationState}
-        onMove={(direction) =>
-          onPeriodNavigate(
-            direction === -1 ? 'previous' : 'next',
-            movePickerPage(selection, direction),
-          )
-        }
-        onSelect={(option) =>
-          onSelectionChange(createSelectionFromPickerOption(page.mode, option))
-        }
+        onPageMove={onPickerPageNavigate}
+        onSelectionChange={onSelectionChange}
       />
     )
   }
@@ -709,17 +709,27 @@ function AnimatedDayCalendar({
 }
 
 function TimePickerPage({
-  page,
+  selection,
   navigationState,
-  onMove,
-  onSelect,
+  onPageMove,
+  onSelectionChange,
 }: {
-  page: PickerPage
+  selection: TimeRangeSelection
   navigationState: TimeNavigationState
-  onMove: (direction: -1 | 1) => void
-  onSelect: (option: PickerPageOption) => void
+  onPageMove: (direction: TimeNavigationDirection) => void
+  onSelectionChange: (selection: TimeRangeSelection) => void
 }) {
+  const [pickerSelection, setPickerSelection] = useState(selection)
+
+  const page = useMemo(() => getPickerPage(pickerSelection), [pickerSelection])
   const gridClassName = ['time-picker-grid', page.gridClassName].join(' ')
+  function handleMove(direction: -1 | 1) {
+    const nextPickerSelection = movePickerPage(pickerSelection, direction)
+
+    setPickerSelection(nextPickerSelection)
+    onPageMove(direction === -1 ? 'previous' : 'next')
+  }
+
   const optionButtons = page.options.map((option) => (
     <button
       type="button"
@@ -730,10 +740,21 @@ function TimePickerPage({
       ]
         .filter(Boolean)
         .join(' ')}
-      onClick={() => onSelect(option)}
+      onClick={() =>
+        onSelectionChange(createSelectionFromPickerOption(page.mode, option))
+      }
     >
       <span>{option.label}</span>
-      {option.detail ? <small>{option.detail}</small> : null}
+      {option.detail ? (
+        <small>
+          {option.detail.split(' - ').map((part, index) => (
+            <span key={part}>
+              {index > 0 ? <span aria-hidden="true">-</span> : null}
+              {part}
+            </span>
+          ))}
+        </small>
+      ) : null}
     </button>
   ))
 
@@ -743,11 +764,11 @@ function TimePickerPage({
         <strong>{page.label}</strong>
       </div>
       <div className="time-picker-bar">
-        <button type="button" aria-label="上一页" onClick={() => onMove(-1)}>
+        <button type="button" aria-label="上一页" onClick={() => handleMove(-1)}>
           ‹
         </button>
         <span>{page.title}</span>
-        <button type="button" aria-label="下一页" onClick={() => onMove(1)}>
+        <button type="button" aria-label="下一页" onClick={() => handleMove(1)}>
           ›
         </button>
       </div>

@@ -27,6 +27,7 @@ export type TimeRangeDisplay = {
 export type TimeRangeTimestamps = {
   startTimestampSeconds: number
   endTimestampSeconds: number
+  dayCount: number
 }
 
 export type DateCell = {
@@ -43,6 +44,7 @@ export type PickerPageOption = {
   detail?: string
   start: string
   end: string
+  anchorDate?: string
   active: boolean
   outsidePage?: boolean
 }
@@ -119,7 +121,7 @@ export function selectWeek(date: string): TimeRangeSelection {
     mode: 'week',
     start,
     end,
-    anchorDate: start,
+    anchorDate: date,
   }
 }
 
@@ -269,6 +271,7 @@ export function createTimeRangeTimestamps(selection: TimeRangeSelection): TimeRa
     endTimestampSeconds: selection.isOpenEnded
       ? Number.POSITIVE_INFINITY
       : dateKeyToShanghaiStartTimestampSeconds(selection.end) + 86_399,
+    dayCount: countInclusiveDays(selection.start, selection.end),
   }
 }
 
@@ -287,8 +290,8 @@ export function getTimeRangeDisplay(selection: TimeRangeSelection): TimeRangeDis
 
   if (selection.mode === 'week') {
     return {
-      title: `第${getWeekNumber(selection.start)}周`,
-      detail: `${formatMonthDay(selection.start)} - ${formatMonthDay(selection.end)}`,
+      title: `第${getWeekNumberForContext(selection.start, selection.end, selection.anchorDate)}周`,
+      detail: `${formatFullDate(selection.start)} - ${formatFullDate(selection.end)}`,
       accountingLabel: '周',
     }
   }
@@ -444,13 +447,15 @@ function getWeekPickerPage(selection: TimeRangeSelection): PickerPage {
       const start = addDays(firstVisibleWeek, index * 7)
       const startKey = formatDateKey(start)
       const endKey = formatDateKey(addDays(start, 6))
+      const anchorDate = getWeekAnchorDateForContext(startKey, endKey, selection.anchorDate)
 
       return {
         key: startKey,
-        label: `第${getWeekNumber(startKey)}周`,
-        detail: `${formatMonthDay(startKey)} - ${formatMonthDay(endKey)}`,
+        label: `第${getWeekNumberForContext(startKey, endKey, anchorDate)}周`,
+        detail: `${formatFullDate(startKey)} - ${formatFullDate(endKey)}`,
         start: startKey,
         end: endKey,
+        anchorDate,
         active: selection.mode === 'week' && selection.start === startKey,
       }
     }),
@@ -568,6 +573,13 @@ function dateKeyToShanghaiStartTimestampSeconds(value: string) {
   return Math.floor(Date.UTC(year, month - 1, day) / 1000) - 8 * 60 * 60
 }
 
+function countInclusiveDays(start: string, end: string) {
+  const startTimestamp = dateKeyToShanghaiStartTimestampSeconds(start)
+  const endTimestamp = dateKeyToShanghaiStartTimestampSeconds(end)
+
+  return Math.max(1, Math.floor((endTimestamp - startTimestamp) / 86_400) + 1)
+}
+
 function formatDateKey(date: Date) {
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
@@ -581,11 +593,6 @@ function formatFullDate(value: string) {
 }
 
 function formatShortDate(value: string) {
-  const date = parseDate(value)
-  return `${date.getMonth() + 1}月${date.getDate()}日`
-}
-
-function formatMonthDay(value: string) {
   const date = parseDate(value)
   return `${date.getMonth() + 1}月${date.getDate()}日`
 }
@@ -606,4 +613,23 @@ function getWeekNumber(value: string) {
   const dayOfYear =
     Math.floor((date.getTime() - firstDay.getTime()) / 86_400_000) + 1
   return Math.ceil((dayOfYear + firstDay.getDay()) / 7)
+}
+
+function getWeekNumberForContext(start: string, end: string, contextDate: string) {
+  return getWeekNumber(getWeekAnchorDateForContext(start, end, contextDate))
+}
+
+function getWeekAnchorDateForContext(start: string, end: string, contextDate: string) {
+  const startDate = parseDate(start)
+  const endDate = parseDate(end)
+  const contextYear = parseDate(contextDate).getFullYear()
+
+  if (
+    startDate.getFullYear() < contextYear &&
+    endDate.getFullYear() >= contextYear
+  ) {
+    return `${contextYear}-01-01`
+  }
+
+  return start
 }

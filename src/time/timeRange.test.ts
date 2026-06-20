@@ -99,7 +99,15 @@ describe('time range selection model', () => {
     })
     expect(getTimeRangeDisplay(selectWeek('2026-05-11'))).toMatchObject({
       title: '第20周',
-      detail: '5月11日 - 5月17日',
+      detail: '2026年5月11日 - 2026年5月17日',
+    })
+    expect(getTimeRangeDisplay(selectWeek('2025-12-29'))).toMatchObject({
+      title: '第53周',
+      detail: '2025年12月29日 - 2026年1月4日',
+    })
+    expect(getTimeRangeDisplay(selectWeek('2026-01-01'))).toMatchObject({
+      title: '第1周',
+      detail: '2025年12月29日 - 2026年1月4日',
     })
     expect(getTimeRangeDisplay(selectMonth(2026, 6))).toMatchObject({
       title: '6月',
@@ -243,7 +251,14 @@ describe('time range selection model', () => {
     ])
     expect(weekPage.options.find((option) => option.start === '2026-07-20')).toMatchObject({
       label: '第30周',
-      detail: '7月20日 - 7月26日',
+      detail: '2026年7月20日 - 2026年7月26日',
+      active: true,
+    })
+
+    const januaryWeekPage = getPickerPage(selectWeek('2026-01-01'))
+    expect(januaryWeekPage.options[0]).toMatchObject({
+      label: '第1周',
+      detail: '2025年12月29日 - 2026年1月4日',
       active: true,
     })
 
@@ -296,7 +311,7 @@ describe('time range selection model', () => {
 
     expect(movePickerPage(selectWeek('2026-07-20'), 1)).toMatchObject({
       mode: 'week',
-      anchorDate: '2026-08-17',
+      anchorDate: '2026-08-20',
       start: '2026-08-17',
       end: '2026-08-23',
     })
@@ -422,18 +437,22 @@ describe('time range selection model', () => {
     expect(createTimeRangeTimestamps(selectDay('2026-06-19'))).toEqual({
       startTimestampSeconds: 1781798400,
       endTimestampSeconds: 1781884799,
+      dayCount: 1,
     })
     expect(createTimeRangeTimestamps(selectWeek('2026-06-19'))).toEqual({
       startTimestampSeconds: 1781452800,
       endTimestampSeconds: 1782057599,
+      dayCount: 7,
     })
     expect(createTimeRangeTimestamps(selectYear(2026))).toEqual({
       startTimestampSeconds: 1767196800,
       endTimestampSeconds: 1798732799,
+      dayCount: 365,
     })
     expect(createTimeRangeTimestamps(customRange)).toEqual({
       startTimestampSeconds: 1781366400,
       endTimestampSeconds: 1781971199,
+      dayCount: 7,
     })
   })
 
@@ -441,6 +460,7 @@ describe('time range selection model', () => {
     expect(createTimeRangeTimestamps(selectPresetRange('all'))).toEqual({
       startTimestampSeconds: 1646064000,
       endTimestampSeconds: Number.POSITIVE_INFINITY,
+      dayCount: 1572,
     })
   })
 
