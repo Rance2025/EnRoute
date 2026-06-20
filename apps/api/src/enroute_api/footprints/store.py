@@ -45,6 +45,9 @@ class FootprintStore:
         )
         return query_all_points(self.connection)
 
+    def close(self) -> None:
+        self.connection.close()
+
 
 def initialize_schema(connection: sqlite3.Connection) -> None:
     connection.executescript(
