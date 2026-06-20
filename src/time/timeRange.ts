@@ -288,7 +288,7 @@ export function getTimeRangeDisplay(selection: TimeRangeSelection): TimeRangeDis
   if (selection.mode === 'week') {
     return {
       title: `第${getWeekNumber(selection.start)}周`,
-      detail: `${formatMonthDay(selection.start)} - ${formatMonthDay(selection.end)}`,
+      detail: formatRangeDetail(selection.start, selection.end),
       accountingLabel: '周',
     }
   }

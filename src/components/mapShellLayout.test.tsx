@@ -447,7 +447,9 @@ describe('unified shell layout', () => {
     expect(screen.getByRole('heading', { name: '第29周' })).toBeInTheDocument()
     const timeCardTop = screen.getByText('全局时间范围').closest('.time-context-card__top')
     expect(timeCardTop).not.toBeNull()
-    expect(within(timeCardTop as HTMLElement).getByText('7月13日 - 7月19日')).toBeInTheDocument()
+    expect(
+      within(timeCardTop as HTMLElement).getByText('2026年 7月13日 - 7月19日'),
+    ).toBeInTheDocument()
     expect(stage).not.toHaveClass('time-panel-content__stage--previous')
     expect(stage).not.toHaveClass('time-panel-content__stage--next')
     expect(getActiveGridMotion()).toHaveClass('time-range-grid-motion--next')
@@ -616,6 +618,11 @@ describe('unified shell layout', () => {
     expect(currentWeekButton).toBeInTheDocument()
     expect(within(currentWeekButton).getByText('6月15日 - 6月21日')).toBeInTheDocument()
     expect(within(currentWeekButton).queryByText('2026年 6月15日 - 6月21日')).not.toBeInTheDocument()
+    const currentWeekCardTop = screen.getByText('全局时间范围').closest('.time-context-card__top')
+    expect(currentWeekCardTop).not.toBeNull()
+    expect(
+      within(currentWeekCardTop as HTMLElement).getByText('2026年 6月15日 - 6月21日'),
+    ).toBeInTheDocument()
     expect(weekPicker.querySelector('.time-picker-grid')).toHaveClass('time-picker-grid--weeks')
     expect(weekPicker.querySelector('.time-picker-calendar-frame')).not.toBeInTheDocument()
     expect(screen.queryByRole('group', { name: '日历显示方式' })).not.toBeInTheDocument()
@@ -748,7 +755,9 @@ describe('unified shell layout', () => {
     expect(screen.getByRole('heading', { name: '第30周' })).toBeInTheDocument()
     const selectedWeekCardTop = screen.getByText('全局时间范围').closest('.time-context-card__top')
     expect(selectedWeekCardTop).not.toBeNull()
-    expect(within(selectedWeekCardTop as HTMLElement).getByText('7月20日 - 7月26日')).toBeInTheDocument()
+    expect(
+      within(selectedWeekCardTop as HTMLElement).getByText('2026年 7月20日 - 7月26日'),
+    ).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '月' }))
     fireEvent.click(screen.getByRole('button', { name: /7月/ }))

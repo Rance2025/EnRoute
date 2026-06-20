@@ -99,7 +99,7 @@ describe('time range selection model', () => {
     })
     expect(getTimeRangeDisplay(selectWeek('2026-05-11'))).toMatchObject({
       title: '第20周',
-      detail: '5月11日 - 5月17日',
+      detail: '2026年 5月11日 - 5月17日',
     })
     expect(getTimeRangeDisplay(selectMonth(2026, 6))).toMatchObject({
       title: '6月',
@@ -121,6 +121,12 @@ describe('time range selection model', () => {
   })
 
   it('formats same-year custom range details with one leading year', () => {
+    expect(getTimeRangeDisplay(selectWeek('2026-06-19'))).toMatchObject({
+      title: '第25周',
+      detail: '2026年 6月15日 - 6月21日',
+      accountingLabel: '周',
+    })
+
     expect(getTimeRangeDisplay(setCustomDateRange('2026-06-15', '2026-06-21'))).toMatchObject({
       title: '自定义',
       detail: '2026年 6月15日 - 6月21日',
