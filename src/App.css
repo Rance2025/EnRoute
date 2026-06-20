@@ -987,13 +987,13 @@
   grid-template-columns: 42px minmax(0, 1fr);
   gap: 10px;
   align-items: center;
-  min-height: 50px;
-  padding: 8px 10px;
-  border: 1px solid rgba(23, 35, 31, 0.08);
-  border-radius: 17px;
+  min-height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
   color: #12201c;
-  background: rgba(255, 255, 255, 0.58);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.68);
+  background: transparent;
+  box-shadow: none;
 }
 
 .time-date-field span {
@@ -1074,7 +1074,7 @@
   gap: 7px;
 }
 
-.time-date-picker__bar button {
+.time-date-picker__bar button:not(.time-date-picker__title) {
   display: grid;
   width: 30px;
   height: 30px;
@@ -1091,33 +1091,41 @@
 
 .time-date-picker__title {
   min-width: 0;
+  width: 100%;
   height: 30px;
   display: grid;
   place-items: center;
   overflow: hidden;
-  padding: 0 10px;
+  padding: 0 6px;
   border: 0;
-  border-radius: 999px;
+  border-radius: 0;
   color: #12201c;
-  background: rgba(17, 40, 35, 0.055);
+  background: transparent;
   font-size: 12px;
   font-weight: 820;
+  font-family: inherit;
   text-overflow: ellipsis;
   white-space: nowrap;
+  box-shadow: none;
   cursor: pointer;
   transition:
-    background 150ms ease,
     color 150ms ease,
-    transform 150ms ease;
+    opacity 150ms ease;
 }
 
 .time-date-picker__title:hover {
   color: #123f35;
-  background: rgba(18, 63, 53, 0.105);
+  background: transparent;
+  opacity: 0.78;
 }
 
 .time-date-picker__title:active {
-  transform: scale(0.98);
+  transform: none;
+}
+
+.time-date-picker__title:focus-visible {
+  outline: 2px solid rgba(18, 63, 53, 0.28);
+  outline-offset: 2px;
 }
 
 .time-date-picker__weekdays,
