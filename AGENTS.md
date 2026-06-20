@@ -6,7 +6,7 @@
 - 这条要求高于本文件其他普通开发流程要求；除非用户后续明确修改本要求，否则不得以任务简单、只是查看文件、只是回答问题、只是修文档、需要先了解上下文等理由跳过 superpowers。
 - superpowers 流程要求在分支上工作：开始任何实现、修复、文档维护或仓库配置修改前，必须先确认当前不在 `master`/`main` 等主分支；如需隔离工作区，应按 `using-git-worktrees` 技能创建并验证 worktree，再继续执行。
 
-本仓库是 `在途 EnRoute` 的前端原型工程：使用 Vite + React + TypeScript 接入高德地图 JS API，先完成全屏地图底座、地图风格、基础地图控件，后续再叠加轨迹点和海量点图层。
+本仓库是 `在途 EnRoute` 的前后端本地原型工程：前端应用使用 Vite + React + TypeScript 接入高德地图 JS API；后端服务使用 Python + FastAPI + SQLite 承载足迹数据导入、视口查询、抽稀和统计。当前阶段优先做好位置分页面的数据承载和地图体验。
 
 ## 产品设想与阶段目标
 
@@ -23,22 +23,33 @@
 ## 项目结构
 
 ```text
-src/
-  components/        地图画布、浮动控件等 React 组件
-  config/            高德地图配置、默认视角、相机/缩放逻辑
-  services/          高德 JS API 加载封装
-  types/             高德运行时的本地 TypeScript 声明
-  layers/            后续轨迹层、点图层预留目录
+apps/
+  web/               React + Vite 前端应用
+    src/
+      components/    地图画布、浮动控件等 React 组件
+      config/        高德地图配置、默认视角、相机/缩放逻辑
+      services/      高德 JS API 加载封装
+      types/         高德运行时的本地 TypeScript 声明
+      layers/        轨迹层、点图层和足迹数据源
+  api/               Python + FastAPI 后端服务
+    src/enroute_api/ API、足迹导入、SQLite 查询、抽稀和统计
+    tests/           后端契约测试
 docs/
   superpowers/       设计说明和实施计划
-public/              静态资源
+scripts/             仓库级启动、检查脚本
+tests/               仓库级工具测试
+external/            本地原始导入数据，不提交
+output/              本地数据库、日志和运行输出，不提交
 ```
 
 ## 常用命令
 
-- 安装依赖：`npm install`
-- 本地开发：`npm run dev`
-- 单元测试：`npm test -- --run`
+- 安装前端依赖：`npm install`
+- 安装后端依赖：`npm run install:api`
+- 本地启动前后端：`python start.py start`
+- 本地开发前端：`npm run dev`
+- 本地开发后端：`npm run api`
+- 单元测试：`npm test`
 - Lint：`npm run lint`
 - 生产构建：`npm run build`
 
@@ -61,11 +72,8 @@ VITE_AMAP_SECURITY_CODE=your-amap-security-js-code
 
 ## 技术栈
 
-- React 19
-- TypeScript 6
-- Vite 8
-- Vitest
-- ESLint
+- 前端应用：React 19、TypeScript 6、Vite 8、Vitest、ESLint
+- 后端服务：Python 3.12、FastAPI、SQLite、pytest
 - 高德地图 JS API 2.0
 - `@amap/amap-jsapi-loader`
 - `lucide-react`
@@ -84,7 +92,7 @@ VITE_AMAP_SECURITY_CODE=your-amap-security-js-code
 完成实现或修复后，提交前至少运行：
 
 ```powershell
-npm test -- --run
+npm test
 npm run lint
 npm run build
 ```
@@ -151,5 +159,6 @@ merge: 合并地图底座初始化
 - `.gitignore`
 - `.env.example`
 - `README.md`
-- `src/config/`
-- `src/components/`
+- `apps/web/src/config/`
+- `apps/web/src/components/`
+- `apps/api/src/enroute_api/`
