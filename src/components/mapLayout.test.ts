@@ -377,8 +377,12 @@ describe('map chrome layout', () => {
   it('keeps the accounting page fixed while ledger internals scroll', () => {
     expect(cssRule('.accounting-page')).toContain('overflow: hidden')
     expect(cssRule('.accounting-workspace')).toContain('overflow: hidden')
-    expect(cssRule('.transaction-list')).toContain('overflow: auto')
-    expect(cssRule('.transaction-editor')).toContain('overflow: auto')
+    expect(cssRule('.accounting-page *')).toContain('min-width: 0')
+    expect(cssRule('.accounting-scroll--ledger')).toContain('overflow-y: auto')
+    expect(cssRule('.accounting-scroll--ledger')).toContain('overflow-x: hidden')
+    expect(cssRule('.ios-ledger-detail')).toContain('overflow: hidden')
+    expect(cssRule('.transaction-list')).toBe('')
+    expect(cssRule('.transaction-editor')).toBe('')
   })
 
   it('initializes the map at the single-world minimum zoom', () => {

@@ -277,11 +277,9 @@ describe('unified shell layout', () => {
     fireEvent.click(screen.getByRole('button', { name: '记账' }))
 
     const shell = screen.getByRole('main')
-    const accountingScope = screen.getByLabelText('当前账目范围')
-
     expect(screen.getByLabelText('时间范围面板')).toBeInTheDocument()
-    expect(accountingScope).toHaveTextContent('月')
-    expect(accountingScope).toHaveTextContent('人民币')
+    expect(screen.getByLabelText('iOS 记账工作台')).toBeInTheDocument()
+    expect(screen.queryByLabelText('当前账目范围')).not.toBeInTheDocument()
     expect(shell).toHaveClass('app-shell--accounting')
     expect(shell).toHaveClass('has-data-panel')
     expect(shell).not.toHaveStyle({ '--data-panel-width': '0px' })
@@ -290,7 +288,7 @@ describe('unified shell layout', () => {
       'aria-valuetext',
       '流水',
     )
-    expect(screen.getByLabelText('流水图谱工作区')).toBeInTheDocument()
+    expect(screen.getByLabelText('流水工作区')).toBeInTheDocument()
   })
 
   it('switches the shared time panel between top-level range modes', () => {
@@ -312,7 +310,9 @@ describe('unified shell layout', () => {
     expect(screen.getByLabelText('时间选择页')).toBeInTheDocument()
     expect(screen.queryByLabelText('日历选择')).not.toBeInTheDocument()
     expect(screen.queryByRole('group', { name: '日历显示方式' })).not.toBeInTheDocument()
-    expect(screen.getByLabelText('当前账目范围')).toHaveTextContent('周')
+    expect(
+      within(screen.getByLabelText('iOS 记账工作台')).getByText('第25周'),
+    ).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '月' }))
 
@@ -710,10 +710,11 @@ describe('unified shell layout', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '记账' }))
 
-    const accountingScope = screen.getByLabelText('当前账目范围')
-
-    expect(accountingScope).toHaveTextContent('自定义')
-    expect(accountingScope).toHaveTextContent('人民币')
+    expect(screen.getByLabelText('iOS 记账工作台')).toBeInTheDocument()
+    expect(
+      within(screen.getByLabelText('iOS 记账工作台')).getByText('近30天'),
+    ).toBeInTheDocument()
+    expect(screen.queryByLabelText('当前账目范围')).not.toBeInTheDocument()
   })
 })
 

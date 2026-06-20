@@ -14,7 +14,6 @@ import { getTimeRangeDisplay, type TimeRangeSelection } from '../time/timeRange'
 import { AccountsWorkspace } from './accounting/AccountsWorkspace'
 import { AnalyticsWorkspace } from './accounting/AnalyticsWorkspace'
 import { LedgerWorkspace } from './accounting/LedgerWorkspace'
-import { formatSignedCny } from './accounting/formatting'
 import { SegmentedControl, type SegmentedOption } from './SegmentedControl'
 
 type AccountingMode = 'ledger' | 'accounts' | 'report'
@@ -57,21 +56,44 @@ export function AccountingPage({ timeRange }: AccountingPageProps) {
   function handleSelectTransaction(transactionId: string) {
     setSelectedTransactionId(transactionId)
     const transaction = transactions.find((item) => item.id === transactionId)
+
     if (transaction?.categoryId) setSelectedCategoryId(transaction.categoryId)
     if (transaction?.tagIds[0]) setSelectedTagId(transaction.tagIds[0])
   }
 
   return (
-    <section className="accounting-page" aria-label="记账图谱工作台">
-      <header className="accounting-topbar">
-        <div className="accounting-title-lockup">
-          <span>Ledger Atlas</span>
-          <strong>记账图谱工作台</strong>
-        </div>
-        <div className="accounting-scope-chip" aria-label="当前账目范围">
-          <span>{display.accountingLabel}</span>
-          <strong>人民币 · {display.detail}</strong>
-        </div>
+    <section className="accounting-page" aria-label="iOS 记账工作台">
+      <div className="accounting-dock" aria-label="记账控制栏">
+        <section className="ios-summary-strip" aria-label="当前范围摘要">
+          <SummaryPill
+            icon={CircleDollarSign}
+            label="净现金流"
+            value={formatSignedCurrency(metrics.netInCents)}
+            tone={metrics.netInCents >= 0 ? 'income' : 'expense'}
+          />
+          <SummaryPill
+            icon={Activity}
+            label="本期支出"
+            value={`¥${formatCnyFromCents(metrics.expenseInCents)}`}
+            tone="expense"
+          />
+          <SummaryPill
+            icon={ReceiptText}
+            label="本期流水"
+            value={`${metrics.transactionCount} 笔`}
+          />
+          <SummaryPill
+            icon={WalletCards}
+            label="活跃账户"
+            value={`${metrics.activeAccountCount} 个`}
+            tone="income"
+          />
+          <div className="ios-summary-scope">
+            <span>{display.accountingLabel}</span>
+            <strong>{display.title}</strong>
+          </div>
+        </section>
+
         <SegmentedControl
           ariaLabel="记账工作区"
           className="accounting-mode-tabs"
@@ -79,34 +101,7 @@ export function AccountingPage({ timeRange }: AccountingPageProps) {
           value={mode}
           onChange={setMode}
         />
-      </header>
-
-      <section className="accounting-overview" aria-label="记账概览">
-        <Metric
-          icon={CircleDollarSign}
-          label="净流入"
-          value={formatSignedCny(metrics.netInCents)}
-          tone="balance"
-        />
-        <Metric
-          icon={Activity}
-          label="支出"
-          value={`¥${formatCnyFromCents(metrics.expenseInCents)}`}
-          tone="expense"
-        />
-        <Metric
-          icon={ReceiptText}
-          label="流水"
-          value={String(metrics.transactionCount)}
-          tone="neutral"
-        />
-        <Metric
-          icon={WalletCards}
-          label="活跃账户"
-          value={String(metrics.activeAccountCount)}
-          tone="income"
-        />
-      </section>
+      </div>
 
       {mode === 'ledger' ? (
         <LedgerWorkspace
@@ -134,6 +129,7 @@ export function AccountingPage({ timeRange }: AccountingPageProps) {
       {mode === 'report' ? (
         <AnalyticsWorkspace
           dataset={ledgerAtlasDataset}
+          metrics={metrics}
           transactions={transactions}
           categoryStats={categoryStats}
           tagStats={tagStats}
@@ -143,7 +139,7 @@ export function AccountingPage({ timeRange }: AccountingPageProps) {
   )
 }
 
-function Metric({
+function SummaryPill({
   icon: Icon,
   label,
   value,
@@ -152,15 +148,19 @@ function Metric({
   icon: typeof CircleDollarSign
   label: string
   value: string
-  tone?: 'balance' | 'income' | 'expense' | 'neutral'
+  tone?: 'income' | 'expense' | 'neutral'
 }) {
   return (
-    <div className={`metric metric--${tone}`}>
-      <span>
-        <Icon size={15} strokeWidth={2} />
-        {label}
-      </span>
+    <div className={`ios-summary-pill ios-summary-pill--${tone}`}>
+      <Icon size={14} strokeWidth={2} />
+      <span>{label}</span>
       <strong>{value}</strong>
     </div>
   )
+}
+
+function formatSignedCurrency(amountInCents: number) {
+  if (amountInCents === 0) return '¥0.00'
+
+  return `${amountInCents > 0 ? '+' : '-'}¥${formatCnyFromCents(Math.abs(amountInCents))}`
 }
