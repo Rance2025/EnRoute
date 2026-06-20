@@ -32,8 +32,12 @@ export const DEFAULT_MAP_CAMERA: MapCamera = {
 
 export const MAP_RESET_DURATION_MS = 900
 
-export function resetMapCamera(map: ResettableMap, bounds: AMap.Bounds) {
+export function resetMapCamera(
+  map: ResettableMap,
+  bounds: AMap.Bounds,
+  avoid?: number[],
+) {
   map.setPitch(DEFAULT_MAP_CAMERA.pitch, true)
   map.setRotation(DEFAULT_MAP_CAMERA.rotation, true)
-  map.setBounds(bounds, false, undefined, MAP_RESET_DURATION_MS)
+  map.setBounds(bounds, false, avoid, MAP_RESET_DURATION_MS)
 }

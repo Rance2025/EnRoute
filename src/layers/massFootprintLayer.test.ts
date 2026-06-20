@@ -195,15 +195,19 @@ describe('createMassFootprintLayer', () => {
     largeLayer.destroy()
   })
 
-  it('updates MassMarks with raw footprint lnglat data and lets AMap own projection during map motion', () => {
+  it('updates MassMarks with raw footprint lnglat data and adjacent wrapped-world copies', () => {
     const runtime = createMassMarksRuntime()
     const layer = createMassFootprintLayer(runtime, {} as AMap.Map)
 
     layer.update(points)
 
     expect(runtime.setData).toHaveBeenCalledWith([
+      { id: 'a:-360', lnglat: [-238.4999, 31.2001] },
       { id: 'a', lnglat: [121.5001, 31.2001] },
+      { id: 'a:+360', lnglat: [481.5001, 31.2001] },
+      { id: 'b:-360', lnglat: [-238.4996, 31.2004] },
       { id: 'b', lnglat: [121.5004, 31.2004] },
+      { id: 'b:+360', lnglat: [481.5004, 31.2004] },
     ])
   })
 

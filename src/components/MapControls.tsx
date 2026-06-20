@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react'
 import { useEffect, useId, useRef, useState } from 'react'
-import { Crosshair, LocateFixed, Minus, Plus, Settings2 } from 'lucide-react'
+import { Crosshair, Globe2, Minus, Plus, Settings2 } from 'lucide-react'
 import {
   FOOTPRINT_OPACITY_MAX,
   FOOTPRINT_OPACITY_MIN,
@@ -17,8 +17,8 @@ import {
 export type { FootprintStyle }
 
 type MapControlsProps = {
-  onLocate: () => void
-  onReset: () => void
+  onFitFootprints: () => void
+  onShowWorld: () => void
   onZoomIn: () => void
   onZoomOut: () => void
   footprintStyle: FootprintStyle
@@ -34,8 +34,8 @@ const FOOTPRINT_COLOR_SWATCHES = ['#123f35', '#4f7cff', '#b8544c']
 const FOOTPRINT_STYLE_COMMIT_DELAY_MS = 180
 
 export function MapControls({
-  onLocate,
-  onReset,
+  onFitFootprints,
+  onShowWorld,
   onZoomIn,
   onZoomOut,
   footprintStyle,
@@ -60,11 +60,11 @@ export function MapControls({
       >
         <Settings2 size={18} strokeWidth={1.8} />
       </button>
-      <button type="button" aria-label="定位当前位置" title="定位当前位置" onClick={onLocate}>
-        <LocateFixed size={18} strokeWidth={1.8} />
-      </button>
-      <button type="button" aria-label="重置视角" title="重置视角" onClick={onReset}>
+      <button type="button" aria-label="聚焦当前足迹" title="聚焦当前足迹" onClick={onFitFootprints}>
         <Crosshair size={18} strokeWidth={1.8} />
+      </button>
+      <button type="button" aria-label="显示世界地图" title="显示世界地图" onClick={onShowWorld}>
+        <Globe2 size={18} strokeWidth={1.8} />
       </button>
       <button type="button" aria-label="放大地图" title="放大地图" onClick={onZoomIn}>
         <Plus size={18} strokeWidth={1.8} />

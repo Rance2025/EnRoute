@@ -31,6 +31,38 @@ describe('accounting selectors', () => {
     ])
   })
 
+  it('does not cap open-ended shared ranges at the visible end date', () => {
+    const range: TimeRangeSelection = {
+      mode: 'custom',
+      start: '2026-06-01',
+      end: '2026-06-19',
+      anchorDate: '2026-06-19',
+      isOpenEnded: true,
+    }
+    const transactions = [
+      {
+        ...ledgerAtlasDataset.transactions[0],
+        id: 'before-start',
+        occurredAt: '2026-05-31T23:59:59+08:00',
+      },
+      {
+        ...ledgerAtlasDataset.transactions[0],
+        id: 'visible-end',
+        occurredAt: '2026-06-19T23:59:59+08:00',
+      },
+      {
+        ...ledgerAtlasDataset.transactions[0],
+        id: 'future-imported',
+        occurredAt: '2026-06-20T00:00:00+08:00',
+      },
+    ]
+
+    expect(filterTransactionsByTimeRange(transactions, range).map((transaction) => transaction.id)).toEqual([
+      'future-imported',
+      'visible-end',
+    ])
+  })
+
   it('derives period metrics from the filtered transactions', () => {
     expect(getPeriodMetrics(ledgerAtlasDataset, juneRange)).toMatchObject({
       transactionCount: 6,

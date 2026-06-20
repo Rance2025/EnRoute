@@ -1,6 +1,13 @@
-export type TimeRangeMode = 'day' | 'week' | 'month' | 'year' | 'all' | 'custom'
+export type TimeRangeMode = 'day' | 'week' | 'month' | 'year' | 'custom'
 export type CalendarDisplayMode = 'week' | 'month'
-export type TimePresetKey = 'all' | 'imported' | 'recent30' | 'qingdao' | 'quarter'
+export type TimePresetKey =
+  | 'all'
+  | 'imported'
+  | 'recent365'
+  | 'recent30'
+  | 'recent7'
+  | 'qingdao'
+  | 'quarter'
 
 export type TimeRangeSelection = {
   mode: TimeRangeMode
@@ -8,12 +15,18 @@ export type TimeRangeSelection = {
   end: string
   anchorDate: string
   label?: string
+  isOpenEnded?: boolean
 }
 
 export type TimeRangeDisplay = {
   title: string
   detail: string
   accountingLabel: string
+}
+
+export type TimeRangeTimestamps = {
+  startTimestampSeconds: number
+  endTimestampSeconds: number
 }
 
 export type DateCell = {
@@ -71,9 +84,8 @@ export function createCurrentSelection(mode: TimeRangeMode): TimeRangeSelection 
     return selectMonth(currentDate.getFullYear(), currentDate.getMonth() + 1)
   }
   if (mode === 'year') return selectYear(currentDate.getFullYear())
-  if (mode === 'all') return selectPresetRange('all')
 
-  return selectPresetRange('recent30')
+  return selectPresetRange('all')
 }
 
 export function getCurrentRangeActionLabel(mode: TimeRangeMode) {
@@ -81,9 +93,8 @@ export function getCurrentRangeActionLabel(mode: TimeRangeMode) {
   if (mode === 'week') return '回到本周'
   if (mode === 'month') return '回到本月'
   if (mode === 'year') return '回到今年'
-  if (mode === 'all') return '回到全部'
 
-  return '回到近30天'
+  return '回到全部'
 }
 
 export function selectDay(date: string): TimeRangeSelection {
@@ -132,21 +143,32 @@ export function selectYear(year: number): TimeRangeSelection {
 export function selectPresetRange(preset: TimePresetKey): TimeRangeSelection {
   if (preset === 'all') {
     return {
-      mode: 'all',
+      mode: 'custom',
       start: firstImportedDate,
       end: today,
       anchorDate: today,
       label: '全部',
+      isOpenEnded: true,
     }
   }
 
   if (preset === 'imported') {
     return {
-      mode: 'all',
+      mode: 'custom',
       start: firstImportedDate,
       end: today,
       anchorDate: today,
       label: '导入数据',
+    }
+  }
+
+  if (preset === 'recent365') {
+    return {
+      mode: 'custom',
+      start: formatDateKey(addDays(parseDate(today), -364)),
+      end: today,
+      anchorDate: today,
+      label: '最近一年',
     }
   }
 
@@ -156,7 +178,17 @@ export function selectPresetRange(preset: TimePresetKey): TimeRangeSelection {
       start: formatDateKey(addDays(parseDate(today), -29)),
       end: today,
       anchorDate: today,
-      label: '近30天',
+      label: '最近一月',
+    }
+  }
+
+  if (preset === 'recent7') {
+    return {
+      mode: 'custom',
+      start: formatDateKey(addDays(parseDate(today), -6)),
+      end: today,
+      anchorDate: today,
+      label: '最近一周',
     }
   }
 
@@ -191,6 +223,42 @@ export function setCustomRangeBoundary(
       : { ...base, end: formatDateKey(addDays(parseDate(base.end), 7)) }
 
   return normalizeCustomSelection(next)
+}
+
+export function setCustomDateRange(start: string, end: string): TimeRangeSelection {
+  return normalizeCustomSelection({
+    mode: 'custom',
+    start,
+    end,
+    anchorDate: end,
+    label: '自定义',
+  })
+}
+
+export function updateCustomDateBoundary(
+  selection: TimeRangeSelection,
+  boundary: 'start' | 'end',
+  value: string,
+): TimeRangeSelection {
+  const base =
+    selection.mode === 'custom' ? selection : selectPresetRange('all')
+  if (!isValidDateKey(value)) return base
+
+  return normalizeCustomSelection({
+    ...base,
+    [boundary]: value,
+    label: '自定义',
+    isOpenEnded: false,
+  })
+}
+
+export function createTimeRangeTimestamps(selection: TimeRangeSelection): TimeRangeTimestamps {
+  return {
+    startTimestampSeconds: dateKeyToShanghaiStartTimestampSeconds(selection.start),
+    endTimestampSeconds: selection.isOpenEnded
+      ? Number.POSITIVE_INFINITY
+      : dateKeyToShanghaiStartTimestampSeconds(selection.end) + 86_399,
+  }
 }
 
 export function getTimeRangeDisplay(selection: TimeRangeSelection): TimeRangeDisplay {
@@ -232,17 +300,11 @@ export function getTimeRangeDisplay(selection: TimeRangeSelection): TimeRangeDis
     }
   }
 
-  if (selection.mode === 'all') {
-    return {
-      title: selection.label ?? '全部',
-      detail: `${formatMonthDot(selection.start)} 至今`,
-      accountingLabel: '全部',
-    }
-  }
-
   return {
     title: selection.label ?? '自定义',
-    detail: `${formatFullDate(selection.start)} - ${formatFullDate(selection.end)}`,
+    detail: selection.label === '全部'
+      ? `${formatMonthDot(selection.start)} 至今`
+      : `${formatFullDate(selection.start)} - ${formatFullDate(selection.end)}`,
     accountingLabel: '自定义',
   }
 }
@@ -438,6 +500,7 @@ function normalizeCustomSelection(selection: TimeRangeSelection): TimeRangeSelec
       mode: 'custom',
       anchorDate: selection.end,
       label: '自定义',
+      isOpenEnded: false,
     }
   }
 
@@ -448,6 +511,7 @@ function normalizeCustomSelection(selection: TimeRangeSelection): TimeRangeSelec
     end: selection.start,
     anchorDate: selection.start,
     label: '自定义',
+    isOpenEnded: false,
   }
 }
 
@@ -478,6 +542,17 @@ function addMonths(date: Date, months: number) {
 function parseDate(value: string) {
   const [year, month, day] = value.split('-').map(Number)
   return new Date(year, month - 1, day)
+}
+
+function isValidDateKey(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+  return formatDateKey(parseDate(value)) === value
+}
+
+function dateKeyToShanghaiStartTimestampSeconds(value: string) {
+  const [year, month, day] = value.split('-').map(Number)
+
+  return Math.floor(Date.UTC(year, month - 1, day) / 1000) - 8 * 60 * 60
 }
 
 function formatDateKey(date: Date) {

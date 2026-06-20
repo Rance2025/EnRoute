@@ -4,6 +4,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { AmapConfig } from '../config/amap'
 import type { FootprintPoint } from '../layers/footprintTypes'
+import {
+  createTodaySelection,
+  selectPresetRange,
+  type TimeRangeSelection,
+} from '../time/timeRange'
 
 const configuredAmap: AmapConfig = {
   key: 'test-key',
@@ -28,7 +33,7 @@ const configuredAmap: AmapConfig = {
 const loadedPoints: FootprintPoint[] = [
   {
     id: '1',
-    timestampSeconds: 1,
+    timestampSeconds: 1781798400,
     longitude: 121.5,
     latitude: 31.2,
     accuracy: 5,
@@ -42,7 +47,7 @@ const loadedPoints: FootprintPoint[] = [
   },
   {
     id: '2',
-    timestampSeconds: 2,
+    timestampSeconds: 1781884799,
     longitude: 121.500001,
     latitude: 31.200001,
     accuracy: 5,
@@ -83,10 +88,12 @@ async function renderFootprintMassMarks({
   containerSize = { width: 1024, height: 768 },
   loadFootprintsPromise,
   mapOverrides,
+  timeRange = selectPresetRange('all'),
 }: {
   containerSize?: { width: number; height: number }
   loadFootprintsPromise: Promise<FootprintPoint[]>
   mapOverrides?: Partial<MockMap>
+  timeRange?: TimeRangeSelection
 }) {
   const mapMoveHandlers: Array<() => void> = []
   const moveEndHandlers: Array<() => void> = []
@@ -130,6 +137,7 @@ async function renderFootprintMassMarks({
     }))
     setCenter = vi.fn()
     setZoomAndCenter = vi.fn()
+    setBounds = vi.fn()
     setPitch = vi.fn()
     setRotation = vi.fn()
     setStatus = vi.fn()
@@ -154,14 +162,18 @@ async function renderFootprintMassMarks({
       Size: class Size {},
       Map: MockMap,
       Scale: class Scale {},
-      Geolocation: class Geolocation {},
-      Bounds: class Bounds {},
+      Bounds: class Bounds {
+        constructor(
+          public southWest: [number, number],
+          public northEast: [number, number],
+        ) {}
+      },
       plugin: vi.fn((_name: string, callback: () => void) => callback()),
     })),
   }))
 
   const { AmapCanvas } = await import('./AmapCanvas')
-  const renderResult = render(<AmapCanvas config={configuredAmap} />)
+  const renderResult = render(<AmapCanvas config={configuredAmap} timeRange={timeRange} />)
   const mapSurface = renderResult.container.querySelector('.amap-surface') as HTMLElement
 
   Object.defineProperty(mapSurface, 'clientWidth', {
@@ -184,6 +196,9 @@ async function renderFootprintMassMarks({
     mapMoveHandlers,
     moveEndHandlers,
     renderResult,
+    rerenderWithTimeRange(nextTimeRange: TimeRangeSelection) {
+      renderResult.rerender(<AmapCanvas config={configuredAmap} timeRange={nextTimeRange} />)
+    },
     zoomChangeHandlers,
     zoomEndHandlers,
   }
@@ -226,6 +241,91 @@ describe('AmapCanvas footprint layer wiring', () => {
 
     expect(moveEndHandlers).toHaveLength(0)
     expect(layerRecords[0].update).not.toHaveBeenCalled()
+  })
+
+  it('filters native MassMarks footprint data by the selected time range without rebuilding the layer', async () => {
+    const timedPoints: FootprintPoint[] = [
+      { ...loadedPoints[0], id: 'before', timestampSeconds: 1781798399 },
+      { ...loadedPoints[0], id: 'selected-a', timestampSeconds: 1781798400 },
+      { ...loadedPoints[1], id: 'selected-b', timestampSeconds: 1781884799 },
+      { ...loadedPoints[1], id: 'after', timestampSeconds: 1781884800 },
+    ]
+    const loadFootprints = createDeferred<FootprintPoint[]>()
+    const { createMassFootprintLayer, layerRecords, rerenderWithTimeRange } = await renderFootprintMassMarks({
+      loadFootprintsPromise: loadFootprints.promise,
+      timeRange: createTodaySelection(),
+    })
+
+    await act(async () => {
+      loadFootprints.resolve(timedPoints)
+      await Promise.resolve()
+    })
+
+    expect(layerRecords[0].update).toHaveBeenLastCalledWith([
+      timedPoints[1],
+      timedPoints[2],
+    ])
+
+    rerenderWithTimeRange(selectPresetRange('all'))
+
+    await waitFor(() => {
+      expect(layerRecords[0].update).toHaveBeenLastCalledWith(timedPoints)
+    })
+    expect(createMassFootprintLayer).toHaveBeenCalledTimes(1)
+  })
+
+  it('fits the map to currently displayed footprint bounds from the toolbar', async () => {
+    const timedPoints: FootprintPoint[] = [
+      { ...loadedPoints[0], id: 'selected-west', timestampSeconds: 1781798400, longitude: 120, latitude: 30 },
+      { ...loadedPoints[1], id: 'selected-east', timestampSeconds: 1781884799, longitude: 123, latitude: 34 },
+      { ...loadedPoints[1], id: 'filtered-out', timestampSeconds: 1781884800, longitude: 130, latitude: 40 },
+    ]
+    const setBounds = vi.fn()
+    const loadFootprints = createDeferred<FootprintPoint[]>()
+    await renderFootprintMassMarks({
+      loadFootprintsPromise: loadFootprints.promise,
+      mapOverrides: { setBounds },
+      timeRange: createTodaySelection(),
+    })
+
+    await act(async () => {
+      loadFootprints.resolve(timedPoints)
+      await Promise.resolve()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: '聚焦当前足迹' }))
+
+    expect(setBounds).toHaveBeenCalledWith(
+      expect.objectContaining({
+        southWest: [120, 30],
+        northEast: [123, 34],
+      }),
+      false,
+      [72, 72, 72, 72],
+      900,
+    )
+  })
+
+  it('restores the minimum world zoom from the toolbar', async () => {
+    const setZoomAndCenter = vi.fn()
+    const loadFootprints = createDeferred<FootprintPoint[]>()
+    await renderFootprintMassMarks({
+      loadFootprintsPromise: loadFootprints.promise,
+      mapOverrides: {
+        getZoom: () => 6,
+        getCenter: () => ({ getLng: () => 120, getLat: () => 31 }),
+        setZoomAndCenter,
+      },
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: '显示世界地图' }))
+
+    expect(setZoomAndCenter).toHaveBeenCalledWith(
+      expect.any(Number),
+      expect.arrayContaining([expect.any(Number), expect.any(Number)]),
+      false,
+      900,
+    )
   })
 
   it('does not reproject footprints after AMap complete because MassMarks follows map motion natively', async () => {

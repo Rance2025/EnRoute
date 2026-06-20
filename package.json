@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "api": "node server/dev-server.mjs",
+    "dev:full": "node scripts/dev-with-api.mjs",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "prepare:footprints": "node scripts/prepare-local-footprints.mjs",

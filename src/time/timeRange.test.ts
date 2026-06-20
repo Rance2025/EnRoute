@@ -3,6 +3,7 @@ import { describe, expect, expectTypeOf, it } from 'vitest'
 import {
   createCurrentSelection,
   createTodaySelection,
+  createTimeRangeTimestamps,
   getCalendarLabel,
   getCurrentRangeActionLabel,
   getPickerPage,
@@ -14,6 +15,8 @@ import {
   selectDay,
   selectMonth,
   selectPresetRange,
+  setCustomDateRange,
+  updateCustomDateBoundary,
   selectWeek,
   selectYear,
 } from './timeRange'
@@ -63,6 +66,27 @@ describe('time range selection model', () => {
     expect(getCurrentRangeActionLabel('week')).toBe('回到本周')
     expect(getCurrentRangeActionLabel('month')).toBe('回到本月')
     expect(getCurrentRangeActionLabel('year')).toBe('回到今年')
+  })
+
+  it('models all-time as a custom preset instead of a top-level mode', () => {
+    expect(selectPresetRange('all')).toMatchObject({
+      mode: 'custom',
+      start: '2022-03-01',
+      end: '2026-06-19',
+      anchorDate: '2026-06-19',
+      isOpenEnded: true,
+      label: '全部',
+    })
+
+    expect(createCurrentSelection('custom')).toMatchObject({
+      mode: 'custom',
+      start: '2022-03-01',
+      end: '2026-06-19',
+      isOpenEnded: true,
+      label: '全部',
+    })
+
+    expect(getCurrentRangeActionLabel('custom')).toBe('回到全部')
   })
 
   it('lays out month calendars against the real weekday grid', () => {
@@ -268,9 +292,24 @@ describe('time range selection model', () => {
 
   it('provides all-time and custom preset ranges through the same interface', () => {
     expect(selectPresetRange('all')).toMatchObject({
-      mode: 'all',
+      mode: 'custom',
       start: '2022-03-01',
       end: '2026-06-19',
+      isOpenEnded: true,
+    })
+
+    expect(selectPresetRange('recent365')).toMatchObject({
+      mode: 'custom',
+      start: '2025-06-20',
+      end: '2026-06-19',
+      label: '最近一年',
+    })
+
+    expect(selectPresetRange('recent7')).toMatchObject({
+      mode: 'custom',
+      start: '2026-06-13',
+      end: '2026-06-19',
+      label: '最近一周',
     })
 
     expect(selectPresetRange('recent30')).toMatchObject({
@@ -284,5 +323,48 @@ describe('time range selection model', () => {
       detail: '2026年6月15日 - 2026年6月19日',
       accountingLabel: '自定义',
     })
+  })
+
+  it('normalizes real custom date input and exposes inclusive timestamps', () => {
+    const customRange = setCustomDateRange('2026-06-20', '2026-06-14')
+
+    expect(customRange).toMatchObject({
+      mode: 'custom',
+      start: '2026-06-14',
+      end: '2026-06-20',
+      anchorDate: '2026-06-20',
+      label: '自定义',
+    })
+
+    expect(createTimeRangeTimestamps(selectDay('2026-06-19'))).toEqual({
+      startTimestampSeconds: 1781798400,
+      endTimestampSeconds: 1781884799,
+    })
+    expect(createTimeRangeTimestamps(selectWeek('2026-06-19'))).toEqual({
+      startTimestampSeconds: 1781452800,
+      endTimestampSeconds: 1782057599,
+    })
+    expect(createTimeRangeTimestamps(selectYear(2026))).toEqual({
+      startTimestampSeconds: 1767196800,
+      endTimestampSeconds: 1798732799,
+    })
+    expect(createTimeRangeTimestamps(customRange)).toEqual({
+      startTimestampSeconds: 1781366400,
+      endTimestampSeconds: 1781971199,
+    })
+  })
+
+  it('keeps all-time open-ended for filtering while preserving the visible end date', () => {
+    expect(createTimeRangeTimestamps(selectPresetRange('all'))).toEqual({
+      startTimestampSeconds: 1646064000,
+      endTimestampSeconds: Number.POSITIVE_INFINITY,
+    })
+  })
+
+  it('preserves the previous custom date when native date inputs emit empty or invalid values', () => {
+    const selection = setCustomDateRange('2026-06-10', '2026-06-19')
+
+    expect(updateCustomDateBoundary(selection, 'start', '')).toEqual(selection)
+    expect(updateCustomDateBoundary(selection, 'end', '2026-02-31')).toEqual(selection)
   })
 })

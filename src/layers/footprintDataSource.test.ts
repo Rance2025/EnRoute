@@ -7,53 +7,77 @@ afterEach(() => {
 })
 
 describe('loadFootprintPoints', () => {
-  it('returns an empty list without fetching when no URL is configured', async () => {
-    const fetchMock = vi.fn()
-    vi.stubGlobal('fetch', fetchMock)
-
-    await expect(loadFootprintPoints('', new AbortController().signal)).resolves.toEqual([])
-    expect(fetchMock).not.toHaveBeenCalled()
-  })
-
-  it('fetches and parses the configured CSV URL', async () => {
+  it('uses the local footprints API when no URL is configured', async () => {
     const signal = new AbortController().signal
     const fetchMock = vi.fn(async () => ({
       ok: true,
-      text: async () =>
-        [
-          'dataTime,locType,longitude,latitude,heading,accuracy,speed,distance,isBackForeground,stepType,altitude',
-          '1768144456,1,121.511383,31.296564,0,5,-1,0,1,0,10',
-        ].join('\n'),
+      json: async () => ({
+        points: [],
+      }),
     }))
     vi.stubGlobal('fetch', fetchMock)
 
-    const points = await loadFootprintPoints('/local/backUpData-all.csv', signal)
-
-    expect(points).toHaveLength(1)
-    expect(points[0]).toMatchObject({
-      longitude: expect.closeTo(121.515779, 6),
-      latitude: expect.closeTo(31.29454, 6),
-    })
-    expect(fetchMock).toHaveBeenCalledWith('/local/backUpData-all.csv', { signal })
+    await expect(loadFootprintPoints(undefined, signal)).resolves.toEqual([])
+    expect(fetchMock).toHaveBeenCalledWith('/api/footprints', { signal })
   })
 
-  it('passes the configured source coordinate system into CSV parsing', async () => {
+  it('fetches and validates the configured footprints API URL', async () => {
+    const signal = new AbortController().signal
+    const apiPoints = [
+      {
+        id: '1768144456-0',
+        timestampSeconds: 1768144456,
+        longitude: 121.511383,
+        latitude: 31.296564,
+        accuracy: 5.729415,
+        speed: -1,
+        distance: 0,
+        heading: 0,
+        altitude: 10.146956,
+        locType: 1,
+        isBackForeground: 1,
+        stepType: 0,
+      },
+    ]
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        points: apiPoints,
+      }),
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const points = await loadFootprintPoints('/api/footprints', signal)
+
+    expect(points).toEqual(apiPoints)
+    expect(fetchMock).toHaveBeenCalledWith('/api/footprints', { signal })
+  })
+
+  it('rejects failed footprints API responses', async () => {
+    const signal = new AbortController().signal
+    const fetchMock = vi.fn(async () => ({
+      ok: false,
+      status: 500,
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(loadFootprintPoints('/api/footprints', signal)).rejects.toThrow(
+      'Failed to load footprint API: 500',
+    )
+  })
+
+  it('rejects malformed footprints API payloads', async () => {
     const signal = new AbortController().signal
     const fetchMock = vi.fn(async () => ({
       ok: true,
-      text: async () =>
-        [
-          'dataTime,locType,longitude,latitude,heading,accuracy,speed,distance,isBackForeground,stepType,altitude',
-          '1768144456,1,121.511383,31.296564,0,5,-1,0,1,0,10',
-        ].join('\n'),
+      json: async () => ({
+        points: [{ id: 'missing-numeric-fields' }],
+      }),
     }))
     vi.stubGlobal('fetch', fetchMock)
 
-    const points = await loadFootprintPoints('/local/backUpData-all.csv', signal, 'gcj02')
-
-    expect(points[0]).toMatchObject({
-      longitude: 121.511383,
-      latitude: 31.296564,
-    })
+    await expect(loadFootprintPoints('/api/footprints', signal)).rejects.toThrow(
+      'Invalid footprint API response',
+    )
   })
 })

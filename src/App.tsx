@@ -125,7 +125,11 @@ function App({ amapConfig }: AppProps) {
       />
 
       {view === 'map' ? (
-        <AmapCanvas config={resolvedAmapConfig} onPanelWidthChange={handlePanelWidthChange} />
+        <AmapCanvas
+          config={resolvedAmapConfig}
+          timeRange={selectedTimeRange}
+          onPanelWidthChange={handlePanelWidthChange}
+        />
       ) : (
         <section className="main-workspace" aria-label="在途 EnRoute 主工作区">
           <AccountingPage timeRange={selectedTimeRange} />

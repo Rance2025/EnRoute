@@ -74,13 +74,27 @@ function toMassMarksData(points: MassFootprintPoint[]) {
   const cachedData = massMarksDataCache.get(points)
   if (cachedData) return cachedData
 
-  const data = points.map((point) => ({
-    id: point.id,
-    lnglat: [point.longitude, point.latitude] as AMap.LngLatLike,
-  }))
+  const data = points.flatMap((point) => toWrappedMassMarksData(point))
   massMarksDataCache.set(points, data)
 
   return data
+}
+
+function toWrappedMassMarksData(point: MassFootprintPoint) {
+  return [
+    {
+      id: `${point.id}:-360`,
+      lnglat: [point.longitude - 360, point.latitude] as AMap.LngLatLike,
+    },
+    {
+      id: point.id,
+      lnglat: [point.longitude, point.latitude] as AMap.LngLatLike,
+    },
+    {
+      id: `${point.id}:+360`,
+      lnglat: [point.longitude + 360, point.latitude] as AMap.LngLatLike,
+    },
+  ]
 }
 
 function createPointIconDataUrl(color: string, size: number, opacity: number) {
