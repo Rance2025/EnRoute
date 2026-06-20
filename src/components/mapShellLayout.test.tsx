@@ -284,11 +284,9 @@ describe('unified shell layout', () => {
     expect(shell).toHaveClass('has-data-panel')
     expect(shell).not.toHaveStyle({ '--data-panel-width': '0px' })
     expect(screen.getByLabelText('在途 EnRoute 主工作区')).toBeInTheDocument()
-    expect(screen.getByRole('slider', { name: '记账工作区滑块' })).toHaveAttribute(
-      'aria-valuetext',
-      '流水',
-    )
-    expect(screen.getByLabelText('流水工作区')).toBeInTheDocument()
+    expect(screen.queryByRole('group', { name: '记账工作区' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('slider', { name: '记账工作区滑块' })).not.toBeInTheDocument()
+    expect(screen.getByLabelText('账户与流水工作台')).toBeInTheDocument()
   })
 
   it('switches the shared time panel between top-level range modes', () => {

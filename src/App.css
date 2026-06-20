@@ -1124,25 +1124,26 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   min-height: 54px;
 }
 
 .ios-summary-strip {
   display: grid;
-  grid-template-columns: repeat(4, minmax(112px, 1fr)) minmax(94px, 0.5fr);
-  gap: 8px;
-  min-height: 54px;
+  grid-template-columns: repeat(4, minmax(104px, 1fr)) minmax(90px, 0.48fr);
+  gap: 7px;
+  min-height: 52px;
 }
 
 .ios-summary-pill,
-.ios-summary-scope {
+.ios-summary-scope,
+.accounting-actions {
   display: grid;
   align-items: center;
-  min-height: 54px;
+  min-height: 52px;
   overflow: hidden;
   border: 1px solid rgba(23, 35, 31, 0.08);
-  border-radius: 18px;
+  border-radius: 17px;
   background: rgba(255, 255, 255, 0.58);
   box-shadow:
     0 10px 28px rgba(26, 42, 38, 0.06),
@@ -1197,35 +1198,61 @@
   text-align: right;
 }
 
-.accounting-mode-tabs {
-  --segmented-gap: 3px;
-  --segmented-padding: 4px;
-  --segmented-thumb-bg: rgba(18, 63, 53, 0.94);
-  --segmented-label-font-size: 13px;
-  --segmented-label-font-weight: 820;
-
-  display: grid;
-  grid-template-columns: repeat(3, minmax(58px, 1fr));
-  gap: var(--segmented-gap);
-  width: 214px;
-  padding: var(--segmented-padding);
-  border: 1px solid rgba(23, 35, 31, 0.08);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.72);
-  box-shadow:
-    0 14px 32px rgba(31, 46, 42, 0.1),
-    inset 0 1px 0 rgba(255, 255, 255, 0.82);
-  backdrop-filter: blur(18px) saturate(1.12);
+.accounting-actions {
+  display: inline-grid;
+  grid-auto-flow: column;
+  gap: 7px;
+  justify-content: end;
+  width: max-content;
+  padding: 7px;
 }
 
-.accounting-mode-tabs button {
+.accounting-actions > span {
+  display: grid;
+  min-width: 88px;
   height: 34px;
-  padding: 0;
-  border: 0;
+  place-items: center;
+  padding: 0 12px;
   border-radius: 999px;
-  background: transparent;
-  font-size: 13px;
+  color: rgba(23, 35, 31, 0.62);
+  background: rgba(255, 255, 255, 0.5);
+  font-size: 12px;
   font-weight: 820;
+  white-space: nowrap;
+}
+
+.accounting-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 86px;
+  height: 34px;
+  padding: 0 13px;
+  border: 1px solid rgba(23, 35, 31, 0.08);
+  border-radius: 999px;
+  color: var(--accounting-ink);
+  background: rgba(255, 255, 255, 0.62);
+  font-size: 12px;
+  font-weight: 840;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78);
+  transition:
+    transform 160ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.accounting-action:hover {
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow:
+    0 10px 22px rgba(31, 46, 42, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.86);
+  transform: translateY(-1px);
+}
+
+.accounting-action:active {
+  transform: scale(0.97);
 }
 
 .accounting-workspace {
@@ -1275,14 +1302,234 @@
   white-space: nowrap;
 }
 
-.ios-ledger-workspace {
-  grid-template-columns: minmax(356px, 0.9fr) minmax(284px, 0.72fr) minmax(260px, 0.58fr);
+.ios-account-ledger-workspace {
+  grid-template-columns: minmax(284px, 0.66fr) minmax(0, 1.58fr);
+  overflow: hidden;
 }
 
-.ios-ledger-flow,
-.ios-ledger-detail,
-.ios-ledger-insight {
+.ios-account-filter-panel,
+.ios-ledger-main {
   height: 100%;
+  overflow: hidden;
+}
+
+.ios-account-stack-summary {
+  display: grid;
+  gap: 4px;
+  padding: 0 16px 7px;
+}
+
+.ios-account-stack-summary span {
+  color: var(--accounting-muted);
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.ios-account-stack-summary strong {
+  color: var(--accounting-ink);
+  font-size: 27px;
+  line-height: 1;
+}
+
+.ios-account-filter-stack {
+  display: grid;
+  align-content: start;
+  min-height: 0;
+  padding: 1px 14px 14px;
+  overflow: hidden;
+}
+
+.ios-account-filter-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 84px;
+  padding: 13px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 24px;
+  color: #ffffff;
+  background:
+    radial-gradient(circle at 86% 14%, rgba(255, 255, 255, 0.2), transparent 32%),
+    linear-gradient(135deg, #123f35, #0d2d26);
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 20px 44px rgba(18, 49, 43, 0.18);
+  transform: translateY(0) scale(0.985);
+  transition:
+    transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 180ms ease,
+    filter 180ms ease;
+}
+
+.ios-account-filter-card + .ios-account-filter-card {
+  margin-top: -21px;
+}
+
+.ios-account-filter-card--1 {
+  background:
+    radial-gradient(circle at 86% 14%, rgba(255, 255, 255, 0.18), transparent 32%),
+    linear-gradient(135deg, #315b68, #183b44);
+}
+
+.ios-account-filter-card--2 {
+  background:
+    radial-gradient(circle at 86% 14%, rgba(255, 255, 255, 0.18), transparent 32%),
+    linear-gradient(135deg, #934e47, #5a302d);
+}
+
+.ios-account-filter-card--3 {
+  background:
+    radial-gradient(circle at 86% 14%, rgba(255, 255, 255, 0.18), transparent 32%),
+    linear-gradient(135deg, #5b6651, #31392f);
+}
+
+.ios-account-filter-card--4 {
+  background:
+    radial-gradient(circle at 86% 14%, rgba(255, 255, 255, 0.18), transparent 32%),
+    linear-gradient(135deg, #604f7a, #332847);
+}
+
+.ios-account-filter-card:hover,
+.ios-account-filter-card.is-active {
+  z-index: 2;
+  filter: saturate(1.08);
+  transform: translateY(-4px) scale(1);
+  box-shadow: 0 25px 54px rgba(18, 49, 43, 0.24);
+}
+
+.ios-account-filter-card__check {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 12px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.ios-account-filter-card__body,
+.ios-account-filter-card__side {
+  display: grid;
+  gap: 4px;
+}
+
+.ios-account-filter-card__body strong,
+.ios-account-filter-card__body em,
+.ios-account-filter-card__side b,
+.ios-account-filter-card__side small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ios-account-filter-card__body strong {
+  color: #fff;
+  font-size: 15px;
+  font-weight: 880;
+}
+
+.ios-account-filter-card__body em,
+.ios-account-filter-card__side small {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 740;
+}
+
+.ios-account-filter-card__side {
+  justify-items: end;
+}
+
+.ios-account-filter-card__side b {
+  color: #fff;
+  font-size: 15px;
+  font-weight: 880;
+}
+
+.ios-ledger-main {
+  overflow: hidden;
+}
+
+.ios-ledger-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+  padding: 13px 14px 10px;
+}
+
+.ios-ledger-toolbar > div:first-child {
+  display: grid;
+  gap: 2px;
+}
+
+.ios-ledger-toolbar strong {
+  color: var(--accounting-ink);
+  font-size: 16px;
+  font-weight: 880;
+}
+
+.ios-ledger-toolbar span {
+  color: var(--accounting-muted);
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.ios-ledger-toolbar__meta {
+  display: grid;
+  justify-items: end;
+  gap: 2px;
+}
+
+.ios-ledger-toolbar__meta b {
+  color: var(--accounting-ink);
+  font-size: 13px;
+  font-weight: 860;
+}
+
+.ios-ledger-toolbar__actions {
+  display: inline-flex;
+  gap: 7px;
+}
+
+.ios-ledger-toolbar__actions button,
+.accounting-modal-actions button,
+.ios-form-chip-row button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid rgba(23, 35, 31, 0.08);
+  border-radius: 999px;
+  color: var(--accounting-ink);
+  background: rgba(255, 255, 255, 0.62);
+  font-size: 12px;
+  font-weight: 840;
+  cursor: pointer;
+  transition:
+    transform 150ms ease,
+    background 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.ios-ledger-toolbar__actions button:first-child,
+.accounting-modal-actions button.is-primary {
+  color: #fff;
+  border-color: rgba(18, 63, 53, 0.1);
+  background: rgba(18, 63, 53, 0.92);
+}
+
+.ios-ledger-toolbar__actions button:hover,
+.accounting-modal-actions button:hover,
+.ios-form-chip-row button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 20px rgba(31, 46, 42, 0.08);
 }
 
 .accounting-scroll--ledger {
@@ -1299,11 +1546,11 @@
 
 .ios-transaction-row {
   display: grid;
-  grid-template-columns: 38px minmax(0, 1fr) auto;
+  grid-template-columns: 38px minmax(0, 1fr) minmax(128px, 0.52fr) auto;
   align-items: center;
   gap: 10px;
   width: 100%;
-  min-height: 66px;
+  min-height: 68px;
   padding: 10px;
   border: 1px solid rgba(23, 35, 31, 0.06);
   border-radius: 20px;
@@ -1358,6 +1605,7 @@
 }
 
 .ios-transaction-row__body,
+.ios-transaction-row__tags,
 .ios-transaction-row__side {
   display: grid;
   gap: 3px;
@@ -1366,8 +1614,10 @@
 .ios-transaction-row__body strong,
 .ios-transaction-row__body em,
 .ios-transaction-row__body small,
+.ios-transaction-row__tags i,
 .ios-transaction-row__side b,
-.ios-transaction-row__side time {
+.ios-transaction-row__side time,
+.ios-transaction-row__side small {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1381,11 +1631,21 @@
 
 .ios-transaction-row__body em,
 .ios-transaction-row__body small,
-.ios-transaction-row__side time {
+.ios-transaction-row__tags i,
+.ios-transaction-row__side time,
+.ios-transaction-row__side small {
   color: var(--accounting-muted);
   font-size: 11px;
   font-style: normal;
   font-weight: 720;
+}
+
+.ios-transaction-row__tags i {
+  width: max-content;
+  max-width: 100%;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(23, 35, 31, 0.055);
 }
 
 .ios-transaction-row__side {
@@ -1394,10 +1654,6 @@
 
 .ios-transaction-row__side b {
   font-size: 14px;
-}
-
-.ios-ledger-detail {
-  overflow: hidden;
 }
 
 .ios-amount-card {
@@ -1488,46 +1744,6 @@
   font-weight: 820;
 }
 
-.ios-ledger-insight {
-  display: grid;
-  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 12px;
-}
-
-.ios-taxonomy-preview header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 14px 14px 8px;
-}
-
-.ios-taxonomy-preview header span {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  color: var(--accounting-ink);
-  font-size: 14px;
-  font-weight: 850;
-}
-
-.ios-taxonomy-preview header em {
-  color: var(--accounting-muted);
-  font-size: 12px;
-  font-style: normal;
-  font-weight: 760;
-}
-
-.ios-taxonomy-preview__rows {
-  display: grid;
-  align-content: start;
-  gap: 7px;
-  min-height: 0;
-  padding: 0 10px 12px;
-  overflow: hidden;
-}
-
-.ios-taxonomy-preview__rows button,
 .ios-bar-rows article,
 .ios-tree-stats article {
   position: relative;
@@ -1544,13 +1760,6 @@
   text-align: left;
 }
 
-.ios-taxonomy-preview__rows button.is-selected {
-  border-color: rgba(18, 63, 53, 0.22);
-  background: rgba(18, 63, 53, 0.08);
-}
-
-.ios-taxonomy-preview__rows span,
-.ios-taxonomy-preview__rows strong,
 .ios-bar-rows span,
 .ios-bar-rows strong,
 .ios-tree-stats span,
@@ -1561,7 +1770,6 @@
   white-space: nowrap;
 }
 
-.ios-taxonomy-preview__rows span,
 .ios-bar-rows span,
 .ios-tree-stats span {
   color: rgba(23, 35, 31, 0.68);
@@ -1569,7 +1777,6 @@
   font-weight: 780;
 }
 
-.ios-taxonomy-preview__rows strong,
 .ios-bar-rows strong,
 .ios-tree-stats em {
   color: var(--accounting-ink);
@@ -1578,7 +1785,6 @@
   font-weight: 820;
 }
 
-.ios-taxonomy-preview__rows i,
 .ios-bar-rows i,
 .ios-tree-stats i {
   grid-column: 1 / -1;
@@ -1588,6 +1794,149 @@
   background:
     linear-gradient(90deg, var(--accounting-accent), rgba(18, 63, 53, 0.28)) 0 0 / calc(var(--bar-share) * 100%) 100% no-repeat,
     rgba(23, 35, 31, 0.08);
+}
+
+.ios-empty-ledger {
+  display: grid;
+  min-height: 120px;
+  place-items: center;
+  color: var(--accounting-muted);
+  font-size: 13px;
+  font-weight: 760;
+}
+
+.accounting-modal-backdrop {
+  position: fixed;
+  z-index: 30;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: max(18px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
+  background: rgba(14, 20, 18, 0.24);
+  backdrop-filter: blur(18px) saturate(1.05);
+}
+
+.accounting-modal-card {
+  display: grid;
+  gap: 12px;
+  width: min(520px, 100%);
+  max-height: min(680px, calc(100svh - 36px));
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  border-radius: 28px;
+  background:
+    linear-gradient(150deg, rgba(255, 255, 255, 0.9), rgba(242, 246, 243, 0.86)),
+    #f6f8f6;
+  box-shadow:
+    0 30px 80px rgba(14, 25, 22, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.accounting-modal-card--new {
+  width: min(460px, 100%);
+}
+
+.accounting-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 16px 0;
+}
+
+.accounting-modal-head div {
+  display: grid;
+  gap: 3px;
+}
+
+.accounting-modal-head span {
+  color: var(--accounting-muted);
+  font-size: 12px;
+  font-weight: 780;
+}
+
+.accounting-modal-head strong {
+  color: var(--accounting-ink);
+  font-size: 20px;
+  font-weight: 880;
+}
+
+.accounting-modal-head button {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid rgba(23, 35, 31, 0.08);
+  border-radius: 999px;
+  color: var(--accounting-ink);
+  background: rgba(255, 255, 255, 0.72);
+  cursor: pointer;
+}
+
+.accounting-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 0 16px 16px;
+}
+
+.accounting-modal-actions button.is-danger {
+  color: #fff;
+  border-color: rgba(184, 84, 76, 0.1);
+  background: rgba(184, 84, 76, 0.92);
+}
+
+.ios-detail-list span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ios-new-transaction-form {
+  display: grid;
+  gap: 10px;
+  padding: 0 16px;
+}
+
+.ios-new-transaction-form label {
+  display: grid;
+  gap: 7px;
+}
+
+.ios-new-transaction-form label > span {
+  color: var(--accounting-muted);
+  font-size: 12px;
+  font-weight: 780;
+}
+
+.ios-new-transaction-form input {
+  width: 100%;
+  height: 42px;
+  padding: 0 12px;
+  border: 1px solid rgba(23, 35, 31, 0.08);
+  border-radius: 15px;
+  color: var(--accounting-ink);
+  background: rgba(255, 255, 255, 0.62);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 760;
+  outline: none;
+}
+
+.ios-new-transaction-form input:focus {
+  border-color: rgba(18, 63, 53, 0.24);
+  box-shadow: 0 0 0 3px rgba(18, 63, 53, 0.08);
+}
+
+.ios-form-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.ios-form-chip-row button.is-active {
+  color: #fff;
+  background: rgba(18, 63, 53, 0.92);
 }
 
 .ios-accounts-workspace {
@@ -2223,10 +2572,6 @@
     display: none;
   }
 
-  .accounting-mode-tabs {
-    width: 100%;
-  }
-
   .accounting-workspace {
     grid-template-columns: minmax(0, 1fr);
     gap: 8px;
@@ -2242,22 +2587,81 @@
     padding: 11px 12px 8px;
   }
 
-  .ios-ledger-workspace {
-    grid-template-rows: minmax(190px, 1fr) minmax(170px, 0.75fr) minmax(130px, 0.58fr);
+  .ios-account-ledger-workspace {
+    grid-template-rows: 222px minmax(0, 1fr);
   }
 
-  .ios-ledger-insight {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-rows: minmax(0, 1fr);
+  .ios-account-filter-panel {
+    min-height: 0;
+  }
+
+  .ios-account-stack-summary {
+    display: none;
+  }
+
+  .ios-account-filter-stack {
+    padding: 0 10px 10px;
+    overflow: hidden;
+  }
+
+  .ios-account-filter-card {
+    grid-template-columns: 26px minmax(0, 1fr) auto;
+    min-height: 54px;
+    padding: 9px;
+    border-radius: 17px;
+  }
+
+  .ios-account-filter-card + .ios-account-filter-card {
+    margin-top: -25px;
+  }
+
+  .ios-account-filter-card__check {
+    width: 26px;
+    height: 26px;
+    border-radius: 10px;
+  }
+
+  .ios-account-filter-card__body strong,
+  .ios-account-filter-card__side b {
+    font-size: 13px;
+  }
+
+  .ios-account-filter-card__body em,
+  .ios-account-filter-card__side small {
+    font-size: 10px;
+  }
+
+  .ios-ledger-toolbar {
+    grid-template-columns: minmax(0, 1fr) auto;
     gap: 8px;
+    padding: 10px 11px 8px;
   }
 
-  .ios-taxonomy-preview__rows button:nth-child(n + 4),
+  .ios-ledger-toolbar__actions {
+    grid-column: 1 / -1;
+  }
+
+  .ios-ledger-toolbar__actions button {
+    flex: 1 1 0;
+  }
+
   .ios-fund-map article:nth-child(n + 4),
   .ios-account-movement__rows article:nth-child(n + 5),
   .ios-tag-cross__rows article:nth-child(n + 4),
   .ios-bar-rows article:nth-child(n + 5),
   .ios-tree-stats article:nth-child(n + 4) {
+    display: none;
+  }
+
+  .ios-transaction-row {
+    grid-template-columns: 34px minmax(0, 1fr) auto;
+    min-height: 60px;
+    gap: 8px;
+    padding: 8px;
+    border-radius: 17px;
+  }
+
+  .ios-transaction-row__tags {
     display: none;
   }
 
@@ -2361,6 +2765,10 @@
     min-height: 34px;
     padding: 6px 9px;
   }
+
+  .accounting-modal-card {
+    border-radius: 24px;
+  }
 }
 
 @media (min-width: 721px) and (max-width: 1240px), (min-width: 721px) and (max-height: 790px) {
@@ -2390,10 +2798,6 @@
     font-size: 14px;
   }
 
-  .accounting-mode-tabs {
-    width: 194px;
-  }
-
   .ios-panel {
     border-radius: 22px;
   }
@@ -2402,8 +2806,25 @@
     padding: 11px 13px 8px;
   }
 
-  .ios-ledger-workspace {
-    grid-template-columns: minmax(286px, 0.88fr) minmax(226px, 0.7fr) minmax(214px, 0.58fr);
+  .ios-account-ledger-workspace {
+    grid-template-columns: minmax(240px, 0.58fr) minmax(0, 1.42fr);
+  }
+
+  .ios-account-filter-card {
+    min-height: 76px;
+    padding: 11px;
+  }
+
+  .ios-account-filter-card + .ios-account-filter-card {
+    margin-top: -18px;
+  }
+
+  .ios-ledger-toolbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .ios-ledger-toolbar__actions {
+    grid-column: 1 / -1;
   }
 
   .ios-accounts-workspace {
