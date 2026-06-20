@@ -123,15 +123,22 @@ describe('map chrome layout', () => {
       'grid-template-columns: minmax(300px, 0.42fr) minmax(0, 1fr) minmax(300px, 0.42fr)',
     )
     expect(workspaceRule).toContain('align-items: start')
+    expect(workspaceRule).toContain('position: relative')
     expect(ledgerMainPlacementRule).toContain('grid-column: 2')
     expect(accountPanelPlacementRule).toContain('align-self: start')
-    expect(accountPanelPlacementRule).toContain('grid-column: 3')
+    expect(accountPanelPlacementRule).toContain('position: fixed')
+    expect(accountPanelPlacementRule).toContain('top: 104px')
+    expect(accountPanelPlacementRule).toContain('right: 24px')
+    expect(accountPanelPlacementRule).toContain('width: min(372px, calc((100vw - 1200px) / 2 + 300px - 24px))')
+    expect(accountPanelPlacementRule).toContain('height: calc(100svh - 122px)')
+    expect(accountPanelPlacementRule).not.toContain('grid-column: 3')
     expect(cssRuleIn(mobileMedia, '.ios-account-ledger-workspace')).toContain('grid-column: 1')
     expect(cssRuleIn(mobileMedia, '.ios-account-ledger-workspace')).toContain(
       'grid-template-columns: minmax(0, 1fr)',
     )
     expect(cssRuleIn(mobileMedia, '.ios-ledger-main')).toContain('grid-column: 1')
     expect(cssRuleIn(mobileMedia, '.ios-account-filter-panel')).toContain('grid-column: 1')
+    expect(cssRuleIn(mobileMedia, '.ios-account-filter-panel')).toContain('position: static')
   })
 
   it('keeps the shared time panel high in the left rail without a fake top spacer', () => {
@@ -501,13 +508,36 @@ describe('map chrome layout', () => {
   it('keeps ledger rows in the main center column and account cards in the right rail', () => {
     const ledgerSource = readFileSync('src/components/accounting/LedgerWorkspace.tsx', 'utf8')
     const workspaceRule = cssRule('.ios-account-ledger-workspace')
+    const accountPanelRule = cssRule('.ios-account-filter-panel')
 
     expect(workspaceRule).toContain(
       'grid-template-columns: minmax(300px, 0.42fr) minmax(0, 1fr) minmax(300px, 0.42fr)',
     )
+    expect(accountPanelRule).toContain('position: fixed')
+    expect(accountPanelRule).toContain('right: 24px')
     expect(ledgerSource.indexOf('className="ios-panel ios-ledger-main"')).toBeLessThan(
       ledgerSource.indexOf('className="ios-panel ios-account-filter-panel"'),
     )
+  })
+
+  it('keeps the desktop account stack near the right rail top with enough room for full cards', () => {
+    const panelRule = cssRule('.ios-account-filter-panel')
+    const summaryRule = cssRule('.ios-account-stack-summary')
+    const allFilterRule = cssRule('.ios-account-all-filter')
+    const stackRule = cssRule('.ios-account-filter-stack')
+
+    expect(panelRule).toContain('padding-bottom: 16px')
+    expect(summaryRule).toContain('grid-template-columns: minmax(0, 1fr) auto')
+    expect(summaryRule).toContain('padding: 0 16px 4px')
+    expect(summaryRule).not.toContain('gap: 4px')
+    expect(allFilterRule).toContain('margin: 0 14px 8px')
+    expect(stackRule).toContain('height: 470px')
+    expect(stackRule).toContain('margin-top: 0')
+    expect(stackRule).toContain('padding: 4px 20px 16px 14px')
+    expect(cssCustomPx(cssRule('.ios-account-filter-card--rank-0'), '--account-card-stack-y')).toBe(318)
+    expect(cssCustomPx(cssRule('.ios-account-filter-card--rank-1'), '--account-card-stack-y')).toBe(212)
+    expect(cssCustomPx(cssRule('.ios-account-filter-card--rank-2'), '--account-card-stack-y')).toBe(106)
+    expect(cssCustomPx(cssRule('.ios-account-filter-card--rank-3'), '--account-card-stack-y')).toBe(0)
   })
 
   it('keeps all-ledger selection outside the stack and detaches the selected account before spreading the remaining cards', () => {
@@ -537,15 +567,18 @@ describe('map chrome layout', () => {
     expect(cssRule('.ios-account-selected-slot')).toContain(
       '420ms cubic-bezier(0.16, 1, 0.3, 1)',
     )
-    expect(cssRule('.ios-account-filter-stack')).toContain('margin-top: 18px')
+    expect(cssRule('.ios-account-filter-stack')).toContain('margin-top: 0')
     expect(cssRule('.ios-account-filter-stack')).toContain('position: relative')
-    expect(cssRule('.ios-account-filter-stack')).toContain('height: 270px')
+    expect(cssRule('.ios-account-filter-stack')).toContain('height: 470px')
     expect(cssRule('.ios-account-filter-stack')).toContain('perspective: 1100px')
     expect(cssRule('.ios-account-filter-stack')).toContain('transform-style: preserve-3d')
     expect(cssRule('.ios-account-filter-stack.is-spread')).not.toContain('gap:')
     expect(cssRule('.ios-account-filter-stack .ios-account-filter-card')).toContain('position: absolute')
     expect(cssRule('.ios-account-filter-stack .ios-account-filter-card')).toContain(
       'top: var(--account-card-stack-y)',
+    )
+    expect(cssRule('.ios-account-filter-stack .ios-account-filter-card')).toContain(
+      'width: calc(100% - 34px)',
     )
     expect(cssRule('.ios-account-filter-card')).toContain('width: 100%')
     expect(cssRule('.ios-account-filter-card__surface')).toContain('transform-origin: center bottom')
@@ -568,9 +601,9 @@ describe('map chrome layout', () => {
     expect(cssRule('.ios-account-filter-card--rank-2')).toContain('--account-card-shift-x: 32px')
     expect(cssRule('.ios-account-filter-card--rank-3')).toContain('--account-card-lift: 0px')
     expect(cssRule('.ios-account-filter-card--rank-3')).toContain('--account-card-shift-x: 48px')
-    expect(cssCustomPx(cssRule('.ios-account-filter-card--rank-0'), '--account-card-stack-y')).toBe(174)
-    expect(cssCustomPx(cssRule('.ios-account-filter-card--rank-1'), '--account-card-stack-y')).toBe(116)
-    expect(cssCustomPx(cssRule('.ios-account-filter-card--rank-2'), '--account-card-stack-y')).toBe(58)
+    expect(cssCustomPx(cssRule('.ios-account-filter-card--rank-0'), '--account-card-stack-y')).toBe(318)
+    expect(cssCustomPx(cssRule('.ios-account-filter-card--rank-1'), '--account-card-stack-y')).toBe(212)
+    expect(cssCustomPx(cssRule('.ios-account-filter-card--rank-2'), '--account-card-stack-y')).toBe(106)
     expect(cssCustomPx(cssRule('.ios-account-filter-card--rank-3'), '--account-card-stack-y')).toBe(0)
     expect(cssCustomPx(cssRule('.ios-account-filter-card--rank-0'), '--account-card-stack-y')).toBeGreaterThan(
       cssCustomPx(cssRule('.ios-account-filter-card--rank-1'), '--account-card-stack-y'),
