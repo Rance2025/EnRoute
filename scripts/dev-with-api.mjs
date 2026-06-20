@@ -1,32 +1,34 @@
 import { spawn } from 'node:child_process'
+import { createRequire } from 'node:module'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 if (isMainModule()) {
   runDevWithApi()
 }
 
-export function getNpmCommand(platform, npmExecPath = process.env.npm_execpath) {
-  return platform === 'win32' && npmExecPath
-    ? { command: process.execPath, args: [npmExecPath] }
-    : { command: 'npm', args: [] }
-}
+const require = createRequire(import.meta.url)
 
-function runDevWithApi() {
-  const npmCommand = getNpmCommand(process.platform)
-  const commands = [
+export function createDevCommands() {
+  const viteBinPath = join(dirname(require.resolve('vite/package.json')), 'bin', 'vite.js')
+
+  return [
     {
       name: 'api',
-      command: 'node',
+      command: process.execPath,
       args: ['server/dev-server.mjs'],
     },
     {
       name: 'vite',
-      command: npmCommand.command,
-      args: [...npmCommand.args, 'run', 'dev', '--', '--host', '127.0.0.1', '--port', '5173'],
+      command: process.execPath,
+      args: [viteBinPath, '--host', '127.0.0.1', '--port', '5173'],
     },
   ]
+}
 
+function runDevWithApi() {
   let shuttingDown = false
+  const commands = createDevCommands()
   const children = commands.map(({ name, command, args }) => {
     const child = spawn(command, args, {
       stdio: ['ignore', 'pipe', 'pipe'],

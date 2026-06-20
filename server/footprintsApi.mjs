@@ -84,10 +84,21 @@ function parseFootprintRow(cells, columnIndex, rowIndex, sourceCoordinateSystem)
   const longitude = value('longitude')
   const latitude = value('latitude')
   const timestampSeconds = value('dataTime')
+  const numericFields = {
+    accuracy: value('accuracy'),
+    speed: value('speed'),
+    distance: value('distance'),
+    heading: value('heading'),
+    altitude: value('altitude'),
+    locType: value('locType'),
+    isBackForeground: value('isBackForeground'),
+    stepType: value('stepType'),
+  }
 
   if (!Number.isFinite(longitude) || longitude < -180 || longitude > 180) return null
   if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90) return null
   if (!Number.isFinite(timestampSeconds) || timestampSeconds <= 0) return null
+  if (Object.values(numericFields).some((fieldValue) => !Number.isFinite(fieldValue))) return null
 
   const transformedCoordinate = transformFootprintCoordinate({
     longitude,
@@ -100,14 +111,7 @@ function parseFootprintRow(cells, columnIndex, rowIndex, sourceCoordinateSystem)
     timestampSeconds: Math.trunc(timestampSeconds),
     longitude: transformedCoordinate.longitude,
     latitude: transformedCoordinate.latitude,
-    accuracy: value('accuracy'),
-    speed: value('speed'),
-    distance: value('distance'),
-    heading: value('heading'),
-    altitude: value('altitude'),
-    locType: value('locType'),
-    isBackForeground: value('isBackForeground'),
-    stepType: value('stepType'),
+    ...numericFields,
   }
 }
 

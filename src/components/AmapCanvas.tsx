@@ -44,6 +44,7 @@ function AmapCanvasComponent({ config, timeRange, onPanelWidthChange }: AmapCanv
   const mapNodeRef = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<AMap.Map | null>(null)
   const amapRef = useRef<AMapNamespace | null>(null)
+  const geolocationRef = useRef<AMap.Geolocation | null>(null)
   const disposeDragRef = useRef<(() => void) | null>(null)
   const disposeZoomRef = useRef<(() => void) | null>(null)
   const disposeZoomClampRef = useRef<(() => void) | null>(null)
@@ -191,6 +192,16 @@ function AmapCanvasComponent({ config, timeRange, onPanelWidthChange }: AmapCanv
         map.on('zoomend', clampLatitudeBounds)
         disposeZoomClampRef.current = () => map.off('zoomend', clampLatitudeBounds)
 
+        geolocationRef.current = new AMap.Geolocation({
+          enableHighAccuracy: true,
+          timeout: 8000,
+          zoomToAccuracy: true,
+          position: {
+            right: '24px',
+            bottom: '136px',
+          },
+        })
+
         mapRef.current = map
         updatePaneLayout(map, mapNodeRef.current)
         if (import.meta.env.DEV) {
@@ -220,6 +231,7 @@ function AmapCanvasComponent({ config, timeRange, onPanelWidthChange }: AmapCanv
 
     return () => {
       disposed = true
+      geolocationRef.current = null
       footprintAbortControllerRef.current?.abort()
       footprintAbortControllerRef.current = null
       clearZoomClampTimers()
@@ -313,6 +325,10 @@ function AmapCanvasComponent({ config, timeRange, onPanelWidthChange }: AmapCanv
     )
   }
 
+  function locate() {
+    geolocationRef.current?.getCurrentPosition()
+  }
+
   function zoomIn() {
     if (!mapRef.current || !mapNodeRef.current) return
     zoomByStep(mapRef.current, mapNodeRef.current, config.renderBounds, 1)
@@ -334,6 +350,7 @@ function AmapCanvasComponent({ config, timeRange, onPanelWidthChange }: AmapCanv
         <>
           <MapControls
             onFitFootprints={fitDisplayedFootprints}
+            onLocate={locate}
             onShowWorld={showWorldMap}
             onZoomIn={zoomIn}
             onZoomOut={zoomOut}
