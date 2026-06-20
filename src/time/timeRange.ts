@@ -448,7 +448,7 @@ function getWeekPickerPage(selection: TimeRangeSelection): PickerPage {
       return {
         key: startKey,
         label: `第${getWeekNumber(startKey)}周`,
-        detail: `${formatMonthDay(startKey)} - ${formatMonthDay(endKey)}`,
+        detail: `${formatMonthDay(startKey)}-${formatMonthDay(endKey)}`,
         start: startKey,
         end: endKey,
         active: selection.mode === 'week' && selection.start === startKey,

@@ -616,7 +616,7 @@ describe('unified shell layout', () => {
     expect(within(weekPicker).getByLabelText('上一页')).toBeInTheDocument()
     expect(within(weekPicker).getByLabelText('下一页')).toBeInTheDocument()
     expect(currentWeekButton).toBeInTheDocument()
-    expect(within(currentWeekButton).getByText('6月15日 - 6月21日')).toBeInTheDocument()
+    expect(within(currentWeekButton).getByText('6月15日-6月21日')).toBeInTheDocument()
     expect(within(currentWeekButton).queryByText('2026年 6月15日 - 6月21日')).not.toBeInTheDocument()
     const currentWeekCardTop = screen.getByText('全局时间范围').closest('.time-context-card__top')
     expect(currentWeekCardTop).not.toBeNull()

@@ -267,8 +267,12 @@ describe('time range selection model', () => {
     ])
     expect(weekPage.options.find((option) => option.start === '2026-07-20')).toMatchObject({
       label: '第30周',
-      detail: '7月20日 - 7月26日',
+      detail: '7月20日-7月26日',
       active: true,
+    })
+
+    expect(weekPage.options.find((option) => option.start === '2026-06-29')).toMatchObject({
+      detail: '6月29日-7月5日',
     })
 
     const monthPage = getPickerPage(selectMonth(2026, 7))
