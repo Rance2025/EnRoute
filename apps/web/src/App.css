@@ -1272,8 +1272,8 @@
 .accounting-page {
   --accounting-ink: #17231f;
   --accounting-muted: rgba(23, 35, 31, 0.56);
-  --accounting-faint: rgba(23, 35, 31, 0.08);
-  --accounting-panel: rgba(255, 255, 255, 0.68);
+  --accounting-faint: rgba(23, 35, 31, 0.07);
+  --accounting-panel: rgba(255, 255, 255, 0.5);
   --accounting-accent: #123f35;
   --accounting-income: #1f7654;
   --accounting-expense: #b8544c;
@@ -1290,9 +1290,9 @@
   overflow: hidden;
   color: var(--accounting-ink);
   background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.68), rgba(238, 243, 239, 0.78)),
-    radial-gradient(circle at 88% 14%, rgba(49, 91, 104, 0.12), transparent 30%),
-    #f2f5f2;
+    radial-gradient(circle at 56% 8%, rgba(255, 255, 255, 0.68), transparent 34%),
+    linear-gradient(145deg, rgba(238, 244, 242, 0.66), rgba(204, 214, 215, 0.78)),
+    #ccd6d7;
 }
 
 .accounting-page * {
@@ -1347,12 +1347,12 @@
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  border: 1px solid rgba(23, 35, 31, 0.08);
+  border: 1px solid rgba(23, 35, 31, 0.065);
   border-radius: 26px;
   background: var(--accounting-panel);
   box-shadow:
-    0 18px 46px rgba(31, 46, 42, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.78);
+    0 24px 58px rgba(35, 52, 48, 0.09),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
   backdrop-filter: blur(22px) saturate(1.1);
 }
 
@@ -1393,6 +1393,7 @@
 .ios-ledger-main {
   grid-column: 1;
   height: calc(100svh - 150px);
+  background: rgba(255, 255, 255, 0.5);
   overflow: hidden;
 }
 
@@ -1408,6 +1409,11 @@
   padding: 14px 18px 16px;
   overflow: visible;
   border-radius: 26px;
+  background: rgba(255, 255, 255, 0.46);
+  box-shadow:
+    0 24px 58px rgba(35, 52, 48, 0.09),
+    inset 0 1px 0 rgba(255, 255, 255, 0.68);
+  backdrop-filter: blur(22px) saturate(1.08);
 }
 
 .ios-account-filter-panel__accounts {
@@ -1420,10 +1426,9 @@
 .ios-account-filter-panel__secondary {
   min-height: 0;
   overflow: hidden;
-  border-top: 1px solid rgba(23, 35, 31, 0.08);
-  border-radius: 0 0 18px 18px;
+  border-top: 1px solid rgba(23, 35, 31, 0.06);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.12));
+    linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0));
 }
 
 .ios-account-filter-panel .ios-panel-head {
@@ -1461,15 +1466,12 @@
   margin: 0 0 10px;
   padding: 0 12px;
   overflow: hidden;
-  border: 1px solid rgba(23, 35, 31, 0.08);
+  border: 1px solid rgba(23, 35, 31, 0.065);
   border-radius: 15px;
   color: var(--accounting-ink);
-  background: rgba(255, 255, 255, 0.58);
+  background: rgba(255, 255, 255, 0.48);
   text-align: left;
   cursor: pointer;
-  box-shadow:
-    0 10px 24px rgba(31, 46, 42, 0.06),
-    inset 0 1px 0 rgba(255, 255, 255, 0.72);
   transition:
     transform 180ms ease,
     background 180ms ease,
@@ -1498,10 +1500,10 @@
 
 .ios-account-all-filter:hover,
 .ios-account-all-filter[aria-pressed='true'] {
-  background: rgba(255, 255, 255, 0.84);
+  background: rgba(255, 255, 255, 0.68);
   box-shadow:
-    0 13px 28px rgba(31, 46, 42, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.86);
+    0 10px 24px rgba(31, 46, 42, 0.07),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
 }
 
 .ios-account-all-filter:active {
