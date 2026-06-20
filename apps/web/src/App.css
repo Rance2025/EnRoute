@@ -2751,7 +2751,7 @@
 .footprint-style-popover {
   position: absolute;
   right: 0;
-  bottom: calc(100% + 10px);
+  bottom: calc(100% + 16px);
   width: 218px;
   max-width: calc(100vw - 28px);
   padding: 12px;

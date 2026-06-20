@@ -1061,7 +1061,7 @@ describe('map chrome layout', () => {
     expect(mapControlsSource).toContain('ref={settingsRef}')
     expect(popoverRule).toContain('position: absolute')
     expect(popoverRule).toContain('right: 0')
-    expect(popoverRule).toContain('bottom: calc(100% + 10px)')
+    expect(popoverRule).toContain('bottom: calc(100% + 16px)')
     expect(popoverRule).toContain('width: 218px')
     expect(popoverRule).toContain('max-width: calc(100vw - 28px)')
     expect(popoverRule).toContain('border-radius: 10px')
