@@ -1,11 +1,11 @@
-import '@testing-library/jest-dom/vitest'
+﻿import '@testing-library/jest-dom/vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { AmapConfig } from '../config/amap'
 import type { FootprintPoint } from '../layers/footprintTypes'
 import {
-  createTodaySelection,
+  selectDay,
   selectPresetRange,
   type TimeRangeSelection,
 } from '../time/timeRange'
@@ -88,11 +88,17 @@ async function renderFootprintMassMarks({
   containerSize = { width: 1024, height: 768 },
   loadFootprintsPromise,
   mapOverrides,
+  onFootprintMetricsChange = vi.fn(),
   timeRange = selectPresetRange('all'),
 }: {
   containerSize?: { width: number; height: number }
   loadFootprintsPromise: Promise<FootprintPoint[]>
   mapOverrides?: Partial<MockMap>
+  onFootprintMetricsChange?: (metrics: {
+    displayedCount: number
+    totalCount: number
+    activeDayCount: number
+  }) => void
   timeRange?: TimeRangeSelection
 }) {
   const mapMoveHandlers: Array<() => void> = []
@@ -180,7 +186,13 @@ async function renderFootprintMassMarks({
   }))
 
   const { AmapCanvas } = await import('./AmapCanvas')
-  const renderResult = render(<AmapCanvas config={configuredAmap} timeRange={timeRange} />)
+  const renderResult = render(
+    <AmapCanvas
+      config={configuredAmap}
+      timeRange={timeRange}
+      onFootprintMetricsChange={onFootprintMetricsChange}
+    />,
+  )
   const mapSurface = renderResult.container.querySelector('.amap-surface') as HTMLElement
 
   Object.defineProperty(mapSurface, 'clientWidth', {
@@ -206,7 +218,13 @@ async function renderFootprintMassMarks({
     moveEndHandlers,
     renderResult,
     rerenderWithTimeRange(nextTimeRange: TimeRangeSelection) {
-      renderResult.rerender(<AmapCanvas config={configuredAmap} timeRange={nextTimeRange} />)
+      renderResult.rerender(
+        <AmapCanvas
+          config={configuredAmap}
+          timeRange={nextTimeRange}
+          onFootprintMetricsChange={onFootprintMetricsChange}
+        />,
+      )
     },
     zoomChangeHandlers,
     zoomEndHandlers,
@@ -262,7 +280,7 @@ describe('AmapCanvas footprint layer wiring', () => {
     const loadFootprints = createDeferred<FootprintPoint[]>()
     const { createMassFootprintLayer, layerRecords, rerenderWithTimeRange } = await renderFootprintMassMarks({
       loadFootprintsPromise: loadFootprints.promise,
-      timeRange: createTodaySelection(),
+      timeRange: selectDay('2026-06-19'),
     })
 
     await act(async () => {
@@ -283,6 +301,42 @@ describe('AmapCanvas footprint layer wiring', () => {
     expect(createMassFootprintLayer).toHaveBeenCalledTimes(1)
   })
 
+  it('reports total displayed and active-day footprint metrics for the shared time card', async () => {
+    const timedPoints: FootprintPoint[] = [
+      { ...loadedPoints[0], id: 'selected-a', timestampSeconds: 1781798400 },
+      { ...loadedPoints[1], id: 'selected-b', timestampSeconds: 1781884799 },
+      { ...loadedPoints[1], id: 'after', timestampSeconds: 1781884800 },
+    ]
+    const onFootprintMetricsChange = vi.fn()
+    const loadFootprints = createDeferred<FootprintPoint[]>()
+    const { rerenderWithTimeRange } = await renderFootprintMassMarks({
+      loadFootprintsPromise: loadFootprints.promise,
+      onFootprintMetricsChange,
+      timeRange: selectDay('2026-06-19'),
+    })
+
+    await act(async () => {
+      loadFootprints.resolve(timedPoints)
+      await Promise.resolve()
+    })
+
+    expect(onFootprintMetricsChange).toHaveBeenLastCalledWith({
+      displayedCount: 2,
+      totalCount: 3,
+      activeDayCount: 1,
+    })
+
+    rerenderWithTimeRange(selectPresetRange('all'))
+
+    await waitFor(() => {
+      expect(onFootprintMetricsChange).toHaveBeenLastCalledWith({
+        displayedCount: 3,
+        totalCount: 3,
+        activeDayCount: 2,
+      })
+    })
+  })
+
   it('fits the map to currently displayed footprint bounds from the toolbar', async () => {
     const timedPoints: FootprintPoint[] = [
       { ...loadedPoints[0], id: 'selected-west', timestampSeconds: 1781798400, longitude: 120, latitude: 30 },
@@ -294,7 +348,7 @@ describe('AmapCanvas footprint layer wiring', () => {
     await renderFootprintMassMarks({
       loadFootprintsPromise: loadFootprints.promise,
       mapOverrides: { setBounds },
-      timeRange: createTodaySelection(),
+      timeRange: selectDay('2026-06-19'),
     })
 
     await act(async () => {

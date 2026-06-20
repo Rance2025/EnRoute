@@ -30,6 +30,11 @@ import {
 } from '../time/timeRange'
 
 export type TimeRangeKey = TimeRangeMode
+export type TimeContextMetricItem = {
+  label: string
+  value: string
+  tone?: 'income' | 'expense'
+}
 
 const DAY_CALENDAR_TRANSITION_MS = 260
 
@@ -58,6 +63,7 @@ const weekdayLabels = ['一', '二', '三', '四', '五', '六', '日']
 type TimeContextPanelProps = {
   view: AppView
   selection: TimeRangeSelection
+  metricItems?: TimeContextMetricItem[]
   onSelectionChange: (selection: TimeRangeSelection) => void
 }
 
@@ -69,6 +75,7 @@ type TimeNavigationState = {
 }
 
 export function TimeContextPanel({
+  metricItems,
   view,
   selection,
   onSelectionChange,
@@ -82,9 +89,9 @@ export function TimeContextPanel({
   })
   const heading = getTimeRangeDisplay(selection)
   const resetLabel = getCurrentRangeActionLabel(selection.mode)
-  const accountingSummary = view === 'accounting'
+  const summaryItems = metricItems ?? (view === 'accounting'
     ? getAccountingSummary(selection)
-    : null
+    : [])
 
   useEffect(() => {
     if (!isDayCalendarCollapsingWeek) return undefined
@@ -170,12 +177,12 @@ export function TimeContextPanel({
             </button>
           </div>
 
-          {accountingSummary ? (
+          {summaryItems.length > 0 ? (
             <section
-              className="time-context-accounting-summary"
-              aria-label="记账概览卡片"
+              className="time-context-metric-strip"
+              aria-label="全局范围指标"
             >
-              {accountingSummary.map((item) => (
+              {summaryItems.map((item) => (
                 <div key={item.label}>
                   <span>{item.label}</span>
                   <strong className={item.tone ? `is-${item.tone}` : undefined}>
@@ -216,7 +223,7 @@ export function TimeContextPanel({
   )
 }
 
-function getAccountingSummary(selection: TimeRangeSelection) {
+function getAccountingSummary(selection: TimeRangeSelection): TimeContextMetricItem[] {
   const metrics = getPeriodMetrics(ledgerAtlasDataset, selection)
 
   return [
@@ -325,6 +332,44 @@ function renderModeContent(
   }
 
   return (
+    <CustomRangeSection
+      selection={selection}
+      onSelectionChange={onSelectionChange}
+    />
+  )
+}
+
+function CustomRangeSection({
+  selection,
+  onSelectionChange,
+}: {
+  selection: TimeRangeSelection
+  onSelectionChange: (selection: TimeRangeSelection) => void
+}) {
+  const [activeBoundary, setActiveBoundary] = useState<'start' | 'end' | null>(null)
+  const [pickerAnchorDate, setPickerAnchorDate] = useState(selection.anchorDate)
+
+  function openPicker(boundary: 'start' | 'end') {
+    setActiveBoundary((current) => (current === boundary ? null : boundary))
+    setPickerAnchorDate(selection[boundary])
+  }
+
+  function handleBoundaryInput(boundary: 'start' | 'end', value: string) {
+    onSelectionChange(updateCustomDateBoundary(selection, boundary, value))
+    if (isDateKey(value)) setPickerAnchorDate(value)
+  }
+
+  function handleDatePick(date: string) {
+    if (!activeBoundary) return
+
+    onSelectionChange(updateCustomDateBoundary(selection, activeBoundary, date))
+    setPickerAnchorDate(date)
+    setActiveBoundary(null)
+  }
+
+  const activeValue = activeBoundary ? selection[activeBoundary] : selection.end
+
+  return (
     <section className="time-custom-shell" aria-label="自定义时间范围">
       <div className="time-mode-section-head">
         <strong>自定义范围</strong>
@@ -335,40 +380,185 @@ function renderModeContent(
             key={preset.value}
             type="button"
             className={selection.label === preset.label ? 'is-active' : undefined}
-            onClick={() => onSelectionChange(selectPresetRange(preset.value))}
+            onClick={() => {
+              setActiveBoundary(null)
+              onSelectionChange(selectPresetRange(preset.value))
+            }}
           >
             {preset.label}
           </button>
         ))}
       </div>
-      <div className="time-range-fields">
-        <label>
-          <span>开始</span>
-          <input
-            aria-label="开始日期"
-            type="date"
-            value={selection.start}
-            onChange={(event) =>
-              onSelectionChange(updateCustomDateBoundary(selection, 'start', event.target.value))
-            }
-          />
-          <strong>{formatTimeRangeDate(selection.start)}</strong>
-        </label>
-        <label>
-          <span>结束</span>
-          <input
-            aria-label="结束日期"
-            type="date"
-            value={selection.end}
-            onChange={(event) =>
-              onSelectionChange(updateCustomDateBoundary(selection, 'end', event.target.value))
-            }
-          />
-          <strong>{formatTimeRangeDate(selection.end)}</strong>
-        </label>
+      <div className="time-range-fields" aria-label="自定义日期字段">
+        <CustomDateField
+          boundary="start"
+          label="开始"
+          isOpen={activeBoundary === 'start'}
+          value={selection.start}
+          onInputChange={(value) => handleBoundaryInput('start', value)}
+          onOpen={() => openPicker('start')}
+        />
+        <CustomDateField
+          boundary="end"
+          label="结束"
+          isOpen={activeBoundary === 'end'}
+          value={selection.end}
+          onInputChange={(value) => handleBoundaryInput('end', value)}
+          onOpen={() => openPicker('end')}
+        />
       </div>
+      {activeBoundary ? (
+        <CustomDatePicker
+          anchorDate={pickerAnchorDate}
+          boundary={activeBoundary}
+          selectedDate={activeValue}
+          onMove={(direction) => setPickerAnchorDate(moveDateKeyByMonths(pickerAnchorDate, direction))}
+          onSelect={handleDatePick}
+        />
+      ) : null}
     </section>
   )
+}
+
+function CustomDateField({
+  boundary,
+  label,
+  isOpen,
+  value,
+  onInputChange,
+  onOpen,
+}: {
+  boundary: 'start' | 'end'
+  label: string
+  isOpen: boolean
+  value: string
+  onInputChange: (value: string) => void
+  onOpen: () => void
+}) {
+  const ariaLabel = boundary === 'start' ? '开始日期' : '结束日期'
+
+  return (
+    <div className="time-date-field">
+      <span>{label}</span>
+      <input
+        aria-label={ariaLabel}
+        className="sr-only"
+        tabIndex={-1}
+        type="text"
+        value={value}
+        onChange={(event) => onInputChange(event.target.value)}
+      />
+      <button
+        type="button"
+        className={isOpen ? 'time-date-button is-open' : 'time-date-button'}
+        aria-label={`打开${ariaLabel}选择器，当前${formatTimeRangeDate(value)}`}
+        aria-expanded={isOpen}
+        onClick={onOpen}
+      >
+        <strong>{formatDateButtonValue(value)}</strong>
+      </button>
+    </div>
+  )
+}
+
+function CustomDatePicker({
+  anchorDate,
+  boundary,
+  selectedDate,
+  onMove,
+  onSelect,
+}: {
+  anchorDate: string
+  boundary: 'start' | 'end'
+  selectedDate: string
+  onMove: (direction: -1 | 1) => void
+  onSelect: (date: string) => void
+}) {
+  const days = getVisibleMonthDays(anchorDate)
+  const dialogLabel = boundary === 'start' ? '开始日期选择' : '结束日期选择'
+
+  return (
+    <div className="time-date-picker" role="dialog" aria-label={dialogLabel}>
+      <div className="time-date-picker__bar">
+        <button type="button" aria-label="上个月" onClick={() => onMove(-1)}>
+          ‹
+        </button>
+        <span>{formatPickerMonth(anchorDate)}</span>
+        <button type="button" aria-label="下个月" onClick={() => onMove(1)}>
+          ›
+        </button>
+      </div>
+      <div className="time-date-picker__weekdays" aria-hidden="true">
+        {weekdayLabels.map((label) => (
+          <span key={label}>{label}</span>
+        ))}
+      </div>
+      <div className="time-date-picker__grid">
+        {days.map((day) => (
+          <button
+            key={day.date}
+            type="button"
+            className={[
+              day.date === selectedDate ? 'is-active' : null,
+              day.inCurrentMonth ? null : 'is-outside-month',
+            ]
+              .filter(Boolean)
+              .join(' ')}
+            onClick={() => onSelect(day.date)}
+          >
+            {day.day}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function isDateKey(value: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value)
+}
+
+function moveDateKeyByMonths(value: string, months: -1 | 1) {
+  const [year, month, day] = parseDateKey(value)
+  const targetMonthStart = new Date(year, month - 1 + months, 1)
+  const targetMonthLastDay = new Date(
+    targetMonthStart.getFullYear(),
+    targetMonthStart.getMonth() + 1,
+    0,
+  ).getDate()
+  const targetDay = Math.min(day, targetMonthLastDay)
+
+  return formatDateKey(
+    targetMonthStart.getFullYear(),
+    targetMonthStart.getMonth() + 1,
+    targetDay,
+  )
+}
+
+function formatDateButtonValue(value: string) {
+  const [year, month, day] = parseDateKey(value)
+
+  return `${year}/${padDatePart(month)}/${padDatePart(day)}`
+}
+
+function formatPickerMonth(value: string) {
+  const [year, month] = parseDateKey(value)
+
+  return `${year}年${month}月`
+}
+
+function parseDateKey(value: string): [number, number, number] {
+  const [year, month, day] = value.split('-').map(Number)
+
+  return [year, month, day]
+}
+
+function formatDateKey(year: number, month: number, day: number) {
+  return `${year}-${padDatePart(month)}-${padDatePart(day)}`
+}
+
+function padDatePart(value: number) {
+  return String(value).padStart(2, '0')
 }
 
 function DayCalendarSection({

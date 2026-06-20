@@ -3,14 +3,14 @@ import './App.css'
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react'
 
 import { AccountingPage } from './components/AccountingPage'
-import { AmapCanvas } from './components/AmapCanvas'
+import { AmapCanvas, type FootprintMetrics } from './components/AmapCanvas'
 import { SegmentedControl, type SegmentedOption } from './components/SegmentedControl'
-import { TimeContextPanel } from './components/TimeContextPanel'
+import { TimeContextPanel, type TimeContextMetricItem } from './components/TimeContextPanel'
 import { getAmapConfig, type AmapConfig } from './config/amap'
 import { calculateFallbackSingleWorldPaneLayout } from './config/mapPaneLayout'
 import {
+  createCurrentSelection,
   createTodaySelection,
-  selectMonth,
   type TimeRangeSelection,
 } from './time/timeRange'
 
@@ -44,6 +44,11 @@ function App({ amapConfig }: AppProps) {
   const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRangeSelection>(
     createTodaySelection,
   )
+  const [footprintMetrics, setFootprintMetrics] = useState<FootprintMetrics>({
+    displayedCount: 0,
+    totalCount: 0,
+    activeDayCount: 0,
+  })
   const [mapPanelWidth, setMapPanelWidth] = useState(0)
   const [viewportSize, setViewportSize] = useState(getViewportSize)
   const fallbackLayout = useMemo(
@@ -65,7 +70,10 @@ function App({ amapConfig }: AppProps) {
       view !== 'accounting' &&
       timeSelectionsAreEqual(selectedTimeRange, createTodaySelection())
     ) {
-      setSelectedTimeRange({ ...selectMonth(2026, 6), anchorDate: '2026-06-19' })
+      setSelectedTimeRange({
+        ...createCurrentSelection('month'),
+        anchorDate: createTodaySelection().anchorDate,
+      })
     }
   }, [selectedTimeRange, view])
 
@@ -98,6 +106,11 @@ function App({ amapConfig }: AppProps) {
     view === 'map'
       ? measuredDataPanelWidth
       : Math.max(measuredDataPanelWidth, calculateUnifiedPanelFallbackWidth(viewportSize.width))
+  const mapMetricItems = useMemo<TimeContextMetricItem[]>(() => [
+    { label: '当前足迹', value: formatMetricCount(footprintMetrics.displayedCount) },
+    { label: '全部足迹', value: formatMetricCount(footprintMetrics.totalCount) },
+    { label: '活跃天数', value: formatMetricCount(footprintMetrics.activeDayCount) },
+  ], [footprintMetrics.activeDayCount, footprintMetrics.displayedCount, footprintMetrics.totalCount])
 
   return (
     <main
@@ -119,6 +132,7 @@ function App({ amapConfig }: AppProps) {
       </nav>
 
       <TimeContextPanel
+        metricItems={view === 'map' ? mapMetricItems : undefined}
         view={view}
         selection={selectedTimeRange}
         onSelectionChange={setSelectedTimeRange}
@@ -128,6 +142,7 @@ function App({ amapConfig }: AppProps) {
         <AmapCanvas
           config={resolvedAmapConfig}
           timeRange={selectedTimeRange}
+          onFootprintMetricsChange={setFootprintMetrics}
           onPanelWidthChange={handlePanelWidthChange}
         />
       ) : (
@@ -140,6 +155,10 @@ function App({ amapConfig }: AppProps) {
 }
 
 export default App
+
+function formatMetricCount(value: number) {
+  return new Intl.NumberFormat('zh-CN').format(value)
+}
 
 function timeSelectionsAreEqual(
   currentSelection: TimeRangeSelection,
