@@ -1,9 +1,20 @@
 .app-shell {
+  --page-board-bg: #eef1f0;
+
   position: relative;
   height: 100svh;
   width: 100vw;
   overflow: hidden;
-  background: #eef1f0;
+  background: var(--page-board-bg);
+}
+
+.app-shell--accounting {
+  --page-board-bg:
+    radial-gradient(circle at 46% 6%, rgba(255, 255, 255, 0.68), transparent 34%),
+    linear-gradient(145deg, rgba(238, 244, 242, 0.66), rgba(204, 214, 215, 0.78)),
+    #ccd6d7;
+
+  background: var(--page-board-bg);
 }
 
 .app-nav {
@@ -228,17 +239,8 @@
   width: var(--data-panel-width, 0px);
   min-width: 0;
   overflow: hidden;
-  border-right: 1px solid rgba(23, 31, 29, 0.08);
-  background: rgba(247, 250, 249, 0.9);
+  background: var(--page-board-bg);
   backdrop-filter: blur(18px) saturate(1.08);
-}
-
-.app-shell--accounting .time-context-panel {
-  border-right: 1px solid rgba(23, 31, 29, 0.035);
-  background:
-    radial-gradient(circle at 78% 8%, rgba(255, 255, 255, 0.58), transparent 34%),
-    linear-gradient(145deg, rgba(238, 244, 242, 0.66), rgba(204, 214, 215, 0.78)),
-    #ccd6d7;
 }
 
 .app-shell:not(.has-data-panel) .time-context-panel {
@@ -1255,13 +1257,13 @@
   color: #18211f;
   background:
     linear-gradient(135deg, rgba(44, 68, 64, 0.06), transparent 38%),
-    #eef1f0;
+    var(--page-board-bg);
 }
 
 .amap-surface {
   position: absolute;
   inset: 0;
-  background: #eef1f0;
+  background: var(--page-board-bg);
   cursor: grab;
   touch-action: none;
   user-select: none;
@@ -1297,10 +1299,7 @@
   padding: 96px 24px 18px;
   overflow: hidden;
   color: var(--accounting-ink);
-  background:
-    radial-gradient(circle at 56% 8%, rgba(255, 255, 255, 0.68), transparent 34%),
-    linear-gradient(145deg, rgba(238, 244, 242, 0.66), rgba(204, 214, 215, 0.78)),
-    #ccd6d7;
+  background: transparent;
 }
 
 .accounting-page * {
