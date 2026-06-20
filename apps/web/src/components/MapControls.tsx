@@ -44,6 +44,23 @@ export function MapControls({
   onFootprintStyleChange,
 }: MapControlsProps) {
   const [isFootprintStyleOpen, setIsFootprintStyleOpen] = useState(false)
+  const settingsRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!isFootprintStyleOpen) return
+
+    function closeFootprintStyleOnOutsidePointer(event: PointerEvent) {
+      if (settingsRef.current?.contains(event.target as Node)) return
+
+      setIsFootprintStyleOpen(false)
+    }
+
+    document.addEventListener('pointerdown', closeFootprintStyleOnOutsidePointer)
+
+    return () => {
+      document.removeEventListener('pointerdown', closeFootprintStyleOnOutsidePointer)
+    }
+  }, [isFootprintStyleOpen])
 
   return (
     <div className="map-toolbar" aria-label="地图工具">
@@ -92,7 +109,7 @@ export function MapControls({
       >
         <Minus size={18} strokeWidth={1.8} />
       </button>
-      <div className="map-toolbar__settings">
+      <div className="map-toolbar__settings" ref={settingsRef}>
         {isFootprintStyleOpen ? (
           <FootprintStylePopover
             footprintStyle={footprintStyle}
