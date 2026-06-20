@@ -129,6 +129,7 @@ async function renderFootprintMassMarks({
   })
   const snapshotRequests: FootprintSnapshotRequest[] = []
   const snapshotSignals: AbortSignal[] = []
+  const mapConstructorCalls: Array<unknown> = []
   const loadFootprintSnapshot = vi.fn(
     async (
       _apiUrl: string | undefined,
@@ -173,7 +174,8 @@ async function renderFootprintMassMarks({
     getPitch = vi.fn(() => 0)
     getRotation = vi.fn(() => 0)
 
-    constructor() {
+    constructor(_container: HTMLElement, options: unknown) {
+      mapConstructorCalls.push(options)
       Object.assign(this, mapOverrides)
     }
   }
@@ -233,6 +235,7 @@ async function renderFootprintMassMarks({
     geolocationGetCurrentPosition,
     layerRecords,
     loadFootprintSnapshot,
+    mapConstructorCalls,
     mapMoveHandlers,
     moveEndHandlers,
     renderResult,
@@ -261,6 +264,18 @@ afterEach(() => {
 })
 
 describe('AmapCanvas footprint layer wiring', () => {
+  it('starts the single-world map camera on the render-world center', async () => {
+    const { mapConstructorCalls } = await renderFootprintMassMarks({
+      containerSize: { width: 1432, height: 815 },
+    })
+
+    expect(mapConstructorCalls[0]).toEqual(expect.objectContaining({
+      center: [0, 0],
+      zoom: 2.02,
+      zooms: [2.02, 20],
+    }))
+  })
+
   it('requests a database sampled snapshot and updates the native MassMarks footprint layer', async () => {
     const representative = {
       id: 'selected-cell',

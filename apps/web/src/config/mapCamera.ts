@@ -32,6 +32,13 @@ export const DEFAULT_MAP_CAMERA: MapCamera = {
 
 export const MAP_RESET_DURATION_MS = 900
 
+export function calculateWorldCenter(bounds: MapBounds): [number, number] {
+  return [
+    (bounds.southWest[0] + bounds.northEast[0]) / 2,
+    (bounds.southWest[1] + bounds.northEast[1]) / 2,
+  ]
+}
+
 export function resetMapCamera(
   map: ResettableMap,
   bounds: AMap.Bounds,
