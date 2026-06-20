@@ -80,7 +80,7 @@ describe('map chrome layout', () => {
     expect(stageRule).toContain('width: calc(100vw - var(--data-panel-width))')
   })
 
-  it('centers the accounting workspace on the page axis instead of the map data panel axis', () => {
+  it('keeps accounting in a three-panel shell with the shared time rail visible', () => {
     const accountingShellRule = cssRule('.app-shell--accounting .time-context-panel')
     const accountingWorkspaceRule = cssRule('.app-shell--accounting .main-workspace')
     const accountingPageRule = cssRule('.accounting-page')
@@ -89,11 +89,12 @@ describe('map chrome layout', () => {
     const accountPanelPlacementRule = cssRule('.ios-account-filter-panel')
     const mobileMedia = mediaBlock('@media (max-width: 720px)')
 
-    expect(accountingShellRule).toContain('display: none')
-    expect(accountingWorkspaceRule).toContain('inset: 0')
-    expect(accountingWorkspaceRule).toContain('width: 100vw')
-    expect(accountingPageRule).toContain('grid-template-columns: minmax(0, 1fr) minmax(0, 1200px) minmax(0, 1fr)')
-    expect(accountingPageRule).toContain('padding: 104px 24px 18px')
+    expect(accountingShellRule).toBe('')
+    expect(accountingWorkspaceRule).toBe('')
+    expect(cssRule('.time-context-panel')).toContain('width: var(--data-panel-width, 0px)')
+    expect(cssRule('.main-workspace')).toContain('inset: 0 0 0 var(--data-panel-width)')
+    expect(accountingPageRule).toContain('grid-template-columns: minmax(0, 1fr) minmax(560px, 1fr) minmax(324px, 390px)')
+    expect(accountingPageRule).toContain('padding: 96px 24px 18px')
     expect(cssRuleIn(mobileMedia, '.accounting-page')).toContain('padding: 92px 10px 12px')
     expect(
       cssRuleIn(
@@ -102,28 +103,32 @@ describe('map chrome layout', () => {
         ),
         '.accounting-page',
       ),
-    ).toContain('padding: 100px 16px 14px')
-    expect(workspaceRule).toContain('grid-column: 2')
+    ).toContain('padding: 92px 16px 14px')
+    expect(workspaceRule).toContain('grid-column: 1 / -1')
     expect(workspaceRule).toContain(
-      'grid-template-columns: minmax(300px, 0.42fr) minmax(0, 1fr) minmax(300px, 0.42fr)',
+      'grid-template-columns: minmax(560px, 1fr) minmax(324px, 390px)',
     )
     expect(workspaceRule).toContain('align-items: start')
     expect(workspaceRule).toContain('position: relative')
-    expect(ledgerMainPlacementRule).toContain('grid-column: 2')
+    expect(ledgerMainPlacementRule).toContain('grid-column: 1')
+    expect(ledgerMainPlacementRule).toContain('height: calc(100svh - 150px)')
     expect(accountPanelPlacementRule).toContain('align-self: start')
-    expect(accountPanelPlacementRule).toContain('position: fixed')
-    expect(accountPanelPlacementRule).toContain('top: 92px')
-    expect(accountPanelPlacementRule).toContain('right: 24px')
-    expect(accountPanelPlacementRule).toContain('width: min(372px, calc((100vw - 1200px) / 2 + 300px - 24px))')
-    expect(accountPanelPlacementRule).toContain('height: calc(100svh - 110px)')
-    expect(accountPanelPlacementRule).not.toContain('grid-column: 3')
+    expect(accountPanelPlacementRule).toContain('grid-column: 2')
+    expect(accountPanelPlacementRule).toContain('width: 100%')
+    expect(accountPanelPlacementRule).toContain('height: calc(100svh - 126px)')
+    expect(accountPanelPlacementRule).toContain('margin-top: 0')
+    expect(accountPanelPlacementRule).not.toContain('position: fixed')
+    expect(accountPanelPlacementRule).not.toContain('right: 24px')
+    expect(accountPanelPlacementRule).not.toContain('top: 92px')
     expect(cssRuleIn(mobileMedia, '.ios-account-ledger-workspace')).toContain('grid-column: 1')
     expect(cssRuleIn(mobileMedia, '.ios-account-ledger-workspace')).toContain(
       'grid-template-columns: minmax(0, 1fr)',
     )
     expect(cssRuleIn(mobileMedia, '.ios-ledger-main')).toContain('grid-column: 1')
     expect(cssRuleIn(mobileMedia, '.ios-account-filter-panel')).toContain('grid-column: 1')
-    expect(cssRuleIn(mobileMedia, '.ios-account-filter-panel')).toContain('position: static')
+    expect(cssRuleIn(mobileMedia, '.ios-account-filter-panel')).not.toContain('position: fixed')
+    expect(cssRuleIn(mobileMedia, '.ios-account-filter-panel')).not.toContain('\n    top:')
+    expect(cssRuleIn(mobileMedia, '.ios-account-filter-panel')).not.toContain('\n    right:')
   })
 
   it('keeps the shared time panel high in the left rail without a fake top spacer', () => {
@@ -542,11 +547,11 @@ describe('map chrome layout', () => {
     const accountPanelRule = cssRule('.ios-account-filter-panel')
 
     expect(workspaceRule).toContain(
-      'grid-template-columns: minmax(300px, 0.42fr) minmax(0, 1fr) minmax(300px, 0.42fr)',
+      'grid-template-columns: minmax(560px, 1fr) minmax(324px, 390px)',
     )
-    expect(accountPanelRule).toContain('position: fixed')
-    expect(accountPanelRule).toContain('right: 24px')
-    expect(accountPanelRule).not.toContain('top: 0')
+    expect(accountPanelRule).toContain('grid-column: 2')
+    expect(accountPanelRule).toContain('width: 100%')
+    expect(accountPanelRule).not.toContain('\n  top:')
     expect(accountPanelRule).not.toContain('height: 100svh')
     expect(ledgerSource.indexOf('className="ios-panel ios-ledger-main"')).toBeLessThan(
       ledgerSource.indexOf('className="ios-panel ios-account-filter-panel"'),
@@ -569,10 +574,9 @@ describe('map chrome layout', () => {
       ledgerSource.indexOf('className="ios-account-filter-panel__secondary"'),
     )
     expect(panelRule).toContain('padding: 14px 18px 16px')
-    expect(panelRule).toContain('top: 92px')
-    expect(panelRule).toContain('right: 24px')
-    expect(panelRule).toContain('width: min(372px, calc((100vw - 1200px) / 2 + 300px - 24px))')
-    expect(panelRule).toContain('height: calc(100svh - 110px)')
+    expect(panelRule).toContain('grid-column: 2')
+    expect(panelRule).toContain('width: 100%')
+    expect(panelRule).toContain('height: calc(100svh - 126px)')
     expect(panelRule).toContain('border-radius: 26px')
     expect(panelRule).toContain('gap: 14px')
     expect(accountRegionRule).toContain('display: grid')
@@ -879,8 +883,8 @@ describe('map chrome layout', () => {
     const secondCardRule = cssRule('.ios-account-filter-card--rank-1')
     const backCardRule = cssRule('.ios-account-filter-card--rank-3')
 
-    expect(accountPanelRule).toContain('top: 92px')
-    expect(accountPanelRule).toContain('right: 24px')
+    expect(accountPanelRule).toContain('height: calc(100svh - 126px)')
+    expect(accountPanelRule).toContain('width: 100%')
     expect(accountPanelRule).toContain('overflow: visible')
     expect(accountStackRule).toContain('margin-top: -10px')
     expect(accountStackRule).toContain('padding: 10px 0 18px')
