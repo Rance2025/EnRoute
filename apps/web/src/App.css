@@ -233,11 +233,29 @@
   backdrop-filter: blur(18px) saturate(1.08);
 }
 
+.app-shell--accounting .time-context-panel::after {
+  content: '';
+  position: absolute;
+  z-index: 0;
+  left: 16px;
+  right: 16px;
+  bottom: 28px;
+  height: min(29svh, 280px);
+  border: 1px solid rgba(255, 255, 255, 0.36);
+  border-radius: 32px;
+  background: rgba(238, 244, 242, 0.42);
+  box-shadow:
+    0 24px 58px rgba(35, 52, 48, 0.07),
+    inset 0 1px 0 rgba(255, 255, 255, 0.52);
+}
+
 .app-shell:not(.has-data-panel) .time-context-panel {
   display: none;
 }
 
 .time-context-panel__scroll {
+  position: relative;
+  z-index: 1;
   height: 100%;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
@@ -1289,10 +1307,27 @@
   padding: 96px 24px 18px;
   overflow: hidden;
   color: var(--accounting-ink);
+  isolation: isolate;
   background:
     radial-gradient(circle at 56% 8%, rgba(255, 255, 255, 0.68), transparent 34%),
     linear-gradient(145deg, rgba(238, 244, 242, 0.66), rgba(204, 214, 215, 0.78)),
     #ccd6d7;
+}
+
+.accounting-page::before {
+  content: '';
+  position: absolute;
+  z-index: 0;
+  top: 34px;
+  right: 280px;
+  width: min(360px, 26vw);
+  height: 76px;
+  border: 1px solid rgba(255, 255, 255, 0.36);
+  border-radius: 999px;
+  background: rgba(238, 244, 242, 0.42);
+  box-shadow:
+    0 22px 54px rgba(35, 52, 48, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 
 .accounting-page * {
@@ -1335,6 +1370,8 @@
 }
 
 .accounting-workspace {
+  position: relative;
+  z-index: 1;
   display: grid;
   min-height: 0;
   gap: 12px;
@@ -2914,6 +2951,14 @@
     height: 100%;
     padding: 92px 10px 12px;
     overflow: hidden;
+  }
+
+  .accounting-page::before {
+    display: none;
+  }
+
+  .app-shell--accounting .time-context-panel::after {
+    display: none;
   }
 
   .accounting-workspace {
