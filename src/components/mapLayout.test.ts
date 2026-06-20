@@ -75,9 +75,11 @@ describe('map chrome layout', () => {
   })
 
   it('moves accounting metrics into the time card instead of the bottom summary grid', () => {
-    expect(timeContextPanelSource).toContain('aria-label="记账概览卡片"')
+    expect(timeContextPanelSource).toContain('aria-label="全局范围指标"')
+    expect(timeContextPanelSource).not.toContain('aria-label="记账概览卡片"')
     expect(timeContextPanelSource).not.toContain('aria-label="当前范围摘要"')
-    expect(cssRule('.time-context-accounting-summary')).toContain('grid-template-columns: repeat(4, minmax(0, 1fr))')
+    expect(cssRule('.time-context-metric-strip')).toContain('grid-template-columns: repeat(auto-fit, minmax(68px, 1fr))')
+    expect(cssRule('.time-context-accounting-summary')).toBe('')
     expect(cssRule('.time-context-summary')).toBe('')
     expect(cssRule('.ios-summary-strip')).toBe('')
   })

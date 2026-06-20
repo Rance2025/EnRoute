@@ -31,7 +31,14 @@ import { MapControls } from './MapControls'
 type AmapCanvasProps = {
   config: AmapConfig
   timeRange: TimeRangeSelection
+  onFootprintMetricsChange?: (metrics: FootprintMetrics) => void
   onPanelWidthChange?: (width: number) => void
+}
+
+export type FootprintMetrics = {
+  displayedCount: number
+  totalCount: number
+  activeDayCount: number
 }
 
 type MapStatus = 'missing-config' | 'loading' | 'ready' | 'error'
@@ -40,7 +47,12 @@ const FOOTPRINT_STYLE_STORAGE_KEY = 'enroute.footprintStyle'
 const MAP_CAMERA_DURATION_MS = 900
 const FIT_FOOTPRINT_AVOID: [number, number, number, number] = [72, 72, 72, 72]
 
-function AmapCanvasComponent({ config, timeRange, onPanelWidthChange }: AmapCanvasProps) {
+function AmapCanvasComponent({
+  config,
+  timeRange,
+  onFootprintMetricsChange,
+  onPanelWidthChange,
+}: AmapCanvasProps) {
   const mapNodeRef = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<AMap.Map | null>(null)
   const amapRef = useRef<AMapNamespace | null>(null)
@@ -77,7 +89,12 @@ function AmapCanvasComponent({ config, timeRange, onPanelWidthChange }: AmapCanv
     const nextDisplayedPoints = points ? filterFootprintPointsByTimeRange(points, range) : []
     displayedFootprintPointsRef.current = nextDisplayedPoints
     footprintLayerRef.current?.update(nextDisplayedPoints)
-  }, [])
+    onFootprintMetricsChange?.({
+      displayedCount: nextDisplayedPoints.length,
+      totalCount: points?.length ?? 0,
+      activeDayCount: countActiveShanghaiDays(nextDisplayedPoints),
+    })
+  }, [onFootprintMetricsChange])
 
   const updateFootprintStyle = useCallback((nextFootprintStyle: FootprintStyle) => {
     const normalizedFootprintStyle = normalizeFootprintStyle(nextFootprintStyle)
@@ -238,6 +255,11 @@ function AmapCanvasComponent({ config, timeRange, onPanelWidthChange }: AmapCanv
       destroyFootprintLayer()
       footprintPointsRef.current = null
       displayedFootprintPointsRef.current = []
+      onFootprintMetricsChange?.({
+        displayedCount: 0,
+        totalCount: 0,
+        activeDayCount: 0,
+      })
       if (import.meta.env.DEV) {
         delete window.__ENROUTE_MAP__
       }
@@ -260,6 +282,7 @@ function AmapCanvasComponent({ config, timeRange, onPanelWidthChange }: AmapCanv
     updatePaneLayout,
     clearZoomClampTimers,
     updateDisplayedFootprints,
+    onFootprintMetricsChange,
   ])
 
   useEffect(() => {
@@ -383,6 +406,20 @@ function toAmapBounds(AMap: AMapNamespace, bounds: MapBounds) {
 
 function calculateWorldCenterLatitude(bounds: MapBounds) {
   return (bounds.southWest[1] + bounds.northEast[1]) / 2
+}
+
+function countActiveShanghaiDays(points: FootprintPoint[]) {
+  const dayKeys = new Set<string>()
+
+  for (const point of points) {
+    dayKeys.add(formatShanghaiDateKey(point.timestampSeconds))
+  }
+
+  return dayKeys.size
+}
+
+function formatShanghaiDateKey(timestampSeconds: number) {
+  return new Date((timestampSeconds + 8 * 60 * 60) * 1000).toISOString().slice(0, 10)
 }
 
 function readStoredFootprintStyle() {

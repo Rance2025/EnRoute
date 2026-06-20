@@ -1,8 +1,9 @@
-import { describe, expect, expectTypeOf, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
 
 import {
   createCurrentSelection,
   createTodaySelection,
+  createTodayKey,
   createTimeRangeTimestamps,
   getCalendarLabel,
   getCurrentRangeActionLabel,
@@ -22,6 +23,60 @@ import {
 } from './timeRange'
 
 describe('time range selection model', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-06-19T10:20:30+08:00'))
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('derives today from the current clock for every current-period range', () => {
+    const dateSpy = new Date('2026-08-03T10:20:30+08:00')
+    vi.setSystemTime(dateSpy)
+
+    try {
+      expect(createTodayKey()).toBe('2026-08-03')
+      expect(createTodaySelection()).toMatchObject({
+        mode: 'day',
+        start: '2026-08-03',
+        end: '2026-08-03',
+      })
+      expect(createCurrentSelection('week')).toMatchObject({
+        mode: 'week',
+        start: '2026-08-03',
+        end: '2026-08-09',
+      })
+      expect(createCurrentSelection('month')).toMatchObject({
+        mode: 'month',
+        start: '2026-08-01',
+        end: '2026-08-31',
+      })
+      expect(createCurrentSelection('year')).toMatchObject({
+        mode: 'year',
+        start: '2026-01-01',
+        end: '2026-12-31',
+      })
+      expect(selectPresetRange('recent7')).toMatchObject({
+        start: '2026-07-28',
+        end: '2026-08-03',
+        anchorDate: '2026-08-03',
+      })
+      expect(selectPresetRange('all')).toMatchObject({
+        end: '2026-08-03',
+        anchorDate: '2026-08-03',
+      })
+      expect(selectPresetRange('quarter')).toMatchObject({
+        start: '2026-07-01',
+        end: '2026-09-30',
+        anchorDate: '2026-08-03',
+      })
+    } finally {
+      vi.setSystemTime(new Date('2026-06-19T10:20:30+08:00'))
+    }
+  })
+
   it('represents today as a concrete day range', () => {
     const selection = createTodaySelection()
 
@@ -32,9 +87,37 @@ describe('time range selection model', () => {
     })
     expect(getTimeRangeDisplay(selection)).toMatchObject({
       title: '今天',
-      detail: '2026年6月19日 · 发生时间',
+      detail: '2026年6月19日',
       accountingLabel: '日',
     })
+  })
+
+  it('keeps range display details free of redundant explanatory suffixes', () => {
+    expect(getTimeRangeDisplay(selectDay('2026-06-15'))).toMatchObject({
+      title: '6月15日',
+      detail: '2026年6月15日',
+    })
+    expect(getTimeRangeDisplay(selectWeek('2026-05-11'))).toMatchObject({
+      title: '第20周',
+      detail: '5月11日 - 5月17日',
+    })
+    expect(getTimeRangeDisplay(selectMonth(2026, 6))).toMatchObject({
+      title: '6月',
+      detail: '2026年6月',
+    })
+    expect(getTimeRangeDisplay(selectYear(2026))).toMatchObject({
+      title: '2026年',
+      detail: '2026年',
+    })
+
+    for (const selection of [
+      selectDay('2026-06-15'),
+      selectWeek('2026-05-11'),
+      selectMonth(2026, 6),
+      selectYear(2026),
+    ]) {
+      expect(getTimeRangeDisplay(selection).detail).not.toMatch(/发生时间|按周聚合|按月聚合|年度聚合| · /)
+    }
   })
 
   it('creates current-period selections and labels for each top-level mode', () => {

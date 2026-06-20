@@ -148,7 +148,7 @@ describe('App', () => {
     expect(screen.queryByRole('group', { name: '记账工作区' })).not.toBeInTheDocument()
 
     const timePanel = screen.getByLabelText('时间范围面板')
-    const timeCardSummary = within(timePanel).getByLabelText('记账概览卡片')
+    const timeCardSummary = within(timePanel).getByLabelText('全局范围指标')
 
     expect(within(timeCardSummary).getByText('净流入')).toBeInTheDocument()
     expect(within(timeCardSummary).getByText('+¥4691.23')).toBeInTheDocument()
@@ -159,6 +159,7 @@ describe('App', () => {
     expect(within(timeCardSummary).queryByText('¥420')).not.toBeInTheDocument()
     expect(screen.queryByLabelText('当前范围摘要')).not.toBeInTheDocument()
     expect(screen.queryByLabelText('记账概览摘要')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('记账概览卡片')).not.toBeInTheDocument()
     expect(screen.queryByText('本期流水')).not.toBeInTheDocument()
   })
 

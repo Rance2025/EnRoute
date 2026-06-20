@@ -68,14 +68,18 @@ export type AggregatePickerPage = PickerPageBase & {
 
 export type PickerPage = CalendarPickerPage | AggregatePickerPage
 
-const today = '2026-06-19'
 const firstImportedDate = '2022-03-01'
 
+export function createTodayKey(now = new Date()) {
+  return formatDateKey(now)
+}
+
 export function createTodaySelection(): TimeRangeSelection {
-  return selectDay(today)
+  return selectDay(createTodayKey())
 }
 
 export function createCurrentSelection(mode: TimeRangeMode): TimeRangeSelection {
+  const today = createTodayKey()
   const currentDate = parseDate(today)
 
   if (mode === 'day') return selectDay(today)
@@ -141,6 +145,8 @@ export function selectYear(year: number): TimeRangeSelection {
 }
 
 export function selectPresetRange(preset: TimePresetKey): TimeRangeSelection {
+  const today = createTodayKey()
+
   if (preset === 'all') {
     return {
       mode: 'custom',
@@ -202,10 +208,15 @@ export function selectPresetRange(preset: TimePresetKey): TimeRangeSelection {
     }
   }
 
+  const currentDate = parseDate(today)
+  const quarterStartMonth = Math.floor(currentDate.getMonth() / 3) * 3
+  const start = formatDateKey(new Date(currentDate.getFullYear(), quarterStartMonth, 1))
+  const end = formatDateKey(new Date(currentDate.getFullYear(), quarterStartMonth + 3, 0))
+
   return {
     mode: 'custom',
-    start: '2026-04-01',
-    end: '2026-06-30',
+    start,
+    end,
     anchorDate: today,
     label: '本季度',
   }
@@ -262,12 +273,14 @@ export function createTimeRangeTimestamps(selection: TimeRangeSelection): TimeRa
 }
 
 export function getTimeRangeDisplay(selection: TimeRangeSelection): TimeRangeDisplay {
+  const today = createTodayKey()
+
   if (selection.mode === 'day') {
     const title = selection.start === today ? '今天' : formatShortDate(selection.start)
 
     return {
       title,
-      detail: `${formatFullDate(selection.start)} · 发生时间`,
+      detail: formatFullDate(selection.start),
       accountingLabel: '日',
     }
   }
@@ -275,7 +288,7 @@ export function getTimeRangeDisplay(selection: TimeRangeSelection): TimeRangeDis
   if (selection.mode === 'week') {
     return {
       title: `第${getWeekNumber(selection.start)}周`,
-      detail: `${formatMonthDay(selection.start)} - ${formatMonthDay(selection.end)} · 按周聚合`,
+      detail: `${formatMonthDay(selection.start)} - ${formatMonthDay(selection.end)}`,
       accountingLabel: '周',
     }
   }
@@ -285,7 +298,7 @@ export function getTimeRangeDisplay(selection: TimeRangeSelection): TimeRangeDis
 
     return {
       title: `${date.getMonth() + 1}月`,
-      detail: `${date.getFullYear()}年${date.getMonth() + 1}月 · 按月聚合`,
+      detail: `${date.getFullYear()}年${date.getMonth() + 1}月`,
       accountingLabel: '月',
     }
   }
@@ -295,7 +308,7 @@ export function getTimeRangeDisplay(selection: TimeRangeSelection): TimeRangeDis
 
     return {
       title: `${year}年`,
-      detail: `${year}年 · 年度聚合`,
+      detail: `${year}年`,
       accountingLabel: '年',
     }
   }
