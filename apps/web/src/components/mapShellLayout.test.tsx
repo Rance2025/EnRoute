@@ -92,6 +92,15 @@ describe('unified shell layout', () => {
   it('opens compact footprint style controls from the map toolbar', () => {
     render(<App amapConfig={configuredAmap} />)
 
+    const toolbar = screen.getByLabelText('地图工具')
+    expect(within(toolbar).getAllByRole('button').map((button) => button.getAttribute('aria-label'))).toEqual([
+      '聚焦当前足迹',
+      '显示世界地图',
+      '定位当前位置',
+      '放大地图',
+      '缩小地图',
+      '足迹显示设置',
+    ])
     expect(screen.queryByRole('dialog', { name: '足迹显示设置' })).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '足迹显示设置' }))

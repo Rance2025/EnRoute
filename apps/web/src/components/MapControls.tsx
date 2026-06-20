@@ -47,36 +47,69 @@ export function MapControls({
 
   return (
     <div className="map-toolbar" aria-label="地图工具">
-      {isFootprintStyleOpen ? (
-        <FootprintStylePopover
-          footprintStyle={footprintStyle}
-          onFootprintStyleChange={onFootprintStyleChange}
-        />
-      ) : null}
       <button
         type="button"
-        aria-label="足迹显示设置"
-        title="足迹显示设置"
-        aria-expanded={isFootprintStyleOpen}
-        onClick={() => setIsFootprintStyleOpen((isOpen) => !isOpen)}
+        className="map-toolbar__button"
+        aria-label="聚焦当前足迹"
+        title="聚焦当前足迹"
+        onClick={onFitFootprints}
       >
-        <Settings2 size={18} strokeWidth={1.8} />
-      </button>
-      <button type="button" aria-label="聚焦当前足迹" title="聚焦当前足迹" onClick={onFitFootprints}>
         <Crosshair size={18} strokeWidth={1.8} />
       </button>
-      <button type="button" aria-label="定位当前位置" title="定位当前位置" onClick={onLocate}>
-        <LocateFixed size={18} strokeWidth={1.8} />
-      </button>
-      <button type="button" aria-label="显示世界地图" title="显示世界地图" onClick={onShowWorld}>
+      <button
+        type="button"
+        className="map-toolbar__button"
+        aria-label="显示世界地图"
+        title="显示世界地图"
+        onClick={onShowWorld}
+      >
         <Globe2 size={18} strokeWidth={1.8} />
       </button>
-      <button type="button" aria-label="放大地图" title="放大地图" onClick={onZoomIn}>
+      <button
+        type="button"
+        className="map-toolbar__button"
+        aria-label="定位当前位置"
+        title="定位当前位置"
+        onClick={onLocate}
+      >
+        <LocateFixed size={18} strokeWidth={1.8} />
+      </button>
+      <button
+        type="button"
+        className="map-toolbar__button"
+        aria-label="放大地图"
+        title="放大地图"
+        onClick={onZoomIn}
+      >
         <Plus size={18} strokeWidth={1.8} />
       </button>
-      <button type="button" aria-label="缩小地图" title="缩小地图" onClick={onZoomOut}>
+      <button
+        type="button"
+        className="map-toolbar__button"
+        aria-label="缩小地图"
+        title="缩小地图"
+        onClick={onZoomOut}
+      >
         <Minus size={18} strokeWidth={1.8} />
       </button>
+      <div className="map-toolbar__settings">
+        {isFootprintStyleOpen ? (
+          <FootprintStylePopover
+            footprintStyle={footprintStyle}
+            onFootprintStyleChange={onFootprintStyleChange}
+          />
+        ) : null}
+        <button
+          type="button"
+          className="map-toolbar__button"
+          aria-label="足迹显示设置"
+          title="足迹显示设置"
+          aria-expanded={isFootprintStyleOpen}
+          onClick={() => setIsFootprintStyleOpen((isOpen) => !isOpen)}
+        >
+          <Settings2 size={18} strokeWidth={1.8} />
+        </button>
+      </div>
     </div>
   )
 }

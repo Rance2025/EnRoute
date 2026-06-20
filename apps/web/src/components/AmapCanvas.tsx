@@ -251,14 +251,13 @@ function AmapCanvasComponent({
         map.on('zoomend', clampLatitudeBounds)
         disposeZoomClampRef.current = () => map.off('zoomend', clampLatitudeBounds)
 
-        geolocationRef.current = new AMap.Geolocation({
-          enableHighAccuracy: true,
-          timeout: 8000,
-          zoomToAccuracy: true,
-          position: {
-            right: '24px',
-            bottom: '136px',
-          },
+        AMap.plugin('AMap.Geolocation', () => {
+          if (disposed) return
+          geolocationRef.current = new AMap.Geolocation({
+            enableHighAccuracy: true,
+            timeout: 8000,
+            zoomToAccuracy: true,
+          })
         })
 
         mapRef.current = map

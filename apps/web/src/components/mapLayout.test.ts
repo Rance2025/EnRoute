@@ -6,6 +6,7 @@ const appCss = readFileSync('src/App.css', 'utf8')
 const appSource = readFileSync('src/App.tsx', 'utf8')
 const amapCanvasSource = readFileSync('src/components/AmapCanvas.tsx', 'utf8')
 const amapLoaderSource = readFileSync('src/services/amapLoader.ts', 'utf8')
+const mapControlsSource = readFileSync('src/components/MapControls.tsx', 'utf8')
 const segmentedControlSource = readFileSync('src/components/SegmentedControl.tsx', 'utf8')
 const timeContextPanelSource = readFileSync('src/components/TimeContextPanel.tsx', 'utf8')
 
@@ -820,7 +821,7 @@ describe('map chrome layout', () => {
   })
 
   it('keeps the 2D map toolbar compact', () => {
-    const rule = cssRule('.map-toolbar > button')
+    const rule = cssRule('.map-toolbar__button')
 
     expect(rule).toContain('width: 38px')
     expect(rule).toContain('height: 38px')
@@ -829,15 +830,20 @@ describe('map chrome layout', () => {
 
   it('positions footprint style settings as a compact popover above the map toolbar', () => {
     const toolbarRule = cssRule('.map-toolbar')
-    const toolbarButtonRule = cssRule('.map-toolbar > button')
+    const toolbarButtonRule = cssRule('.map-toolbar__button')
+    const settingsRule = cssRule('.map-toolbar__settings')
     const popoverRule = cssRule('.footprint-style-popover')
     const rowRule = cssRule('.footprint-style-popover__row')
     const swatchRule = cssRule('.footprint-style-popover__swatch')
 
     expect(toolbarRule).toContain('overflow: visible')
     expect(cssRule('.map-toolbar button')).toBe('')
+    expect(cssRule('.map-toolbar > button')).toBe('')
     expect(toolbarButtonRule).toContain('width: 38px')
-    expect(appCss).toContain('.map-toolbar > button:hover')
+    expect(settingsRule).toContain('position: relative')
+    expect(settingsRule).toContain('display: grid')
+    expect(appCss).toContain('.map-toolbar__button:hover')
+    expect(mapControlsSource).toContain('<div className="map-toolbar__settings">')
     expect(popoverRule).toContain('position: absolute')
     expect(popoverRule).toContain('right: 0')
     expect(popoverRule).toContain('bottom: calc(100% + 10px)')
@@ -859,14 +865,17 @@ describe('map chrome layout', () => {
     )
   })
 
-  it('places the footprint rendering debug panel on the right side above the toolbar', () => {
+  it('places the footprint rendering debug panel in the map upper-right corner', () => {
+    const stageRule = cssRule('.map-stage')
     const panelRule = cssRule('.footprint-debug-panel')
     const rowRule = cssRule('.footprint-debug-panel__row')
 
     expect(amapCanvasSource).toContain('aria-label="足迹渲染调试"')
+    expect(stageRule).toContain('--map-chrome-top: max(24px, env(safe-area-inset-top))')
     expect(panelRule).toContain('position: absolute')
     expect(panelRule).toContain('right: var(--map-chrome-x)')
-    expect(panelRule).toContain('bottom: calc(var(--map-chrome-y) + 66px)')
+    expect(panelRule).toContain('top: var(--map-chrome-top)')
+    expect(panelRule).not.toContain('bottom: calc(var(--map-chrome-y) + 66px)')
     expect(panelRule).toContain('width: 168px')
     expect(panelRule).toContain('z-index: 2')
     expect(rowRule).toContain('grid-template-columns: minmax(0, 1fr) auto')
