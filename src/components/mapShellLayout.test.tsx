@@ -745,7 +745,7 @@ describe('unified shell layout', () => {
 
     expect(screen.getByLabelText('iOS 记账工作台')).toBeInTheDocument()
     expect(
-      within(screen.getByLabelText('iOS 记账工作台')).getByText('近30天'),
+      within(screen.getByLabelText('iOS 记账工作台')).getByText('最近一月'),
     ).toBeInTheDocument()
     expect(screen.queryByLabelText('当前账目范围')).not.toBeInTheDocument()
   })
