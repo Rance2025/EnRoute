@@ -9,7 +9,7 @@ import {
   getTagTreeStats,
 } from '../accounting/selectors'
 import type { Transaction } from '../accounting/types'
-import { getTimeRangeDisplay, type TimeRangeSelection } from '../time/timeRange'
+import type { TimeRangeSelection } from '../time/timeRange'
 import { AnalyticsWorkspace } from './accounting/AnalyticsWorkspace'
 import {
   LedgerDetailDialog,
@@ -28,7 +28,6 @@ export function AccountingPage({ timeRange }: AccountingPageProps) {
   const [selectedAccountId, setSelectedAccountId] = useState<string>('all')
   const [activeTransaction, setActiveTransaction] = useState<Transaction | null>(null)
   const [isNewTransactionOpen, setIsNewTransactionOpen] = useState(false)
-  const display = getTimeRangeDisplay(timeRange)
   const transactions = useMemo(
     () => filterTransactionsByTimeRange(ledgerAtlasDataset.transactions, timeRange),
     [timeRange],
@@ -46,23 +45,6 @@ export function AccountingPage({ timeRange }: AccountingPageProps) {
 
   return (
     <section className="accounting-page" aria-label="iOS 记账工作台">
-      <div className="accounting-dock" aria-label="记账控制栏">
-        <section className="accounting-range-chip" aria-label="记账时间范围">
-          <span>{display.accountingLabel}</span>
-          <strong>{display.title}</strong>
-        </section>
-
-        <div className="accounting-actions" aria-label="记账快捷操作">
-          {view === 'analytics' ? (
-            <button type="button" className="accounting-action" onClick={() => setView('workspace')}>
-              返回流水
-            </button>
-          ) : (
-            <span>{transactions.length} 笔流水</span>
-          )}
-        </div>
-      </div>
-
       {view === 'workspace' ? (
         <LedgerWorkspace
           dataset={ledgerAtlasDataset}
@@ -83,6 +65,7 @@ export function AccountingPage({ timeRange }: AccountingPageProps) {
           transactions={transactions}
           categoryStats={categoryStats}
           tagStats={tagStats}
+          onBackToLedger={() => setView('workspace')}
         />
       ) : null}
 

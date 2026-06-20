@@ -99,7 +99,7 @@ describe('time range selection model', () => {
     })
     expect(getTimeRangeDisplay(selectWeek('2026-05-11'))).toMatchObject({
       title: '第20周',
-      detail: '2026年5月11日 - 2026年5月17日',
+      detail: '2026年 5月11日 - 5月17日',
     })
     expect(getTimeRangeDisplay(selectWeek('2025-12-29'))).toMatchObject({
       title: '第53周',
@@ -126,6 +126,24 @@ describe('time range selection model', () => {
     ]) {
       expect(getTimeRangeDisplay(selection).detail).not.toMatch(/发生时间|按周聚合|按月聚合|年度聚合| · /)
     }
+  })
+
+  it('formats same-year range details with one leading year', () => {
+    expect(getTimeRangeDisplay(selectWeek('2026-06-19'))).toMatchObject({
+      title: '第25周',
+      detail: '2026年 6月15日 - 6月21日',
+      accountingLabel: '周',
+    })
+
+    expect(getTimeRangeDisplay(setCustomDateRange('2026-05-21', '2026-06-19'))).toMatchObject({
+      title: '自定义',
+      detail: '2026年 5月21日 - 6月19日',
+    })
+
+    expect(getTimeRangeDisplay(setCustomDateRange('2025-12-29', '2026-01-04'))).toMatchObject({
+      title: '自定义',
+      detail: '2025年12月29日 - 2026年1月4日',
+    })
   })
 
   it('creates current-period selections and labels for each top-level mode', () => {
@@ -418,7 +436,7 @@ describe('time range selection model', () => {
 
     expect(getTimeRangeDisplay(selectPresetRange('qingdao'))).toMatchObject({
       title: '青岛之行',
-      detail: '2026年6月15日 - 2026年6月19日',
+      detail: '2026年 6月15日 - 6月19日',
       accountingLabel: '自定义',
     })
   })

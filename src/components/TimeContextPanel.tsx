@@ -235,9 +235,9 @@ function getAccountingSummary(selection: TimeRangeSelection): TimeContextMetricI
 
   return [
     {
-      label: '净流入',
-      value: formatSignedAccountingCurrency(metrics.netInCents),
-      tone: metrics.netInCents >= 0 ? 'income' : 'expense',
+      label: '收入',
+      value: formatAccountingCurrency(metrics.incomeInCents),
+      tone: 'income',
     },
     {
       label: '支出',
@@ -245,7 +245,6 @@ function getAccountingSummary(selection: TimeRangeSelection): TimeContextMetricI
       tone: 'expense',
     },
     { label: '流水', value: `${metrics.transactionCount} 笔` },
-    { label: '账户', value: `${metrics.activeAccountCount} 个` },
   ]
 }
 
@@ -253,12 +252,6 @@ function formatAccountingCurrency(amountInCents: number) {
   const prefix = amountInCents < 0 ? '-¥' : '¥'
 
   return `${prefix}${formatCnyFromCents(Math.abs(amountInCents))}`
-}
-
-function formatSignedAccountingCurrency(amountInCents: number) {
-  if (amountInCents === 0) return '¥0.00'
-
-  return `${amountInCents > 0 ? '+' : '-'}¥${formatCnyFromCents(Math.abs(amountInCents))}`
 }
 
 function timeSelectionsAreEqual(

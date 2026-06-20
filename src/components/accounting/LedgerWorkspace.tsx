@@ -13,6 +13,7 @@ import {
   WalletCards,
   X,
 } from 'lucide-react'
+import { LayoutGroup, motion } from 'framer-motion'
 import type { ComponentType } from 'react'
 
 import { formatCnyFromCents } from '../../accounting/money'
@@ -45,6 +46,18 @@ const typeLabels: Record<TransactionType, string> = {
   expense: '支出',
   transfer: '转账',
 }
+
+const ACCOUNT_CARD_LAYOUT_TRANSITION = {
+  layout: {
+    type: 'spring',
+    stiffness: 430,
+    damping: 38,
+    mass: 0.9,
+  },
+  opacity: {
+    duration: 0.18,
+  },
+} as const
 
 type LedgerWorkspaceProps = {
   dataset: AccountingDataset
@@ -90,70 +103,6 @@ export function LedgerWorkspace({
       className="accounting-workspace ios-account-ledger-workspace"
       aria-label="账户与流水工作台"
     >
-      <section className="ios-panel ios-account-filter-panel" aria-label="账户筛选卡片">
-        <header className="ios-panel-head">
-          <strong>账户卡片</strong>
-          <span>{summaries.length} 个账户</span>
-        </header>
-        <div className="ios-account-stack-summary">
-          <span>估算净资产</span>
-          <strong>¥{formatCnyFromCents(totalBalanceInCents)}</strong>
-        </div>
-        <button
-          type="button"
-          className="ios-account-all-filter"
-          aria-pressed={selectedAccountId === 'all'}
-          onClick={() => onSelectAccount('all')}
-        >
-          <span>全部流水</span>
-          <strong>{transactions.length} 笔</strong>
-        </button>
-        {selectedSummary ? (
-          <div className="ios-account-selected-slot" aria-label="选中账户卡片">
-            <AccountFilterCard
-              variant={summaryVariantByAccountId.get(selectedSummary.account.id) ?? 1}
-              stackIndex={0}
-              title={selectedSummary.account.name}
-              detail={`${selectedSummary.transactionCount} 笔 · ${selectedSummary.account.sourceFundType ?? 'fund'}`}
-              balance={`¥${formatCnyFromCents(selectedSummary.closingInCents)}`}
-              movement={formatSigned(
-                selectedSummary.incomeInCents -
-                  selectedSummary.expenseInCents +
-                  selectedSummary.transferInInCents -
-                  selectedSummary.transferOutInCents,
-              )}
-              active
-              detached
-              onSelect={() => onSelectAccount('all')}
-            />
-          </div>
-        ) : null}
-        <div className={`ios-account-filter-stack${selectedSummary ? ' is-spread' : ''}`}>
-          {visibleStackSummaries.map((summary, stackIndex) => (
-            <AccountFilterCard
-              key={summary.account.id}
-              variant={summaryVariantByAccountId.get(summary.account.id) ?? 1}
-              stackIndex={stackIndex}
-              title={summary.account.name}
-              detail={`${summary.transactionCount} 笔 · ${summary.account.sourceFundType ?? 'fund'}`}
-              balance={`¥${formatCnyFromCents(summary.closingInCents)}`}
-              movement={formatSigned(
-                summary.incomeInCents -
-                  summary.expenseInCents +
-                  summary.transferInInCents -
-                  summary.transferOutInCents,
-              )}
-              active={selectedAccountId === summary.account.id}
-              onSelect={() => {
-                onSelectAccount(
-                  selectedAccountId === summary.account.id ? 'all' : summary.account.id,
-                )
-              }}
-            />
-          ))}
-        </div>
-      </section>
-
       <section className="ios-panel ios-ledger-main">
         <header className="ios-ledger-toolbar">
           <div>
@@ -190,11 +139,92 @@ export function LedgerWorkspace({
           ) : null}
         </div>
       </section>
+
+      <section className="ios-panel ios-account-filter-panel" aria-label="账户筛选卡片">
+        <header className="ios-panel-head">
+          <strong>账户卡片</strong>
+          <span>{summaries.length} 个账户</span>
+        </header>
+        <div className="ios-account-stack-summary">
+          <span>估算净资产</span>
+          <strong>¥{formatCnyFromCents(totalBalanceInCents)}</strong>
+        </div>
+        <button
+          type="button"
+          className="ios-account-all-filter"
+          aria-pressed={selectedAccountId === 'all'}
+          onClick={() => onSelectAccount('all')}
+        >
+          <span>全部流水</span>
+          <strong>{transactions.length} 笔</strong>
+        </button>
+        <LayoutGroup id="account-card-stack">
+          {selectedSummary ? (
+            <motion.div
+              key="selected-account-slot"
+              layout="position"
+              className="ios-account-selected-slot"
+              aria-label="单独显示的选中账户"
+              transition={ACCOUNT_CARD_LAYOUT_TRANSITION}
+            >
+              <AccountFilterCard
+                key={selectedSummary.account.id}
+                layoutId={`account-card-${selectedSummary.account.id}`}
+                variant={summaryVariantByAccountId.get(selectedSummary.account.id) ?? 1}
+                stackIndex={0}
+                title={selectedSummary.account.name}
+                detail={`${selectedSummary.transactionCount} 笔 · ${selectedSummary.account.sourceFundType ?? 'fund'}`}
+                balance={`¥${formatCnyFromCents(selectedSummary.closingInCents)}`}
+                movement={formatSigned(
+                  selectedSummary.incomeInCents -
+                    selectedSummary.expenseInCents +
+                    selectedSummary.transferInInCents -
+                    selectedSummary.transferOutInCents,
+                )}
+                active
+                detached
+                onSelect={() => onSelectAccount('all')}
+              />
+            </motion.div>
+          ) : null}
+          <motion.div
+            layout="position"
+            className={`ios-account-filter-stack${selectedSummary ? ' is-spread' : ''}`}
+            aria-label="层叠账户卡片"
+            transition={ACCOUNT_CARD_LAYOUT_TRANSITION}
+          >
+            {visibleStackSummaries.map((summary, stackIndex) => (
+              <AccountFilterCard
+                key={summary.account.id}
+                layoutId={`account-card-${summary.account.id}`}
+                variant={summaryVariantByAccountId.get(summary.account.id) ?? 1}
+                stackIndex={stackIndex}
+                title={summary.account.name}
+                detail={`${summary.transactionCount} 笔 · ${summary.account.sourceFundType ?? 'fund'}`}
+                balance={`¥${formatCnyFromCents(summary.closingInCents)}`}
+                movement={formatSigned(
+                  summary.incomeInCents -
+                    summary.expenseInCents +
+                    summary.transferInInCents -
+                    summary.transferOutInCents,
+                )}
+                active={selectedAccountId === summary.account.id}
+                onSelect={() => {
+                  onSelectAccount(
+                    selectedAccountId === summary.account.id ? 'all' : summary.account.id,
+                  )
+                }}
+              />
+            ))}
+          </motion.div>
+        </LayoutGroup>
+      </section>
     </div>
   )
 }
 
 function AccountFilterCard({
+  layoutId,
   variant,
   stackIndex,
   title,
@@ -205,6 +235,7 @@ function AccountFilterCard({
   detached = false,
   onSelect,
 }: {
+  layoutId: string
   variant: number
   stackIndex: number
   title: string
@@ -216,7 +247,10 @@ function AccountFilterCard({
   onSelect: () => void
 }) {
   return (
-    <button
+    <motion.button
+      layout="position"
+      layoutId={layoutId}
+      transition={ACCOUNT_CARD_LAYOUT_TRANSITION}
       type="button"
       className={[
         'ios-account-filter-card',
@@ -230,18 +264,20 @@ function AccountFilterCard({
       aria-pressed={active}
       onClick={onSelect}
     >
-      <span className="ios-account-filter-card__check" aria-hidden="true">
-        {active ? <Check size={14} strokeWidth={2.4} /> : <WalletCards size={14} strokeWidth={2.2} />}
+      <span className="ios-account-filter-card__surface">
+        <span className="ios-account-filter-card__check" aria-hidden="true">
+          {active ? <Check size={14} strokeWidth={2.4} /> : <WalletCards size={14} strokeWidth={2.2} />}
+        </span>
+        <span className="ios-account-filter-card__body">
+          <strong>{title}</strong>
+          <em>{detail}</em>
+        </span>
+        <span className="ios-account-filter-card__side">
+          <b>{balance}</b>
+          <small>{movement}</small>
+        </span>
       </span>
-      <span className="ios-account-filter-card__body">
-        <strong>{title}</strong>
-        <em>{detail}</em>
-      </span>
-      <span className="ios-account-filter-card__side">
-        <b>{balance}</b>
-        <small>{movement}</small>
-      </span>
-    </button>
+    </motion.button>
   )
 }
 
@@ -282,8 +318,10 @@ function TransactionRow({
       </span>
       <span className="ios-transaction-row__side">
         <b>{formatTransactionAmount(transaction)}</b>
-        <time>{formatMonthDay(transaction.occurredAt)}</time>
-        <small>{typeLabels[transaction.type]}</small>
+        <span className="ios-transaction-row__meta">
+          <time>{formatMonthDay(transaction.occurredAt)}</time>
+          <small>{typeLabels[transaction.type]}</small>
+        </span>
       </span>
     </button>
   )
