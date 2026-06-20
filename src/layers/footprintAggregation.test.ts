@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { aggregateFootprintPoints } from './footprintAggregation'
+import { aggregateFootprintPoints, createFootprintRenderSnapshot } from './footprintAggregation'
 import type { FootprintPoint } from './footprintTypes'
 
 const basePoint: Omit<FootprintPoint, 'id' | 'longitude' | 'latitude' | 'timestampSeconds'> = {
@@ -21,6 +21,23 @@ function point(id: string, longitude: number, latitude: number): FootprintPoint 
     longitude,
     latitude,
     timestampSeconds: 1768144456 + Number(id),
+  }
+}
+
+function timedPoint(
+  id: string,
+  timestampSeconds: number,
+  longitude: number,
+  latitude: number,
+  distance = 0,
+): FootprintPoint {
+  return {
+    ...basePoint,
+    id,
+    longitude,
+    latitude,
+    timestampSeconds,
+    distance,
   }
 }
 
@@ -107,5 +124,36 @@ describe('aggregateFootprintPoints', () => {
     expect(result).toHaveLength(1)
     expect(result[0].count).toBe(2)
     expect(Math.abs(Math.abs(result[0].longitude) - 180)).toBeLessThan(0.01)
+  })
+
+  it('returns a render snapshot with exact range metrics and sampled viewport representatives', () => {
+    const selectedA = timedPoint('selected-a', 1781798400, 121.511383, 31.296564, 100)
+    const selectedB = timedPoint('selected-b', 1781840000, 121.511384, 31.296565, 250)
+    const selectedOutOfView = timedPoint('selected-out-of-view', 1781840100, 118, 30, 50)
+    const after = timedPoint('after', 1781884800, 121.511385, 31.296566, 999)
+
+    const snapshot = createFootprintRenderSnapshot({
+      points: [selectedA, selectedB, selectedOutOfView, after],
+      timeRange: {
+        startTimestampSeconds: 1781798400,
+        endTimestampSeconds: 1781884799,
+        dayCount: 1,
+      },
+      zoom: 16,
+      cellSizePx: 8,
+      viewportBounds: { west: 121, south: 31, east: 122, north: 32 },
+    })
+
+    expect(snapshot.metrics).toEqual({
+      selectedCount: 3,
+      totalDistanceMeters: 400,
+      averageDistanceMetersPerDay: 400,
+    })
+    expect(snapshot.selectedBounds).toEqual({
+      southWest: [118, 30],
+      northEast: [121.511384, 31.296565],
+    })
+    expect(snapshot.points).toHaveLength(1)
+    expect(snapshot.points[0]).toMatchObject({ count: 2 })
   })
 })

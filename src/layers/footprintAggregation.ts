@@ -1,10 +1,16 @@
 import { projectLngLat, TILE_SIZE, unprojectWorldPoint } from '../config/mercator'
 import type {
   AggregatedFootprintPoint,
+  FootprintRenderSnapshot,
   FootprintPoint,
   LngLatBounds,
   WorldPixelPoint,
 } from './footprintTypes'
+import {
+  calculateFootprintLngLatBounds,
+  calculateFootprintMetricsForTimestamps,
+  filterFootprintPointsByTimestampRange,
+} from './footprintSelectors'
 
 type AggregateFootprintPointsInput = {
   points: FootprintPoint[]
@@ -12,6 +18,14 @@ type AggregateFootprintPointsInput = {
   cellSizePx: number
   viewportBounds: LngLatBounds
   viewportNorthWestWorldPixel?: WorldPixelPoint
+}
+
+type FootprintRenderSnapshotInput = AggregateFootprintPointsInput & {
+  timeRange: {
+    startTimestampSeconds: number
+    endTimestampSeconds: number
+    dayCount: number
+  }
 }
 
 type Bucket = {
@@ -90,6 +104,29 @@ export function aggregateFootprintPoints({
       endTimestampSeconds: bucket.endTimestampSeconds,
     }
   })
+}
+
+export function createFootprintRenderSnapshot({
+  points,
+  timeRange,
+  zoom,
+  cellSizePx,
+  viewportBounds,
+  viewportNorthWestWorldPixel,
+}: FootprintRenderSnapshotInput): FootprintRenderSnapshot {
+  const selectedPoints = filterFootprintPointsByTimestampRange(points, timeRange)
+
+  return {
+    points: aggregateFootprintPoints({
+      points: selectedPoints,
+      zoom,
+      cellSizePx,
+      viewportBounds,
+      viewportNorthWestWorldPixel,
+    }),
+    metrics: calculateFootprintMetricsForTimestamps(points, timeRange),
+    selectedBounds: calculateFootprintLngLatBounds(selectedPoints),
+  }
 }
 
 function isPointInsideBounds(point: FootprintPoint, bounds: LngLatBounds) {

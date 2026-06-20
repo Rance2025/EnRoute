@@ -21,6 +21,20 @@ const points: FootprintPoint[] = [
 ]
 
 const viewportNorthWestWorldPixel = { x: 100, y: 200 }
+const timeRange = {
+  startTimestampSeconds: 1,
+  endTimestampSeconds: 2,
+  dayCount: 1,
+}
+const emptySnapshot = {
+  points: [],
+  metrics: {
+    selectedCount: 0,
+    totalDistanceMeters: 0,
+    averageDistanceMetersPerDay: 0,
+  },
+  selectedBounds: null,
+}
 
 class FakeWorker {
   onmessage: ((event: MessageEvent) => void) | null = null
@@ -41,6 +55,7 @@ describe('FootprintWorkerClient', () => {
 
     client.setPoints(points)
     const aggregation = client.aggregate({
+      timeRange,
       zoom: 10,
       cellSizePx: 1,
       viewportBounds: { west: 120, south: 30, east: 122, north: 32 },
@@ -55,6 +70,7 @@ describe('FootprintWorkerClient', () => {
       {
         type: 'aggregate',
         requestId: 1,
+        timeRange,
         zoom: 10,
         cellSizePx: 1,
         viewportBounds: { west: 120, south: 30, east: 122, north: 32 },
@@ -64,11 +80,11 @@ describe('FootprintWorkerClient', () => {
 
     worker.onmessage?.(
       new MessageEvent('message', {
-        data: { requestId: 1, points: [] },
+        data: { requestId: 1, snapshot: emptySnapshot },
       }),
     )
 
-    await expect(aggregation).resolves.toEqual([])
+    await expect(aggregation).resolves.toEqual(emptySnapshot)
   })
 
   it('resolves only the latest aggregation request after the active worker job finishes', async () => {
@@ -78,6 +94,7 @@ describe('FootprintWorkerClient', () => {
     client.setPoints(points)
 
     const first = client.aggregate({
+      timeRange,
       zoom: 10,
       cellSizePx: 10,
       viewportBounds: { west: 0, south: 0, east: 1, north: 1 },
@@ -85,6 +102,7 @@ describe('FootprintWorkerClient', () => {
     })
     const firstExpectation = expect(first).rejects.toThrow('superseded')
     const second = client.aggregate({
+      timeRange,
       zoom: 11,
       cellSizePx: 10,
       viewportBounds: { west: 0, south: 0, east: 1, north: 1 },
@@ -100,6 +118,7 @@ describe('FootprintWorkerClient', () => {
       {
         type: 'aggregate',
         requestId: 1,
+        timeRange,
         zoom: 10,
         cellSizePx: 10,
         viewportBounds: { west: 0, south: 0, east: 1, north: 1 },
@@ -109,7 +128,7 @@ describe('FootprintWorkerClient', () => {
 
     worker.onmessage?.(
       new MessageEvent('message', {
-        data: { requestId: 1, points: [] },
+        data: { requestId: 1, snapshot: emptySnapshot },
       }),
     )
     expect(worker.postedMessages[2]).toMatchObject({
@@ -120,11 +139,11 @@ describe('FootprintWorkerClient', () => {
 
     worker.onmessage?.(
       new MessageEvent('message', {
-        data: { requestId: 2, points: [] },
+        data: { requestId: 2, snapshot: emptySnapshot },
       }),
     )
 
-    await expect(second).resolves.toEqual([])
+    await expect(second).resolves.toEqual(emptySnapshot)
     await firstExpectation
   })
 
@@ -134,6 +153,7 @@ describe('FootprintWorkerClient', () => {
 
     client.setPoints(points)
     const first = client.aggregate({
+      timeRange,
       zoom: 10,
       cellSizePx: 10,
       viewportBounds: { west: 0, south: 0, east: 1, north: 1 },
@@ -141,6 +161,7 @@ describe('FootprintWorkerClient', () => {
     })
     const firstExpectation = expect(first).rejects.toThrow('superseded')
     const second = client.aggregate({
+      timeRange,
       zoom: 11,
       cellSizePx: 10,
       viewportBounds: { west: 0, south: 0, east: 1, north: 1 },
@@ -148,6 +169,7 @@ describe('FootprintWorkerClient', () => {
     })
     const secondExpectation = expect(second).rejects.toThrow('superseded')
     const third = client.aggregate({
+      timeRange,
       zoom: 12,
       cellSizePx: 10,
       viewportBounds: { west: 0, south: 0, east: 1, north: 1 },
@@ -163,6 +185,7 @@ describe('FootprintWorkerClient', () => {
       {
         type: 'aggregate',
         requestId: 1,
+        timeRange,
         zoom: 10,
         cellSizePx: 10,
         viewportBounds: { west: 0, south: 0, east: 1, north: 1 },
@@ -172,7 +195,7 @@ describe('FootprintWorkerClient', () => {
 
     worker.onmessage?.(
       new MessageEvent('message', {
-        data: { requestId: 1, points: [] },
+        data: { requestId: 1, snapshot: emptySnapshot },
       }),
     )
 
@@ -185,11 +208,11 @@ describe('FootprintWorkerClient', () => {
 
     worker.onmessage?.(
       new MessageEvent('message', {
-        data: { requestId: 3, points: [] },
+        data: { requestId: 3, snapshot: emptySnapshot },
       }),
     )
 
-    await expect(third).resolves.toEqual([])
+    await expect(third).resolves.toEqual(emptySnapshot)
     await firstExpectation
     await secondExpectation
   })
@@ -200,6 +223,7 @@ describe('FootprintWorkerClient', () => {
 
     client.setPoints(points)
     const failed = client.aggregate({
+      timeRange,
       zoom: 10,
       cellSizePx: 10,
       viewportBounds: { west: 0, south: 0, east: 1, north: 1 },
@@ -211,6 +235,7 @@ describe('FootprintWorkerClient', () => {
     await expect(failed).rejects.toThrow('failed')
 
     const recovered = client.aggregate({
+      timeRange,
       zoom: 11,
       cellSizePx: 10,
       viewportBounds: { west: 0, south: 0, east: 1, north: 1 },
@@ -225,11 +250,11 @@ describe('FootprintWorkerClient', () => {
 
     worker.onmessage?.(
       new MessageEvent('message', {
-        data: { requestId: 2, points: [] },
+        data: { requestId: 2, snapshot: emptySnapshot },
       }),
     )
 
-    await expect(recovered).resolves.toEqual([])
+    await expect(recovered).resolves.toEqual(emptySnapshot)
   })
 
   it('terminates the worker on dispose', () => {

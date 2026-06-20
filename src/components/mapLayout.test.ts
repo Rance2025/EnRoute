@@ -238,6 +238,18 @@ describe('map chrome layout', () => {
     )
   })
 
+  it('wraps long week ranges inside picker cards instead of forcing one long line', () => {
+    const weekDetailRule = lastCssRule('.time-picker-grid--weeks button small')
+    const weekDetailLineRule = lastCssRule('.time-picker-grid--weeks button small > span')
+    const weekDetailSeparatorRule = lastCssRule(".time-picker-grid--weeks button small span[aria-hidden='true']")
+
+    expect(weekDetailRule).toContain('display: grid')
+    expect(weekDetailRule).toContain('white-space: normal')
+    expect(weekDetailLineRule).toContain('white-space: nowrap')
+    expect(weekDetailLineRule).toContain('text-overflow: ellipsis')
+    expect(weekDetailSeparatorRule).toContain('display: none')
+  })
+
   it('gives day calendar active cells the same uncut raised shadow as picker cells', () => {
     const sharedActiveRule =
       appCss.match(

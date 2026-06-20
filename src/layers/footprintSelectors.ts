@@ -1,6 +1,12 @@
 import { createTimeRangeTimestamps, type TimeRangeSelection } from '../time/timeRange'
 import type { FootprintPoint } from './footprintTypes'
 
+export type FootprintMetricSnapshot = {
+  selectedCount: number
+  totalDistanceMeters: number
+  averageDistanceMetersPerDay: number
+}
+
 export type FootprintLngLatBounds = {
   southWest: [number, number]
   northEast: [number, number]
@@ -18,6 +24,40 @@ export function filterFootprintPointsByTimeRange(
       point.timestampSeconds >= startTimestampSeconds &&
       point.timestampSeconds <= endTimestampSeconds,
   )
+}
+
+export function calculateFootprintMetrics(
+  points: FootprintPoint[],
+  selection: TimeRangeSelection,
+): FootprintMetricSnapshot {
+  return calculateFootprintMetricsForTimestamps(points, createTimeRangeTimestamps(selection))
+}
+
+export function calculateFootprintMetricsForTimestamps(
+  points: FootprintPoint[],
+  timeRange: {
+    startTimestampSeconds: number
+    endTimestampSeconds: number
+    dayCount: number
+  },
+): FootprintMetricSnapshot {
+  let selectedCount = 0
+  let totalDistanceMeters = 0
+
+  for (const point of points) {
+    if (!isPointInTimestampRange(point, timeRange)) continue
+
+    selectedCount += 1
+    if (Number.isFinite(point.distance) && point.distance > 0) {
+      totalDistanceMeters += point.distance
+    }
+  }
+
+  return {
+    selectedCount,
+    totalDistanceMeters,
+    averageDistanceMetersPerDay: totalDistanceMeters / Math.max(timeRange.dayCount, 1),
+  }
 }
 
 export function calculateFootprintLngLatBounds(
@@ -41,4 +81,27 @@ export function calculateFootprintLngLatBounds(
     southWest: [west, south],
     northEast: [east, north],
   }
+}
+
+export function filterFootprintPointsByTimestampRange(
+  points: FootprintPoint[],
+  timeRange: {
+    startTimestampSeconds: number
+    endTimestampSeconds: number
+  },
+) {
+  return points.filter((point) => isPointInTimestampRange(point, timeRange))
+}
+
+function isPointInTimestampRange(
+  point: FootprintPoint,
+  timeRange: {
+    startTimestampSeconds: number
+    endTimestampSeconds: number
+  },
+) {
+  return (
+    point.timestampSeconds >= timeRange.startTimestampSeconds &&
+    point.timestampSeconds <= timeRange.endTimestampSeconds
+  )
 }

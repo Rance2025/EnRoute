@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { selectDay, selectMonth, selectPresetRange, setCustomDateRange } from '../time/timeRange'
 import type { FootprintPoint } from './footprintTypes'
 import {
+  calculateFootprintMetrics,
   calculateFootprintLngLatBounds,
   filterFootprintPointsByTimeRange,
 } from './footprintSelectors'
@@ -27,6 +28,7 @@ function point(
   timestampSeconds: number,
   longitude: number,
   latitude: number,
+  distance = 0,
 ): FootprintPoint {
   return {
     ...basePoint,
@@ -34,6 +36,7 @@ function point(
     timestampSeconds,
     longitude,
     latitude,
+    distance,
   }
 }
 
@@ -111,6 +114,28 @@ describe('footprint selectors', () => {
     ).toEqual({
       southWest: [120, 30],
       northEast: [123, 34],
+    })
+  })
+
+  it('calculates exact metrics for the selected calendar range before render thinning', () => {
+    const points = [
+      point('before', 1781798399, 120, 30, 90),
+      point('start', 1781798400, 121, 31, 100),
+      point('middle', 1781840000, 122, 32, 200.5),
+      point('end', 1781884799, 123, 33, Number.NaN),
+      point('after', 1781971200, 124, 34, 300),
+    ]
+
+    expect(calculateFootprintMetrics(points, selectDay('2026-06-19'))).toEqual({
+      selectedCount: 3,
+      totalDistanceMeters: 300.5,
+      averageDistanceMetersPerDay: 300.5,
+    })
+
+    expect(calculateFootprintMetrics(points, setCustomDateRange('2026-06-19', '2026-06-20'))).toEqual({
+      selectedCount: 3,
+      totalDistanceMeters: 300.5,
+      averageDistanceMetersPerDay: 150.25,
     })
   })
 })

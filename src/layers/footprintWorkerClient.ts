@@ -1,11 +1,13 @@
 import type {
-  AggregatedFootprintPoint,
+  FootprintRenderSnapshot,
   FootprintPoint,
   LngLatBounds,
   WorldPixelPoint,
 } from './footprintTypes'
+import type { TimeRangeTimestamps } from '../time/timeRange'
 
 type AggregateInput = {
+  timeRange: TimeRangeTimestamps
   zoom: number
   cellSizePx: number
   viewportBounds: LngLatBounds
@@ -24,13 +26,13 @@ type AggregateRequest = AggregateInput & {
 
 type WorkerResponse = {
   requestId: number
-  points: AggregatedFootprintPoint[]
+  snapshot: FootprintRenderSnapshot
 }
 
 type PendingRequest = {
   requestId: number
-  promise: Promise<AggregatedFootprintPoint[]>
-  resolve: (points: AggregatedFootprintPoint[]) => void
+  promise: Promise<FootprintRenderSnapshot>
+  resolve: (snapshot: FootprintRenderSnapshot) => void
   reject: (error: Error) => void
 }
 
@@ -64,7 +66,7 @@ export class FootprintWorkerClient {
       const pendingRequest = this.pendingRequest
       if (!pendingRequest || event.data.requestId !== pendingRequest.requestId) return
       this.pendingRequest = null
-      pendingRequest.resolve(event.data.points)
+      pendingRequest.resolve(event.data.snapshot)
     }
     this.worker.onerror = () => {
       this.activeRequestId = null
@@ -80,7 +82,7 @@ export class FootprintWorkerClient {
     } satisfies SetPointsRequest)
   }
 
-  aggregate(input: AggregateInput): Promise<AggregatedFootprintPoint[]> {
+  aggregate(input: AggregateInput): Promise<FootprintRenderSnapshot> {
     if (this.activeRequestId !== null) {
       this.rejectPending(new Error('Footprint aggregation request superseded'))
       this.pendingRequest = this.createPendingRequest(input)
@@ -102,9 +104,9 @@ export class FootprintWorkerClient {
     const requestId = this.nextRequestId
     this.nextRequestId += 1
 
-    let resolveRequest: (points: AggregatedFootprintPoint[]) => void = () => {}
+    let resolveRequest: (snapshot: FootprintRenderSnapshot) => void = () => {}
     let rejectRequest: (error: Error) => void = () => {}
-    const promise = new Promise<AggregatedFootprintPoint[]>((resolve, reject) => {
+    const promise = new Promise<FootprintRenderSnapshot>((resolve, reject) => {
       resolveRequest = resolve
       rejectRequest = reject
     })
