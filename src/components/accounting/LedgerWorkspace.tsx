@@ -78,6 +78,10 @@ export function LedgerWorkspace({
   const accountTransactionCount = filteredTransactions.length
   const selectedSummary = summaries.find((summary) => summary.account.id === selectedAccountId)
   const activeAccountName = selectedSummary?.account.name ?? '全部账户'
+  const orderedSummaries = getOrderedAccountSummaries(summaries, selectedAccountId)
+  const summaryVariantByAccountId = new Map(
+    summaries.map((summary, index) => [summary.account.id, (index % 4) + 1]),
+  )
 
   return (
     <div
@@ -103,10 +107,11 @@ export function LedgerWorkspace({
           <strong>{transactions.length} 笔</strong>
         </button>
         <div className="ios-account-filter-stack">
-          {summaries.map((summary, index) => (
+          {orderedSummaries.map((summary, stackIndex) => (
             <AccountFilterCard
               key={summary.account.id}
-              variant={(index % 4) + 1}
+              variant={summaryVariantByAccountId.get(summary.account.id) ?? 1}
+              stackIndex={stackIndex}
               title={summary.account.name}
               detail={`${summary.transactionCount} 笔 · ${summary.account.sourceFundType ?? 'fund'}`}
               balance={`¥${formatCnyFromCents(summary.closingInCents)}`}
@@ -169,6 +174,7 @@ export function LedgerWorkspace({
 
 function AccountFilterCard({
   variant,
+  stackIndex,
   title,
   detail,
   balance,
@@ -177,6 +183,7 @@ function AccountFilterCard({
   onSelect,
 }: {
   variant: number
+  stackIndex: number
   title: string
   detail: string
   balance: string
@@ -190,7 +197,9 @@ function AccountFilterCard({
       className={[
         'ios-account-filter-card',
         `ios-account-filter-card--${variant}`,
-        active ? 'is-active is-pulled' : null,
+        `ios-account-filter-card--rank-${Math.min(stackIndex, 3)}`,
+        active ? 'is-active' : null,
+        active && stackIndex === 0 ? 'is-stack-primary' : null,
       ]
         .filter(Boolean)
         .join(' ')}
@@ -384,6 +393,25 @@ function transactionBelongsToAccount(transaction: Transaction, accountId: string
   }
 
   return transaction.accountId === accountId
+}
+
+function getOrderedAccountSummaries(
+  summaries: AccountPeriodSummary[],
+  selectedAccountId: string,
+) {
+  if (selectedAccountId === 'all') return summaries
+
+  const selectedIndex = summaries.findIndex(
+    (summary) => summary.account.id === selectedAccountId,
+  )
+
+  if (selectedIndex < 0) return summaries
+
+  return [
+    summaries[selectedIndex],
+    ...summaries.slice(0, selectedIndex),
+    ...summaries.slice(selectedIndex + 1),
+  ]
 }
 
 function formatTransactionAmount(transaction: Transaction) {

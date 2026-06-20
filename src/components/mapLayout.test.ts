@@ -56,7 +56,7 @@ describe('map chrome layout', () => {
   it('moves accounting metrics into the time card instead of the bottom summary grid', () => {
     expect(timeContextPanelSource).toContain('aria-label="记账概览卡片"')
     expect(timeContextPanelSource).not.toContain('aria-label="当前范围摘要"')
-    expect(cssRule('.time-context-accounting-summary')).toContain('grid-template-columns: repeat(2, minmax(0, 1fr))')
+    expect(cssRule('.time-context-accounting-summary')).toContain('grid-template-columns: repeat(4, minmax(0, 1fr))')
     expect(cssRule('.time-context-summary')).toBe('')
     expect(cssRule('.ios-summary-strip')).toBe('')
   })
@@ -394,17 +394,38 @@ describe('map chrome layout', () => {
     expect(cssRule('.transaction-editor')).toBe('')
   })
 
-  it('keeps all-ledger selection outside the account card stack and pulls selected account cards out', () => {
+  it('keeps all-ledger selection outside the account card stack and rotates selected account cards into the stack front', () => {
     const ledgerSource = readFileSync('src/components/accounting/LedgerWorkspace.tsx', 'utf8')
 
     expect(ledgerSource).toContain('className="ios-account-all-filter"')
     expect(ledgerSource).not.toContain('title="全部账户"')
-    expect(ledgerSource).toContain("active ? 'is-active is-pulled' : null")
+    expect(ledgerSource).toContain('getOrderedAccountSummaries')
+    expect(ledgerSource).toContain('ios-account-filter-card--rank-')
+    expect(ledgerSource).not.toContain('is-pulled')
     expect(cssRule('.ios-account-all-filter')).not.toContain('linear-gradient(135deg')
-    expect(cssRule('.ios-account-filter-card')).toContain('--account-pull-x: 24px')
-    expect(cssRule('.ios-account-filter-card.is-pulled')).toContain(
-      'translate3d(var(--account-pull-x), -6px, 0)',
+    expect(cssRule('.ios-account-filter-card')).not.toContain('--account-pull-x')
+    expect(cssRule('.ios-account-filter-card.is-pulled')).toBe('')
+    expect(cssRule('.ios-account-filter-card.is-stack-primary')).toContain(
+      'animation: accountCardRollIn',
     )
+    expect(appCss).toContain('@keyframes accountCardRollIn')
+  })
+
+  it('contains ledger rows so amount and date content cannot spill out of the row', () => {
+    const rowRule = cssRule('.ios-transaction-row')
+    const sideRule = cssRule('.ios-transaction-row__side')
+    const sideTextRule =
+      appCss.match(
+        /\.ios-transaction-row__side b,\s*\.ios-transaction-row__side time,\s*\.ios-transaction-row__side small\s*\{[^}]*\}/,
+      )?.[0] ?? ''
+
+    expect(rowRule).toContain('grid-template-columns:')
+    expect(rowRule).toContain('minmax(96px, 112px)')
+    expect(rowRule).toContain('overflow: hidden')
+    expect(sideRule).toContain('min-width: 0')
+    expect(sideRule).toContain('justify-items: end')
+    expect(sideTextRule).toContain('max-width: 100%')
+    expect(sideTextRule).toContain('text-overflow: ellipsis')
   })
 
   it('initializes the map at the single-world minimum zoom', () => {
