@@ -390,6 +390,9 @@ describe('map chrome layout', () => {
 
   it('lets the custom date picker title open a compact month grid that shares navigation motion', () => {
     const titleRule = cssRule('.time-date-picker__title')
+    const titleHoverRule = cssRule('.time-date-picker__title:hover')
+    const titleActiveRule = cssRule('.time-date-picker__title:active')
+    const arrowButtonRule = cssRule('.time-date-picker__bar button:not(.time-date-picker__title)')
     const monthGridRule = cssRule('.time-date-picker__grid--months')
     const monthButtonRule = cssRule('.time-date-picker__grid--months button')
 
@@ -401,8 +404,30 @@ describe('map chrome layout', () => {
     expect(timeContextPanelSource).toContain('time-range-grid-motion--')
     expect(titleRule).toContain('display: grid')
     expect(titleRule).toContain('cursor: pointer')
+    expect(titleRule).toContain('width: 100%')
+    expect(titleRule).toContain('border: 0')
+    expect(titleRule).toContain('border-radius: 0')
+    expect(titleRule).toContain('background: transparent')
+    expect(titleRule).toContain('box-shadow: none')
+    expect(titleHoverRule).toContain('background: transparent')
+    expect(titleActiveRule).toContain('transform: none')
+    expect(arrowButtonRule).toContain('border-radius: 50%')
+    expect(appCss).not.toMatch(/\.time-date-picker__bar button\s*\{/)
     expect(monthGridRule).toContain('grid-template-columns: repeat(6, minmax(0, 1fr))')
     expect(monthButtonRule).toContain('height: 34px')
+  })
+
+  it('keeps custom date fields to one visible input surface', () => {
+    const fieldRule = cssRule('.time-date-field')
+    const buttonRule = cssRule('.time-date-button')
+
+    expect(fieldRule).toContain('padding: 0')
+    expect(fieldRule).toContain('border: 0')
+    expect(fieldRule).toContain('border-radius: 0')
+    expect(fieldRule).toContain('background: transparent')
+    expect(fieldRule).toContain('box-shadow: none')
+    expect(buttonRule).toContain('border: 1px solid')
+    expect(buttonRule).toContain('background:')
   })
 
   it('lets segmented sliders drag from the switch surface with drag cursors', () => {
