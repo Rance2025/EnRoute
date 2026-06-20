@@ -30,8 +30,9 @@ export function clampMapCenterToLatitudeBounds(
   bounds: MapBounds,
 ) {
   const center = map.getCenter()
+  const currentCenter: [number, number] = [center.getLng(), center.getLat()]
   const nextCenter = calculateBoundedCenterForViewport({
-    center: [center.getLng(), center.getLat()],
+    center: currentCenter,
     bounds,
     viewportSize: {
       width: container.clientWidth,
