@@ -6,7 +6,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any, Iterable
 
-from .csv_loader import iter_footprint_points, load_footprint_payload
+from .csv_loader import iter_footprint_points
 
 TILE_SIZE = 256
 MAX_MERCATOR_LATITUDE = 85.05112878
@@ -36,6 +36,14 @@ class FootprintStore:
             coordinate_system=self.coordinate_system,
         )
         return query_snapshot(self.connection, normalize_snapshot_input(input_payload))
+
+    def get_all_points(self) -> dict[str, list[dict[str, Any]]]:
+        ensure_imported(
+            self.connection,
+            data_path=self.data_path,
+            coordinate_system=self.coordinate_system,
+        )
+        return query_all_points(self.connection)
 
 
 def initialize_schema(connection: sqlite3.Connection) -> None:
@@ -190,6 +198,46 @@ def query_metrics(connection: sqlite3.Connection, input_payload: dict[str, Any])
         "totalDistanceMeters": total_distance_meters,
         "averageDistanceMetersPerDay": total_distance_meters
         / max(input_payload["timeRange"]["dayCount"], 1),
+    }
+
+
+def query_all_points(connection: sqlite3.Connection) -> dict[str, list[dict[str, Any]]]:
+    rows = connection.execute(
+        """
+        SELECT
+          id,
+          timestamp_seconds AS timestampSeconds,
+          longitude,
+          latitude,
+          accuracy,
+          speed,
+          distance,
+          heading,
+          altitude,
+          loc_type AS locType,
+          is_back_foreground AS isBackForeground,
+          step_type AS stepType
+        FROM footprints
+        ORDER BY timestamp_seconds, id
+        """,
+    )
+    return {"points": [format_raw_point(row) for row in rows]}
+
+
+def format_raw_point(row: sqlite3.Row) -> dict[str, Any]:
+    return {
+        "id": str(row["id"]),
+        "timestampSeconds": int(row["timestampSeconds"]),
+        "longitude": float(row["longitude"]),
+        "latitude": float(row["latitude"]),
+        "accuracy": float(row["accuracy"]),
+        "speed": float(row["speed"]),
+        "distance": float(row["distance"]),
+        "heading": float(row["heading"]),
+        "altitude": float(row["altitude"]),
+        "locType": float(row["locType"]),
+        "isBackForeground": float(row["isBackForeground"]),
+        "stepType": float(row["stepType"]),
     }
 
 
