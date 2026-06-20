@@ -42,6 +42,34 @@ function cssRuleIn(source: string, selector: string) {
   return source.match(new RegExp(`${escapedSelector}\\s*\\{[^}]*\\}`))?.[0] ?? ''
 }
 
+function keyframesRule(name: string) {
+  const start = appCss.indexOf(`@keyframes ${name}`)
+  if (start < 0) return ''
+
+  let depth = 0
+  for (let index = start; index < appCss.length; index += 1) {
+    if (appCss[index] === '{') depth += 1
+    if (appCss[index] === '}') {
+      depth -= 1
+      if (depth === 0) return appCss.slice(start, index + 1)
+    }
+  }
+
+  return ''
+}
+
+function cssCustomPx(rule: string, property: string) {
+  const match = rule.match(new RegExp(`${property}:\\s*(-?\\d+(?:\\.\\d+)?)px`))
+
+  return match ? Number(match[1]) : Number.NaN
+}
+
+function cssCustomNumber(rule: string, property: string) {
+  const match = rule.match(new RegExp(`${property}:\\s*(-?\\d+(?:\\.\\d+)?)`))
+
+  return match ? Number(match[1]) : Number.NaN
+}
+
 describe('map chrome layout', () => {
   it('does not render a second map wordmark inside the map chrome', () => {
     expect(amapCanvasSource).not.toContain('className="brand-header"')
@@ -65,6 +93,45 @@ describe('map chrome layout', () => {
     expect(workspaceRule).toContain('width: calc(100vw - var(--data-panel-width))')
     expect(stageRule).toContain('inset: 0 0 0 var(--data-panel-width)')
     expect(stageRule).toContain('width: calc(100vw - var(--data-panel-width))')
+  })
+
+  it('centers the accounting workspace on the page axis instead of the map data panel axis', () => {
+    const accountingShellRule = cssRule('.app-shell--accounting .time-context-panel')
+    const accountingWorkspaceRule = cssRule('.app-shell--accounting .main-workspace')
+    const accountingPageRule = cssRule('.accounting-page')
+    const workspaceRule = cssRule('.ios-account-ledger-workspace')
+    const ledgerMainPlacementRule = cssRule('.ios-ledger-main')
+    const accountPanelPlacementRule = cssRule('.ios-account-filter-panel')
+    const mobileMedia = mediaBlock('@media (max-width: 720px)')
+
+    expect(accountingShellRule).toContain('display: none')
+    expect(accountingWorkspaceRule).toContain('inset: 0')
+    expect(accountingWorkspaceRule).toContain('width: 100vw')
+    expect(accountingPageRule).toContain('grid-template-columns: minmax(0, 1fr) minmax(0, 1200px) minmax(0, 1fr)')
+    expect(accountingPageRule).toContain('padding: 104px 24px 18px')
+    expect(cssRuleIn(mobileMedia, '.accounting-page')).toContain('padding: 92px 10px 12px')
+    expect(
+      cssRuleIn(
+        mediaBlock(
+          '@media (min-width: 721px) and (max-width: 1240px), (min-width: 721px) and (max-height: 790px)',
+        ),
+        '.accounting-page',
+      ),
+    ).toContain('padding: 100px 16px 14px')
+    expect(workspaceRule).toContain('grid-column: 2')
+    expect(workspaceRule).toContain(
+      'grid-template-columns: minmax(300px, 0.42fr) minmax(0, 1fr) minmax(300px, 0.42fr)',
+    )
+    expect(workspaceRule).toContain('align-items: start')
+    expect(ledgerMainPlacementRule).toContain('grid-column: 2')
+    expect(accountPanelPlacementRule).toContain('align-self: start')
+    expect(accountPanelPlacementRule).toContain('grid-column: 3')
+    expect(cssRuleIn(mobileMedia, '.ios-account-ledger-workspace')).toContain('grid-column: 1')
+    expect(cssRuleIn(mobileMedia, '.ios-account-ledger-workspace')).toContain(
+      'grid-template-columns: minmax(0, 1fr)',
+    )
+    expect(cssRuleIn(mobileMedia, '.ios-ledger-main')).toContain('grid-column: 1')
+    expect(cssRuleIn(mobileMedia, '.ios-account-filter-panel')).toContain('grid-column: 1')
   })
 
   it('keeps the shared time panel high in the left rail without a fake top spacer', () => {
@@ -406,6 +473,7 @@ describe('map chrome layout', () => {
 
   it('keeps the accounting page fixed while ledger internals scroll', () => {
     expect(cssRule('.accounting-page')).toContain('overflow: hidden')
+    expect(cssRule('.accounting-page')).not.toContain('grid-template-rows: auto minmax(0, 1fr)')
     expect(cssRule('.accounting-workspace')).toContain('overflow: hidden')
     expect(cssRule('.accounting-page *')).toContain('min-width: 0')
     expect(cssRule('.accounting-scroll--ledger')).toContain('overflow-y: auto')
@@ -417,6 +485,18 @@ describe('map chrome layout', () => {
     expect(cssRule('.transaction-editor')).toBe('')
   })
 
+  it('keeps ledger rows in the main center column and account cards in the right rail', () => {
+    const ledgerSource = readFileSync('src/components/accounting/LedgerWorkspace.tsx', 'utf8')
+    const workspaceRule = cssRule('.ios-account-ledger-workspace')
+
+    expect(workspaceRule).toContain(
+      'grid-template-columns: minmax(300px, 0.42fr) minmax(0, 1fr) minmax(300px, 0.42fr)',
+    )
+    expect(ledgerSource.indexOf('className="ios-panel ios-ledger-main"')).toBeLessThan(
+      ledgerSource.indexOf('className="ios-panel ios-account-filter-panel"'),
+    )
+  })
+
   it('keeps all-ledger selection outside the stack and detaches the selected account before spreading the remaining cards', () => {
     const ledgerSource = readFileSync('src/components/accounting/LedgerWorkspace.tsx', 'utf8')
 
@@ -424,36 +504,183 @@ describe('map chrome layout', () => {
     expect(ledgerSource).not.toContain('title="全部账户"')
     expect(ledgerSource).toContain('selectedSummary ? (')
     expect(ledgerSource).toContain('visibleStackSummaries')
-    expect(ledgerSource).toContain('aria-label="选中账户卡片"')
+    expect(ledgerSource).toContain('aria-label="单独显示的选中账户"')
+    expect(ledgerSource).toContain('aria-label="层叠账户卡片"')
+    expect(ledgerSource).toContain("from 'framer-motion'")
+    expect(ledgerSource).toContain('ACCOUNT_CARD_LAYOUT_TRANSITION')
+    expect(ledgerSource).not.toContain('AnimatePresence')
+    expect(ledgerSource).toContain('<LayoutGroup id="account-card-stack">')
+    expect(ledgerSource).toContain('layoutId={`account-card-${selectedSummary.account.id}`}')
+    expect(ledgerSource).toContain('key={selectedSummary.account.id}')
+    expect(ledgerSource).toContain('layoutId={`account-card-${summary.account.id}`}')
+    expect(ledgerSource).toContain('<motion.button')
+    expect(ledgerSource).toContain('layout="position"')
     expect(ledgerSource).toContain('ios-account-filter-card--rank-')
     expect(ledgerSource).not.toContain('is-pulled')
     expect(cssRule('.ios-account-all-filter')).not.toContain('linear-gradient(135deg')
     expect(cssRule('.ios-account-filter-card')).not.toContain('--account-pull-x')
     expect(cssRule('.ios-account-filter-card.is-pulled')).toBe('')
     expect(cssRule('.ios-account-selected-slot')).toContain('animation: accountSelectedSlotIn')
-    expect(cssRule('.ios-account-filter-stack.is-spread')).toContain('gap:')
+    expect(cssRule('.ios-account-selected-slot')).toContain(
+      '420ms cubic-bezier(0.16, 1, 0.3, 1)',
+    )
+    expect(cssRule('.ios-account-filter-stack')).toContain('margin-top: 18px')
+    expect(cssRule('.ios-account-filter-stack')).toContain('position: relative')
+    expect(cssRule('.ios-account-filter-stack')).toContain('height: 270px')
+    expect(cssRule('.ios-account-filter-stack')).toContain('perspective: 1100px')
+    expect(cssRule('.ios-account-filter-stack')).toContain('transform-style: preserve-3d')
+    expect(cssRule('.ios-account-filter-stack.is-spread')).not.toContain('gap:')
+    expect(cssRule('.ios-account-filter-stack .ios-account-filter-card')).toContain('position: absolute')
+    expect(cssRule('.ios-account-filter-stack .ios-account-filter-card')).toContain(
+      'top: var(--account-card-stack-y)',
+    )
+    expect(cssRule('.ios-account-filter-card')).toContain('width: 100%')
+    expect(cssRule('.ios-account-filter-card__surface')).toContain('transform-origin: center bottom')
+    expect(cssRule('.ios-account-filter-card__surface')).toContain(
+      'width: calc(100% - var(--account-card-shift-x))',
+    )
+    expect(cssRule('.ios-account-filter-card__surface')).toContain(
+      'translate 520ms cubic-bezier(0.16, 1, 0.3, 1)',
+    )
+    expect(cssRule('.ios-account-filter-card__surface')).toContain('transform: rotateX(var(--account-card-tilt))')
+    expect(cssRule('.ios-account-filter-card + .ios-account-filter-card')).toContain(
+      'margin-top: 0',
+    )
+    expect(
+      cssRule('.ios-account-filter-stack.is-spread .ios-account-filter-card + .ios-account-filter-card'),
+    ).toContain('margin-top: 0')
+    expect(cssRule('.ios-account-filter-card--rank-1')).toContain('--account-card-lift: 0px')
+    expect(cssRule('.ios-account-filter-card--rank-1')).toContain('--account-card-shift-x: 16px')
+    expect(cssRule('.ios-account-filter-card--rank-2')).toContain('--account-card-lift: 0px')
+    expect(cssRule('.ios-account-filter-card--rank-2')).toContain('--account-card-shift-x: 32px')
+    expect(cssRule('.ios-account-filter-card--rank-3')).toContain('--account-card-lift: 0px')
+    expect(cssRule('.ios-account-filter-card--rank-3')).toContain('--account-card-shift-x: 48px')
+    expect(cssCustomPx(cssRule('.ios-account-filter-card--rank-0'), '--account-card-stack-y')).toBe(174)
+    expect(cssCustomPx(cssRule('.ios-account-filter-card--rank-1'), '--account-card-stack-y')).toBe(116)
+    expect(cssCustomPx(cssRule('.ios-account-filter-card--rank-2'), '--account-card-stack-y')).toBe(58)
+    expect(cssCustomPx(cssRule('.ios-account-filter-card--rank-3'), '--account-card-stack-y')).toBe(0)
+    expect(cssCustomPx(cssRule('.ios-account-filter-card--rank-0'), '--account-card-stack-y')).toBeGreaterThan(
+      cssCustomPx(cssRule('.ios-account-filter-card--rank-1'), '--account-card-stack-y'),
+    )
+    expect(cssCustomPx(cssRule('.ios-account-filter-card--rank-1'), '--account-card-stack-y')).toBeGreaterThan(
+      cssCustomPx(cssRule('.ios-account-filter-card--rank-2'), '--account-card-stack-y'),
+    )
+    expect(cssCustomPx(cssRule('.ios-account-filter-card--rank-2'), '--account-card-stack-y')).toBeGreaterThan(
+      cssCustomPx(cssRule('.ios-account-filter-card--rank-3'), '--account-card-stack-y'),
+    )
+    expect(cssCustomNumber(cssRule('.ios-account-filter-card--rank-0'), '--account-card-z')).toBeGreaterThan(
+      cssCustomNumber(cssRule('.ios-account-filter-card--rank-1'), '--account-card-z'),
+    )
+    expect(cssCustomNumber(cssRule('.ios-account-filter-card--rank-1'), '--account-card-z')).toBeGreaterThan(
+      cssCustomNumber(cssRule('.ios-account-filter-card--rank-2'), '--account-card-z'),
+    )
+    expect(cssCustomNumber(cssRule('.ios-account-filter-card--rank-2'), '--account-card-z')).toBeGreaterThan(
+      cssCustomNumber(cssRule('.ios-account-filter-card--rank-3'), '--account-card-z'),
+    )
+    expect(appCss).not.toContain('--account-card-info-y')
+    expect(
+      cssRule(
+        '.ios-account-filter-card__check,\n.ios-account-filter-card__body,\n.ios-account-filter-card__side',
+      ),
+    ).not.toContain('transform:')
     expect(cssRule('.ios-account-filter-card.is-detached')).toContain(
-      'animation: accountCardDetachIn',
+      'animation: accountCardDetachIn 520ms cubic-bezier(0.16, 1, 0.3, 1)',
+    )
+    expect(cssRule('.ios-account-filter-card.is-detached .ios-account-filter-card__surface')).toContain(
+      'min-height: 92px',
+    )
+    expect(cssRule('.ios-account-filter-stack.is-spread')).toContain(
+      'animation: accountCardSettleBack 460ms cubic-bezier(0.16, 1, 0.3, 1)',
     )
     expect(appCss).toContain('@keyframes accountCardDetachIn')
     expect(appCss).toContain('@keyframes accountCardSettleBack')
+    expect(keyframesRule('accountSelectedSlotIn')).not.toContain('transform:')
+    expect(keyframesRule('accountCardDetachIn')).not.toContain('transform:')
+    expect(keyframesRule('accountCardSettleBack')).not.toContain('transform:')
+  })
+
+  it('keeps account-card layout projection separate from the 3D stack surface', () => {
+    const ledgerSource = readFileSync('src/components/accounting/LedgerWorkspace.tsx', 'utf8')
+    const cardRule = cssRule('.ios-account-filter-card')
+    const surfaceRule = cssRule('.ios-account-filter-card__surface')
+    const hoverRule = cssRule('.ios-account-filter-card:hover .ios-account-filter-card__surface')
+
+    expect(ledgerSource).toContain('className="ios-account-filter-card__surface"')
+    expect(ledgerSource).toContain('<motion.button')
+    expect(cardRule).toContain('width: 100%')
+    expect(cardRule).not.toMatch(/\n\s+translate:/)
+    expect(cardRule).not.toMatch(/\n\s+scale:/)
+    expect(cardRule).not.toContain('transform: rotateX')
+    expect(cardRule).not.toContain('will-change: translate, scale, transform')
+    expect(surfaceRule).toContain('width: calc(100% - var(--account-card-shift-x))')
+    expect(surfaceRule).toContain('translate: var(--account-card-shift-x) var(--account-card-lift)')
+    expect(surfaceRule).toContain('scale: var(--account-card-scale)')
+    expect(surfaceRule).toContain('transform: rotateX(var(--account-card-tilt))')
+    expect(hoverRule).toContain('translate: var(--account-card-shift-x) calc(var(--account-card-lift) - 3px)')
+  })
+
+  it('keeps responsive account-card stacks ordered upward without margin-based overlap', () => {
+    const mobileMedia = mediaBlock('@media (max-width: 720px)')
+    const compactMedia = mediaBlock(
+      '@media (min-width: 721px) and (max-width: 1240px), (min-width: 721px) and (max-height: 790px)',
+    )
+
+    const cases = [
+      { media: mobileMedia, offsets: [102, 68, 34, 0] },
+      { media: compactMedia, offsets: [156, 104, 52, 0] },
+    ] as const
+
+    for (const { media, offsets } of cases) {
+      expect(cssRuleIn(media, '.ios-account-filter-card + .ios-account-filter-card')).toContain(
+        'margin-top: 0',
+      )
+      expect(cssCustomPx(cssRuleIn(media, '.ios-account-filter-card--rank-0'), '--account-card-stack-y')).toBe(
+        offsets[0],
+      )
+      expect(cssCustomPx(cssRuleIn(media, '.ios-account-filter-card--rank-1'), '--account-card-stack-y')).toBe(
+        offsets[1],
+      )
+      expect(cssCustomPx(cssRuleIn(media, '.ios-account-filter-card--rank-2'), '--account-card-stack-y')).toBe(
+        offsets[2],
+      )
+      expect(cssCustomPx(cssRuleIn(media, '.ios-account-filter-card--rank-3'), '--account-card-stack-y')).toBe(
+        offsets[3],
+      )
+      expect(cssCustomPx(cssRuleIn(media, '.ios-account-filter-card--rank-0'), '--account-card-stack-y')).toBeGreaterThan(
+        cssCustomPx(cssRuleIn(media, '.ios-account-filter-card--rank-1'), '--account-card-stack-y'),
+      )
+      expect(cssCustomPx(cssRuleIn(media, '.ios-account-filter-card--rank-1'), '--account-card-stack-y')).toBeGreaterThan(
+        cssCustomPx(cssRuleIn(media, '.ios-account-filter-card--rank-2'), '--account-card-stack-y'),
+      )
+      expect(cssCustomPx(cssRuleIn(media, '.ios-account-filter-card--rank-2'), '--account-card-stack-y')).toBeGreaterThan(
+        cssCustomPx(cssRuleIn(media, '.ios-account-filter-card--rank-3'), '--account-card-stack-y'),
+      )
+    }
   })
 
   it('contains ledger rows so amount and date content cannot spill out of the row', () => {
     const rowRule = cssRule('.ios-transaction-row')
     const sideRule = cssRule('.ios-transaction-row__side')
+    const metaRule = cssRule('.ios-transaction-row__meta')
     const sideTextRule =
       appCss.match(
-        /\.ios-transaction-row__side b,\s*\.ios-transaction-row__side time,\s*\.ios-transaction-row__side small\s*\{[^}]*\}/,
+        /\.ios-transaction-row__side b,\s*\.ios-transaction-row__meta\s*\{[^}]*\}/,
       )?.[0] ?? ''
+    const ledgerSource = readFileSync('src/components/accounting/LedgerWorkspace.tsx', 'utf8')
 
     expect(rowRule).toContain('grid-template-columns:')
     expect(rowRule).toContain('minmax(96px, 112px)')
     expect(rowRule).toContain('overflow: hidden')
     expect(sideRule).toContain('min-width: 0')
     expect(sideRule).toContain('justify-items: end')
+    expect(metaRule).toContain('display: inline-flex')
+    expect(metaRule).toContain('gap:')
     expect(sideTextRule).toContain('max-width: 100%')
     expect(sideTextRule).toContain('text-overflow: ellipsis')
+    expect(ledgerSource).toContain('className="ios-transaction-row__meta"')
+    expect(ledgerSource).toMatch(
+      /<span className="ios-transaction-row__meta">\s*<time>\{formatMonthDay\(transaction\.occurredAt\)\}<\/time>\s*<small>\{typeLabels\[transaction\.type\]\}<\/small>\s*<\/span>/,
+    )
   })
 
   it('keeps compact ledger rows as a single readable line instead of wrapping side content under the icon', () => {

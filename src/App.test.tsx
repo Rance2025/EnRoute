@@ -150,12 +150,14 @@ describe('App', () => {
     const timePanel = screen.getByLabelText('时间范围面板')
     const timeCardSummary = within(timePanel).getByLabelText('全局范围指标')
 
-    expect(within(timeCardSummary).getByText('净流入')).toBeInTheDocument()
-    expect(within(timeCardSummary).getByText('+¥4691.23')).toBeInTheDocument()
+    expect(within(timeCardSummary).getByText('收入')).toBeInTheDocument()
+    expect(within(timeCardSummary).getByText('¥5172.41')).toBeInTheDocument()
     expect(within(timeCardSummary).getByText('支出')).toBeInTheDocument()
     expect(within(timeCardSummary).getByText('¥481.18')).toBeInTheDocument()
     expect(within(timeCardSummary).getByText('流水')).toBeInTheDocument()
     expect(within(timeCardSummary).getByText('6 笔')).toBeInTheDocument()
+    expect(within(timeCardSummary).queryByText('净流入')).not.toBeInTheDocument()
+    expect(within(timeCardSummary).queryByText('账户')).not.toBeInTheDocument()
     expect(within(timeCardSummary).queryByText('¥420')).not.toBeInTheDocument()
     expect(screen.queryByLabelText('当前范围摘要')).not.toBeInTheDocument()
     expect(screen.queryByLabelText('记账概览摘要')).not.toBeInTheDocument()
@@ -224,7 +226,7 @@ describe('App', () => {
 
     fireEvent.click(huabeiCard)
 
-    const detachedSlot = within(accountFilter).getByLabelText('选中账户卡片')
+    const detachedSlot = within(accountFilter).getByLabelText('单独显示的选中账户')
     const detachedHuabeiCard = within(detachedSlot).getByRole('button', { name: /花呗/ })
     const spreadAccountCards = Array.from(
       (accountStack as HTMLElement).querySelectorAll('.ios-account-filter-card'),

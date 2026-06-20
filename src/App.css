@@ -1187,6 +1187,15 @@
   overflow: hidden;
 }
 
+.app-shell--accounting .time-context-panel {
+  display: none;
+}
+
+.app-shell--accounting .main-workspace {
+  inset: 0;
+  width: 100vw;
+}
+
 .map-stage {
   --map-chrome-x: max(24px, env(safe-area-inset-right));
   --map-chrome-y: max(24px, env(safe-area-inset-bottom));
@@ -1233,11 +1242,10 @@
   --accounting-blue: #315b68;
 
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1200px) minmax(0, 1fr);
   height: 100%;
   min-height: 0;
-  padding: 78px 20px 14px;
+  padding: 104px 24px 18px;
   overflow: hidden;
   color: var(--accounting-ink);
   background:
@@ -1249,77 +1257,6 @@
 .accounting-page * {
   min-width: 0;
   box-sizing: border-box;
-}
-
-.accounting-dock {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-  min-height: 40px;
-}
-
-.accounting-range-chip,
-.accounting-actions {
-  display: grid;
-  align-items: center;
-  min-height: 40px;
-  overflow: hidden;
-  border: 1px solid rgba(23, 35, 31, 0.08);
-  border-radius: 15px;
-  background: rgba(255, 255, 255, 0.58);
-  box-shadow:
-    0 10px 28px rgba(26, 42, 38, 0.06),
-    inset 0 1px 0 rgba(255, 255, 255, 0.76);
-  backdrop-filter: blur(18px) saturate(1.08);
-}
-
-.accounting-range-chip {
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 8px;
-  padding: 0 12px;
-}
-
-.accounting-range-chip span,
-.accounting-range-chip strong {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.accounting-range-chip span {
-  color: var(--accounting-muted);
-  font-size: 11px;
-  font-weight: 790;
-}
-
-.accounting-range-chip strong {
-  color: var(--accounting-ink);
-  font-size: 13px;
-  font-weight: 860;
-}
-
-.accounting-actions {
-  display: inline-grid;
-  grid-auto-flow: column;
-  gap: 7px;
-  justify-content: end;
-  width: max-content;
-  padding: 4px;
-}
-
-.accounting-actions > span {
-  display: grid;
-  min-width: 88px;
-  height: 30px;
-  place-items: center;
-  padding: 0 12px;
-  border-radius: 999px;
-  color: rgba(23, 35, 31, 0.62);
-  background: rgba(255, 255, 255, 0.5);
-  font-size: 12px;
-  font-weight: 820;
-  white-space: nowrap;
 }
 
 .accounting-action {
@@ -1404,12 +1341,21 @@
 }
 
 .ios-account-ledger-workspace {
-  grid-template-columns: minmax(284px, 0.66fr) minmax(0, 1.58fr);
+  grid-column: 2;
+  grid-template-columns: minmax(300px, 0.42fr) minmax(0, 1fr) minmax(300px, 0.42fr);
+  align-items: start;
   overflow: hidden;
 }
 
-.ios-account-filter-panel,
 .ios-ledger-main {
+  grid-column: 2;
+  height: 100%;
+  overflow: hidden;
+}
+
+.ios-account-filter-panel {
+  grid-column: 3;
+  align-self: start;
   height: 100%;
   overflow: hidden;
 }
@@ -1489,92 +1435,120 @@
 }
 
 .ios-account-filter-stack {
-  display: grid;
-  align-content: start;
+  position: relative;
+  display: block;
   min-height: 0;
-  padding: 8px 22px 18px 14px;
-  overflow: hidden;
+  height: 270px;
+  margin-top: 18px;
+  padding: 8px 20px 28px 14px;
+  overflow: visible;
   isolation: isolate;
+  perspective: 1100px;
+  transform-style: preserve-3d;
   transition:
-    gap 260ms ease,
-    padding 260ms ease;
+    padding 420ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .ios-account-selected-slot {
-  padding: 4px 22px 8px 14px;
-  animation: accountSelectedSlotIn 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  padding: 4px 24px 16px 14px;
+  animation: accountSelectedSlotIn 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .ios-account-filter-stack.is-spread {
-  gap: 8px;
-  padding-top: 2px;
-  animation: accountCardSettleBack 280ms cubic-bezier(0.22, 1, 0.36, 1);
+  padding-top: 0;
+  animation: accountCardSettleBack 460ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .ios-account-filter-card {
   --account-card-lift: 0px;
   --account-card-scale: 0.985;
   --account-card-shift-x: 0px;
+  --account-card-stack-y: 0px;
+  --account-card-tilt: 0deg;
   --account-card-z: 1;
 
   position: relative;
   z-index: var(--account-card-z);
+  display: block;
+  justify-self: start;
+  width: 100%;
+  min-width: 0;
+  min-height: 84px;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  color: #ffffff;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ios-account-filter-card__surface {
   display: grid;
   grid-template-columns: 30px minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
-  width: 100%;
+  width: calc(100% - var(--account-card-shift-x));
   min-height: 84px;
   padding: 13px;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.24);
   border-radius: 24px;
-  color: #ffffff;
   background:
     radial-gradient(circle at 86% 14%, rgba(255, 255, 255, 0.2), transparent 32%),
     linear-gradient(135deg, #123f35, #0d2d26);
-  text-align: left;
-  cursor: pointer;
   box-shadow: 0 20px 44px rgba(18, 49, 43, 0.18);
-  transform: translate3d(
-      var(--account-card-shift-x),
-      var(--account-card-lift),
-      0
-    )
-    scale(var(--account-card-scale));
+  backface-visibility: hidden;
+  transform-origin: center bottom;
+  translate: var(--account-card-shift-x) var(--account-card-lift);
+  scale: var(--account-card-scale);
+  transform: rotateX(var(--account-card-tilt));
   transition:
-    transform 380ms cubic-bezier(0.22, 1, 0.36, 1),
-    box-shadow 260ms ease,
-    filter 220ms ease;
+    translate 520ms cubic-bezier(0.16, 1, 0.3, 1),
+    scale 520ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 520ms cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 320ms ease,
+    filter 280ms ease;
+  will-change: translate, scale, transform;
+}
+
+.ios-account-filter-stack .ios-account-filter-card {
+  position: absolute;
+  top: var(--account-card-stack-y);
+  left: 14px;
+  transition:
+    top 520ms cubic-bezier(0.16, 1, 0.3, 1),
+    width 520ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .ios-account-filter-card + .ios-account-filter-card {
-  margin-top: -21px;
+  margin-top: 0;
 }
 
 .ios-account-filter-stack.is-spread .ios-account-filter-card + .ios-account-filter-card {
   margin-top: 0;
 }
 
-.ios-account-filter-card--1 {
+.ios-account-filter-card--1 .ios-account-filter-card__surface {
   background:
     radial-gradient(circle at 86% 14%, rgba(255, 255, 255, 0.18), transparent 32%),
     linear-gradient(135deg, #315b68, #183b44);
 }
 
-.ios-account-filter-card--2 {
+.ios-account-filter-card--2 .ios-account-filter-card__surface {
   background:
     radial-gradient(circle at 86% 14%, rgba(255, 255, 255, 0.18), transparent 32%),
     linear-gradient(135deg, #934e47, #5a302d);
 }
 
-.ios-account-filter-card--3 {
+.ios-account-filter-card--3 .ios-account-filter-card__surface {
   background:
     radial-gradient(circle at 86% 14%, rgba(255, 255, 255, 0.18), transparent 32%),
     linear-gradient(135deg, #5b6651, #31392f);
 }
 
-.ios-account-filter-card--4 {
+.ios-account-filter-card--4 .ios-account-filter-card__surface {
   background:
     radial-gradient(circle at 86% 14%, rgba(255, 255, 255, 0.18), transparent 32%),
     linear-gradient(135deg, #604f7a, #332847);
@@ -1583,43 +1557,45 @@
 .ios-account-filter-card--rank-0 {
   --account-card-scale: 1;
   --account-card-shift-x: 0px;
+  --account-card-stack-y: 174px;
   --account-card-z: 5;
 }
 
 .ios-account-filter-card--rank-1 {
-  --account-card-lift: -2px;
-  --account-card-scale: 0.988;
-  --account-card-shift-x: 7px;
+  --account-card-lift: 0px;
+  --account-card-scale: 0.982;
+  --account-card-shift-x: 16px;
+  --account-card-stack-y: 116px;
+  --account-card-tilt: -1.2deg;
   --account-card-z: 4;
 }
 
 .ios-account-filter-card--rank-2 {
-  --account-card-lift: -4px;
-  --account-card-scale: 0.976;
-  --account-card-shift-x: -2px;
+  --account-card-lift: 0px;
+  --account-card-scale: 0.964;
+  --account-card-shift-x: 32px;
+  --account-card-stack-y: 58px;
+  --account-card-tilt: -1.8deg;
   --account-card-z: 3;
 }
 
 .ios-account-filter-card--rank-3 {
-  --account-card-lift: -6px;
-  --account-card-scale: 0.964;
-  --account-card-shift-x: 9px;
+  --account-card-lift: 0px;
+  --account-card-scale: 0.946;
+  --account-card-shift-x: 48px;
+  --account-card-stack-y: 0px;
+  --account-card-tilt: -2.4deg;
   --account-card-z: 2;
 }
 
-.ios-account-filter-card:hover {
+.ios-account-filter-card:hover .ios-account-filter-card__surface {
   z-index: calc(var(--account-card-z) + 1);
   filter: saturate(1.08);
-  transform: translate3d(
-      var(--account-card-shift-x),
-      calc(var(--account-card-lift) - 3px),
-      0
-    )
-    scale(var(--account-card-scale));
+  translate: var(--account-card-shift-x) calc(var(--account-card-lift) - 3px);
   box-shadow: 0 23px 50px rgba(18, 49, 43, 0.22);
 }
 
-.ios-account-filter-card.is-active {
+.ios-account-filter-card.is-active .ios-account-filter-card__surface {
   filter: saturate(1.1);
   box-shadow: 0 25px 54px rgba(18, 49, 43, 0.24);
 }
@@ -1628,58 +1604,53 @@
   --account-card-scale: 1;
   --account-card-shift-x: 0px;
   --account-card-lift: 0px;
+  --account-card-tilt: 0deg;
   --account-card-z: 6;
 
   min-height: 92px;
-  animation: accountCardDetachIn 420ms cubic-bezier(0.2, 1, 0.22, 1);
+  animation: accountCardDetachIn 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.ios-account-filter-card.is-detached .ios-account-filter-card__surface {
+  min-height: 92px;
 }
 
 @keyframes accountSelectedSlotIn {
   from {
-    opacity: 0;
-    transform: translateY(-18px);
+    opacity: 0.72;
+    filter: saturate(0.94);
   }
 
   to {
     opacity: 1;
-    transform: translateY(0);
+    filter: saturate(1);
   }
 }
 
 @keyframes accountCardDetachIn {
   from {
-    opacity: 0.86;
-    filter: saturate(0.94);
-    transform: translate3d(8px, 42px, 0) scale(0.94);
+    opacity: 0.82;
+    filter: saturate(0.92);
   }
 
-  62% {
+  72% {
     opacity: 1;
-    filter: saturate(1.08);
-    transform: translate3d(-4px, -4px, 0) scale(1.012);
+    filter: saturate(1.06);
   }
 
   to {
     opacity: 1;
     filter: saturate(1.1);
-    transform: translate3d(
-        var(--account-card-shift-x),
-        var(--account-card-lift),
-        0
-      )
-      scale(var(--account-card-scale));
   }
 }
 
 @keyframes accountCardSettleBack {
   from {
-    opacity: 0.92;
-    transform: translateY(-8px);
+    opacity: 0.86;
   }
 
   to {
     opacity: 1;
-    transform: translateY(0);
   }
 }
 
@@ -1693,6 +1664,7 @@
   background: rgba(255, 255, 255, 0.14);
 }
 
+.ios-account-filter-card__check,
 .ios-account-filter-card__body,
 .ios-account-filter-card__side {
   display: grid;
@@ -1906,12 +1878,15 @@
 .ios-transaction-row__body small,
 .ios-transaction-row__tags i,
 .ios-transaction-row__side b,
-.ios-transaction-row__side time,
-.ios-transaction-row__side small {
+.ios-transaction-row__meta {
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
 }
 
 .ios-transaction-row__body strong {
@@ -1923,12 +1898,16 @@
 .ios-transaction-row__body em,
 .ios-transaction-row__body small,
 .ios-transaction-row__tags i,
-.ios-transaction-row__side time,
-.ios-transaction-row__side small {
+.ios-transaction-row__meta {
   color: var(--accounting-muted);
   font-size: 11px;
-  font-style: normal;
   font-weight: 720;
+}
+
+.ios-transaction-row__body em,
+.ios-transaction-row__body small,
+.ios-transaction-row__tags i {
+  font-style: normal;
 }
 
 .ios-transaction-row__tags i {
@@ -1941,14 +1920,24 @@
 }
 
 .ios-transaction-row__side b,
-.ios-transaction-row__side time,
-.ios-transaction-row__side small {
+.ios-transaction-row__meta {
   max-width: 100%;
   justify-self: end;
 }
 
 .ios-transaction-row__side b {
   font-size: 14px;
+}
+
+.ios-transaction-row__meta time,
+.ios-transaction-row__meta small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ios-transaction-row__meta small {
+  font-style: normal;
 }
 
 .ios-amount-card {
@@ -2820,33 +2809,10 @@
   }
 
   .accounting-page {
-    grid-template-rows: auto minmax(0, 1fr);
-    gap: 8px;
-    height: 100%;
-    padding: 82px 10px 12px;
-    overflow: hidden;
-  }
-
-  .accounting-dock {
     grid-template-columns: minmax(0, 1fr);
-    gap: 8px;
-    min-height: 0;
-  }
-
-  .accounting-range-chip,
-  .accounting-actions {
-    min-height: 36px;
-    border-radius: 14px;
-  }
-
-  .accounting-actions {
-    justify-content: stretch;
-    width: 100%;
-  }
-
-  .accounting-actions > span {
-    width: 100%;
-    height: 28px;
+    height: 100%;
+    padding: 92px 10px 12px;
+    overflow: hidden;
   }
 
   .accounting-workspace {
@@ -2865,7 +2831,17 @@
   }
 
   .ios-account-ledger-workspace {
-    grid-template-rows: 222px minmax(0, 1fr);
+    grid-column: 1;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) 252px;
+  }
+
+  .ios-ledger-main {
+    grid-column: 1;
+  }
+
+  .ios-account-filter-panel {
+    grid-column: 1;
   }
 
   .ios-account-filter-panel {
@@ -2883,11 +2859,20 @@
   }
 
   .ios-account-filter-stack {
-    padding: 6px 20px 10px 10px;
-    overflow: hidden;
+    height: 188px;
+    padding: 6px 14px 18px 10px;
+    overflow: visible;
+  }
+
+  .ios-account-selected-slot {
+    padding: 2px 14px 9px 10px;
   }
 
   .ios-account-filter-card {
+    min-height: 54px;
+  }
+
+  .ios-account-filter-card__surface {
     grid-template-columns: 26px minmax(0, 1fr) auto;
     min-height: 54px;
     padding: 9px;
@@ -2895,7 +2880,33 @@
   }
 
   .ios-account-filter-card + .ios-account-filter-card {
-    margin-top: -25px;
+    margin-top: 0;
+  }
+
+  .ios-account-filter-stack.is-spread .ios-account-filter-card + .ios-account-filter-card {
+    margin-top: 0;
+  }
+
+  .ios-account-filter-card--rank-0 {
+    --account-card-stack-y: 102px;
+  }
+
+  .ios-account-filter-card--rank-1 {
+    --account-card-lift: 0px;
+    --account-card-shift-x: 12px;
+    --account-card-stack-y: 68px;
+  }
+
+  .ios-account-filter-card--rank-2 {
+    --account-card-lift: 0px;
+    --account-card-shift-x: 24px;
+    --account-card-stack-y: 34px;
+  }
+
+  .ios-account-filter-card--rank-3 {
+    --account-card-lift: 0px;
+    --account-card-shift-x: 36px;
+    --account-card-stack-y: 0px;
   }
 
   .ios-account-filter-card__check {
@@ -3056,18 +3067,11 @@
 
 @media (min-width: 721px) and (max-width: 1240px), (min-width: 721px) and (max-height: 790px) {
   .accounting-page {
-    gap: 9px;
-    padding: 78px 14px 12px;
+    padding: 100px 16px 14px;
   }
 
-  .accounting-dock,
   .accounting-workspace {
     gap: 9px;
-  }
-
-  .accounting-range-chip,
-  .accounting-actions {
-    min-height: 38px;
   }
 
   .ios-panel {
@@ -3079,16 +3083,46 @@
   }
 
   .ios-account-ledger-workspace {
-    grid-template-columns: minmax(240px, 0.58fr) minmax(0, 1.42fr);
+    grid-template-columns: minmax(276px, 0.44fr) minmax(0, 1fr) minmax(276px, 0.44fr);
   }
 
   .ios-account-filter-card {
+    min-height: 76px;
+  }
+
+  .ios-account-filter-card__surface {
     min-height: 76px;
     padding: 11px;
   }
 
   .ios-account-filter-card + .ios-account-filter-card {
-    margin-top: -18px;
+    margin-top: 0;
+  }
+
+  .ios-account-filter-stack.is-spread .ios-account-filter-card + .ios-account-filter-card {
+    margin-top: 0;
+  }
+
+  .ios-account-filter-card--rank-0 {
+    --account-card-stack-y: 156px;
+  }
+
+  .ios-account-filter-card--rank-1 {
+    --account-card-lift: 0px;
+    --account-card-shift-x: 16px;
+    --account-card-stack-y: 104px;
+  }
+
+  .ios-account-filter-card--rank-2 {
+    --account-card-lift: 0px;
+    --account-card-shift-x: 32px;
+    --account-card-stack-y: 52px;
+  }
+
+  .ios-account-filter-card--rank-3 {
+    --account-card-lift: 0px;
+    --account-card-shift-x: 48px;
+    --account-card-stack-y: 0px;
   }
 
   .ios-ledger-toolbar {

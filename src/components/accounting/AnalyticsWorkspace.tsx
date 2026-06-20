@@ -16,6 +16,7 @@ type AnalyticsWorkspaceProps = {
   transactions: Transaction[]
   categoryStats: TaxonomyNodeStat[]
   tagStats: TaxonomyNodeStat[]
+  onBackToLedger: () => void
 }
 
 export function AnalyticsWorkspace({
@@ -24,6 +25,7 @@ export function AnalyticsWorkspace({
   transactions,
   categoryStats,
   tagStats,
+  onBackToLedger,
 }: AnalyticsWorkspaceProps) {
   const activeCategoryStats = categoryStats
     .filter((stat) => stat.transactionCount > 0)
@@ -38,7 +40,9 @@ export function AnalyticsWorkspace({
       <section className="ios-panel ios-report-overview">
         <header className="ios-panel-head">
           <strong>统计总览</strong>
-          <span>{metrics.transactionCount} 笔</span>
+          <button type="button" className="accounting-action" onClick={onBackToLedger}>
+            返回流水
+          </button>
         </header>
         <div
           className="ios-chart-ring"
