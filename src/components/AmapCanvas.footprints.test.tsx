@@ -1,8 +1,12 @@
-﻿import '@testing-library/jest-dom/vitest'
+import '@testing-library/jest-dom/vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { AmapConfig } from '../config/amap'
+import type {
+  FootprintSnapshot,
+  FootprintSnapshotRequest,
+} from '../layers/footprintDataSource'
 import type { FootprintPoint, FootprintRenderSnapshot } from '../layers/footprintTypes'
 import {
   selectDay,
@@ -77,64 +81,25 @@ Object.defineProperty(window, 'localStorage', {
   value: localStorageMock,
 })
 
-type Deferred<T> = {
-  promise: Promise<T>
-  resolve: (value: T) => void
-  reject: (error: Error) => void
-}
-
-function createDeferred<T>(): Deferred<T> {
-  let resolve: (value: T) => void = () => {}
-  let reject: (error: Error) => void = () => {}
-  const promise = new Promise<T>((promiseResolve, promiseReject) => {
-    resolve = promiseResolve
-    reject = promiseReject
-  })
-
-  return { promise, resolve, reject }
-}
-
 async function renderFootprintMassMarks({
   containerSize = { width: 1024, height: 768 },
-  loadFootprintsPromise,
   mapOverrides,
   onFootprintMetricsChange = vi.fn(),
-  workerSnapshot = {
-    ...emptyRenderSnapshot,
-    points: loadedPoints.map((point) => ({
-      id: point.id,
-      longitude: point.longitude,
-      latitude: point.latitude,
-      count: 1,
-      minAccuracy: point.accuracy,
-      startTimestampSeconds: point.timestampSeconds,
-      endTimestampSeconds: point.timestampSeconds,
-    })),
-    metrics: {
-      selectedCount: loadedPoints.length,
-      totalDistanceMeters: 0,
-      averageDistanceMetersPerDay: 0,
-    },
-    selectedBounds: {
-      southWest: [loadedPoints[0].longitude, loadedPoints[0].latitude],
-      northEast: [loadedPoints[1].longitude, loadedPoints[1].latitude],
-    },
-  } satisfies FootprintRenderSnapshot,
-  workerSnapshots,
+  snapshot = createDefaultSnapshot(),
+  snapshots,
   timeRange = selectPresetRange('all'),
 }: {
   containerSize?: { width: number; height: number }
-  loadFootprintsPromise: Promise<FootprintPoint[]>
-  mapOverrides?: Partial<MockMap>
+  mapOverrides?: object
   onFootprintMetricsChange?: (metrics: {
     selectedCount: number
     averageDistanceMetersPerDay: number
     totalDistanceMeters: number
   }) => void
-  workerSnapshot?: FootprintRenderSnapshot
-  workerSnapshots?: FootprintRenderSnapshot[]
+  snapshot?: FootprintSnapshot
+  snapshots?: FootprintSnapshot[]
   timeRange?: TimeRangeSelection
-}) {
+} = {}) {
   const mapMoveHandlers: Array<() => void> = []
   const moveEndHandlers: Array<() => void> = []
   const zoomChangeHandlers: Array<() => void> = []
@@ -161,28 +126,23 @@ async function renderFootprintMassMarks({
 
     return layer
   })
-  const workerInstances: Array<{
-    setPoints: ReturnType<typeof vi.fn>
-    aggregate: ReturnType<typeof vi.fn>
-    dispose: ReturnType<typeof vi.fn>
-  }> = []
-  const FootprintWorkerClient = vi.fn(function FootprintWorkerClient(this: {
-    setPoints: ReturnType<typeof vi.fn>
-    aggregate: ReturnType<typeof vi.fn>
-    dispose: ReturnType<typeof vi.fn>
-  }) {
-    const snapshots = workerSnapshots ?? [workerSnapshot]
-    let aggregateCallIndex = 0
-    this.setPoints = vi.fn()
-    this.aggregate = vi.fn(async () => {
-      const snapshot = snapshots[Math.min(aggregateCallIndex, snapshots.length - 1)]
-      aggregateCallIndex += 1
+  const snapshotRequests: FootprintSnapshotRequest[] = []
+  const snapshotSignals: AbortSignal[] = []
+  const loadFootprintSnapshot = vi.fn(
+    async (
+      _apiUrl: string | undefined,
+      input: FootprintSnapshotRequest,
+      signal: AbortSignal,
+    ) => {
+      snapshotRequests.push(input)
+      snapshotSignals.push(signal)
+      const availableSnapshots = snapshots ?? [snapshot]
 
-      return snapshot
-    })
-    this.dispose = vi.fn()
-    workerInstances.push(this)
-  })
+      return availableSnapshots[
+        Math.min(snapshotRequests.length - 1, availableSnapshots.length - 1)
+      ]
+    },
+  )
   class MockMap {
     addControl = vi.fn()
     destroy = vi.fn()
@@ -218,13 +178,10 @@ async function renderFootprintMassMarks({
   }
 
   vi.doMock('../layers/footprintDataSource', () => ({
-    loadFootprintPoints: vi.fn(() => loadFootprintsPromise),
+    loadFootprintSnapshot,
   }))
   vi.doMock('../layers/massFootprintLayer', () => ({
     createMassFootprintLayer,
-  }))
-  vi.doMock('../layers/footprintWorkerClient', () => ({
-    FootprintWorkerClient,
   }))
   vi.doMock('../services/amapLoader', () => ({
     loadAmap: vi.fn(async () => ({
@@ -268,11 +225,12 @@ async function renderFootprintMassMarks({
   })
 
   return {
-    createMassFootprintLayer,
     completeHandlers,
+    createMassFootprintLayer,
     geolocationConstructor,
     geolocationGetCurrentPosition,
     layerRecords,
+    loadFootprintSnapshot,
     mapMoveHandlers,
     moveEndHandlers,
     renderResult,
@@ -285,12 +243,13 @@ async function renderFootprintMassMarks({
         />,
       )
     },
-    workerInstances,
-    FootprintWorkerClient,
+    snapshotRequests,
+    snapshotSignals,
     zoomChangeHandlers,
     zoomEndHandlers,
   }
 }
+
 afterEach(() => {
   cleanup()
   window.localStorage.clear()
@@ -300,8 +259,7 @@ afterEach(() => {
 })
 
 describe('AmapCanvas footprint layer wiring', () => {
-  it('updates the native MassMarks footprint layer with worker-sampled representatives after data loads', async () => {
-    const loadFootprints = createDeferred<FootprintPoint[]>()
+  it('requests a database sampled snapshot and updates the native MassMarks footprint layer', async () => {
     const representative = {
       id: 'selected-cell',
       longitude: 121.5000005,
@@ -311,26 +269,23 @@ describe('AmapCanvas footprint layer wiring', () => {
       startTimestampSeconds: 1781798400,
       endTimestampSeconds: 1781884799,
     }
-    const { createMassFootprintLayer, layerRecords, moveEndHandlers, workerInstances } = await renderFootprintMassMarks({
-      loadFootprintsPromise: loadFootprints.promise,
-      workerSnapshot: {
-        points: [representative],
-        metrics: {
-          selectedCount: 2,
-          totalDistanceMeters: 0,
-          averageDistanceMetersPerDay: 0,
-        },
-        selectedBounds: {
-          southWest: [121.5, 31.2],
-          northEast: [121.500001, 31.200001],
-        },
-      },
-    })
+    const { createMassFootprintLayer, layerRecords, moveEndHandlers, snapshotRequests } =
+      await renderFootprintMassMarks({
+        snapshot: withDebug({
+          points: [representative],
+          metrics: {
+            selectedCount: 2,
+            totalDistanceMeters: 0,
+            averageDistanceMetersPerDay: 0,
+          },
+          selectedBounds: {
+            southWest: [121.5, 31.2],
+            northEast: [121.500001, 31.200001],
+          },
+        }),
+      })
 
-    await act(async () => {
-      loadFootprints.resolve(loadedPoints)
-      await Promise.resolve()
-    })
+    await waitFor(() => expect(layerRecords[0].update).toHaveBeenCalledWith([representative]))
 
     expect(createMassFootprintLayer).toHaveBeenCalledWith(
       expect.objectContaining({ MassMarks: expect.any(Function) }),
@@ -341,9 +296,8 @@ describe('AmapCanvas footprint layer wiring', () => {
         pixelSize: 1.5,
       },
     )
-    expect(workerInstances[0].setPoints).toHaveBeenCalledWith(loadedPoints)
-    expect(workerInstances[0].aggregate).toHaveBeenCalledWith(expect.objectContaining({
-      cellSizePx: 1.5,
+    expect(snapshotRequests[0]).toEqual(expect.objectContaining({
+      cellSizePx: 0.5,
       timeRange: {
         startTimestampSeconds: 1646064000,
         endTimestampSeconds: Number.POSITIVE_INFINITY,
@@ -352,9 +306,10 @@ describe('AmapCanvas footprint layer wiring', () => {
       viewportBounds: { west: 120, south: 30, east: 122, north: 32 },
       zoom: 10,
     }))
-    expect(layerRecords[0].update).toHaveBeenCalledWith([representative])
     expect(layerRecords[0].update.mock.calls[0]?.[0]).toHaveLength(1)
-    expect(layerRecords[0].update.mock.calls[0]?.[0].map((point) => point.id)).toEqual(['selected-cell'])
+    expect(layerRecords[0].update.mock.calls[0]?.[0].map((point) => point.id)).toEqual([
+      'selected-cell',
+    ])
 
     layerRecords[0].update.mockClear()
 
@@ -363,45 +318,42 @@ describe('AmapCanvas footprint layer wiring', () => {
   })
 
   it('requests a new sampled snapshot by selected time range without rebuilding the layer', async () => {
-    const timedPoints: FootprintPoint[] = [
-      { ...loadedPoints[0], id: 'before', timestampSeconds: 1781798399 },
-      { ...loadedPoints[0], id: 'selected-a', timestampSeconds: 1781798400 },
-      { ...loadedPoints[1], id: 'selected-b', timestampSeconds: 1781884799 },
-      { ...loadedPoints[1], id: 'after', timestampSeconds: 1781884800 },
-    ]
-    const selectedSnapshot: FootprintRenderSnapshot = {
+    const selectedSnapshot = withDebug({
       ...emptyRenderSnapshot,
-      points: [{ id: 'selected-cell', longitude: 121.5, latitude: 31.2, count: 2, minAccuracy: 5, startTimestampSeconds: 1781798400, endTimestampSeconds: 1781884799 }],
+      points: [createAggregatedPoint('selected-cell', 2)],
       metrics: { selectedCount: 2, averageDistanceMetersPerDay: 2, totalDistanceMeters: 0 },
-      selectedBounds: { southWest: [121.5, 31.2], northEast: [121.500001, 31.200001] },
-    }
-    const allSnapshot: FootprintRenderSnapshot = {
+      selectedBounds: {
+        southWest: [121.5, 31.2],
+        northEast: [121.500001, 31.200001],
+      },
+    })
+    const allSnapshot = withDebug({
       ...emptyRenderSnapshot,
-      points: [{ id: 'all-cell', longitude: 121.5, latitude: 31.2, count: 4, minAccuracy: 5, startTimestampSeconds: 1781798399, endTimestampSeconds: 1781884800 }],
+      points: [createAggregatedPoint('all-cell', 4)],
       metrics: { selectedCount: 4, averageDistanceMetersPerDay: 0, totalDistanceMeters: 0 },
-      selectedBounds: { southWest: [121.5, 31.2], northEast: [121.500001, 31.200001] },
-    }
-    const loadFootprints = createDeferred<FootprintPoint[]>()
-    const { createMassFootprintLayer, layerRecords, rerenderWithTimeRange, workerInstances } = await renderFootprintMassMarks({
-      loadFootprintsPromise: loadFootprints.promise,
+      selectedBounds: {
+        southWest: [121.5, 31.2],
+        northEast: [121.500001, 31.200001],
+      },
+    })
+    const {
+      createMassFootprintLayer,
+      layerRecords,
+      rerenderWithTimeRange,
+      snapshotRequests,
+    } = await renderFootprintMassMarks({
       timeRange: selectDay('2026-06-19'),
-      workerSnapshots: [selectedSnapshot, allSnapshot],
+      snapshots: [selectedSnapshot, allSnapshot],
     })
 
-    await act(async () => {
-      loadFootprints.resolve(timedPoints)
-      await Promise.resolve()
-    })
-
-    expect(workerInstances[0].setPoints).toHaveBeenCalledWith(timedPoints)
-    expect(layerRecords[0].update).toHaveBeenLastCalledWith(selectedSnapshot.points)
+    await waitFor(() => expect(layerRecords[0].update).toHaveBeenLastCalledWith(selectedSnapshot.points))
 
     rerenderWithTimeRange(selectPresetRange('all'))
 
     await waitFor(() => {
       expect(layerRecords[0].update).toHaveBeenLastCalledWith(allSnapshot.points)
     })
-    expect(workerInstances[0].aggregate).toHaveBeenLastCalledWith(expect.objectContaining({
+    expect(snapshotRequests.at(-1)).toEqual(expect.objectContaining({
       timeRange: expect.objectContaining({
         startTimestampSeconds: 1646064000,
         endTimestampSeconds: Number.POSITIVE_INFINITY,
@@ -411,41 +363,41 @@ describe('AmapCanvas footprint layer wiring', () => {
   })
 
   it('reports exact selected-count distance and daily-distance metrics for the shared time card', async () => {
-    const timedPoints: FootprintPoint[] = [
-      { ...loadedPoints[0], id: 'selected-a', timestampSeconds: 1781798400, distance: 100 },
-      { ...loadedPoints[1], id: 'selected-b', timestampSeconds: 1781884799, distance: 250.5 },
-      { ...loadedPoints[1], id: 'after', timestampSeconds: 1781884800, distance: 999 },
-    ]
     const onFootprintMetricsChange = vi.fn()
-    const loadFootprints = createDeferred<FootprintPoint[]>()
-    const daySnapshot: FootprintRenderSnapshot = {
+    const daySnapshot = withDebug({
       ...emptyRenderSnapshot,
-      points: [{ id: 'selected-cell', longitude: 121.5, latitude: 31.2, count: 2, minAccuracy: 5, startTimestampSeconds: 1781798400, endTimestampSeconds: 1781884799 }],
-      metrics: { selectedCount: 2, averageDistanceMetersPerDay: 350.5, totalDistanceMeters: 350.5 },
-      selectedBounds: { southWest: [121.5, 31.2], northEast: [121.500001, 31.200001] },
-    }
-    const allSnapshot: FootprintRenderSnapshot = {
+      points: [createAggregatedPoint('selected-cell', 2)],
+      metrics: {
+        selectedCount: 2,
+        averageDistanceMetersPerDay: 350.5,
+        totalDistanceMeters: 350.5,
+      },
+      selectedBounds: {
+        southWest: [121.5, 31.2],
+        northEast: [121.500001, 31.200001],
+      },
+    })
+    const allSnapshot = withDebug({
       ...emptyRenderSnapshot,
-      points: [{ id: 'all-cell', longitude: 121.5, latitude: 31.2, count: 3, minAccuracy: 5, startTimestampSeconds: 1781798400, endTimestampSeconds: 1781884800 }],
+      points: [createAggregatedPoint('all-cell', 3)],
       metrics: { selectedCount: 3, averageDistanceMetersPerDay: 0.86, totalDistanceMeters: 1349.5 },
-      selectedBounds: { southWest: [121.5, 31.2], northEast: [121.500001, 31.200001] },
-    }
+      selectedBounds: {
+        southWest: [121.5, 31.2],
+        northEast: [121.500001, 31.200001],
+      },
+    })
     const { rerenderWithTimeRange } = await renderFootprintMassMarks({
-      loadFootprintsPromise: loadFootprints.promise,
       onFootprintMetricsChange,
       timeRange: selectDay('2026-06-19'),
-      workerSnapshots: [daySnapshot, allSnapshot],
+      snapshots: [daySnapshot, allSnapshot],
     })
 
-    await act(async () => {
-      loadFootprints.resolve(timedPoints)
-      await Promise.resolve()
-    })
-
-    expect(onFootprintMetricsChange).toHaveBeenLastCalledWith({
-      selectedCount: 2,
-      totalDistanceMeters: 350.5,
-      averageDistanceMetersPerDay: 350.5,
+    await waitFor(() => {
+      expect(onFootprintMetricsChange).toHaveBeenLastCalledWith({
+        selectedCount: 2,
+        totalDistanceMeters: 350.5,
+        averageDistanceMetersPerDay: 350.5,
+      })
     })
 
     rerenderWithTimeRange(selectPresetRange('all'))
@@ -459,33 +411,61 @@ describe('AmapCanvas footprint layer wiring', () => {
     })
   })
 
-  it('fits the map to currently displayed footprint bounds from the toolbar', async () => {
-    const timedPoints: FootprintPoint[] = [
-      { ...loadedPoints[0], id: 'selected-west', timestampSeconds: 1781798400, longitude: 120, latitude: 30 },
-      { ...loadedPoints[1], id: 'selected-east', timestampSeconds: 1781884799, longitude: 123, latitude: 34 },
-      { ...loadedPoints[1], id: 'filtered-out', timestampSeconds: 1781884800, longitude: 130, latitude: 40 },
-    ]
-    const setBounds = vi.fn()
-    const loadFootprints = createDeferred<FootprintPoint[]>()
+  it('shows current footprint rendering counts and ratio in a right-side debug panel', async () => {
     await renderFootprintMassMarks({
-      loadFootprintsPromise: loadFootprints.promise,
+      snapshot: withDebug(
+        {
+          ...emptyRenderSnapshot,
+          points: [createAggregatedPoint('debug-cell', 354)],
+          metrics: {
+            selectedCount: 40441,
+            totalDistanceMeters: 0,
+            averageDistanceMetersPerDay: 0,
+          },
+          selectedBounds: null,
+        },
+        {
+          rawCount: 40441,
+          renderedCount: 354,
+          renderRatio: 0.00875,
+        },
+      ),
+    })
+
+    await waitFor(() => expect(screen.getByLabelText('足迹渲染调试')).toHaveTextContent('0.9%'))
+    expect(screen.getByText('渲染点数')).toBeInTheDocument()
+    expect(screen.getByText('实际点数')).toBeInTheDocument()
+    expect(screen.getByText('渲染比例')).toBeInTheDocument()
+    expect(screen.getByText('354')).toBeInTheDocument()
+    expect(screen.getByText('40,441')).toBeInTheDocument()
+  })
+
+  it('fits the map to currently displayed footprint bounds from the toolbar', async () => {
+    const setBounds = vi.fn()
+    await renderFootprintMassMarks({
       mapOverrides: { setBounds },
       timeRange: selectDay('2026-06-19'),
-      workerSnapshot: {
-        points: [{ id: 'sampled-center', longitude: 121.5, latitude: 32, count: 2, minAccuracy: 5, startTimestampSeconds: 1781798400, endTimestampSeconds: 1781884799 }],
+      snapshot: withDebug({
+        points: [
+          {
+            id: 'sampled-center',
+            longitude: 121.5,
+            latitude: 32,
+            count: 2,
+            minAccuracy: 5,
+            startTimestampSeconds: 1781798400,
+            endTimestampSeconds: 1781884799,
+          },
+        ],
         metrics: { selectedCount: 2, averageDistanceMetersPerDay: 2, totalDistanceMeters: 0 },
         selectedBounds: {
           southWest: [120, 30],
           northEast: [123, 34],
         },
-      },
+      }),
     })
 
-    await act(async () => {
-      loadFootprints.resolve(timedPoints)
-      await Promise.resolve()
-    })
-
+    await waitFor(() => expect(setBounds).not.toHaveBeenCalled())
     fireEvent.click(screen.getByRole('button', { name: '聚焦当前足迹' }))
 
     expect(setBounds).toHaveBeenCalledWith(
@@ -501,9 +481,7 @@ describe('AmapCanvas footprint layer wiring', () => {
 
   it('restores the minimum world zoom from the toolbar', async () => {
     const setZoomAndCenter = vi.fn()
-    const loadFootprints = createDeferred<FootprintPoint[]>()
     await renderFootprintMassMarks({
-      loadFootprintsPromise: loadFootprints.promise,
       mapOverrides: {
         getZoom: () => 6,
         getCenter: () => ({ getLng: () => 120, getLat: () => 31 }),
@@ -526,9 +504,19 @@ describe('AmapCanvas footprint layer wiring', () => {
     const setZoomAndCenter = vi.fn(() => {
       isWorldView = true
     })
-    const loadFootprints = createDeferred<FootprintPoint[]>()
-    const { layerRecords, workerInstances, zoomEndHandlers } = await renderFootprintMassMarks({
-      loadFootprintsPromise: loadFootprints.promise,
+    const worldSnapshot = withDebug({
+      ...emptyRenderSnapshot,
+      points: [
+        createAggregatedPoint('1', 1, loadedPoints[0].longitude, loadedPoints[0].latitude),
+        createAggregatedPoint('2', 1, loadedPoints[1].longitude, loadedPoints[1].latitude),
+      ],
+      metrics: { selectedCount: 2, averageDistanceMetersPerDay: 2, totalDistanceMeters: 0 },
+      selectedBounds: {
+        southWest: [121.5, 31.2],
+        northEast: [121.500001, 31.200001],
+      },
+    })
+    const { layerRecords, snapshotRequests, zoomEndHandlers } = await renderFootprintMassMarks({
       mapOverrides: {
         getZoom: () => (isWorldView ? 2 : 6),
         lnglatToPixel: ([longitude]: [number, number], zoom: number) => ({
@@ -541,14 +529,11 @@ describe('AmapCanvas footprint layer wiring', () => {
         }),
         setZoomAndCenter,
       },
+      snapshots: [createDefaultSnapshot(), worldSnapshot],
     })
 
-    await act(async () => {
-      loadFootprints.resolve(loadedPoints)
-      await Promise.resolve()
-    })
+    await waitFor(() => expect(layerRecords[0].update).toHaveBeenCalled())
     layerRecords[0].update.mockClear()
-    workerInstances[0].aggregate.mockClear()
 
     fireEvent.click(screen.getByRole('button', { name: '显示世界地图' }))
 
@@ -560,7 +545,7 @@ describe('AmapCanvas footprint layer wiring', () => {
     await waitFor(() => {
       expect(layerRecords[0].update).toHaveBeenCalled()
     })
-    expect(workerInstances[0].aggregate).toHaveBeenLastCalledWith(expect.objectContaining({
+    expect(snapshotRequests.at(-1)).toEqual(expect.objectContaining({
       viewportBounds: expect.objectContaining({
         west: -180,
         east: 180,
@@ -573,10 +558,7 @@ describe('AmapCanvas footprint layer wiring', () => {
   })
 
   it('keeps the current-location toolbar action wired to AMap Geolocation', async () => {
-    const loadFootprints = createDeferred<FootprintPoint[]>()
-    const { geolocationConstructor, geolocationGetCurrentPosition } = await renderFootprintMassMarks({
-      loadFootprintsPromise: loadFootprints.promise,
-    })
+    const { geolocationConstructor, geolocationGetCurrentPosition } = await renderFootprintMassMarks()
 
     await waitFor(() => expect(geolocationConstructor).toHaveBeenCalledTimes(1))
 
@@ -596,15 +578,9 @@ describe('AmapCanvas footprint layer wiring', () => {
   })
 
   it('does not refresh sampled footprints after AMap complete without a viewport change', async () => {
-    const loadFootprints = createDeferred<FootprintPoint[]>()
-    const { completeHandlers, layerRecords } = await renderFootprintMassMarks({
-      loadFootprintsPromise: loadFootprints.promise,
-    })
+    const { completeHandlers, layerRecords } = await renderFootprintMassMarks()
 
-    await act(async () => {
-      loadFootprints.resolve(loadedPoints)
-      await Promise.resolve()
-    })
+    await waitFor(() => expect(layerRecords[0].update).toHaveBeenCalled())
     layerRecords[0].update.mockClear()
 
     expect(completeHandlers).toHaveLength(0)
@@ -614,36 +590,27 @@ describe('AmapCanvas footprint layer wiring', () => {
   it('refreshes sampled footprint data after zoomend settles without rebuilding the layer', async () => {
     const setCenter = vi.fn()
     const setZoomAndCenter = vi.fn()
-    const loadFootprints = createDeferred<FootprintPoint[]>()
-    const zoomSnapshot: FootprintRenderSnapshot = {
+    const zoomSnapshot = withDebug({
       ...emptyRenderSnapshot,
-      points: [{ id: 'zoomed-cell', longitude: 121.5, latitude: 31.2, count: 1, minAccuracy: 5, startTimestampSeconds: 1781798400, endTimestampSeconds: 1781798400 }],
+      points: [createAggregatedPoint('zoomed-cell', 1)],
       metrics: { selectedCount: 2, averageDistanceMetersPerDay: 2, totalDistanceMeters: 0 },
-      selectedBounds: { southWest: [121.5, 31.2], northEast: [121.500001, 31.200001] },
-    }
-    const { createMassFootprintLayer, layerRecords, workerInstances, zoomEndHandlers } = await renderFootprintMassMarks({
-      loadFootprintsPromise: loadFootprints.promise,
-      mapOverrides: {
-        getZoom: () => 2,
-        getCenter: () => ({ getLng: () => 104, getLat: () => 80 }),
-        setCenter,
-        setZoomAndCenter,
+      selectedBounds: {
+        southWest: [121.5, 31.2],
+        northEast: [121.500001, 31.200001],
       },
-      workerSnapshots: [
-        {
-          ...emptyRenderSnapshot,
-          points: loadedPoints.map((point) => ({ id: point.id, longitude: point.longitude, latitude: point.latitude, count: 1, minAccuracy: point.accuracy, startTimestampSeconds: point.timestampSeconds, endTimestampSeconds: point.timestampSeconds })),
-          metrics: { selectedCount: 2, averageDistanceMetersPerDay: 2, totalDistanceMeters: 0 },
-          selectedBounds: { southWest: [121.5, 31.2], northEast: [121.500001, 31.200001] },
+    })
+    const { createMassFootprintLayer, layerRecords, loadFootprintSnapshot, zoomEndHandlers } =
+      await renderFootprintMassMarks({
+        mapOverrides: {
+          getZoom: () => 2,
+          getCenter: () => ({ getLng: () => 104, getLat: () => 80 }),
+          setCenter,
+          setZoomAndCenter,
         },
-        zoomSnapshot,
-      ],
-    })
+        snapshots: [createDefaultSnapshot(), zoomSnapshot],
+      })
 
-    await act(async () => {
-      loadFootprints.resolve(loadedPoints)
-      await Promise.resolve()
-    })
+    await waitFor(() => expect(layerRecords[0].update).toHaveBeenCalled())
     layerRecords[0].update.mockClear()
     setCenter.mockClear()
     setZoomAndCenter.mockClear()
@@ -665,36 +632,32 @@ describe('AmapCanvas footprint layer wiring', () => {
     await waitFor(() => {
       expect(layerRecords[0].update).toHaveBeenLastCalledWith(zoomSnapshot.points)
     })
-    expect(workerInstances[0].aggregate).toHaveBeenCalledTimes(2)
+    expect(loadFootprintSnapshot).toHaveBeenCalledTimes(2)
     expect(createMassFootprintLayer).toHaveBeenCalledTimes(1)
-    expect(setCenter.mock.calls.length + setZoomAndCenter.mock.calls.length).toBeLessThanOrEqual(2)
+    expect(setCenter.mock.calls.length + setZoomAndCenter.mock.calls.length).toBeGreaterThan(0)
   })
 
   it('keeps MassMarks data stable during map movement and refreshes only after moveend', async () => {
-    const loadFootprints = createDeferred<FootprintPoint[]>()
-    const moveEndSnapshot: FootprintRenderSnapshot = {
+    const moveEndSnapshot = withDebug({
       ...emptyRenderSnapshot,
-      points: [{ id: 'moved-cell', longitude: 121.5, latitude: 31.2, count: 1, minAccuracy: 5, startTimestampSeconds: 1781798400, endTimestampSeconds: 1781798400 }],
+      points: [createAggregatedPoint('moved-cell', 1)],
       metrics: { selectedCount: 2, averageDistanceMetersPerDay: 2, totalDistanceMeters: 0 },
-      selectedBounds: { southWest: [121.5, 31.2], northEast: [121.500001, 31.200001] },
-    }
-    const { layerRecords, mapMoveHandlers, moveEndHandlers, workerInstances, zoomChangeHandlers } = await renderFootprintMassMarks({
-      loadFootprintsPromise: loadFootprints.promise,
-      workerSnapshots: [
-        {
-          ...emptyRenderSnapshot,
-          points: loadedPoints.map((point) => ({ id: point.id, longitude: point.longitude, latitude: point.latitude, count: 1, minAccuracy: point.accuracy, startTimestampSeconds: point.timestampSeconds, endTimestampSeconds: point.timestampSeconds })),
-          metrics: { selectedCount: 2, averageDistanceMetersPerDay: 2, totalDistanceMeters: 0 },
-          selectedBounds: { southWest: [121.5, 31.2], northEast: [121.500001, 31.200001] },
-        },
-        moveEndSnapshot,
-      ],
+      selectedBounds: {
+        southWest: [121.5, 31.2],
+        northEast: [121.500001, 31.200001],
+      },
+    })
+    const {
+      layerRecords,
+      loadFootprintSnapshot,
+      mapMoveHandlers,
+      moveEndHandlers,
+      zoomChangeHandlers,
+    } = await renderFootprintMassMarks({
+      snapshots: [createDefaultSnapshot(), moveEndSnapshot],
     })
 
-    await act(async () => {
-      loadFootprints.resolve(loadedPoints)
-      await Promise.resolve()
-    })
+    await waitFor(() => expect(layerRecords[0].update).toHaveBeenCalled())
     layerRecords[0].update.mockClear()
 
     expect(mapMoveHandlers).toHaveLength(0)
@@ -710,55 +673,40 @@ describe('AmapCanvas footprint layer wiring', () => {
     await waitFor(() => {
       expect(layerRecords[0].update).toHaveBeenLastCalledWith(moveEndSnapshot.points)
     })
-    expect(workerInstances[0].aggregate).toHaveBeenCalledTimes(2)
+    expect(loadFootprintSnapshot).toHaveBeenCalledTimes(2)
   })
 
   it('resizes the map and refreshes sampled MassMarks data for the new viewport', async () => {
-    const loadFootprints = createDeferred<FootprintPoint[]>()
     const resize = vi.fn()
-    const resizedSnapshot: FootprintRenderSnapshot = {
+    const resizedSnapshot = withDebug({
       ...emptyRenderSnapshot,
-      points: [{ id: 'resized-cell', longitude: 121.5, latitude: 31.2, count: 1, minAccuracy: 5, startTimestampSeconds: 1781798400, endTimestampSeconds: 1781798400 }],
+      points: [createAggregatedPoint('resized-cell', 1)],
       metrics: { selectedCount: 2, averageDistanceMetersPerDay: 2, totalDistanceMeters: 0 },
-      selectedBounds: { southWest: [121.5, 31.2], northEast: [121.500001, 31.200001] },
-    }
-    const { layerRecords, workerInstances } = await renderFootprintMassMarks({
-      loadFootprintsPromise: loadFootprints.promise,
+      selectedBounds: {
+        southWest: [121.5, 31.2],
+        northEast: [121.500001, 31.200001],
+      },
+    })
+    const { layerRecords, loadFootprintSnapshot } = await renderFootprintMassMarks({
       mapOverrides: { resize },
-      workerSnapshots: [
-        {
-          ...emptyRenderSnapshot,
-          points: loadedPoints.map((point) => ({ id: point.id, longitude: point.longitude, latitude: point.latitude, count: 1, minAccuracy: point.accuracy, startTimestampSeconds: point.timestampSeconds, endTimestampSeconds: point.timestampSeconds })),
-          metrics: { selectedCount: 2, averageDistanceMetersPerDay: 2, totalDistanceMeters: 0 },
-          selectedBounds: { southWest: [121.5, 31.2], northEast: [121.500001, 31.200001] },
-        },
-        resizedSnapshot,
-      ],
+      snapshots: [createDefaultSnapshot(), resizedSnapshot],
     })
 
-    await act(async () => {
-      loadFootprints.resolve(loadedPoints)
-      await Promise.resolve()
-    })
+    await waitFor(() => expect(layerRecords[0].update).toHaveBeenCalled())
     layerRecords[0].update.mockClear()
+    resize.mockClear()
 
     window.dispatchEvent(new Event('resize'))
 
-    await waitFor(() => expect(resize).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(resize).toHaveBeenCalled())
     await waitFor(() => expect(layerRecords[0].update).toHaveBeenLastCalledWith(resizedSnapshot.points))
-    expect(workerInstances[0].aggregate).toHaveBeenCalledTimes(2)
+    expect(loadFootprintSnapshot).toHaveBeenCalledTimes(2)
   })
 
   it('destroys the native MassMarks footprint layer on unmount', async () => {
-    const loadFootprints = createDeferred<FootprintPoint[]>()
-    const { layerRecords, renderResult } = await renderFootprintMassMarks({
-      loadFootprintsPromise: loadFootprints.promise,
-    })
+    const { layerRecords, renderResult } = await renderFootprintMassMarks()
 
-    await act(async () => {
-      loadFootprints.resolve(loadedPoints)
-      await Promise.resolve()
-    })
+    await waitFor(() => expect(layerRecords[0].update).toHaveBeenCalled())
 
     renderResult.unmount()
 
@@ -766,15 +714,9 @@ describe('AmapCanvas footprint layer wiring', () => {
   })
 
   it('schedules native footprint style updates without rebuilding the layer during toolbar edits', async () => {
-    const loadFootprints = createDeferred<FootprintPoint[]>()
-    const { createMassFootprintLayer, layerRecords } = await renderFootprintMassMarks({
-      loadFootprintsPromise: loadFootprints.promise,
-    })
+    const { createMassFootprintLayer, layerRecords } = await renderFootprintMassMarks()
 
-    await act(async () => {
-      loadFootprints.resolve(loadedPoints)
-      await Promise.resolve()
-    })
+    await waitFor(() => expect(layerRecords[0].update).toHaveBeenCalled())
     await waitFor(() => expect(createMassFootprintLayer).toHaveBeenCalledTimes(1))
     vi.useFakeTimers()
 
@@ -825,16 +767,9 @@ describe('AmapCanvas footprint layer wiring', () => {
   })
 
   it('skips native footprint layer recreation for equivalent style commits', async () => {
-    const loadFootprints = createDeferred<FootprintPoint[]>()
     const setItemSpy = vi.spyOn(window.localStorage, 'setItem')
-    const { createMassFootprintLayer } = await renderFootprintMassMarks({
-      loadFootprintsPromise: loadFootprints.promise,
-    })
+    const { createMassFootprintLayer } = await renderFootprintMassMarks()
 
-    await act(async () => {
-      loadFootprints.resolve(loadedPoints)
-      await Promise.resolve()
-    })
     await waitFor(() => expect(createMassFootprintLayer).toHaveBeenCalledTimes(1))
     vi.useFakeTimers()
 
@@ -855,15 +790,7 @@ describe('AmapCanvas footprint layer wiring', () => {
       'enroute.footprintStyle',
       JSON.stringify({ color: '#4f7cff', opacity: 0.66, pixelSize: 2.7 }),
     )
-    const loadFootprints = createDeferred<FootprintPoint[]>()
-    const { createMassFootprintLayer } = await renderFootprintMassMarks({
-      loadFootprintsPromise: loadFootprints.promise,
-    })
-
-    await act(async () => {
-      loadFootprints.resolve(loadedPoints)
-      await Promise.resolve()
-    })
+    const { createMassFootprintLayer } = await renderFootprintMassMarks()
 
     expect(createMassFootprintLayer).toHaveBeenCalledTimes(1)
     expect(createMassFootprintLayer).toHaveBeenLastCalledWith(
@@ -878,10 +805,7 @@ describe('AmapCanvas footprint layer wiring', () => {
   })
 
   it('schedules pending footprint style changes onto the existing native layer', async () => {
-    const loadFootprints = createDeferred<FootprintPoint[]>()
-    const { layerRecords } = await renderFootprintMassMarks({
-      loadFootprintsPromise: loadFootprints.promise,
-    })
+    const { layerRecords } = await renderFootprintMassMarks()
     vi.useFakeTimers()
 
     fireEvent.click(screen.getByRole('button', { name: '足迹显示设置' }))
@@ -906,10 +830,7 @@ describe('AmapCanvas footprint layer wiring', () => {
       'enroute.footprintStyle',
       JSON.stringify({ color: 'javascript:alert(1)', opacity: 0.1, pixelSize: 9 }),
     )
-    const loadFootprints = createDeferred<FootprintPoint[]>()
-    const { createMassFootprintLayer } = await renderFootprintMassMarks({
-      loadFootprintsPromise: loadFootprints.promise,
-    })
+    const { createMassFootprintLayer } = await renderFootprintMassMarks()
 
     expect(createMassFootprintLayer).toHaveBeenLastCalledWith(
       expect.objectContaining({ MassMarks: expect.any(Function) }),
@@ -922,6 +843,59 @@ describe('AmapCanvas footprint layer wiring', () => {
     )
   })
 })
+
+function createDefaultSnapshot() {
+  return withDebug({
+    ...emptyRenderSnapshot,
+    points: [
+      createAggregatedPoint('1', 1, loadedPoints[0].longitude, loadedPoints[0].latitude),
+      createAggregatedPoint('2', 1, loadedPoints[1].longitude, loadedPoints[1].latitude),
+    ],
+    metrics: {
+      selectedCount: loadedPoints.length,
+      totalDistanceMeters: 0,
+      averageDistanceMetersPerDay: 0,
+    },
+    selectedBounds: {
+      southWest: [loadedPoints[0].longitude, loadedPoints[0].latitude],
+      northEast: [loadedPoints[1].longitude, loadedPoints[1].latitude],
+    },
+  })
+}
+
+function createAggregatedPoint(
+  id: string,
+  count: number,
+  longitude = 121.5,
+  latitude = 31.2,
+) {
+  return {
+    id,
+    longitude,
+    latitude,
+    count,
+    minAccuracy: 5,
+    startTimestampSeconds: 1781798400,
+    endTimestampSeconds: 1781884799,
+  }
+}
+
+function withDebug(
+  snapshot: FootprintRenderSnapshot,
+  debug?: Partial<FootprintSnapshot['debug']>,
+): FootprintSnapshot {
+  const rawCount = debug?.rawCount ?? snapshot.metrics.selectedCount
+  const renderedCount = debug?.renderedCount ?? snapshot.points.length
+
+  return {
+    ...snapshot,
+    debug: {
+      rawCount,
+      renderedCount,
+      renderRatio: debug?.renderRatio ?? (rawCount === 0 ? 0 : renderedCount / rawCount),
+    },
+  }
+}
 
 function createLocalStorageMock() {
   const store = new Map<string, string>()

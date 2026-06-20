@@ -1,6 +1,8 @@
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 
+import { createFootprintStore } from './footprintStore.mjs'
+
 const DEFAULT_DATA_PATH = 'external/backUpData-all.csv'
 const DEFAULT_COORDINATE_SYSTEM = 'wgs84'
 
@@ -33,8 +35,27 @@ export async function loadFootprintPayload({
 }
 
 export function createFootprintsRequestHandler(options = {}) {
+  let store = null
+
   return async function handleFootprintsRequest(request, response) {
     const url = new URL(request.url ?? '/', `http://${request.headers.host ?? '127.0.0.1'}`)
+
+    if (request.method === 'POST' && url.pathname === '/api/footprints/snapshot') {
+      try {
+        store ??= createFootprintStore({
+          dbPath: options.dbPath,
+          dataPath: options.dataPath,
+          coordinateSystem: options.coordinateSystem,
+          loadPoints: loadFootprintPayload,
+        })
+        sendJson(response, 200, await store.getSnapshot(await readJsonRequestBody(request)))
+      } catch (error) {
+        sendJson(response, 500, {
+          error: error instanceof Error ? error.message : 'Failed to load footprint snapshot',
+        })
+      }
+      return
+    }
 
     if (request.method !== 'GET' || url.pathname !== '/api/footprints') {
       sendJson(response, 404, { error: 'Not found' })
@@ -50,6 +71,25 @@ export function createFootprintsRequestHandler(options = {}) {
       })
     }
   }
+}
+
+function readJsonRequestBody(request) {
+  return new Promise((resolveRequest, rejectRequest) => {
+    let body = ''
+
+    request.setEncoding('utf8')
+    request.on('data', (chunk) => {
+      body += chunk
+    })
+    request.on('end', () => {
+      try {
+        resolveRequest(body ? JSON.parse(body) : {})
+      } catch (error) {
+        rejectRequest(error)
+      }
+    })
+    request.on('error', rejectRequest)
+  })
 }
 
 function parseFootprintCsv(csv, sourceCoordinateSystem) {

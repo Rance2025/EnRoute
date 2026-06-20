@@ -813,6 +813,20 @@ describe('map chrome layout', () => {
     )
   })
 
+  it('places the footprint rendering debug panel on the right side above the toolbar', () => {
+    const panelRule = cssRule('.footprint-debug-panel')
+    const rowRule = cssRule('.footprint-debug-panel__row')
+
+    expect(amapCanvasSource).toContain('aria-label="足迹渲染调试"')
+    expect(panelRule).toContain('position: absolute')
+    expect(panelRule).toContain('right: var(--map-chrome-x)')
+    expect(panelRule).toContain('bottom: calc(var(--map-chrome-y) + 66px)')
+    expect(panelRule).toContain('width: 168px')
+    expect(panelRule).toContain('z-index: 2')
+    expect(rowRule).toContain('grid-template-columns: minmax(0, 1fr) auto')
+    expect(rowRule).toContain('white-space: nowrap')
+  })
+
   it('removes the AMap compass and limits map dragging to configured bounds', () => {
     expect(cssRule('.map-stage .amap-controlbar')).toBe('')
     expect(amapCanvasSource).not.toContain('new AMap.ControlBar')

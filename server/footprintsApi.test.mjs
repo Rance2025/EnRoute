@@ -3,6 +3,7 @@ import { createServer } from 'node:http'
 import { mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
 
 import { afterEach, describe, expect, it } from 'vitest'
 
@@ -11,6 +12,13 @@ import { createFootprintsRequestHandler, loadFootprintPayload } from './footprin
 const csv = [
   'dataTime,locType,longitude,latitude,heading,accuracy,speed,distance,isBackForeground,stepType,altitude',
   '1768144456,1,121.511383,31.296564,0.000000,5.729415,-1.000000,0.000000,1,0,10.146956',
+].join('\n')
+const snapshotCsv = [
+  'dataTime,locType,longitude,latitude,heading,accuracy,speed,distance,isBackForeground,stepType,altitude',
+  '1781798400,1,121.511383,31.296564,0.000000,5.729415,-1.000000,100.000000,1,0,10.146956',
+  '1781840000,1,121.511384,31.296565,0.000000,4.729415,-1.000000,250.000000,1,0,10.146956',
+  '1781840100,1,118.000000,30.000000,0.000000,6.729415,-1.000000,50.000000,1,0,10.146956',
+  '1781884800,1,121.511385,31.296566,0.000000,5.729415,-1.000000,999.000000,1,0,10.146956',
 ].join('\n')
 
 const servers = []
@@ -105,6 +113,106 @@ describe('footprints API', () => {
         }),
       ],
     })
+  })
+
+  it('serves POST /api/footprints/snapshot from a database-backed viewport query', async () => {
+    const dataPath = await writeTempCsv(snapshotCsv)
+    const dbPath = join(await mkdtemp(join(tmpdir(), 'enroute-footprints-db-')), 'footprints.sqlite')
+    const server = createServer(
+      createFootprintsRequestHandler({
+        dataPath,
+        dbPath,
+        coordinateSystem: 'gcj02',
+      }),
+    )
+    servers.push(server)
+    const origin = await listen(server)
+
+    const response = await fetch(`${origin}/api/footprints/snapshot`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        timeRange: {
+          startTimestampSeconds: 1781798400,
+          endTimestampSeconds: 1781884799,
+          dayCount: 1,
+        },
+        zoom: 16,
+        cellSizePx: 8,
+        viewportBounds: { west: 121, south: 31, east: 122, north: 32 },
+        viewportNorthWestWorldPixel: { x: 0, y: 0 },
+      }),
+    })
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({
+      points: [
+        expect.objectContaining({
+          count: 2,
+          minAccuracy: 4.729415,
+          startTimestampSeconds: 1781798400,
+          endTimestampSeconds: 1781840000,
+        }),
+      ],
+      metrics: {
+        selectedCount: 3,
+        totalDistanceMeters: 400,
+        averageDistanceMetersPerDay: 400,
+      },
+      selectedBounds: {
+        southWest: [118, 30],
+        northEast: [121.511384, 31.296565],
+      },
+      debug: {
+        rawCount: 2,
+        renderedCount: 1,
+        renderRatio: 0.5,
+      },
+    })
+  })
+
+  it('imports footprints into a SQLite RTree viewport index for spatial filtering', async () => {
+    const dataPath = await writeTempCsv(snapshotCsv)
+    const dbPath = join(await mkdtemp(join(tmpdir(), 'enroute-footprints-db-')), 'footprints.sqlite')
+    const server = createServer(
+      createFootprintsRequestHandler({
+        dataPath,
+        dbPath,
+        coordinateSystem: 'gcj02',
+      }),
+    )
+    servers.push(server)
+    const origin = await listen(server)
+
+    await fetch(`${origin}/api/footprints/snapshot`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        timeRange: {
+          startTimestampSeconds: 1781798400,
+          endTimestampSeconds: 1781884799,
+          dayCount: 1,
+        },
+        zoom: 16,
+        cellSizePx: 0.5,
+        viewportBounds: { west: 121, south: 31, east: 122, north: 32 },
+        viewportNorthWestWorldPixel: { x: 0, y: 0 },
+      }),
+    })
+
+    const db = new DatabaseSync(dbPath)
+    try {
+      expect(db.prepare(`
+        SELECT name
+        FROM sqlite_master
+        WHERE type = 'table' AND name = 'footprint_spatial'
+      `).get()).toEqual({ name: 'footprint_spatial' })
+      expect(db.prepare('SELECT COUNT(*) AS count FROM footprint_spatial').get()).toEqual({
+        count: 4,
+      })
+    } finally {
+      db.close()
+    }
   })
 
   it('returns 404 for unknown routes', async () => {

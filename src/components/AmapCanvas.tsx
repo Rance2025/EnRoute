@@ -13,10 +13,9 @@ import {
 } from '../config/mapPaneLayout'
 import { projectLngLat } from '../config/mercator'
 import { calculateBoundedZoomCenter, installBoundedMapZoom, zoomByStep } from '../config/mapZoomBounds'
-import { loadFootprintPoints } from '../layers/footprintDataSource'
+import { loadFootprintSnapshot, type FootprintRenderDebug } from '../layers/footprintDataSource'
 import { createMassFootprintLayer } from '../layers/massFootprintLayer'
-import type { FootprintLngLatBounds, FootprintPoint } from '../layers/footprintTypes'
-import { FootprintWorkerClient } from '../layers/footprintWorkerClient'
+import type { FootprintLngLatBounds } from '../layers/footprintTypes'
 import {
   DEFAULT_FOOTPRINT_STYLE,
   normalizeFootprintStyle,
@@ -25,6 +24,7 @@ import {
 import { loadAmap, type AMapNamespace } from '../services/amapLoader'
 import { createTimeRangeTimestamps, type TimeRangeSelection } from '../time/timeRange'
 import { MapControls } from './MapControls'
+import { formatMetricCount } from './mapMetricFormat'
 
 type AmapCanvasProps = {
   config: AmapConfig
@@ -42,9 +42,20 @@ export type FootprintMetrics = {
 type MapStatus = 'missing-config' | 'loading' | 'ready' | 'error'
 
 const FOOTPRINT_STYLE_STORAGE_KEY = 'enroute.footprintStyle'
+const FOOTPRINT_SAMPLING_CELL_SIZE_PX = 0.5
 const MAP_CAMERA_DURATION_MS = 900
 const FIT_FOOTPRINT_AVOID: [number, number, number, number] = [72, 72, 72, 72]
 const FULL_WORLD_VIEWPORT_TOLERANCE_PX = 1
+const EMPTY_FOOTPRINT_METRICS: FootprintMetrics = {
+  selectedCount: 0,
+  totalDistanceMeters: 0,
+  averageDistanceMetersPerDay: 0,
+}
+const EMPTY_FOOTPRINT_DEBUG: FootprintRenderDebug = {
+  rawCount: 0,
+  renderedCount: 0,
+  renderRatio: 0,
+}
 
 function AmapCanvasComponent({
   config,
@@ -60,9 +71,8 @@ function AmapCanvasComponent({
   const disposeZoomRef = useRef<(() => void) | null>(null)
   const disposeZoomClampRef = useRef<(() => void) | null>(null)
   const footprintLayerRef = useRef<ReturnType<typeof createMassFootprintLayer> | null>(null)
-  const footprintWorkerRef = useRef<FootprintWorkerClient | null>(null)
   const footprintAbortControllerRef = useRef<AbortController | null>(null)
-  const footprintPointsRef = useRef<FootprintPoint[] | null>(null)
+  const footprintRequestIdRef = useRef(0)
   const selectedFootprintBoundsRef = useRef<FootprintLngLatBounds | null>(null)
   const timeRangeRef = useRef(timeRange)
   const zoomClampTimersRef = useRef<number[]>([])
@@ -71,6 +81,9 @@ function AmapCanvasComponent({
   )
   const [errorMessage, setErrorMessage] = useState('')
   const [footprintStyle, setFootprintStyle] = useState<FootprintStyle>(readStoredFootprintStyle)
+  const [footprintDebug, setFootprintDebug] = useState<FootprintRenderDebug>(
+    EMPTY_FOOTPRINT_DEBUG,
+  )
   const footprintStyleRef = useRef(footprintStyle)
 
   const themes = config.themes.length ? config.themes : AMAP_THEMES
@@ -86,41 +99,40 @@ function AmapCanvasComponent({
   }, [])
 
   const updateDisplayedFootprints = useCallback((range: TimeRangeSelection) => {
-    if (
-      !footprintPointsRef.current ||
-      !footprintWorkerRef.current ||
-      !mapRef.current ||
-      !mapNodeRef.current
-    ) {
+    if (!mapRef.current || !mapNodeRef.current || !footprintLayerRef.current) {
       selectedFootprintBoundsRef.current = null
       footprintLayerRef.current?.update([])
-      onFootprintMetricsChange?.({
-        selectedCount: 0,
-        totalDistanceMeters: 0,
-        averageDistanceMetersPerDay: 0,
-      })
+      setFootprintDebug(EMPTY_FOOTPRINT_DEBUG)
+      onFootprintMetricsChange?.(EMPTY_FOOTPRINT_METRICS)
       return
     }
 
     const viewport = calculateCurrentViewportSampleInput(mapRef.current, mapNodeRef.current)
-    const worker = footprintWorkerRef.current
+    const requestId = footprintRequestIdRef.current + 1
+    footprintRequestIdRef.current = requestId
+    footprintAbortControllerRef.current?.abort()
+    const abortController = new AbortController()
+    footprintAbortControllerRef.current = abortController
 
-    worker.aggregate({
+    loadFootprintSnapshot(import.meta.env.VITE_FOOTPRINT_API_URL, {
       timeRange: createTimeRangeTimestamps(range),
       zoom: viewport.zoom,
-      cellSizePx: Math.max(footprintStyleRef.current.pixelSize, 1),
+      cellSizePx: FOOTPRINT_SAMPLING_CELL_SIZE_PX,
       viewportBounds: viewport.bounds,
       viewportNorthWestWorldPixel: viewport.northWestWorldPixel,
-    })
+    }, abortController.signal)
       .then((snapshot) => {
-        if (worker !== footprintWorkerRef.current) return
+        if (requestId !== footprintRequestIdRef.current) return
 
         selectedFootprintBoundsRef.current = snapshot.selectedBounds
         footprintLayerRef.current?.update(snapshot.points)
+        setFootprintDebug(snapshot.debug)
         onFootprintMetricsChange?.(snapshot.metrics)
       })
       .catch((error: unknown) => {
-        if (import.meta.env.DEV && !(error instanceof Error && error.message.includes('superseded'))) {
+        if (abortController.signal.aborted) return
+
+        if (import.meta.env.DEV) {
           console.warn(error)
         }
       })
@@ -255,21 +267,6 @@ function AmapCanvasComponent({
           window.__ENROUTE_MAP__ = map
         }
         setStatus('ready')
-
-        footprintAbortControllerRef.current = new AbortController()
-        loadFootprintPoints(
-          import.meta.env.VITE_FOOTPRINT_API_URL,
-          footprintAbortControllerRef.current.signal,
-        )
-          .then((points) => {
-            if (disposed) return
-            footprintPointsRef.current = points
-            footprintWorkerRef.current?.setPoints(points)
-            updateDisplayedFootprints(timeRangeRef.current)
-          })
-          .catch((error: unknown) => {
-            if (!disposed && import.meta.env.DEV) console.warn(error)
-          })
       })
       .catch((error: unknown) => {
         if (disposed) return
@@ -280,19 +277,14 @@ function AmapCanvasComponent({
     return () => {
       disposed = true
       geolocationRef.current = null
+      footprintRequestIdRef.current += 1
       footprintAbortControllerRef.current?.abort()
       footprintAbortControllerRef.current = null
       clearZoomClampTimers()
       destroyFootprintLayer()
-      footprintPointsRef.current = null
       selectedFootprintBoundsRef.current = null
-      footprintWorkerRef.current?.dispose()
-      footprintWorkerRef.current = null
-      onFootprintMetricsChange?.({
-        selectedCount: 0,
-        totalDistanceMeters: 0,
-        averageDistanceMetersPerDay: 0,
-      })
+      setFootprintDebug(EMPTY_FOOTPRINT_DEBUG)
+      onFootprintMetricsChange?.(EMPTY_FOOTPRINT_METRICS)
       if (import.meta.env.DEV) {
         delete window.__ENROUTE_MAP__
       }
@@ -327,20 +319,11 @@ function AmapCanvasComponent({
       footprintStyleRef.current,
     )
     footprintLayerRef.current = layer
-    const worker = new FootprintWorkerClient()
-    footprintWorkerRef.current = worker
-    if (footprintPointsRef.current) {
-      worker.setPoints(footprintPointsRef.current)
-      updateDisplayedFootprints(timeRangeRef.current)
-    }
+    updateDisplayedFootprints(timeRangeRef.current)
 
     return () => {
       if (footprintLayerRef.current === layer) {
         destroyFootprintLayer()
-      }
-      if (footprintWorkerRef.current === worker) {
-        worker.dispose()
-        footprintWorkerRef.current = null
       }
     }
   }, [destroyFootprintLayer, status, updateDisplayedFootprints])
@@ -437,6 +420,7 @@ function AmapCanvasComponent({
             footprintStyle={footprintStyle}
             onFootprintStyleChange={updateFootprintStyle}
           />
+          {status === 'ready' ? <FootprintDebugPanel debug={footprintDebug} /> : null}
           {status === 'error' ? (
             <div className="map-message" role="alert">
               <h2>地图加载失败</h2>
@@ -499,6 +483,33 @@ function calculateCurrentViewportSampleInput(map: AMap.Map, container: HTMLEleme
     },
     northWestWorldPixel: projectLngLat(northWestLngLat, zoom),
   }
+}
+
+function FootprintDebugPanel({ debug }: { debug: FootprintRenderDebug }) {
+  return (
+    <aside className="footprint-debug-panel" aria-label="足迹渲染调试">
+      <div className="footprint-debug-panel__row">
+        <span>渲染点数</span>
+        <strong>{formatMetricCount(debug.renderedCount)}</strong>
+      </div>
+      <div className="footprint-debug-panel__row">
+        <span>实际点数</span>
+        <strong>{formatMetricCount(debug.rawCount)}</strong>
+      </div>
+      <div className="footprint-debug-panel__row">
+        <span>渲染比例</span>
+        <strong>{formatRenderRatio(debug.renderRatio)}</strong>
+      </div>
+    </aside>
+  )
+}
+
+function formatRenderRatio(value: number) {
+  return new Intl.NumberFormat('zh-CN', {
+    style: 'percent',
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  }).format(Number.isFinite(value) ? value : 0)
 }
 
 function writeStoredFootprintStyle(footprintStyle: FootprintStyle) {
