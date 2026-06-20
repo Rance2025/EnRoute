@@ -93,26 +93,16 @@ export function LedgerWorkspace({
           <span>估算净资产</span>
           <strong>¥{formatCnyFromCents(totalBalanceInCents)}</strong>
         </div>
+        <button
+          type="button"
+          className="ios-account-all-filter"
+          aria-pressed={selectedAccountId === 'all'}
+          onClick={() => onSelectAccount('all')}
+        >
+          <span>全部流水</span>
+          <strong>{transactions.length} 笔</strong>
+        </button>
         <div className="ios-account-filter-stack">
-          <AccountFilterCard
-            variant={0}
-            title="全部账户"
-            detail={`${transactions.length} 笔流水`}
-            balance={`¥${formatCnyFromCents(totalBalanceInCents)}`}
-            movement={formatSigned(
-              summaries.reduce(
-                (total, summary) =>
-                  total +
-                  summary.incomeInCents -
-                  summary.expenseInCents +
-                  summary.transferInInCents -
-                  summary.transferOutInCents,
-                0,
-              ),
-            )}
-            active={selectedAccountId === 'all'}
-            onSelect={() => onSelectAccount('all')}
-          />
           {summaries.map((summary, index) => (
             <AccountFilterCard
               key={summary.account.id}
@@ -127,7 +117,11 @@ export function LedgerWorkspace({
                   summary.transferOutInCents,
               )}
               active={selectedAccountId === summary.account.id}
-              onSelect={() => onSelectAccount(summary.account.id)}
+              onSelect={() => {
+                onSelectAccount(
+                  selectedAccountId === summary.account.id ? 'all' : summary.account.id,
+                )
+              }}
             />
           ))}
         </div>
@@ -196,7 +190,7 @@ function AccountFilterCard({
       className={[
         'ios-account-filter-card',
         `ios-account-filter-card--${variant}`,
-        active ? 'is-active' : null,
+        active ? 'is-active is-pulled' : null,
       ]
         .filter(Boolean)
         .join(' ')}

@@ -53,6 +53,14 @@ describe('map chrome layout', () => {
     expect(scrollRule).not.toContain('padding: 88px')
   })
 
+  it('moves accounting metrics into the time card instead of the bottom summary grid', () => {
+    expect(timeContextPanelSource).toContain('aria-label="记账概览卡片"')
+    expect(timeContextPanelSource).not.toContain('aria-label="当前范围摘要"')
+    expect(cssRule('.time-context-accounting-summary')).toContain('grid-template-columns: repeat(2, minmax(0, 1fr))')
+    expect(cssRule('.time-context-summary')).toBe('')
+    expect(cssRule('.ios-summary-strip')).toBe('')
+  })
+
   it('keeps calendar display mode local to the time panel to avoid map rerenders', () => {
     const timePanelSource = readFileSync('src/components/TimeContextPanel.tsx', 'utf8')
 
@@ -384,6 +392,19 @@ describe('map chrome layout', () => {
     expect(cssRule('.accounting-modal-card')).toContain('overflow: hidden')
     expect(cssRule('.transaction-list')).toBe('')
     expect(cssRule('.transaction-editor')).toBe('')
+  })
+
+  it('keeps all-ledger selection outside the account card stack and pulls selected account cards out', () => {
+    const ledgerSource = readFileSync('src/components/accounting/LedgerWorkspace.tsx', 'utf8')
+
+    expect(ledgerSource).toContain('className="ios-account-all-filter"')
+    expect(ledgerSource).not.toContain('title="全部账户"')
+    expect(ledgerSource).toContain("active ? 'is-active is-pulled' : null")
+    expect(cssRule('.ios-account-all-filter')).not.toContain('linear-gradient(135deg')
+    expect(cssRule('.ios-account-filter-card')).toContain('--account-pull-x: 24px')
+    expect(cssRule('.ios-account-filter-card.is-pulled')).toContain(
+      'translate3d(var(--account-pull-x), -6px, 0)',
+    )
   })
 
   it('initializes the map at the single-world minimum zoom', () => {

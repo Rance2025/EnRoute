@@ -10,7 +10,7 @@ afterEach(() => {
 })
 
 describe('TimeContextPanel', () => {
-  it('derives accounting summary values from the selected time range', () => {
+  it('derives accounting summary values inside the main time card for accounting', () => {
     render(
       <TimeContextPanel
         view="accounting"
@@ -19,12 +19,17 @@ describe('TimeContextPanel', () => {
       />,
     )
 
-    const summary = screen.getByLabelText('当前范围摘要')
+    const timeCardSummary = screen.getByLabelText('记账概览卡片')
 
-    expect(within(summary).getByText('流水')).toBeInTheDocument()
-    expect(within(summary).getByText('6')).toBeInTheDocument()
-    expect(within(summary).getByText('¥481.18')).toBeInTheDocument()
-    expect(within(summary).getByText('¥4691.23')).toBeInTheDocument()
-    expect(within(summary).queryByText('¥420')).not.toBeInTheDocument()
+    expect(within(timeCardSummary).getByText('净流入')).toBeInTheDocument()
+    expect(within(timeCardSummary).getByText('+¥4691.23')).toBeInTheDocument()
+    expect(within(timeCardSummary).getByText('支出')).toBeInTheDocument()
+    expect(within(timeCardSummary).getByText('¥481.18')).toBeInTheDocument()
+    expect(within(timeCardSummary).getByText('流水')).toBeInTheDocument()
+    expect(within(timeCardSummary).getByText('6 笔')).toBeInTheDocument()
+    expect(within(timeCardSummary).getByText('账户')).toBeInTheDocument()
+    expect(within(timeCardSummary).getByText('4 个')).toBeInTheDocument()
+    expect(within(timeCardSummary).queryByText('¥420')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('当前范围摘要')).not.toBeInTheDocument()
   })
 })

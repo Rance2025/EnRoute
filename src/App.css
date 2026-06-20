@@ -354,6 +354,55 @@
   background: rgba(255, 255, 255, 0.11);
 }
 
+.time-context-accounting-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 14px;
+}
+
+.time-context-accounting-summary div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  min-height: 48px;
+  align-content: center;
+  padding: 8px 10px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.09);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.time-context-accounting-summary span,
+.time-context-accounting-summary strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.time-context-accounting-summary span {
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 10px;
+  font-weight: 820;
+}
+
+.time-context-accounting-summary strong {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 14px;
+  font-weight: 880;
+  line-height: 1;
+}
+
+.time-context-accounting-summary strong.is-income {
+  color: #9be0bd;
+}
+
+.time-context-accounting-summary strong.is-expense {
+  color: #f2afa8;
+}
+
 .time-mode-tabs button {
   min-width: 0;
   height: 30px;
@@ -1010,43 +1059,6 @@
   font-weight: 820;
 }
 
-.time-context-summary {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 7px;
-}
-
-.time-context-summary div {
-  min-width: 0;
-  min-height: 43px;
-  display: grid;
-  align-content: center;
-  padding: 8px;
-  border: 1px solid rgba(23, 35, 31, 0.08);
-  border-radius: 15px;
-  background: rgba(255, 255, 255, 0.55);
-}
-
-.time-context-summary b,
-.time-context-summary span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.time-context-summary b {
-  color: #12201c;
-  font-size: 12px;
-  font-weight: 850;
-}
-
-.time-context-summary span {
-  color: rgba(23, 35, 31, 0.56);
-  font-size: 10px;
-  font-weight: 760;
-}
-
 .main-workspace {
   position: absolute;
   inset: 0 0 0 var(--data-panel-width);
@@ -1125,25 +1137,17 @@
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
-  min-height: 54px;
+  min-height: 40px;
 }
 
-.ios-summary-strip {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(104px, 1fr)) minmax(90px, 0.48fr);
-  gap: 7px;
-  min-height: 52px;
-}
-
-.ios-summary-pill,
-.ios-summary-scope,
+.accounting-range-chip,
 .accounting-actions {
   display: grid;
   align-items: center;
-  min-height: 52px;
+  min-height: 40px;
   overflow: hidden;
   border: 1px solid rgba(23, 35, 31, 0.08);
-  border-radius: 17px;
+  border-radius: 15px;
   background: rgba(255, 255, 255, 0.58);
   box-shadow:
     0 10px 28px rgba(26, 42, 38, 0.06),
@@ -1151,51 +1155,29 @@
   backdrop-filter: blur(18px) saturate(1.08);
 }
 
-.ios-summary-pill {
-  grid-template-columns: 18px minmax(0, 1fr);
-  gap: 2px 8px;
-  padding: 8px 11px;
+.accounting-range-chip {
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  padding: 0 12px;
 }
 
-.ios-summary-pill svg {
-  grid-row: 1 / 3;
-  color: rgba(23, 35, 31, 0.42);
-}
-
-.ios-summary-pill span,
-.ios-summary-scope span {
+.accounting-range-chip span,
+.accounting-range-chip strong {
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.accounting-range-chip span {
   color: var(--accounting-muted);
   font-size: 11px;
-  font-weight: 780;
-  line-height: 1.1;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-weight: 790;
 }
 
-.ios-summary-pill strong,
-.ios-summary-scope strong {
-  overflow: hidden;
+.accounting-range-chip strong {
   color: var(--accounting-ink);
-  font-size: 16px;
+  font-size: 13px;
   font-weight: 860;
-  line-height: 1.1;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.ios-summary-pill--income strong {
-  color: var(--accounting-income);
-}
-
-.ios-summary-pill--expense strong {
-  color: var(--accounting-expense);
-}
-
-.ios-summary-scope {
-  justify-items: end;
-  padding: 8px 12px;
-  text-align: right;
 }
 
 .accounting-actions {
@@ -1204,13 +1186,13 @@
   gap: 7px;
   justify-content: end;
   width: max-content;
-  padding: 7px;
+  padding: 4px;
 }
 
 .accounting-actions > span {
   display: grid;
   min-width: 88px;
-  height: 34px;
+  height: 30px;
   place-items: center;
   padding: 0 12px;
   border-radius: 999px;
@@ -1227,7 +1209,7 @@
   justify-content: center;
   gap: 7px;
   min-width: 86px;
-  height: 34px;
+  height: 30px;
   padding: 0 13px;
   border: 1px solid rgba(23, 35, 31, 0.08);
   border-radius: 999px;
@@ -1316,7 +1298,7 @@
 .ios-account-stack-summary {
   display: grid;
   gap: 4px;
-  padding: 0 16px 7px;
+  padding: 0 16px 6px;
 }
 
 .ios-account-stack-summary span {
@@ -1331,15 +1313,74 @@
   line-height: 1;
 }
 
+.ios-account-all-filter {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
+  margin: 0 14px 10px;
+  padding: 0 12px;
+  overflow: hidden;
+  border: 1px solid rgba(23, 35, 31, 0.08);
+  border-radius: 15px;
+  color: var(--accounting-ink);
+  background: rgba(255, 255, 255, 0.58);
+  text-align: left;
+  cursor: pointer;
+  box-shadow:
+    0 10px 24px rgba(31, 46, 42, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  transition:
+    transform 180ms ease,
+    background 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.ios-account-all-filter span,
+.ios-account-all-filter strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ios-account-all-filter span {
+  color: var(--accounting-muted);
+  font-size: 12px;
+  font-weight: 820;
+}
+
+.ios-account-all-filter strong {
+  justify-self: end;
+  color: var(--accounting-ink);
+  font-size: 13px;
+  font-weight: 860;
+}
+
+.ios-account-all-filter:hover,
+.ios-account-all-filter[aria-pressed='true'] {
+  background: rgba(255, 255, 255, 0.84);
+  box-shadow:
+    0 13px 28px rgba(31, 46, 42, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.86);
+}
+
+.ios-account-all-filter:active {
+  transform: scale(0.98);
+}
+
 .ios-account-filter-stack {
   display: grid;
   align-content: start;
   min-height: 0;
-  padding: 1px 14px 14px;
+  padding: 8px 22px 18px 14px;
   overflow: hidden;
+  isolation: isolate;
 }
 
 .ios-account-filter-card {
+  --account-pull-x: 24px;
+
   position: relative;
   display: grid;
   grid-template-columns: 30px minmax(0, 1fr) auto;
@@ -1357,11 +1398,11 @@
   text-align: left;
   cursor: pointer;
   box-shadow: 0 20px 44px rgba(18, 49, 43, 0.18);
-  transform: translateY(0) scale(0.985);
+  transform: translate3d(0, 0, 0) scale(0.985);
   transition:
-    transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
-    box-shadow 180ms ease,
-    filter 180ms ease;
+    transform 340ms cubic-bezier(0.2, 1.08, 0.22, 1),
+    box-shadow 260ms ease,
+    filter 220ms ease;
 }
 
 .ios-account-filter-card + .ios-account-filter-card {
@@ -1392,11 +1433,17 @@
     linear-gradient(135deg, #604f7a, #332847);
 }
 
-.ios-account-filter-card:hover,
-.ios-account-filter-card.is-active {
+.ios-account-filter-card:hover {
   z-index: 2;
   filter: saturate(1.08);
-  transform: translateY(-4px) scale(1);
+  transform: translate3d(8px, -3px, 0) scale(0.995);
+  box-shadow: 0 23px 50px rgba(18, 49, 43, 0.22);
+}
+
+.ios-account-filter-card.is-pulled {
+  z-index: 5;
+  filter: saturate(1.1);
+  transform: translate3d(var(--account-pull-x), -6px, 0) scale(1);
   box-shadow: 0 25px 54px rgba(18, 49, 43, 0.24);
 }
 
@@ -2538,38 +2585,20 @@
     min-height: 0;
   }
 
-  .ios-summary-strip {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 6px;
-    min-height: 0;
+  .accounting-range-chip,
+  .accounting-actions {
+    min-height: 36px;
+    border-radius: 14px;
   }
 
-  .ios-summary-pill,
-  .ios-summary-scope {
-    min-height: 40px;
-    border-radius: 15px;
+  .accounting-actions {
+    justify-content: stretch;
+    width: 100%;
   }
 
-  .ios-summary-pill {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 2px;
-    padding: 7px 8px;
-  }
-
-  .ios-summary-pill svg {
-    display: none;
-  }
-
-  .ios-summary-pill span {
-    font-size: 10px;
-  }
-
-  .ios-summary-pill strong {
-    font-size: 12px;
-  }
-
-  .ios-summary-scope {
-    display: none;
+  .accounting-actions > span {
+    width: 100%;
+    height: 28px;
   }
 
   .accounting-workspace {
@@ -2599,12 +2628,20 @@
     display: none;
   }
 
+  .ios-account-all-filter {
+    min-height: 32px;
+    margin: 0 10px 6px;
+    border-radius: 13px;
+  }
+
   .ios-account-filter-stack {
-    padding: 0 10px 10px;
+    padding: 6px 20px 10px 10px;
     overflow: hidden;
   }
 
   .ios-account-filter-card {
+    --account-pull-x: 14px;
+
     grid-template-columns: 26px minmax(0, 1fr) auto;
     min-height: 54px;
     padding: 9px;
@@ -2782,20 +2819,9 @@
     gap: 9px;
   }
 
-  .ios-summary-strip {
-    grid-template-columns: repeat(4, minmax(96px, 1fr)) minmax(84px, 0.46fr);
-    gap: 7px;
-  }
-
-  .ios-summary-pill,
-  .ios-summary-scope {
-    min-height: 48px;
-    border-radius: 16px;
-  }
-
-  .ios-summary-pill strong,
-  .ios-summary-scope strong {
-    font-size: 14px;
+  .accounting-range-chip,
+  .accounting-actions {
+    min-height: 38px;
   }
 
   .ios-panel {
@@ -2811,6 +2837,8 @@
   }
 
   .ios-account-filter-card {
+    --account-pull-x: 18px;
+
     min-height: 76px;
     padding: 11px;
   }
