@@ -170,17 +170,16 @@ export function calculateNextBoundedDragCenter({
 
   const minLatitude = bounds.southWest[1] + viewportEdgeOffsets.south + LATITUDE_EDGE_PADDING_DEGREES
   const maxLatitude = bounds.northEast[1] - viewportEdgeOffsets.north - LATITUDE_EDGE_PADDING_DEGREES
-  const lockedLatitude =
+  const preserveOutOfRangeLatitude =
     currentZoom !== undefined && isAtMinimumWorldZoom(currentZoom, viewportSize.height)
-      ? calculateLatitudeMidpoint(bounds)
-      : undefined
 
   return [
     targetLngLat[0],
-    lockedLatitude ??
-      (minLatitude > maxLatitude
-        ? calculateLatitudeMidpoint(bounds)
-        : clampToViewportRange(targetLngLat[1], currentCenter[1], minLatitude, maxLatitude)),
+    minLatitude > maxLatitude
+      ? calculateLatitudeMidpoint(bounds)
+      : preserveOutOfRangeLatitude
+        ? clampDragLatitudeToViewportRange(targetLngLat[1], currentCenter[1], minLatitude, maxLatitude)
+        : clampToViewportRange(targetLngLat[1], currentCenter[1], minLatitude, maxLatitude),
   ]
 }
 
@@ -274,6 +273,18 @@ function clampToViewportRange(value: number, fallback: number, min: number, max:
   }
 
   return Math.min(Math.max(value, min), max)
+}
+
+function clampDragLatitudeToViewportRange(value: number, fallback: number, min: number, max: number) {
+  if (fallback < min) {
+    return Math.min(Math.max(value, fallback), max)
+  }
+
+  if (fallback > max) {
+    return Math.max(Math.min(value, fallback), min)
+  }
+
+  return clampToViewportRange(value, fallback, min, max)
 }
 
 function canCapturePointer(container: HTMLElement): container is HTMLElement & {

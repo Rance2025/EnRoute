@@ -10,6 +10,7 @@ import {
   type ContainerPoint,
 } from './mapDragBounds'
 import type { MapBounds } from './mapCamera'
+import { projectLngLat, unprojectWorldPoint } from './mercator'
 
 const bounds: MapBounds = {
   southWest: [73.3, 17.8],
@@ -39,6 +40,35 @@ function lngLat([lng, lat]: [number, number]) {
   return {
     getLng: () => lng,
     getLat: () => lat,
+  }
+}
+
+function createMercatorTransforms(
+  center: [number, number],
+  zoom: number,
+  size = viewportSize,
+) {
+  return {
+    lngLatToContainer: (lngLat: [number, number]): ContainerPoint => {
+      const centerWorld = projectLngLat(center, zoom)
+      const world = projectLngLat(lngLat, zoom)
+
+      return {
+        x: size.width / 2 + world.x - centerWorld.x,
+        y: size.height / 2 + world.y - centerWorld.y,
+      }
+    },
+    containerToLngLat: (point: ContainerPoint): [number, number] => {
+      const centerWorld = projectLngLat(center, zoom)
+
+      return unprojectWorldPoint(
+        {
+          x: centerWorld.x + point.x - size.width / 2,
+          y: centerWorld.y + point.y - size.height / 2,
+        },
+        zoom,
+      )
+    },
   }
 }
 
@@ -175,28 +205,58 @@ describe('bounded map dragging', () => {
     expect(calculateMinimumZoomForLatitudeCoverage(1800)).toBe(3.16)
   })
 
-  it('preserves horizontal dragging while locking latitude at the minimum world zoom', () => {
-    const center: [number, number] = [104, 0]
+  it('preserves latitude while dragging horizontally at the minimum world zoom', () => {
+    const center: [number, number] = [104, 46.895065]
+    const minimumViewportSize = {
+      width: 1432,
+      height: 815,
+    }
     const mercatorBounds: MapBounds = {
       southWest: [-180, -85.05112878],
       northEast: [180, 85.05112878],
     }
+    const transforms = createMercatorTransforms(center, 2.02, minimumViewportSize)
+
     const nextCenter = calculateNextBoundedDragCenter({
       currentCenter: center,
-      currentZoom: 2,
-      previousPointer: { x: 100, y: 100 },
-      currentPointer: { x: 110, y: 140 },
+      currentZoom: 2.02,
+      previousPointer: { x: 716, y: 408 },
+      currentPointer: { x: 726, y: 408 },
       bounds: mercatorBounds,
-      viewportSize,
-      lngLatToContainer: ([lng, lat]) => ({
-        x: viewportSize.width / 2 + (lng - center[0]),
-        y: viewportSize.height / 2 - lat * 0.5,
-      }),
-      containerToLngLat: ({ x, y }) => [center[0] + x - viewportSize.width / 2, 80 - y],
+      viewportSize: minimumViewportSize,
+      lngLatToContainer: transforms.lngLatToContainer,
+      containerToLngLat: transforms.containerToLngLat,
     })
 
-    expect(nextCenter[0]).toBeCloseTo(94)
-    expect(nextCenter[1]).toBeCloseTo(0)
+    expect(nextCenter[0]).toBeLessThan(center[0])
+    expect(nextCenter[1]).toBeCloseTo(46.895065)
+  })
+
+  it('moves out-of-range polar centers smoothly back inward while dragging at minimum world zoom', () => {
+    const center: [number, number] = [104, 46.895065]
+    const minimumViewportSize = {
+      width: 1432,
+      height: 815,
+    }
+    const mercatorBounds: MapBounds = {
+      southWest: [-180, -85.05112878],
+      northEast: [180, 85.05112878],
+    }
+    const transforms = createMercatorTransforms(center, 2.02, minimumViewportSize)
+
+    const nextCenter = calculateNextBoundedDragCenter({
+      currentCenter: center,
+      currentZoom: 2.02,
+      previousPointer: { x: 716, y: 408 },
+      currentPointer: { x: 716, y: 378 },
+      bounds: mercatorBounds,
+      viewportSize: minimumViewportSize,
+      lngLatToContainer: transforms.lngLatToContainer,
+      containerToLngLat: transforms.containerToLngLat,
+    })
+
+    expect(nextCenter[1]).toBeLessThan(center[1])
+    expect(nextCenter[1]).toBeGreaterThan(36)
   })
 
   it('keeps zoomend latitude clamping from recentering at minimum zoom', () => {
