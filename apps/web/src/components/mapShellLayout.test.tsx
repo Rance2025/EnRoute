@@ -314,10 +314,10 @@ describe('unified shell layout', () => {
     expect(screen.queryByRole('slider', { name: '记账工作区滑块' })).not.toBeInTheDocument()
     expect(screen.getByLabelText('账户与流水工作台')).toBeInTheDocument()
     const accountingMetricStrip = screen.getByLabelText('全局范围指标')
-    expect(within(accountingMetricStrip).getByText('净流入')).toBeInTheDocument()
+    expect(within(accountingMetricStrip).getByText('收入')).toBeInTheDocument()
     expect(within(accountingMetricStrip).getByText('支出')).toBeInTheDocument()
     expect(within(accountingMetricStrip).getByText('流水')).toBeInTheDocument()
-    expect(within(accountingMetricStrip).getByText('账户')).toBeInTheDocument()
+    expect(within(accountingMetricStrip).queryByText('账户')).not.toBeInTheDocument()
     expect(within(accountingMetricStrip).queryByText('当前足迹')).not.toBeInTheDocument()
   })
 

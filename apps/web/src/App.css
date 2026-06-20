@@ -1397,6 +1397,7 @@
   grid-column: 2;
   grid-template-columns: minmax(300px, 0.42fr) minmax(0, 1fr) minmax(300px, 0.42fr);
   align-items: start;
+  gap: 18px;
   overflow: hidden;
 }
 
@@ -1408,13 +1409,37 @@
 
 .ios-account-filter-panel {
   position: fixed;
-  top: 104px;
+  top: 92px;
   right: 24px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 14px;
   width: min(372px, calc((100vw - 1200px) / 2 + 300px - 24px));
-  height: calc(100svh - 122px);
+  height: calc(100svh - 110px);
   align-self: start;
-  padding-bottom: 16px;
+  padding: 14px 18px 16px;
+  overflow: visible;
+  border-radius: 26px;
+}
+
+.ios-account-filter-panel__accounts {
+  display: grid;
+  align-content: start;
+  min-height: 0;
+  overflow: visible;
+}
+
+.ios-account-filter-panel__secondary {
+  min-height: 0;
   overflow: hidden;
+  border-top: 1px solid rgba(23, 35, 31, 0.08);
+  border-radius: 0 0 18px 18px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.12));
+}
+
+.ios-account-filter-panel .ios-panel-head {
+  padding: 8px 0 10px;
 }
 
 .ios-account-stack-summary {
@@ -1422,7 +1447,7 @@
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: end;
   gap: 10px;
-  padding: 0 16px 4px;
+  padding: 0 0 6px;
 }
 
 .ios-account-stack-summary span {
@@ -1445,7 +1470,7 @@
   align-items: center;
   gap: 10px;
   min-height: 38px;
-  margin: 0 14px 8px;
+  margin: 0 0 10px;
   padding: 0 12px;
   overflow: hidden;
   border: 1px solid rgba(23, 35, 31, 0.08);
@@ -1499,25 +1524,16 @@
   position: relative;
   display: block;
   min-height: 0;
-  height: 470px;
-  margin-top: 0;
-  padding: 4px 20px 16px 14px;
+  height: 406px;
+  margin-top: -10px;
+  padding: 10px 0 18px;
   overflow: visible;
   isolation: isolate;
+  overscroll-behavior: contain;
   perspective: 1100px;
   transform-style: preserve-3d;
   transition:
     padding 420ms cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.ios-account-selected-slot {
-  padding: 4px 24px 16px 14px;
-  animation: accountSelectedSlotIn 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-.ios-account-filter-stack.is-spread {
-  padding-top: 0;
-  animation: accountCardSettleBack 460ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .ios-account-filter-card {
@@ -1527,6 +1543,9 @@
   --account-card-stack-y: 0px;
   --account-card-tilt: 0deg;
   --account-card-z: 1;
+  --account-card-bg-start: #385552;
+  --account-card-bg-mid: #244340;
+  --account-card-bg-end: #152b29;
 
   position: relative;
   z-index: var(--account-card-z);
@@ -1534,7 +1553,6 @@
   justify-self: start;
   width: 100%;
   min-width: 0;
-  min-height: 84px;
   padding: 0;
   overflow: visible;
   border: 0;
@@ -1546,39 +1564,44 @@
 }
 
 .ios-account-filter-card__surface {
+  position: relative;
   display: grid;
-  grid-template-columns: 30px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 12px;
   width: calc(100% - var(--account-card-shift-x));
-  min-height: 84px;
-  padding: 13px;
+  aspect-ratio: 1.586 / 1;
+  padding: 18px;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.24);
-  border-radius: 24px;
+  border-radius: 26px;
   background:
-    radial-gradient(circle at 86% 14%, rgba(255, 255, 255, 0.2), transparent 32%),
-    linear-gradient(135deg, #123f35, #0d2d26);
+    linear-gradient(
+      145deg,
+      var(--account-card-bg-start),
+      var(--account-card-bg-mid) 58%,
+      var(--account-card-bg-end)
+    );
   box-shadow: 0 20px 44px rgba(18, 49, 43, 0.18);
   backface-visibility: hidden;
   transform-origin: center bottom;
   translate: var(--account-card-shift-x) var(--account-card-lift);
   scale: var(--account-card-scale);
   transform: rotateX(var(--account-card-tilt));
-  will-change: translate, scale, transform;
   transition:
     translate 520ms cubic-bezier(0.16, 1, 0.3, 1),
     scale 520ms cubic-bezier(0.16, 1, 0.3, 1),
     transform 520ms cubic-bezier(0.16, 1, 0.3, 1),
-    box-shadow 320ms ease,
-    filter 280ms ease;
+    box-shadow 320ms ease;
+  will-change: translate, scale, transform;
 }
 
 .ios-account-filter-stack .ios-account-filter-card {
   position: absolute;
   top: var(--account-card-stack-y);
-  left: 14px;
-  width: calc(100% - 34px);
+  left: 0;
+  width: 100%;
   transition:
     top 520ms cubic-bezier(0.16, 1, 0.3, 1),
     width 520ms cubic-bezier(0.16, 1, 0.3, 1);
@@ -1588,73 +1611,42 @@
   margin-top: 0;
 }
 
-.ios-account-filter-stack.is-spread .ios-account-filter-card + .ios-account-filter-card {
-  margin-top: 0;
-}
-
-.ios-account-filter-card--1 .ios-account-filter-card__surface {
-  background:
-    radial-gradient(circle at 86% 14%, rgba(255, 255, 255, 0.18), transparent 32%),
-    linear-gradient(135deg, #315b68, #183b44);
-}
-
-.ios-account-filter-card--2 .ios-account-filter-card__surface {
-  background:
-    radial-gradient(circle at 86% 14%, rgba(255, 255, 255, 0.18), transparent 32%),
-    linear-gradient(135deg, #934e47, #5a302d);
-}
-
-.ios-account-filter-card--3 .ios-account-filter-card__surface {
-  background:
-    radial-gradient(circle at 86% 14%, rgba(255, 255, 255, 0.18), transparent 32%),
-    linear-gradient(135deg, #5b6651, #31392f);
-}
-
-.ios-account-filter-card--4 .ios-account-filter-card__surface {
-  background:
-    radial-gradient(circle at 86% 14%, rgba(255, 255, 255, 0.18), transparent 32%),
-    linear-gradient(135deg, #604f7a, #332847);
-}
-
 .ios-account-filter-card--rank-0 {
   --account-card-scale: 1;
   --account-card-shift-x: 0px;
-  --account-card-stack-y: 318px;
+  --account-card-stack-y: 126px;
   --account-card-z: 5;
 }
 
 .ios-account-filter-card--rank-1 {
   --account-card-lift: 0px;
-  --account-card-scale: 0.982;
-  --account-card-shift-x: 16px;
-  --account-card-stack-y: 212px;
-  --account-card-tilt: -1.2deg;
+  --account-card-scale: 0.995;
+  --account-card-shift-x: 10px;
+  --account-card-stack-y: 80px;
+  --account-card-tilt: -0.8deg;
   --account-card-z: 4;
 }
 
 .ios-account-filter-card--rank-2 {
   --account-card-lift: 0px;
-  --account-card-scale: 0.964;
-  --account-card-shift-x: 32px;
-  --account-card-stack-y: 106px;
-  --account-card-tilt: -1.8deg;
+  --account-card-scale: 0.99;
+  --account-card-shift-x: 20px;
+  --account-card-stack-y: 34px;
+  --account-card-tilt: -1.2deg;
   --account-card-z: 3;
 }
 
 .ios-account-filter-card--rank-3 {
   --account-card-lift: 0px;
-  --account-card-scale: 0.946;
-  --account-card-shift-x: 48px;
-  --account-card-stack-y: 0px;
-  --account-card-tilt: -2.4deg;
+  --account-card-scale: 0.985;
+  --account-card-shift-x: 30px;
+  --account-card-stack-y: -12px;
+  --account-card-tilt: -1.6deg;
   --account-card-z: 2;
 }
 
 .ios-account-filter-card:hover .ios-account-filter-card__surface {
-  z-index: calc(var(--account-card-z) + 1);
-  filter: saturate(1.08);
-  translate: var(--account-card-shift-x) calc(var(--account-card-lift) - 3px);
-  box-shadow: 0 23px 50px rgba(18, 49, 43, 0.22);
+  border-color: rgba(255, 255, 255, 0.34);
 }
 
 .ios-account-filter-card.is-active .ios-account-filter-card__surface {
@@ -1662,74 +1654,44 @@
   box-shadow: 0 25px 54px rgba(18, 49, 43, 0.24);
 }
 
-.ios-account-filter-card.is-detached {
-  --account-card-scale: 1;
-  --account-card-shift-x: 0px;
-  --account-card-lift: 0px;
-  --account-card-tilt: 0deg;
-  --account-card-z: 6;
-
-  min-height: 92px;
-  animation: accountCardDetachIn 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-.ios-account-filter-card.is-detached .ios-account-filter-card__surface {
-  min-height: 92px;
-}
-
-@keyframes accountSelectedSlotIn {
-  from {
-    opacity: 0.72;
-    filter: saturate(0.94);
-  }
-
-  to {
-    opacity: 1;
-    filter: saturate(1);
-  }
-}
-
-@keyframes accountCardDetachIn {
-  from {
-    opacity: 0.82;
-    filter: saturate(0.92);
-  }
-
-  72% {
-    opacity: 1;
-    filter: saturate(1.06);
-  }
-
-  to {
-    opacity: 1;
-    filter: saturate(1.1);
-  }
-}
-
-@keyframes accountCardSettleBack {
-  from {
-    opacity: 0.86;
-  }
-
-  to {
-    opacity: 1;
-  }
-}
-
-.ios-account-filter-card__check {
+.ios-account-filter-card__brand-logo {
+  position: absolute;
+  z-index: 0;
+  right: -24px;
+  bottom: 6px;
   display: grid;
-  width: 30px;
-  height: 30px;
+  width: clamp(124px, 46%, 184px);
+  aspect-ratio: 1;
   place-items: center;
-  border-radius: 12px;
-  color: #fff;
-  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+  opacity: 0.16;
+  pointer-events: none;
+}
+
+.ios-account-filter-card--brand-meituan .ios-account-filter-card__brand-logo {
+  right: -8px;
+  bottom: 18px;
+  width: min(78%, 260px);
+  aspect-ratio: 2.56 / 1;
+  opacity: 0.13;
+}
+
+.ios-account-filter-card__brand-logo svg {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .ios-account-filter-card__body,
 .ios-account-filter-card__side {
+  position: relative;
+  z-index: 1;
   display: grid;
   gap: 4px;
+}
+
+.ios-account-filter-card__body {
+  align-self: end;
 }
 
 .ios-account-filter-card__body strong,
@@ -1757,12 +1719,50 @@
 
 .ios-account-filter-card__side {
   justify-items: end;
+  align-self: end;
 }
 
 .ios-account-filter-card__side b {
   color: #fff;
   font-size: 15px;
   font-weight: 880;
+}
+
+.ios-account-filter-stack .ios-account-filter-card:not(.ios-account-filter-card--rank-0) .ios-account-filter-card__body {
+  align-self: start;
+}
+
+.ios-account-filter-stack .ios-account-filter-card:not(.ios-account-filter-card--rank-0) .ios-account-filter-card__side {
+  align-self: start;
+}
+
+.ios-account-filter-stack .ios-account-filter-card:not(.ios-account-filter-card--rank-0):not(:hover):not(:focus-visible) .ios-account-filter-card__body,
+.ios-account-filter-stack .ios-account-filter-card:not(.ios-account-filter-card--rank-0):not(:hover):not(:focus-visible) .ios-account-filter-card__side {
+  opacity: 1;
+  translate: 0 0;
+}
+
+.ios-account-filter-stack .ios-account-filter-card:not(.ios-account-filter-card--rank-0):hover .ios-account-filter-card__body,
+.ios-account-filter-stack .ios-account-filter-card:not(.ios-account-filter-card--rank-0):hover .ios-account-filter-card__side,
+.ios-account-filter-stack .ios-account-filter-card:not(.ios-account-filter-card--rank-0):focus-visible .ios-account-filter-card__body,
+.ios-account-filter-stack .ios-account-filter-card:not(.ios-account-filter-card--rank-0):focus-visible .ios-account-filter-card__side {
+  opacity: 1;
+  translate: 0 0;
+}
+
+.ios-account-filter-stack .ios-account-filter-card:not(.ios-account-filter-card--rank-0) .ios-account-filter-card__body em {
+  display: none;
+}
+
+.ios-account-filter-stack .ios-account-filter-card:not(.ios-account-filter-card--rank-0) .ios-account-filter-card__side small {
+  display: none;
+}
+
+.ios-account-filter-card__body,
+.ios-account-filter-card__side {
+  transition:
+    opacity 220ms ease,
+    translate 260ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .ios-ledger-main {
@@ -2958,7 +2958,14 @@
     width: auto;
     height: auto;
     min-height: 0;
-    padding-bottom: 0;
+    display: grid;
+    grid-template-rows: minmax(0, 1fr);
+    gap: 0;
+    padding: 10px;
+  }
+
+  .ios-account-filter-panel__secondary {
+    display: none;
   }
 
   .ios-account-stack-summary {
@@ -2972,60 +2979,40 @@
   }
 
   .ios-account-filter-stack {
-    height: 188px;
-    padding: 6px 14px 18px 10px;
-    overflow: visible;
-  }
-
-  .ios-account-selected-slot {
-    padding: 2px 14px 9px 10px;
-  }
-
-  .ios-account-filter-card {
-    min-height: 54px;
+    height: 248px;
+    padding: 6px 0 18px;
+    overflow: hidden;
   }
 
   .ios-account-filter-card__surface {
-    grid-template-columns: 26px minmax(0, 1fr) auto;
-    min-height: 54px;
-    padding: 9px;
-    border-radius: 17px;
+    padding: 10px;
+    border-radius: 19px;
   }
 
   .ios-account-filter-card + .ios-account-filter-card {
     margin-top: 0;
   }
 
-  .ios-account-filter-stack.is-spread .ios-account-filter-card + .ios-account-filter-card {
-    margin-top: 0;
-  }
-
   .ios-account-filter-card--rank-0 {
-    --account-card-stack-y: 102px;
+    --account-card-stack-y: 78px;
   }
 
   .ios-account-filter-card--rank-1 {
     --account-card-lift: 0px;
-    --account-card-shift-x: 12px;
-    --account-card-stack-y: 68px;
+    --account-card-shift-x: 9px;
+    --account-card-stack-y: 52px;
   }
 
   .ios-account-filter-card--rank-2 {
     --account-card-lift: 0px;
-    --account-card-shift-x: 24px;
-    --account-card-stack-y: 34px;
+    --account-card-shift-x: 18px;
+    --account-card-stack-y: 26px;
   }
 
   .ios-account-filter-card--rank-3 {
     --account-card-lift: 0px;
-    --account-card-shift-x: 36px;
+    --account-card-shift-x: 27px;
     --account-card-stack-y: 0px;
-  }
-
-  .ios-account-filter-card__check {
-    width: 26px;
-    height: 26px;
-    border-radius: 10px;
   }
 
   .ios-account-filter-card__body strong,
@@ -3197,21 +3184,22 @@
 
   .ios-account-ledger-workspace {
     grid-template-columns: minmax(276px, 0.44fr) minmax(0, 1fr) minmax(276px, 0.44fr);
+    gap: 16px;
   }
 
   .ios-account-filter-panel {
-    top: 100px;
+    top: 88px;
     right: 16px;
-    width: min(300px, calc(100vw - 32px));
-    height: calc(100svh - 114px);
+    width: 276px;
+    height: calc(100svh - 102px);
+    padding: 12px 14px 14px;
   }
 
-  .ios-account-filter-card {
-    min-height: 76px;
+  .ios-account-filter-stack {
+    height: 332px;
   }
 
   .ios-account-filter-card__surface {
-    min-height: 76px;
     padding: 11px;
   }
 
@@ -3219,29 +3207,25 @@
     margin-top: 0;
   }
 
-  .ios-account-filter-stack.is-spread .ios-account-filter-card + .ios-account-filter-card {
-    margin-top: 0;
-  }
-
   .ios-account-filter-card--rank-0 {
-    --account-card-stack-y: 156px;
+    --account-card-stack-y: 96px;
   }
 
   .ios-account-filter-card--rank-1 {
     --account-card-lift: 0px;
-    --account-card-shift-x: 16px;
-    --account-card-stack-y: 104px;
+    --account-card-shift-x: 12px;
+    --account-card-stack-y: 64px;
   }
 
   .ios-account-filter-card--rank-2 {
     --account-card-lift: 0px;
-    --account-card-shift-x: 32px;
-    --account-card-stack-y: 52px;
+    --account-card-shift-x: 24px;
+    --account-card-stack-y: 32px;
   }
 
   .ios-account-filter-card--rank-3 {
     --account-card-lift: 0px;
-    --account-card-shift-x: 48px;
+    --account-card-shift-x: 36px;
     --account-card-stack-y: 0px;
   }
 
