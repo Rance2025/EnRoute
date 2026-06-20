@@ -521,6 +521,57 @@ describe('AmapCanvas footprint layer wiring', () => {
     )
   })
 
+  it('keeps all longitudes eligible for footprint sampling after the world map camera settles', async () => {
+    let isWorldView = false
+    const setZoomAndCenter = vi.fn(() => {
+      isWorldView = true
+    })
+    const loadFootprints = createDeferred<FootprintPoint[]>()
+    const { layerRecords, workerInstances, zoomEndHandlers } = await renderFootprintMassMarks({
+      loadFootprintsPromise: loadFootprints.promise,
+      mapOverrides: {
+        getZoom: () => (isWorldView ? 2 : 6),
+        lnglatToPixel: ([longitude]: [number, number], zoom: number) => ({
+          x: longitude <= -180 ? 0 : 256 * 2 ** zoom,
+          y: 0,
+        }),
+        containerToLngLat: (point: { x: number; y: number }) => ({
+          getLng: () => (isWorldView ? -180 : point.x === 0 ? 120 : 122),
+          getLat: () => (point.y === 0 ? 85.05112878 : -85.05112878),
+        }),
+        setZoomAndCenter,
+      },
+    })
+
+    await act(async () => {
+      loadFootprints.resolve(loadedPoints)
+      await Promise.resolve()
+    })
+    layerRecords[0].update.mockClear()
+    workerInstances[0].aggregate.mockClear()
+
+    fireEvent.click(screen.getByRole('button', { name: '显示世界地图' }))
+
+    await act(async () => {
+      for (const handler of zoomEndHandlers) handler()
+      await Promise.resolve()
+    })
+
+    await waitFor(() => {
+      expect(layerRecords[0].update).toHaveBeenCalled()
+    })
+    expect(workerInstances[0].aggregate).toHaveBeenLastCalledWith(expect.objectContaining({
+      viewportBounds: expect.objectContaining({
+        west: -180,
+        east: 180,
+      }),
+    }))
+    expect(layerRecords[0].update).toHaveBeenLastCalledWith(expect.arrayContaining([
+      expect.objectContaining({ id: '1' }),
+      expect.objectContaining({ id: '2' }),
+    ]))
+  })
+
   it('keeps the current-location toolbar action wired to AMap Geolocation', async () => {
     const loadFootprints = createDeferred<FootprintPoint[]>()
     const { geolocationConstructor, geolocationGetCurrentPosition } = await renderFootprintMassMarks({

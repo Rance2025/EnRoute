@@ -113,6 +113,17 @@ describe('aggregateFootprintPoints', () => {
     expect(result[0].longitude).toBeCloseTo(121.511383, 5)
   })
 
+  it('keeps points visible when the viewport spans the full world longitude range', () => {
+    const result = aggregateFootprintPoints({
+      points: [point('1', 121.511383, 31.296564), point('2', -30, 31.296564)],
+      zoom: 2,
+      cellSizePx: 8,
+      viewportBounds: { west: -180, south: -85.05112878, east: 180, north: 85.05112878 },
+    })
+
+    expect(result.map((sample) => sample.count).reduce((sum, count) => sum + count, 0)).toBe(2)
+  })
+
   it('keeps an antimeridian bucket representative near the wrapped world edge', () => {
     const result = aggregateFootprintPoints({
       points: [point('1', 179.999, 0), point('2', -179.999, 0)],
