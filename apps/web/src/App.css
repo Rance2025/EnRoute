@@ -1241,6 +1241,7 @@
 .map-stage {
   --map-chrome-x: max(24px, env(safe-area-inset-right));
   --map-chrome-y: max(24px, env(safe-area-inset-bottom));
+  --map-chrome-top: max(24px, env(safe-area-inset-top));
 
   position: absolute;
   inset: 0 0 0 var(--data-panel-width);
@@ -2666,7 +2667,7 @@
 .footprint-debug-panel {
   position: absolute;
   right: var(--map-chrome-x);
-  bottom: calc(var(--map-chrome-y) + 66px);
+  top: var(--map-chrome-top);
   z-index: 2;
   display: grid;
   width: 168px;
@@ -2706,7 +2707,13 @@
   font-variant-numeric: tabular-nums;
 }
 
-.map-toolbar > button {
+.map-toolbar__settings {
+  position: relative;
+  display: grid;
+  overflow: visible;
+}
+
+.map-toolbar__button {
   display: grid;
   width: 38px;
   height: 38px;
@@ -2722,13 +2729,13 @@
     transform 160ms ease;
 }
 
-.map-toolbar > button:hover {
+.map-toolbar__button:hover {
   color: #14211f;
   background: rgba(25, 34, 32, 0.08);
   transform: translateY(-1px);
 }
 
-.map-toolbar > button:focus-visible {
+.map-toolbar__button:focus-visible {
   outline: 2px solid rgba(38, 58, 54, 0.38);
   outline-offset: 3px;
 }
@@ -2907,7 +2914,7 @@
     overflow: visible;
   }
 
-  .map-toolbar > button {
+  .map-toolbar__button {
     flex: 0 0 38px;
   }
 

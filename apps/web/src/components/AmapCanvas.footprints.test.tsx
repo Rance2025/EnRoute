@@ -116,6 +116,7 @@ async function renderFootprintMassMarks({
   }) {
     this.getCurrentPosition = geolocationGetCurrentPosition
   })
+  const amapPlugin = vi.fn((_name: string, callback: () => void) => callback())
   const createMassFootprintLayer = vi.fn(() => {
     const layer = {
       destroy: vi.fn(),
@@ -197,7 +198,7 @@ async function renderFootprintMassMarks({
           public northEast: [number, number],
         ) {}
       },
-      plugin: vi.fn((_name: string, callback: () => void) => callback()),
+      plugin: amapPlugin,
     })),
   }))
 
@@ -227,6 +228,7 @@ async function renderFootprintMassMarks({
   return {
     completeHandlers,
     createMassFootprintLayer,
+    amapPlugin,
     geolocationConstructor,
     geolocationGetCurrentPosition,
     layerRecords,
@@ -558,18 +560,19 @@ describe('AmapCanvas footprint layer wiring', () => {
   })
 
   it('keeps the current-location toolbar action wired to AMap Geolocation', async () => {
-    const { geolocationConstructor, geolocationGetCurrentPosition } = await renderFootprintMassMarks()
+    const {
+      amapPlugin,
+      geolocationConstructor,
+      geolocationGetCurrentPosition,
+    } = await renderFootprintMassMarks()
 
     await waitFor(() => expect(geolocationConstructor).toHaveBeenCalledTimes(1))
 
+    expect(amapPlugin).toHaveBeenCalledWith('AMap.Geolocation', expect.any(Function))
     expect(geolocationConstructor).toHaveBeenCalledWith({
       enableHighAccuracy: true,
       timeout: 8000,
       zoomToAccuracy: true,
-      position: {
-        right: '24px',
-        bottom: '136px',
-      },
     })
 
     fireEvent.click(screen.getByRole('button', { name: '定位当前位置' }))
