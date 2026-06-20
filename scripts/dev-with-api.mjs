@@ -3,11 +3,15 @@ import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-if (isMainModule()) {
-  runDevWithApi()
-}
-
 const require = createRequire(import.meta.url)
+
+if (isMainModule()) {
+  if (process.argv.includes('--print-dev-commands')) {
+    process.stdout.write(`${JSON.stringify(createDevCommands())}\n`)
+  } else {
+    runDevWithApi()
+  }
+}
 
 export function createDevCommands() {
   const viteBinPath = join(dirname(require.resolve('vite/package.json')), 'bin', 'vite.js')
