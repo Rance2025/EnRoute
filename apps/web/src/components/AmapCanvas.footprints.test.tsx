@@ -264,15 +264,15 @@ afterEach(() => {
 })
 
 describe('AmapCanvas footprint layer wiring', () => {
-  it('starts the single-world map camera on the render-world center', async () => {
+  it('starts the map camera on the first full-world coverage threshold', async () => {
     const { mapConstructorCalls } = await renderFootprintMassMarks({
       containerSize: { width: 1432, height: 815 },
     })
 
     expect(mapConstructorCalls[0]).toEqual(expect.objectContaining({
       center: [0, 0],
-      zoom: 2.02,
-      zooms: [2.02, 20],
+      zoom: 2.48,
+      zooms: [2, 20],
     }))
   })
 
@@ -719,6 +719,27 @@ describe('AmapCanvas footprint layer wiring', () => {
     await waitFor(() => expect(resize).toHaveBeenCalled())
     await waitFor(() => expect(layerRecords[0].update).toHaveBeenLastCalledWith(resizedSnapshot.points))
     expect(loadFootprintSnapshot).toHaveBeenCalledTimes(2)
+  })
+
+  it('recenters the locked world camera on the full-world center after resizing', async () => {
+    const setZoomAndCenter = vi.fn()
+    await renderFootprintMassMarks({
+      containerSize: { width: 1432, height: 815 },
+      mapOverrides: {
+        getZoom: () => 6,
+        getCenter: () => ({ getLng: () => 120, getLat: () => 31 }),
+        setZoomAndCenter,
+      },
+    })
+
+    await waitFor(() => expect(setZoomAndCenter).toHaveBeenCalled())
+    setZoomAndCenter.mockClear()
+
+    window.dispatchEvent(new Event('resize'))
+
+    await waitFor(() => {
+      expect(setZoomAndCenter).toHaveBeenCalledWith(2.48, [0, 0], true)
+    })
   })
 
   it('destroys the native MassMarks footprint layer on unmount', async () => {

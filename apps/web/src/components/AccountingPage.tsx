@@ -17,14 +17,19 @@ import {
   NewTransactionDialog,
 } from './accounting/LedgerWorkspace'
 
-type AccountingView = 'workspace' | 'analytics'
+export type AccountingSection = 'workspace' | 'analytics'
 
 type AccountingPageProps = {
+  section: AccountingSection
   timeRange: TimeRangeSelection
+  onSectionChange: (section: AccountingSection) => void
 }
 
-export function AccountingPage({ timeRange }: AccountingPageProps) {
-  const [view, setView] = useState<AccountingView>('workspace')
+export function AccountingPage({
+  section,
+  timeRange,
+  onSectionChange,
+}: AccountingPageProps) {
   const [selectedAccountId, setSelectedAccountId] = useState<string>('all')
   const [activeTransaction, setActiveTransaction] = useState<Transaction | null>(null)
   const [isNewTransactionOpen, setIsNewTransactionOpen] = useState(false)
@@ -45,7 +50,7 @@ export function AccountingPage({ timeRange }: AccountingPageProps) {
 
   return (
     <section className="accounting-page" aria-label="iOS 记账工作台">
-      {view === 'workspace' ? (
+      {section === 'workspace' ? (
         <LedgerWorkspace
           dataset={ledgerAtlasDataset}
           summaries={accountSummaries}
@@ -54,18 +59,18 @@ export function AccountingPage({ timeRange }: AccountingPageProps) {
           onSelectAccount={setSelectedAccountId}
           onSelectTransaction={setActiveTransaction}
           onCreateTransaction={() => setIsNewTransactionOpen(true)}
-          onOpenAnalytics={() => setView('analytics')}
+          onOpenAnalytics={() => onSectionChange('analytics')}
         />
       ) : null}
 
-      {view === 'analytics' ? (
+      {section === 'analytics' ? (
         <AnalyticsWorkspace
           dataset={ledgerAtlasDataset}
           metrics={metrics}
           transactions={transactions}
           categoryStats={categoryStats}
           tagStats={tagStats}
-          onBackToLedger={() => setView('workspace')}
+          onBackToLedger={() => onSectionChange('workspace')}
         />
       ) : null}
 

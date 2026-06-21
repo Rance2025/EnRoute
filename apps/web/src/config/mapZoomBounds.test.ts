@@ -194,7 +194,7 @@ describe('bounded map zooming', () => {
     vi.useRealTimers()
   })
 
-  it('preserves longitude and latitude while zooming to minimum AMap zoom', () => {
+  it('preserves longitude and latitude while zooming to the first coverage threshold', () => {
     vi.useFakeTimers()
     const container = document.createElement('div')
     Object.defineProperties(container, {
@@ -217,9 +217,40 @@ describe('bounded map zooming', () => {
     vi.runAllTimers()
 
     const lastCall = map.setZoomAndCenter.mock.calls.at(-1)
-    expect(lastCall?.[0]).toBeCloseTo(2.02)
+    expect(lastCall?.[0]).toBeCloseTo(2.48)
     expect(lastCall?.[1][0]).toBeCloseTo(104)
     expect(lastCall?.[1][1]).toBeCloseTo(35)
+
+    vi.useRealTimers()
+  })
+
+  it('zooms out to the full-longitude threshold when it is reached before full latitude', () => {
+    vi.useFakeTimers()
+    const container = document.createElement('div')
+    Object.defineProperties(container, {
+      clientWidth: { value: 1308 },
+      clientHeight: { value: 1080 },
+    })
+    let zoom = 2.8
+    let center: [number, number] = [104, 35]
+    const map = {
+      setStatus: vi.fn(),
+      getZoom: vi.fn(() => zoom),
+      getCenter: vi.fn(() => lngLat(center)),
+      setZoomAndCenter: vi.fn((nextZoom: number, nextCenter: [number, number]) => {
+        zoom = nextZoom
+        center = nextCenter
+      }),
+    }
+
+    zoomByStep(map, container, renderBounds, -1)
+    vi.runAllTimers()
+
+    const lastCall = map.setZoomAndCenter.mock.calls.at(-1)
+    expect(lastCall?.[0]).toBeCloseTo(2.35)
+    expect(lastCall?.[1][0]).toBeCloseTo(104)
+    expect(lastCall?.[1][1]).toBeGreaterThan(renderBounds.southWest[1])
+    expect(lastCall?.[1][1]).toBeLessThan(renderBounds.northEast[1])
 
     vi.useRealTimers()
   })
@@ -236,7 +267,7 @@ describe('bounded map zooming', () => {
     })
     const map: BoundedZoomMap = {
       setStatus: vi.fn(),
-      getZoom: () => 2.02,
+      getZoom: () => 2.48,
       getCenter: () => lngLat([104, 0]),
       setZoomAndCenter: vi.fn(),
     }

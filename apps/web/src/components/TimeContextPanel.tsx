@@ -3,7 +3,7 @@ import { useEffect, useState, type CSSProperties } from 'react'
 import { ledgerAtlasDataset } from '../accounting/ledgerAtlasData'
 import { formatCnyFromCents } from '../accounting/money'
 import { getPeriodMetrics } from '../accounting/selectors'
-import type { AppView } from '../App'
+import type { AppView } from '../appLayout'
 import { SegmentedControl, type SegmentedOption } from './SegmentedControl'
 import {
   createCurrentSelection,
@@ -64,6 +64,7 @@ const weekdayLabels = ['一', '二', '三', '四', '五', '六', '日']
 type TimeContextPanelProps = {
   view: AppView
   selection: TimeRangeSelection
+  secondaryContextLabel?: string
   metricItems?: TimeContextMetricItem[]
   onSelectionChange: (selection: TimeRangeSelection) => void
 }
@@ -79,6 +80,7 @@ type CustomDatePickerMode = 'day' | 'month'
 
 export function TimeContextPanel({
   metricItems,
+  secondaryContextLabel,
   view,
   selection,
   onSelectionChange,
@@ -166,7 +168,7 @@ export function TimeContextPanel({
         <header className="time-context-card">
           <div className="time-context-card__top">
             <div>
-              <span>全局时间范围</span>
+              <span>{secondaryContextLabel ? `${secondaryContextLabel}时间范围` : '全局时间范围'}</span>
               <h2>{heading.title}</h2>
               <p>{heading.detail}</p>
             </div>

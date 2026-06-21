@@ -27,7 +27,7 @@ export function calculateSingleWorldMapPaneLayout({
   worldWidthPx,
 }: SingleWorldMapPaneLayoutOptions) {
   const normalizedViewportWidth = Math.max(viewportWidth, 0)
-  const singleWorldWidth = Math.max(worldWidthPx, 0)
+  const singleWorldWidth = Math.ceil(Math.max(worldWidthPx, 0))
   const mapPaneWidth = Math.min(normalizedViewportWidth, singleWorldWidth)
 
   return {

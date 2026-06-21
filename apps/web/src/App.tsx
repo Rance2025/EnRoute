@@ -1,6 +1,13 @@
 import './App.css'
 
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react'
+import {
+  BarChart3,
+  Footprints,
+  List,
+  Shapes,
+  type LucideIcon,
+} from 'lucide-react'
 
 import { AccountingPage } from './components/AccountingPage'
 import { AmapCanvas, type FootprintMetrics } from './components/AmapCanvas'
@@ -11,8 +18,11 @@ import {
 } from './components/mapMetricFormat'
 import { SegmentedControl, type SegmentedOption } from './components/SegmentedControl'
 import { TimeContextPanel, type TimeContextMetricItem } from './components/TimeContextPanel'
+import {
+  calculateUnifiedDataPanelWidth,
+  type AppView,
+} from './appLayout'
 import { getAmapConfig, type AmapConfig } from './config/amap'
-import { calculateFallbackSingleWorldPaneLayout } from './config/mapPaneLayout'
 import {
   createCurrentSelection,
   createTodaySelection,
@@ -23,7 +33,13 @@ type AppProps = {
   amapConfig?: AmapConfig
 }
 
-export type AppView = 'overview' | 'map' | 'schedule' | 'accounting'
+type SecondaryNavId = 'footprints' | 'regions' | 'stats' | 'ledger'
+type SecondaryNavItem = {
+  id: SecondaryNavId
+  label: string
+  icon: LucideIcon
+}
+type SecondaryNavSelection = Record<AppView, SecondaryNavId>
 
 const viewOptions: Array<SegmentedOption<AppView>> = [
   { value: 'overview', label: '概览', disabled: true },
@@ -31,9 +47,24 @@ const viewOptions: Array<SegmentedOption<AppView>> = [
   { value: 'schedule', label: '日程', disabled: true },
   { value: 'accounting', label: '记账' },
 ]
-
-function calculateUnifiedPanelFallbackWidth(viewportWidth: number) {
-  return Math.round(Math.min(Math.max(viewportWidth * 0.26, 320), 420))
+const secondaryNavItemsByView: Record<AppView, SecondaryNavItem[]> = {
+  overview: [],
+  map: [
+    { id: 'footprints', label: '足迹', icon: Footprints },
+    { id: 'regions', label: '区域', icon: Shapes },
+    { id: 'stats', label: '统计', icon: BarChart3 },
+  ],
+  schedule: [],
+  accounting: [
+    { id: 'ledger', label: '流水', icon: List },
+    { id: 'stats', label: '统计', icon: BarChart3 },
+  ],
+}
+const defaultSecondaryNavSelection: SecondaryNavSelection = {
+  overview: 'stats',
+  map: 'footprints',
+  schedule: 'stats',
+  accounting: 'ledger',
 }
 
 function getViewportSize() {
@@ -46,6 +77,9 @@ function getViewportSize() {
 function App({ amapConfig }: AppProps) {
   const resolvedAmapConfig = useMemo(() => amapConfig ?? getAmapConfig(), [amapConfig])
   const [view, setView] = useState<AppView>('map')
+  const [secondaryNavSelection, setSecondaryNavSelection] = useState<SecondaryNavSelection>(
+    defaultSecondaryNavSelection,
+  )
   const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRangeSelection>(
     createTodaySelection,
   )
@@ -54,19 +88,7 @@ function App({ amapConfig }: AppProps) {
     totalDistanceMeters: 0,
     averageDistanceMetersPerDay: 0,
   })
-  const [mapPanelWidth, setMapPanelWidth] = useState(0)
   const [viewportSize, setViewportSize] = useState(getViewportSize)
-  const fallbackLayout = useMemo(
-    () =>
-      calculateFallbackSingleWorldPaneLayout({
-        viewportWidth: viewportSize.width,
-        viewportHeight: viewportSize.height,
-      }),
-    [viewportSize.height, viewportSize.width],
-  )
-  const handlePanelWidthChange = useCallback((width: number) => {
-    setMapPanelWidth(width)
-  }, [])
   const handleViewChange = useCallback((nextView: AppView) => {
     setView(nextView)
 
@@ -106,11 +128,14 @@ function App({ amapConfig }: AppProps) {
     }
   }, [view])
 
-  const measuredDataPanelWidth = Math.max(mapPanelWidth, fallbackLayout.sidePanelWidth)
-  const dataPanelWidth =
-    view === 'map'
-      ? measuredDataPanelWidth
-      : Math.max(measuredDataPanelWidth, calculateUnifiedPanelFallbackWidth(viewportSize.width))
+  const dataPanelWidth = calculateUnifiedDataPanelWidth({
+    view,
+    viewportSize,
+  })
+  const secondaryNavItems = secondaryNavItemsByView[view]
+  const activeSecondaryNavId = secondaryNavSelection[view]
+  const activeSecondaryNavItem = secondaryNavItems.find((item) => item.id === activeSecondaryNavId)
+    ?? secondaryNavItems[0]
   const mapMetricItems = useMemo<TimeContextMetricItem[]>(() => [
     { label: '足迹总数', value: formatMetricCount(footprintMetrics.selectedCount) },
     { label: '总距离', value: formatDistanceMeters(footprintMetrics.totalDistanceMeters) },
@@ -142,21 +167,58 @@ function App({ amapConfig }: AppProps) {
 
       <TimeContextPanel
         metricItems={view === 'map' ? mapMetricItems : undefined}
+        secondaryContextLabel={activeSecondaryNavItem?.label}
         view={view}
         selection={selectedTimeRange}
         onSelectionChange={setSelectedTimeRange}
       />
+
+      <nav className="secondary-nav-rail" aria-label="二级导航">
+        <div className="secondary-nav-rail__items">
+          {secondaryNavItems.map((item) => {
+            const Icon = item.icon
+            const isActive = item.id === activeSecondaryNavId
+
+            return (
+              <button
+                key={item.id}
+                type="button"
+                className={isActive ? 'secondary-nav-rail__button is-active' : 'secondary-nav-rail__button'}
+                aria-pressed={isActive}
+                title={item.label}
+                onClick={() =>
+                  setSecondaryNavSelection((current) => ({
+                    ...current,
+                    [view]: item.id,
+                  }))
+                }
+              >
+                <Icon size={18} strokeWidth={1.85} aria-hidden="true" />
+                <span>{item.label}</span>
+              </button>
+            )
+          })}
+        </div>
+      </nav>
 
       {view === 'map' ? (
         <AmapCanvas
           config={resolvedAmapConfig}
           timeRange={selectedTimeRange}
           onFootprintMetricsChange={setFootprintMetrics}
-          onPanelWidthChange={handlePanelWidthChange}
         />
       ) : (
         <section className="main-workspace" aria-label="在途 EnRoute 主工作区">
-          <AccountingPage timeRange={selectedTimeRange} />
+          <AccountingPage
+            section={activeSecondaryNavId === 'stats' ? 'analytics' : 'workspace'}
+            timeRange={selectedTimeRange}
+            onSectionChange={(nextSection) =>
+              setSecondaryNavSelection((current) => ({
+                ...current,
+                accounting: nextSection === 'analytics' ? 'stats' : 'ledger',
+              }))
+            }
+          />
         </section>
       )}
     </main>

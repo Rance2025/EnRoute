@@ -14,16 +14,16 @@ function lngLat([lng, lat]: [number, number]) {
   }
 }
 
-describe('single-world map pane layout', () => {
+describe('map world-width layout helpers', () => {
   it('moves only the surplus desktop width into the left panel', () => {
     expect(
       calculateSingleWorldMapPaneLayout({
         viewportWidth: 1440,
-        worldWidthPx: 1024,
+        worldWidthPx: 1024.4,
       }),
     ).toEqual({
-      mapPaneWidth: 1024,
-      sidePanelWidth: 416,
+      mapPaneWidth: 1025,
+      sidePanelWidth: 415,
     })
   })
 
@@ -51,15 +51,15 @@ describe('single-world map pane layout', () => {
     })
   })
 
-  it('sizes the map pane from the cropped-world zoom used by the live map', () => {
+  it('sizes the fallback map pane from the full-latitude world zoom', () => {
     expect(
       calculateFallbackSingleWorldPaneLayout({
         viewportWidth: 2048,
         viewportHeight: 1152,
       }),
     ).toEqual({
-      mapPaneWidth: expect.closeTo(1468.37, 2),
-      sidePanelWidth: expect.closeTo(579.63, 2),
+      mapPaneWidth: 1145,
+      sidePanelWidth: 903,
     })
   })
 
