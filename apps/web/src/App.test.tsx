@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { siAlipay, siMeituan } from 'simple-icons'
 
 import App from './App'
@@ -35,6 +35,7 @@ const missingAmapConfig = {
 
 afterEach(() => {
   cleanup()
+  vi.restoreAllMocks()
 })
 
 beforeEach(() => {
@@ -220,6 +221,61 @@ describe('App', () => {
     )
     expect(screen.getByRole('main')).toHaveClass('app-shell--overview')
     expect(screen.getByLabelText('在途 EnRoute 概览工作区')).toBeInTheDocument()
+  })
+
+  it('switches top navigation pages by dragging the active slider', () => {
+    const { container } = render(<App amapConfig={missingAmapConfig} />)
+
+    const mainNav = container.querySelector('.app-nav') as HTMLElement
+    const tabs = container.querySelector('.app-nav__tabs') as HTMLElement
+    const slider = within(mainNav).getByRole('slider')
+
+    Object.assign(tabs, {
+      setPointerCapture: () => undefined,
+      hasPointerCapture: () => true,
+      releasePointerCapture: () => undefined,
+    })
+
+    vi.spyOn(tabs, 'getBoundingClientRect').mockReturnValue({
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      right: 400,
+      bottom: 52,
+      width: 400,
+      height: 52,
+      toJSON: () => ({}),
+    } as DOMRect)
+    within(mainNav).getAllByRole('button').forEach((button, index) => {
+      vi.spyOn(button, 'getBoundingClientRect').mockReturnValue({
+        x: index * 100,
+        y: 0,
+        top: 0,
+        left: index * 100,
+        right: (index + 1) * 100,
+        bottom: 52,
+        width: 100,
+        height: 52,
+        toJSON: () => ({}),
+      } as DOMRect)
+    })
+
+    fireEvent.pointerDown(slider, { clientX: 150, pointerId: 1 })
+    fireEvent.pointerMove(tabs, { clientX: 250, pointerId: 1 })
+
+    expect(tabs).toHaveClass('is-dragging')
+    expect((tabs as HTMLElement).style.getPropertyValue('--top-nav-thumb-preview-left')).toBe(
+      '200px',
+    )
+    expect(within(mainNav).getAllByRole('button')[1]).toHaveAttribute('aria-pressed', 'true')
+
+    fireEvent.pointerUp(tabs, { clientX: 250, pointerId: 1 })
+
+    expect(within(mainNav).getAllByRole('button')[2]).toHaveAttribute('aria-pressed', 'true')
+    expect(tabs).not.toHaveClass('is-dragging')
+    expect((tabs as HTMLElement).style.getPropertyValue('--top-nav-thumb-preview-left')).toBe('')
+    expect(screen.getByRole('main')).toHaveClass('app-shell--accounting')
   })
 
   it('opens a paged settings dialog from the time panel and toggles mixed navigation labels', () => {
