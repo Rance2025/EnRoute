@@ -171,7 +171,7 @@ export function calculateNextBoundedDragCenter({
   const minLatitude = bounds.southWest[1] + viewportEdgeOffsets.south + LATITUDE_EDGE_PADDING_DEGREES
   const maxLatitude = bounds.northEast[1] - viewportEdgeOffsets.north - LATITUDE_EDGE_PADDING_DEGREES
   const preserveOutOfRangeLatitude =
-    currentZoom !== undefined && isAtMinimumWorldZoom(currentZoom, viewportSize.height)
+    currentZoom !== undefined && isAtMinimumWorldZoom(currentZoom, viewportSize)
 
   return [
     targetLngLat[0],

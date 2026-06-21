@@ -62,54 +62,115 @@ describe('map chrome layout', () => {
     expect(cssRule('.brand-header h1')).toBe('')
   })
 
-  it('reserves a left data panel and keeps the map in the remaining workspace', () => {
+  it('reserves a left shared time panel, a right secondary navigation rail, and keeps the map between them', () => {
     const appShellRule = cssRule('.app-shell')
     const panelRule = cssRule('.time-context-panel')
+    const secondaryRailRule = cssRule('.secondary-nav-rail')
     const workspaceRule = cssRule('.main-workspace')
     const stageRule = cssRule('.map-stage')
 
     expect(appShellRule).toContain('position: relative')
-    expect(appShellRule).toContain('--page-board-bg: #eef1f0')
-    expect(panelRule).toContain('background: var(--page-board-bg)')
+    expect(appShellRule).toContain('--page-board-bg:')
+    expect(appShellRule).toContain('--secondary-rail-width: 60px')
+    expect(appShellRule).toContain('rgba(238, 244, 242, 0.66)')
+    expect(appShellRule).toContain('rgba(204, 214, 215, 0.78)')
+    expect(appShellRule).toContain('#ccd6d7')
+    expect(appShellRule).toContain('background: var(--page-board-bg)')
+    expect(appSource).toContain('aria-label="二级导航"')
+    expect(appSource).toContain('className="secondary-nav-rail"')
+    expect(appSource).toContain('const secondaryNavItemsByView')
+    expect(appSource).toContain("label: '足迹'")
+    expect(appSource).toContain("label: '区域'")
+    expect(appSource).toContain("label: '统计'")
+    expect(appSource).toContain("label: '流水'")
+    expect(secondaryRailRule).toContain('position: absolute')
+    expect(secondaryRailRule).toContain('inset: 0 0 0 auto')
+    expect(secondaryRailRule).toContain('width: var(--secondary-rail-width)')
+    expect(secondaryRailRule).toContain('height: 100svh')
+    expect(secondaryRailRule).toContain('align-items: center')
+    expect(secondaryRailRule).toContain('justify-content: center')
+    expect(secondaryRailRule).toContain('padding: 0 8px')
+    expect(secondaryRailRule).toContain('box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.42)')
+    expect(secondaryRailRule).toContain('background: transparent')
+    expect(secondaryRailRule).toContain('pointer-events: auto')
+    expect(panelRule).toContain('inset: 0 auto 0 0')
+    expect(panelRule).toContain('background: transparent')
+    expect(panelRule).not.toContain('backdrop-filter')
     expect(panelRule).not.toContain('border-right')
+    expect(panelRule).toContain('box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.42)')
     expect(panelRule).toContain('width: var(--data-panel-width, 0px)')
-    expect(panelRule).toContain('overflow: hidden')
+    expect(panelRule).toContain('overflow: visible')
+    expect(panelRule).toContain('pointer-events: none')
     expect(cssRule('.app-shell:not(.has-data-panel) .time-context-panel')).toContain(
       'display: none',
     )
-    expect(workspaceRule).toContain('inset: 0 0 0 var(--data-panel-width)')
-    expect(workspaceRule).toContain('width: calc(100vw - var(--data-panel-width))')
-    expect(stageRule).toContain('inset: 0 0 0 var(--data-panel-width)')
-    expect(stageRule).toContain('width: calc(100vw - var(--data-panel-width))')
-    expect(stageRule).toContain('background:')
-    expect(stageRule).toContain('var(--page-board-bg)')
-    expect(cssRule('.amap-surface')).toContain('background: var(--page-board-bg)')
+    expect(workspaceRule).toContain(
+      'inset: 0 var(--secondary-rail-width) 0 var(--data-panel-width)',
+    )
+    expect(workspaceRule).toContain(
+      'width: calc(100vw - var(--data-panel-width) - var(--secondary-rail-width))',
+    )
+    expect(workspaceRule).toContain('overflow: visible')
+    expect(workspaceRule).toContain('background: transparent')
+    expect(stageRule).toContain(
+      'inset: 0 var(--secondary-rail-width) 0 var(--data-panel-width)',
+    )
+    expect(stageRule).toContain(
+      'width: calc(100vw - var(--data-panel-width) - var(--secondary-rail-width))',
+    )
+    expect(stageRule).toContain('background: transparent')
+    expect(stageRule).not.toContain('var(--page-board-bg)')
+    expect(cssRule('.app-shell--map .secondary-nav-rail')).toBe('')
+    expect(cssRule('.app-shell--accounting .secondary-nav-rail')).toBe('')
+    expect(cssRule('.app-shell--schedule .secondary-nav-rail')).toBe('')
+    expect(cssRule('.secondary-nav-rail__button')).toContain('box-sizing: border-box')
+    expect(cssRule('.secondary-nav-rail__button')).toContain('width: 44px')
+    expect(cssRule('.secondary-nav-rail__button')).toContain('height: 44px')
+    expect(cssRule('.secondary-nav-rail__button')).toContain('aspect-ratio: 1 / 1')
+    expect(cssRule('.secondary-nav-rail__button.is-active')).toContain('background: #123f35')
+    expect(cssRule('.amap-surface')).toContain('background: transparent')
+    expect(cssRule('.amap-surface')).not.toContain('var(--page-board-bg)')
   })
 
   it('keeps accounting in a three-panel shell with the shared time rail visible', () => {
     const accountingAppShellRule = cssRule('.app-shell--accounting')
     const accountingShellRule = cssRule('.app-shell--accounting .time-context-panel')
     const accountingWorkspaceRule = cssRule('.app-shell--accounting .main-workspace')
+    const accountingRailScrollRule = cssRule('.app-shell--accounting .time-context-panel__scroll')
     const accountingPageRule = cssRule('.accounting-page')
     const workspaceRule = cssRule('.ios-account-ledger-workspace')
     const ledgerMainPlacementRule = cssRule('.ios-ledger-main')
     const accountPanelPlacementRule = cssRule('.ios-account-filter-panel')
     const mobileMedia = mediaBlock('@media (max-width: 720px)')
 
-    expect(accountingAppShellRule).toContain('--page-board-bg:')
-    expect(accountingAppShellRule).toContain('rgba(238, 244, 242, 0.66)')
-    expect(accountingAppShellRule).toContain('rgba(204, 214, 215, 0.78)')
-    expect(accountingAppShellRule).toContain('#ccd6d7')
-    expect(accountingAppShellRule).toContain('background: var(--page-board-bg)')
+    expect(accountingAppShellRule).toBe('')
     expect(accountingShellRule).not.toContain('display: none')
     expect(accountingShellRule).toBe('')
     expect(accountingShellRule).not.toContain('border-right:')
     expect(accountingShellRule).not.toContain('rgba(247, 250, 249, 0.9)')
     expect(accountingWorkspaceRule).toBe('')
+    expect(accountingRailScrollRule).toBe('')
     expect(cssRule('.time-context-panel')).toContain('width: var(--data-panel-width, 0px)')
-    expect(cssRule('.main-workspace')).toContain('inset: 0 0 0 var(--data-panel-width)')
-    expect(accountingPageRule).toContain('grid-template-columns: minmax(0, 1fr) minmax(560px, 1fr) minmax(324px, 390px)')
-    expect(accountingPageRule).toContain('padding: 96px 24px 18px')
+    expect(cssRule('.main-workspace')).toContain(
+      'inset: 0 var(--secondary-rail-width) 0 var(--data-panel-width)',
+    )
+    expect(accountingPageRule).toContain('grid-template-columns: minmax(0, 1fr) minmax(640px, 1fr) minmax(280px, 320px)')
+    expect(accountingPageRule).toContain('--accounting-outer-gutter: 36px')
+    expect(accountingPageRule).toContain('--accounting-internal-gap: 24px')
+    expect(accountingPageRule).not.toContain('--accounting-left-bleed')
+    expect(cssCustomPx(accountingPageRule, '--accounting-outer-gutter')).toBeGreaterThan(
+      cssCustomPx(accountingPageRule, '--accounting-internal-gap'),
+    )
+    expect(
+      cssCustomPx(accountingPageRule, '--accounting-outer-gutter') -
+        cssCustomPx(accountingPageRule, '--accounting-internal-gap'),
+    ).toBe(12)
+    expect(accountingPageRule).toContain('column-gap: var(--accounting-internal-gap)')
+    expect(accountingPageRule).toContain('margin-left: 0')
+    expect(accountingPageRule).toContain('width: 100%')
+    expect(accountingPageRule).toContain(
+      'padding: 96px var(--accounting-outer-gutter) 18px var(--accounting-outer-gutter)',
+    )
     expect(accountingPageRule).toContain('background: transparent')
     expect(accountingPageRule).not.toContain('#ccd6d7')
     expect(accountingPageRule).not.toContain('rgba(238, 244, 242, 0.66)')
@@ -126,19 +187,20 @@ describe('map chrome layout', () => {
         ),
         '.accounting-page',
       ),
-    ).toContain('padding: 92px 16px 14px')
+    ).toContain('--accounting-outer-gutter: 28px')
     expect(workspaceRule).toContain('grid-column: 1 / -1')
     expect(workspaceRule).toContain(
-      'grid-template-columns: minmax(560px, 1fr) minmax(324px, 390px)',
+      'grid-template-columns: minmax(640px, 1fr) minmax(280px, 320px)',
     )
+    expect(workspaceRule).toContain('gap: var(--accounting-internal-gap)')
     expect(workspaceRule).toContain('align-items: start')
     expect(workspaceRule).toContain('position: relative')
     expect(ledgerMainPlacementRule).toContain('grid-column: 1')
-    expect(ledgerMainPlacementRule).toContain('height: calc(100svh - 150px)')
+    expect(ledgerMainPlacementRule).toContain('height: calc(100svh - 114px)')
     expect(accountPanelPlacementRule).toContain('align-self: start')
     expect(accountPanelPlacementRule).toContain('grid-column: 2')
     expect(accountPanelPlacementRule).toContain('width: 100%')
-    expect(accountPanelPlacementRule).toContain('height: calc(100svh - 126px)')
+    expect(accountPanelPlacementRule).toContain('height: calc(100svh - 114px)')
     expect(accountPanelPlacementRule).toContain('margin-top: 0')
     expect(accountPanelPlacementRule).not.toContain('position: fixed')
     expect(accountPanelPlacementRule).not.toContain('right: 24px')
@@ -157,8 +219,142 @@ describe('map chrome layout', () => {
   it('keeps the shared time panel high in the left rail without a fake top spacer', () => {
     const scrollRule = cssRule('.time-context-panel__scroll')
 
-    expect(scrollRule).toContain('padding: 16px 16px 16px')
+    expect(scrollRule).toContain('--time-panel-shadow-buffer: 34px')
+    expect(scrollRule).toContain('width: calc(100% + var(--time-panel-shadow-buffer))')
+    expect(scrollRule).toContain('margin-right: calc(0px - var(--time-panel-shadow-buffer))')
+    expect(scrollRule).toContain(
+      'padding: 96px calc(24px + var(--time-panel-shadow-buffer)) 18px 24px',
+    )
+    expect(scrollRule).toContain('gap: 20px')
+    expect(scrollRule).toContain('overflow-x: hidden')
+    expect(scrollRule).toContain('overflow-y: auto')
+    expect(scrollRule).toContain('pointer-events: none')
+    expect(scrollRule).not.toContain('padding: 16px')
     expect(scrollRule).not.toContain('padding: 88px')
+    expect(cssRule('.time-context-panel__scroll > *')).toContain('pointer-events: auto')
+  })
+
+  it('keeps the left time panel layout isomorphic across navigation views', () => {
+    const sharedScrollRule = cssRule('.time-context-panel__scroll')
+
+    expect(sharedScrollRule).toContain(
+      'padding: 96px calc(24px + var(--time-panel-shadow-buffer)) 18px 24px',
+    )
+    expect(sharedScrollRule).toContain('gap: 20px')
+    expect(cssRule('.app-shell--map .time-context-panel__scroll')).toBe('')
+    expect(cssRule('.app-shell--accounting .time-context-panel__scroll')).toBe('')
+    expect(cssRule('.app-shell--schedule .time-context-panel__scroll')).toBe('')
+  })
+
+  it('keeps the accounting ledger surface unframed so the center column reads as open content', () => {
+    const ledgerRule = cssRule('.ios-ledger-main')
+
+    expect(ledgerRule).toContain('background: transparent')
+    expect(ledgerRule).toContain('border: 0')
+    expect(ledgerRule).toContain('box-shadow: none')
+    expect(ledgerRule).not.toContain('0 24px 58px')
+    expect(ledgerRule).toContain('backdrop-filter: none')
+  })
+
+  it('keeps the right account column as an unframed assistant area instead of a dominant panel', () => {
+    const accountPanelRule = cssRule('.ios-account-filter-panel')
+
+    expect(accountPanelRule).toContain('border: 0')
+    expect(accountPanelRule).toContain('background: transparent')
+    expect(accountPanelRule).toContain('box-shadow: none')
+    expect(accountPanelRule).toContain('backdrop-filter: none')
+    expect(accountPanelRule).not.toContain('0 24px 58px')
+    expect(accountPanelRule).not.toContain('rgba(255, 255, 255, 0.46)')
+  })
+
+  it('lets the time header card shadow render past the rail edge without a hard clip', () => {
+    const panelRule = cssRule('.time-context-panel')
+    const scrollRule = cssRule('.time-context-panel__scroll')
+    const cardRule = cssRule('.time-context-card')
+
+    expect(panelRule).toContain('overflow: visible')
+    expect(panelRule).toContain('pointer-events: none')
+    expect(scrollRule).toContain('--time-panel-shadow-buffer: 34px')
+    expect(scrollRule).toContain('width: calc(100% + var(--time-panel-shadow-buffer))')
+    expect(scrollRule).toContain('margin-right: calc(0px - var(--time-panel-shadow-buffer))')
+    expect(scrollRule).toContain('pointer-events: none')
+    expect(cssRule('.time-context-panel__scroll > *')).toContain('pointer-events: auto')
+    expect(cardRule).toContain('box-shadow:')
+    expect(cardRule).toContain('rgba(13, 46, 39, 0.22)')
+    expect(cardRule).not.toContain('0 18px 42px rgba(13, 46, 39, 0.24)')
+    expect(cardRule).toContain('0 18px 34px -12px')
+  })
+
+  it('balances the accounting page with the shared rail and keeps ledger content unframed', () => {
+    const accountingPageRule = cssRule('.accounting-page')
+    const workspaceRule = cssRule('.ios-account-ledger-workspace')
+    const ledgerRule = cssRule('.ios-ledger-main')
+    const ledgerScrollRule = cssRule('.accounting-scroll--ledger')
+    const accountPanelRule = cssRule('.ios-account-filter-panel')
+
+    expect(cssRule('.app-shell--accounting .time-context-panel__scroll')).toBe('')
+    expect(accountingPageRule).toContain('--accounting-outer-gutter: 36px')
+    expect(accountingPageRule).toContain('--accounting-internal-gap: 24px')
+    expect(cssCustomPx(accountingPageRule, '--accounting-outer-gutter')).toBeGreaterThan(
+      cssCustomPx(accountingPageRule, '--accounting-internal-gap'),
+    )
+    expect(
+      cssCustomPx(accountingPageRule, '--accounting-outer-gutter') -
+        cssCustomPx(accountingPageRule, '--accounting-internal-gap'),
+    ).toBe(12)
+    expect(accountingPageRule).toContain('column-gap: var(--accounting-internal-gap)')
+    expect(accountingPageRule).toContain('margin-left: 0')
+    expect(accountingPageRule).toContain('width: 100%')
+    expect(accountingPageRule).toContain(
+      'padding: 96px var(--accounting-outer-gutter) 18px var(--accounting-outer-gutter)',
+    )
+    expect(workspaceRule).toContain('gap: var(--accounting-internal-gap)')
+    expect(ledgerRule).toContain('height: calc(100svh - 114px)')
+    expect(ledgerRule).toContain('background: transparent')
+    expect(ledgerRule).toContain('border: 0')
+    expect(ledgerRule).toContain('box-shadow: none')
+    expect(ledgerRule).toContain('overflow: visible')
+    expect(ledgerScrollRule).toContain('padding: 0')
+    expect(ledgerScrollRule).toContain('gap: 10px')
+    expect(accountPanelRule).toContain('height: calc(100svh - 114px)')
+    expect(accountPanelRule).toContain('max-width: 320px')
+    expect(accountPanelRule).toContain('background: transparent')
+    expect(accountPanelRule).toContain('box-shadow: none')
+  })
+
+  it('keeps compact desktop accounting columns aligned to the shared rail', () => {
+    const compactMedia = mediaBlock(
+      '@media (min-width: 721px) and (max-width: 1240px), (min-width: 721px) and (max-height: 790px)',
+    )
+    const compactAccountingRule = cssRuleIn(compactMedia, '.accounting-page')
+
+    expect(compactAccountingRule).toContain('--accounting-outer-gutter: 28px')
+    expect(compactAccountingRule).toContain('--accounting-internal-gap: 20px')
+    expect(cssCustomPx(compactAccountingRule, '--accounting-outer-gutter')).toBeGreaterThan(
+      cssCustomPx(compactAccountingRule, '--accounting-internal-gap'),
+    )
+    expect(
+      cssCustomPx(compactAccountingRule, '--accounting-outer-gutter') -
+        cssCustomPx(compactAccountingRule, '--accounting-internal-gap'),
+    ).toBe(8)
+    expect(compactAccountingRule).toContain('column-gap: var(--accounting-internal-gap)')
+    expect(compactAccountingRule).toContain(
+      'padding: 96px var(--accounting-outer-gutter) 14px var(--accounting-outer-gutter)',
+    )
+    expect(cssRuleIn(compactMedia, '.ios-account-ledger-workspace')).toContain(
+      'grid-template-columns: minmax(500px, 1fr) minmax(252px, 286px)',
+    )
+    expect(cssRuleIn(compactMedia, '.ios-account-ledger-workspace')).toContain(
+      'gap: var(--accounting-internal-gap)',
+    )
+    expect(cssRuleIn(compactMedia, '.time-context-panel__scroll')).toContain(
+      'padding: 96px calc(24px + var(--time-panel-shadow-buffer)) 18px 24px',
+    )
+    expect(cssRuleIn(compactMedia, '.ios-ledger-main')).toContain('height: calc(100svh - 110px)')
+    expect(cssRuleIn(compactMedia, '.ios-account-filter-panel')).toContain('height: calc(100svh - 110px)')
+    expect(cssRuleIn(compactMedia, '.ios-account-filter-panel')).toContain('max-width: 286px')
+    expect(cssRuleIn(compactMedia, '.ios-account-filter-panel')).not.toContain('height: calc(100svh - 112px)')
+    expect(cssRuleIn(compactMedia, '.ios-ledger-main')).not.toContain('height: calc(100svh - 136px)')
   })
 
   it('moves accounting metrics into the time card instead of the bottom summary grid', () => {
@@ -614,7 +810,7 @@ describe('map chrome layout', () => {
     expect(cssRule('.accounting-scroll--ledger')).toContain('overflow-y: auto')
     expect(cssRule('.accounting-scroll--ledger')).toContain('overflow-x: hidden')
     expect(cssRule('.ios-account-ledger-workspace')).toContain('overflow: hidden')
-    expect(cssRule('.ios-ledger-main')).toContain('overflow: hidden')
+    expect(cssRule('.ios-ledger-main')).toContain('overflow: visible')
     expect(cssRule('.accounting-modal-card')).toContain('overflow: hidden')
     expect(cssRule('.transaction-list')).toBe('')
     expect(cssRule('.transaction-editor')).toBe('')
@@ -626,7 +822,7 @@ describe('map chrome layout', () => {
     const accountPanelRule = cssRule('.ios-account-filter-panel')
 
     expect(workspaceRule).toContain(
-      'grid-template-columns: minmax(560px, 1fr) minmax(324px, 390px)',
+      'grid-template-columns: minmax(640px, 1fr) minmax(280px, 320px)',
     )
     expect(accountPanelRule).toContain('grid-column: 2')
     expect(accountPanelRule).toContain('width: 100%')
@@ -655,12 +851,13 @@ describe('map chrome layout', () => {
     expect(panelRule).toContain('padding: 14px 18px 16px')
     expect(panelRule).toContain('grid-column: 2')
     expect(panelRule).toContain('width: 100%')
-    expect(panelRule).toContain('height: calc(100svh - 126px)')
+    expect(panelRule).toContain('max-width: 320px')
+    expect(panelRule).toContain('height: calc(100svh - 114px)')
     expect(panelRule).toContain('border-radius: 26px')
     expect(panelRule).toContain('gap: 14px')
-    expect(panelRule).toContain('background: rgba(255, 255, 255, 0.46)')
-    expect(panelRule).toContain('0 24px 58px rgba(35, 52, 48, 0.09)')
-    expect(cssRule('.ios-ledger-main')).toContain('background: rgba(255, 255, 255, 0.5)')
+    expect(panelRule).toContain('background: transparent')
+    expect(panelRule).toContain('box-shadow: none')
+    expect(cssRule('.ios-ledger-main')).toContain('background: transparent')
     expect(accountRegionRule).toContain('display: grid')
     expect(accountRegionRule).toContain('align-content: start')
     expect(accountRegionRule).toContain('overflow: visible')
@@ -967,7 +1164,7 @@ describe('map chrome layout', () => {
     const secondCardRule = cssRule('.ios-account-filter-card--rank-1')
     const backCardRule = cssRule('.ios-account-filter-card--rank-3')
 
-    expect(accountPanelRule).toContain('height: calc(100svh - 126px)')
+    expect(accountPanelRule).toContain('height: calc(100svh - 114px)')
     expect(accountPanelRule).toContain('width: 100%')
     expect(accountPanelRule).toContain('overflow: visible')
     expect(accountStackRule).toContain('margin-top: -10px')
@@ -1022,18 +1219,22 @@ describe('map chrome layout', () => {
     expect(compactTagsRule).toContain('display: none')
   })
 
-  it('initializes the map at the single-world minimum zoom', () => {
-    expect(amapCanvasSource).toContain(
-      'const initialZoom = calculateMinimumZoomForLatitudeCoverage(mapNodeRef.current.clientHeight)',
-    )
+  it('initializes the map at the first full-world coverage threshold', () => {
+    expect(amapCanvasSource).toContain('calculateMinimumZoomForViewportCoverage({')
+    expect(amapCanvasSource).toContain('viewportWidth: mapNodeRef.current.clientWidth')
+    expect(amapCanvasSource).toContain('viewportHeight: mapNodeRef.current.clientHeight')
     expect(amapCanvasSource).toContain('zoom: initialZoom')
+    expect(amapCanvasSource).toContain('zooms: [AMAP_MIN_ZOOM, 20]')
+    expect(amapCanvasSource).not.toContain('zooms: [initialZoom, 20]')
     expect(amapCanvasSource).not.toContain('zoom: config.defaultZoom')
   })
 
-  it('enforces the current map zoom against the resized single-world minimum', () => {
+  it('enforces the current map zoom against the resized coverage threshold', () => {
     expect(amapCanvasSource).toContain('currentZoom < minimumZoom')
+    expect(amapCanvasSource).toContain('currentZoom > minimumZoom')
+    expect(amapCanvasSource).toContain('isWorldViewLockedRef')
     expect(amapCanvasSource).toContain('setZoomAndCenter(')
-    expect(amapCanvasSource).toContain('calculateBoundedZoomCenter(')
+    expect(amapCanvasSource).toContain('calculateWorldCenter(config.renderBounds)')
   })
 
   it('anchors the map toolbar to the lower-right', () => {

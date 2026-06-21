@@ -1,7 +1,7 @@
 import type { ContainerPoint } from './mapDragBounds'
 import type { MapBounds } from './mapCamera'
 import {
-  calculateMinimumZoomForWorldCoverage,
+  calculateMinimumZoomForViewportCoverage,
   isAtMinimumWorldZoom,
   projectLngLat,
   unprojectWorldPoint,
@@ -64,7 +64,7 @@ export function calculateBoundedZoomCenter({
   viewportSize,
   bounds,
 }: CalculateBoundedZoomCenterOptions): [number, number] {
-  const effectiveFocalPoint = isAtMinimumWorldZoom(targetZoom, viewportSize.height)
+  const effectiveFocalPoint = isAtMinimumWorldZoom(targetZoom, viewportSize)
     ? {
         x: viewportSize.width / 2,
         y: viewportSize.height / 2,
@@ -130,7 +130,7 @@ export function installBoundedMapZoom(
     const zoomStep = calculateWheelZoomStep(event.deltaY)
     const targetZoom = clampZoom(
       currentZoom + zoomStep,
-      calculateMinimumZoomForViewport(container.clientHeight),
+      calculateMinimumZoomForViewport(container.clientWidth, container.clientHeight),
     )
 
     const rect = container.getBoundingClientRect()
@@ -165,7 +165,7 @@ export function zoomByStep(
   const currentZoom = map.getZoom()
   const targetZoom = clampZoom(
     currentZoom + TOOLBAR_ZOOM_STEP * direction,
-    calculateMinimumZoomForViewport(container.clientHeight),
+    calculateMinimumZoomForViewport(container.clientWidth, container.clientHeight),
   )
 
   const center = map.getCenter()
@@ -278,8 +278,11 @@ function calculateWheelZoomStep(deltaY: number) {
   return direction * magnitude
 }
 
-function calculateMinimumZoomForViewport(viewportHeight: number) {
-  return calculateMinimumZoomForWorldCoverage(viewportHeight)
+function calculateMinimumZoomForViewport(viewportWidth: number, viewportHeight: number) {
+  return calculateMinimumZoomForViewportCoverage({
+    viewportWidth,
+    viewportHeight,
+  })
 }
 
 function clampZoom(zoom: number, minZoom: number) {

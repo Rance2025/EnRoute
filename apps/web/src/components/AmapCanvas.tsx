@@ -2,7 +2,6 @@ import { memo, useCallback, useEffect, useRef, useState } from 'react'
 
 import { AMAP_THEMES, type AmapConfig } from '../config/amap'
 import {
-  calculateMinimumZoomForLatitudeCoverage,
   clampMapCenterToLatitudeBounds,
   installBoundedMapDrag,
 } from '../config/mapDragBounds'
@@ -12,12 +11,13 @@ import {
   resetMapCamera,
   type MapBounds,
 } from '../config/mapCamera'
+import { measureAmapWorldPixelWidthAtZoom } from '../config/mapPaneLayout'
 import {
-  calculateSingleWorldMapPaneLayout,
-  measureAmapWorldPixelWidthAtZoom,
-} from '../config/mapPaneLayout'
-import { projectLngLat } from '../config/mercator'
-import { calculateBoundedZoomCenter, installBoundedMapZoom, zoomByStep } from '../config/mapZoomBounds'
+  AMAP_MIN_ZOOM,
+  calculateMinimumZoomForViewportCoverage,
+  projectLngLat,
+} from '../config/mercator'
+import { installBoundedMapZoom, zoomByStep } from '../config/mapZoomBounds'
 import { loadFootprintSnapshot, type FootprintRenderDebug } from '../layers/footprintDataSource'
 import { createMassFootprintLayer } from '../layers/massFootprintLayer'
 import type { FootprintLngLatBounds } from '../layers/footprintTypes'
@@ -35,7 +35,6 @@ type AmapCanvasProps = {
   config: AmapConfig
   timeRange: TimeRangeSelection
   onFootprintMetricsChange?: (metrics: FootprintMetrics) => void
-  onPanelWidthChange?: (width: number) => void
 }
 
 export type FootprintMetrics = {
@@ -66,7 +65,6 @@ function AmapCanvasComponent({
   config,
   timeRange,
   onFootprintMetricsChange,
-  onPanelWidthChange,
 }: AmapCanvasProps) {
   const mapNodeRef = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<AMap.Map | null>(null)
@@ -81,6 +79,7 @@ function AmapCanvasComponent({
   const selectedFootprintBoundsRef = useRef<FootprintLngLatBounds | null>(null)
   const timeRangeRef = useRef(timeRange)
   const zoomClampTimersRef = useRef<number[]>([])
+  const isWorldViewLockedRef = useRef(true)
   const [status, setStatus] = useState<MapStatus>(
     config.isConfigured ? 'loading' : 'missing-config',
   )
@@ -172,36 +171,19 @@ function AmapCanvasComponent({
 
   const updatePaneLayout = useCallback(
     (map: AMap.Map, container: HTMLElement) => {
-      const minimumZoom = calculateMinimumZoomForLatitudeCoverage(container.clientHeight)
-      const worldWidthPx = measureAmapWorldPixelWidthAtZoom(map, minimumZoom)
-      const layout = calculateSingleWorldMapPaneLayout({
-        viewportWidth: window.innerWidth,
-        worldWidthPx,
-      })
-
-      onPanelWidthChange?.(layout.sidePanelWidth)
       window.requestAnimationFrame(() => {
         window.requestAnimationFrame(() => {
           map.resize()
           const currentZoom = map.getZoom()
-          if (currentZoom < minimumZoom) {
-            const center = map.getCenter()
+          const minimumZoom = calculateMinimumZoomForViewportCoverage({
+            viewportWidth: container.clientWidth,
+            viewportHeight: container.clientHeight,
+          })
+          const zoomIsAwayFromMinimum = currentZoom < minimumZoom || currentZoom > minimumZoom
+          if (isWorldViewLockedRef.current && zoomIsAwayFromMinimum) {
             map.setZoomAndCenter(
               minimumZoom,
-              calculateBoundedZoomCenter({
-                center: [center.getLng(), center.getLat()],
-                currentZoom,
-                targetZoom: minimumZoom,
-                focalPoint: {
-                  x: container.clientWidth / 2,
-                  y: container.clientHeight / 2,
-                },
-                viewportSize: {
-                  width: container.clientWidth,
-                  height: container.clientHeight,
-                },
-                bounds: config.renderBounds,
-              }),
+              calculateWorldCenter(config.renderBounds),
               true,
             )
           }
@@ -209,13 +191,12 @@ function AmapCanvasComponent({
         })
       })
     },
-    [config.renderBounds, onPanelWidthChange],
+    [config.renderBounds],
   )
 
   useEffect(() => {
     if (!config.isConfigured || !mapNodeRef.current) {
       setStatus('missing-config')
-      onPanelWidthChange?.(0)
       return
     }
 
@@ -229,12 +210,15 @@ function AmapCanvasComponent({
         if (disposed || !mapNodeRef.current) return
 
         amapRef.current = AMap
-        const initialZoom = calculateMinimumZoomForLatitudeCoverage(mapNodeRef.current.clientHeight)
+        const initialZoom = calculateMinimumZoomForViewportCoverage({
+          viewportWidth: mapNodeRef.current.clientWidth,
+          viewportHeight: mapNodeRef.current.clientHeight,
+        })
         const initialCenter = calculateWorldCenter(config.renderBounds)
         const map = new AMap.Map(mapNodeRef.current, {
           center: initialCenter,
           zoom: initialZoom,
-          zooms: [initialZoom, 20],
+          zooms: [AMAP_MIN_ZOOM, 20],
           mapStyle: mapTheme.style,
           features: config.features,
           viewMode: DEFAULT_MAP_CAMERA.viewMode,
@@ -307,7 +291,6 @@ function AmapCanvasComponent({
     clampViewAfterZoom,
     config,
     mapTheme.style,
-    onPanelWidthChange,
     destroyFootprintLayer,
     updatePaneLayout,
     clearZoomClampTimers,
@@ -369,9 +352,13 @@ function AmapCanvasComponent({
 
   function showWorldMap() {
     if (!mapRef.current || !mapNodeRef.current) return
-    const minimumZoom = calculateMinimumZoomForLatitudeCoverage(mapNodeRef.current.clientHeight)
+    const minimumZoom = calculateMinimumZoomForViewportCoverage({
+      viewportWidth: mapNodeRef.current.clientWidth,
+      viewportHeight: mapNodeRef.current.clientHeight,
+    })
     mapRef.current.setPitch(DEFAULT_MAP_CAMERA.pitch, true)
     mapRef.current.setRotation(DEFAULT_MAP_CAMERA.rotation, true)
+    isWorldViewLockedRef.current = true
     mapRef.current.setZoomAndCenter(
       minimumZoom,
       calculateWorldCenter(config.renderBounds),
@@ -386,6 +373,7 @@ function AmapCanvasComponent({
     const bounds = selectedFootprintBoundsRef.current
     if (!bounds) return
 
+    isWorldViewLockedRef.current = false
     resetMapCamera(
       mapRef.current,
       toAmapBounds(amapRef.current, bounds),
@@ -394,16 +382,19 @@ function AmapCanvasComponent({
   }
 
   function locate() {
+    isWorldViewLockedRef.current = false
     geolocationRef.current?.getCurrentPosition()
   }
 
   function zoomIn() {
     if (!mapRef.current || !mapNodeRef.current) return
+    isWorldViewLockedRef.current = false
     zoomByStep(mapRef.current, mapNodeRef.current, config.renderBounds, 1)
   }
 
   function zoomOut() {
     if (!mapRef.current || !mapNodeRef.current) return
+    isWorldViewLockedRef.current = false
     zoomByStep(mapRef.current, mapNodeRef.current, config.renderBounds, -1)
   }
 

@@ -3,7 +3,6 @@ import type { MapBounds } from './mapCamera'
 export const TILE_SIZE = 256
 export const AMAP_MIN_ZOOM = 2
 export const MAX_MERCATOR_LATITUDE = 85.05112878
-const POLAR_EDGE_CROP_FACTOR = 1.27
 
 export type WorldPoint = {
   x: number
@@ -11,9 +10,33 @@ export type WorldPoint = {
 }
 
 export function calculateMinimumZoomForWorldCoverage(viewportHeight: number) {
+  if (viewportHeight <= 0) return AMAP_MIN_ZOOM
+
   return Math.max(
-    roundZoomUpToAmapPrecision(Math.log2((viewportHeight * POLAR_EDGE_CROP_FACTOR) / TILE_SIZE)),
+    roundZoomDownToAmapPrecision(Math.log2(viewportHeight / TILE_SIZE)),
     AMAP_MIN_ZOOM,
+  )
+}
+
+export function calculateMaximumZoomForFullLongitudeCoverage(viewportWidth: number) {
+  if (viewportWidth <= 0) return AMAP_MIN_ZOOM
+
+  return Math.max(
+    roundZoomDownToAmapPrecision(Math.log2(viewportWidth / TILE_SIZE)),
+    AMAP_MIN_ZOOM,
+  )
+}
+
+export function calculateMinimumZoomForViewportCoverage({
+  viewportWidth,
+  viewportHeight,
+}: {
+  viewportWidth: number
+  viewportHeight: number
+}) {
+  return Math.max(
+    calculateMinimumZoomForWorldCoverage(viewportHeight),
+    calculateMaximumZoomForFullLongitudeCoverage(viewportWidth),
   )
 }
 
@@ -49,10 +72,21 @@ export function calculateLatitudeMidpoint(bounds: MapBounds) {
   )[1]
 }
 
-export function isAtMinimumWorldZoom(zoom: number, viewportHeight: number) {
-  return zoom <= calculateMinimumZoomForWorldCoverage(viewportHeight) + 0.000001
+export function isAtMinimumWorldZoom(
+  zoom: number,
+  viewportSize: number | { width: number; height: number },
+) {
+  const minimumZoom =
+    typeof viewportSize === 'number'
+      ? calculateMinimumZoomForWorldCoverage(viewportSize)
+      : calculateMinimumZoomForViewportCoverage({
+          viewportWidth: viewportSize.width,
+          viewportHeight: viewportSize.height,
+        })
+
+  return zoom <= minimumZoom + 0.000001
 }
 
-function roundZoomUpToAmapPrecision(zoom: number) {
-  return Math.ceil(zoom * 100) / 100
+function roundZoomDownToAmapPrecision(zoom: number) {
+  return Math.floor(zoom * 100) / 100
 }

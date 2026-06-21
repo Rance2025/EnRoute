@@ -1,19 +1,14 @@
 .app-shell {
-  --page-board-bg: #eef1f0;
-
-  position: relative;
-  height: 100svh;
-  width: 100vw;
-  overflow: hidden;
-  background: var(--page-board-bg);
-}
-
-.app-shell--accounting {
+  --secondary-rail-width: 60px;
   --page-board-bg:
     radial-gradient(circle at 46% 6%, rgba(255, 255, 255, 0.68), transparent 34%),
     linear-gradient(145deg, rgba(238, 244, 242, 0.66), rgba(204, 214, 215, 0.78)),
     #ccd6d7;
 
+  position: relative;
+  height: 100svh;
+  width: 100vw;
+  overflow: hidden;
   background: var(--page-board-bg);
 }
 
@@ -238,9 +233,10 @@
   z-index: 1;
   width: var(--data-panel-width, 0px);
   min-width: 0;
-  overflow: hidden;
-  background: var(--page-board-bg);
-  backdrop-filter: blur(18px) saturate(1.08);
+  overflow: visible;
+  background: transparent;
+  box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.42);
+  pointer-events: none;
 }
 
 .app-shell:not(.has-data-panel) .time-context-panel {
@@ -248,14 +244,24 @@
 }
 
 .time-context-panel__scroll {
+  --time-panel-shadow-buffer: 34px;
+
   height: 100%;
+  width: calc(100% + var(--time-panel-shadow-buffer));
+  margin-right: calc(0px - var(--time-panel-shadow-buffer));
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
-  gap: 12px;
-  padding: 16px 16px 16px;
-  overflow: auto;
+  gap: 20px;
+  padding: 96px calc(24px + var(--time-panel-shadow-buffer)) 18px 24px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  pointer-events: none;
   scrollbar-width: thin;
   scrollbar-color: rgba(23, 62, 53, 0.22) transparent;
+}
+
+.time-context-panel__scroll > * {
+  pointer-events: auto;
 }
 
 .time-context-card {
@@ -270,7 +276,7 @@
       transparent 30%
     ),
     linear-gradient(145deg, #113a32 0%, #0b2a24 100%);
-  box-shadow: 0 18px 42px rgba(13, 46, 39, 0.24);
+  box-shadow: 0 18px 34px -12px rgba(13, 46, 39, 0.22);
 }
 
 .time-context-card__top {
@@ -1270,13 +1276,87 @@
   box-shadow: 0 8px 18px rgba(18, 63, 53, 0.18);
 }
 
+.secondary-nav-rail {
+  position: absolute;
+  z-index: 2;
+  inset: 0 0 0 auto;
+  width: var(--secondary-rail-width);
+  height: 100svh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 8px;
+  background: transparent;
+  box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.42);
+  pointer-events: auto;
+}
+
+.secondary-nav-rail__items {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.secondary-nav-rail__button {
+  display: grid;
+  box-sizing: border-box;
+  width: 44px;
+  height: 44px;
+  aspect-ratio: 1 / 1;
+  place-items: center;
+  gap: 2px;
+  padding: 4px 0;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  color: rgba(23, 35, 31, 0.62);
+  background: transparent;
+  cursor: pointer;
+  transition:
+    color 160ms ease,
+    background 160ms ease,
+    border-color 160ms ease,
+    transform 160ms ease;
+}
+
+.secondary-nav-rail__button span {
+  color: inherit;
+  font-size: 10px;
+  font-weight: 820;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.secondary-nav-rail__button:hover {
+  color: #17231f;
+  background: rgba(255, 255, 255, 0.34);
+  border-color: rgba(23, 35, 31, 0.06);
+}
+
+.secondary-nav-rail__button.is-active {
+  color: #f8fbfa;
+  background: #123f35;
+  border-color: transparent;
+  box-shadow: 0 12px 28px rgba(18, 63, 53, 0.18);
+}
+
+.secondary-nav-rail__button:active {
+  transform: scale(0.96);
+}
+
+.secondary-nav-rail__button:focus-visible {
+  outline: 2px solid rgba(18, 63, 53, 0.28);
+  outline-offset: 3px;
+}
+
 .main-workspace {
   position: absolute;
-  inset: 0 0 0 var(--data-panel-width);
-  width: calc(100vw - var(--data-panel-width));
+  inset: 0 var(--secondary-rail-width) 0 var(--data-panel-width);
+  width: calc(100vw - var(--data-panel-width) - var(--secondary-rail-width));
   min-width: 0;
   height: 100svh;
-  overflow: hidden;
+  overflow: visible;
+  background: transparent;
 }
 
 .map-stage {
@@ -1285,20 +1365,18 @@
   --map-chrome-top: max(24px, env(safe-area-inset-top));
 
   position: absolute;
-  inset: 0 0 0 var(--data-panel-width);
+  inset: 0 var(--secondary-rail-width) 0 var(--data-panel-width);
   min-height: 100svh;
-  width: calc(100vw - var(--data-panel-width));
+  width: calc(100vw - var(--data-panel-width) - var(--secondary-rail-width));
   overflow: hidden;
   color: #18211f;
-  background:
-    linear-gradient(135deg, rgba(44, 68, 64, 0.06), transparent 38%),
-    var(--page-board-bg);
+  background: transparent;
 }
 
 .amap-surface {
   position: absolute;
   inset: 0;
-  background: var(--page-board-bg);
+  background: transparent;
   cursor: grab;
   touch-action: none;
   user-select: none;
@@ -1324,14 +1402,18 @@
   --accounting-expense: #b8544c;
   --accounting-transfer: #3d6388;
   --accounting-blue: #315b68;
+  --accounting-outer-gutter: 36px;
+  --accounting-internal-gap: 24px;
 
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(560px, 1fr) minmax(324px, 390px);
-  column-gap: 28px;
+  grid-template-columns: minmax(0, 1fr) minmax(640px, 1fr) minmax(280px, 320px);
+  column-gap: var(--accounting-internal-gap);
   align-items: start;
+  width: 100%;
   height: 100%;
   min-height: 0;
-  padding: 96px 24px 18px;
+  margin-left: 0;
+  padding: 96px var(--accounting-outer-gutter) 18px var(--accounting-outer-gutter);
   overflow: hidden;
   color: var(--accounting-ink);
   background: transparent;
@@ -1426,17 +1508,20 @@
 .ios-account-ledger-workspace {
   position: relative;
   grid-column: 1 / -1;
-  grid-template-columns: minmax(560px, 1fr) minmax(324px, 390px);
+  grid-template-columns: minmax(640px, 1fr) minmax(280px, 320px);
   align-items: start;
-  gap: 28px;
+  gap: var(--accounting-internal-gap);
   overflow: hidden;
 }
 
 .ios-ledger-main {
   grid-column: 1;
-  height: calc(100svh - 150px);
-  background: rgba(255, 255, 255, 0.5);
-  overflow: hidden;
+  height: calc(100svh - 114px);
+  overflow: visible;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
 .ios-account-filter-panel {
@@ -1445,17 +1530,17 @@
   grid-template-rows: auto minmax(0, 1fr);
   gap: 14px;
   width: 100%;
-  height: calc(100svh - 126px);
+  max-width: 320px;
+  height: calc(100svh - 114px);
   align-self: start;
   margin-top: 0;
   padding: 14px 18px 16px;
   overflow: visible;
+  border: 0;
   border-radius: 26px;
-  background: rgba(255, 255, 255, 0.46);
-  box-shadow:
-    0 24px 58px rgba(35, 52, 48, 0.09),
-    inset 0 1px 0 rgba(255, 255, 255, 0.68);
-  backdrop-filter: blur(22px) saturate(1.08);
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
 .ios-account-filter-panel__accounts {
@@ -1798,7 +1883,7 @@
 }
 
 .ios-ledger-main {
-  overflow: hidden;
+  overflow: visible;
 }
 
 .ios-ledger-toolbar {
@@ -1883,9 +1968,9 @@
 .accounting-scroll--ledger {
   display: grid;
   align-content: start;
-  gap: 8px;
+  gap: 10px;
   min-height: 0;
-  padding: 0 10px 12px;
+  padding: 0;
   overflow-x: hidden;
   overflow-y: auto;
   scrollbar-width: thin;
@@ -2912,6 +2997,10 @@
 }
 
 @media (max-width: 720px) {
+  .app-shell {
+    --secondary-rail-width: 0px;
+  }
+
   .app-nav {
     top: max(10px, env(safe-area-inset-top));
     width: calc(100vw - 20px);
@@ -2939,6 +3028,10 @@
   .main-workspace {
     inset: 0;
     width: 100vw;
+  }
+
+  .secondary-nav-rail {
+    display: none;
   }
 
   .map-toolbar {
@@ -3197,9 +3290,16 @@
 
 @media (min-width: 721px) and (max-width: 1240px), (min-width: 721px) and (max-height: 790px) {
   .accounting-page {
-    grid-template-columns: minmax(0, 1fr) minmax(460px, 1fr) minmax(276px, 330px);
-    column-gap: 18px;
-    padding: 92px 16px 14px;
+    --accounting-outer-gutter: 28px;
+    --accounting-internal-gap: 20px;
+
+    grid-template-columns: minmax(0, 1fr) minmax(500px, 1fr) minmax(252px, 286px);
+    column-gap: var(--accounting-internal-gap);
+    padding: 96px var(--accounting-outer-gutter) 14px var(--accounting-outer-gutter);
+  }
+
+  .time-context-panel__scroll {
+    padding: 96px calc(24px + var(--time-panel-shadow-buffer)) 18px 24px;
   }
 
   .accounting-workspace {
@@ -3215,17 +3315,18 @@
   }
 
   .ios-account-ledger-workspace {
-    grid-template-columns: minmax(460px, 1fr) minmax(276px, 330px);
-    gap: 18px;
+    grid-template-columns: minmax(500px, 1fr) minmax(252px, 286px);
+    gap: var(--accounting-internal-gap);
   }
 
   .ios-ledger-main {
-    height: calc(100svh - 136px);
+    height: calc(100svh - 110px);
   }
 
   .ios-account-filter-panel {
     width: 100%;
-    height: calc(100svh - 112px);
+    max-width: 286px;
+    height: calc(100svh - 110px);
     padding: 12px 14px 14px;
   }
 

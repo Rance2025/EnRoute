@@ -199,10 +199,10 @@ describe('bounded map dragging', () => {
     expect(nextCenter).toEqual([120, 76])
   })
 
-  it('calculates a minimum zoom that crops polar edges instead of barely fitting the world', () => {
-    expect(calculateMinimumZoomForLatitudeCoverage(815)).toBe(2.02)
-    expect(calculateMinimumZoomForLatitudeCoverage(1152)).toBe(2.52)
-    expect(calculateMinimumZoomForLatitudeCoverage(1800)).toBe(3.16)
+  it('calculates the minimum zoom where the full vertical Mercator world fits', () => {
+    expect(calculateMinimumZoomForLatitudeCoverage(815)).toBe(2)
+    expect(calculateMinimumZoomForLatitudeCoverage(1152)).toBe(2.16)
+    expect(calculateMinimumZoomForLatitudeCoverage(1800)).toBe(2.81)
   })
 
   it('preserves latitude while dragging horizontally at the minimum world zoom', () => {
@@ -215,11 +215,11 @@ describe('bounded map dragging', () => {
       southWest: [-180, -85.05112878],
       northEast: [180, 85.05112878],
     }
-    const transforms = createMercatorTransforms(center, 2.02, minimumViewportSize)
+    const transforms = createMercatorTransforms(center, 2.48, minimumViewportSize)
 
     const nextCenter = calculateNextBoundedDragCenter({
       currentCenter: center,
-      currentZoom: 2.02,
+      currentZoom: 2.48,
       previousPointer: { x: 716, y: 408 },
       currentPointer: { x: 726, y: 408 },
       bounds: mercatorBounds,
@@ -242,11 +242,11 @@ describe('bounded map dragging', () => {
       southWest: [-180, -85.05112878],
       northEast: [180, 85.05112878],
     }
-    const transforms = createMercatorTransforms(center, 2.02, minimumViewportSize)
+    const transforms = createMercatorTransforms(center, 2.48, minimumViewportSize)
 
     const nextCenter = calculateNextBoundedDragCenter({
       currentCenter: center,
-      currentZoom: 2.02,
+      currentZoom: 2.48,
       previousPointer: { x: 716, y: 408 },
       currentPointer: { x: 716, y: 378 },
       bounds: mercatorBounds,
@@ -273,7 +273,7 @@ describe('bounded map dragging', () => {
     const setCenter = vi.fn()
     const map: BoundedDragMap = {
       setStatus: vi.fn(),
-      getZoom: () => 2.02,
+      getZoom: () => 2.48,
       getCenter: () => lngLat(center),
       setCenter,
       lngLatToContainer: ([, lat]) => {

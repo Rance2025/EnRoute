@@ -13,6 +13,14 @@ Object.defineProperty(window, 'localStorage', {
 beforeEach(() => {
   vi.useFakeTimers()
   vi.setSystemTime(new Date('2026-06-19T10:20:30+08:00'))
+  Object.defineProperty(window, 'innerWidth', {
+    configurable: true,
+    value: 1366,
+  })
+  Object.defineProperty(window, 'innerHeight', {
+    configurable: true,
+    value: 768,
+  })
 })
 
 afterEach(() => {
@@ -485,7 +493,7 @@ describe('unified shell layout', () => {
 
     stage = screen.getByLabelText('时间范围内容')
     expect(screen.getByRole('heading', { name: '第29周' })).toBeInTheDocument()
-    const timeCardTop = screen.getByText('全局时间范围').closest('.time-context-card__top')
+    const timeCardTop = screen.getByText('足迹时间范围').closest('.time-context-card__top')
     expect(timeCardTop).not.toBeNull()
     expect(
       within(timeCardTop as HTMLElement).getByText('2026年 7月13日 - 7月19日'),
@@ -663,7 +671,7 @@ describe('unified shell layout', () => {
     expect(currentWeekButton).toBeInTheDocument()
     expect(within(currentWeekButton).getByText('6月15日-6月21日')).toBeInTheDocument()
     expect(within(currentWeekButton).queryByText('2026年 6月15日 - 6月21日')).not.toBeInTheDocument()
-    const currentWeekCardTop = screen.getByText('全局时间范围').closest('.time-context-card__top')
+    const currentWeekCardTop = screen.getByText('足迹时间范围').closest('.time-context-card__top')
     expect(currentWeekCardTop).not.toBeNull()
     expect(
       within(currentWeekCardTop as HTMLElement).getByText('2026年 6月15日 - 6月21日'),
@@ -803,7 +811,7 @@ describe('unified shell layout', () => {
     fireEvent.click(screen.getByRole('button', { name: /第30周/ }))
 
     expect(screen.getByRole('heading', { name: '第30周' })).toBeInTheDocument()
-    const selectedWeekCardTop = screen.getByText('全局时间范围').closest('.time-context-card__top')
+    const selectedWeekCardTop = screen.getByText('足迹时间范围').closest('.time-context-card__top')
     expect(selectedWeekCardTop).not.toBeNull()
     expect(
       within(selectedWeekCardTop as HTMLElement).getByText('2026年 7月20日 - 7月26日'),

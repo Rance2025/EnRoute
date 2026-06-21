@@ -4,6 +4,12 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { siAlipay, siMeituan } from 'simple-icons'
 
 import App from './App'
+import {
+  SECONDARY_NAV_RAIL_WIDTH,
+  calculateAvailableMapShellWidth,
+  calculateUnifiedDataPanelWidth,
+  calculateUnifiedMapPaneWidth,
+} from './appLayout'
 
 const missingAmapConfig = {
   key: '',
@@ -26,6 +32,134 @@ afterEach(() => {
 })
 
 describe('App', () => {
+  it('calculates the shared left time panel from the shell rhythm instead of the map world width', () => {
+    const availableMapShellWidth = calculateAvailableMapShellWidth({
+      viewportWidth: 2048,
+      secondaryRailWidth: SECONDARY_NAV_RAIL_WIDTH,
+    })
+    const dataPanelWidth = calculateUnifiedDataPanelWidth({
+      view: 'map',
+      viewportSize: { width: 2048, height: 1080 },
+    })
+
+    expect(SECONDARY_NAV_RAIL_WIDTH).toBe(60)
+    expect(availableMapShellWidth).toBe(1988)
+    expect(dataPanelWidth).toBe(560)
+    expect(
+      calculateUnifiedMapPaneWidth({
+        viewportWidth: 2048,
+        secondaryRailWidth: SECONDARY_NAV_RAIL_WIDTH,
+        dataPanelWidth,
+      }),
+    ).toBe(1428)
+
+    for (const view of ['map', 'accounting'] as const) {
+      expect(
+        calculateUnifiedDataPanelWidth({
+          view,
+          viewportSize: { width: 2048, height: 1080 },
+        }),
+      ).toBe(dataPanelWidth)
+    }
+  })
+
+  it('keeps the shared left panel wide on taller desktop windows', () => {
+    const availableMapShellWidth = calculateAvailableMapShellWidth({
+      viewportWidth: 2048,
+      secondaryRailWidth: SECONDARY_NAV_RAIL_WIDTH,
+    })
+    const dataPanelWidth = calculateUnifiedDataPanelWidth({
+      view: 'map',
+      viewportSize: { width: 2048, height: 1155 },
+    })
+
+    expect(availableMapShellWidth).toBe(1988)
+    expect(dataPanelWidth).toBe(560)
+    expect(
+      calculateUnifiedMapPaneWidth({
+        viewportWidth: 2048,
+        secondaryRailWidth: SECONDARY_NAV_RAIL_WIDTH,
+        dataPanelWidth,
+      }),
+    ).toBe(1428)
+  })
+
+  it('does not let the 360-degree map width squeeze the shared left panel on compact desktop', () => {
+    const availableMapShellWidth = calculateAvailableMapShellWidth({
+      viewportWidth: 1366,
+      secondaryRailWidth: SECONDARY_NAV_RAIL_WIDTH,
+    })
+    const dataPanelWidth = calculateUnifiedDataPanelWidth({
+      view: 'map',
+      viewportSize: { width: 1366, height: 768 },
+    })
+
+    expect(availableMapShellWidth).toBe(1306)
+    expect(dataPanelWidth).toBe(420)
+    expect(
+      calculateUnifiedMapPaneWidth({
+        viewportWidth: 1366,
+        secondaryRailWidth: SECONDARY_NAV_RAIL_WIDTH,
+        dataPanelWidth,
+      }),
+    ).toBe(886)
+  })
+
+  it('keeps the shared panel and map pane deterministic across desktop windows', () => {
+    const desktopWindows: Array<{
+      viewportSize: { width: number; height: number }
+      dataPanelWidth: number
+      mapPaneWidth: number
+    }> = [
+      { viewportSize: { width: 1280, height: 720 }, dataPanelWidth: 420, mapPaneWidth: 800 },
+      { viewportSize: { width: 1366, height: 768 }, dataPanelWidth: 420, mapPaneWidth: 886 },
+      { viewportSize: { width: 1440, height: 900 }, dataPanelWidth: 420, mapPaneWidth: 960 },
+      { viewportSize: { width: 1536, height: 864 }, dataPanelWidth: 443, mapPaneWidth: 1033 },
+      { viewportSize: { width: 1728, height: 972 }, dataPanelWidth: 500, mapPaneWidth: 1168 },
+      { viewportSize: { width: 1920, height: 1080 }, dataPanelWidth: 558, mapPaneWidth: 1302 },
+      { viewportSize: { width: 2048, height: 1155 }, dataPanelWidth: 560, mapPaneWidth: 1428 },
+    ]
+
+    for (const { viewportSize, dataPanelWidth, mapPaneWidth } of desktopWindows) {
+      const availableMapShellWidth = calculateAvailableMapShellWidth({
+        viewportWidth: viewportSize.width,
+        secondaryRailWidth: SECONDARY_NAV_RAIL_WIDTH,
+      })
+      const actualDataPanelWidth = calculateUnifiedDataPanelWidth({
+        view: 'accounting',
+        viewportSize,
+      })
+
+      expect(actualDataPanelWidth).toBe(dataPanelWidth)
+      expect(
+        calculateUnifiedMapPaneWidth({
+          viewportWidth: viewportSize.width,
+          secondaryRailWidth: SECONDARY_NAV_RAIL_WIDTH,
+          dataPanelWidth: actualDataPanelWidth,
+        }),
+      ).toBe(mapPaneWidth)
+      expect(actualDataPanelWidth + mapPaneWidth).toBe(availableMapShellWidth)
+    }
+  })
+
+  it('uses the same shared left panel width for map and accounting and hides it on mobile', () => {
+    for (const view of ['map', 'accounting'] as const) {
+      expect(
+        calculateUnifiedDataPanelWidth({
+          view,
+          viewportSize: { width: 1366, height: 768 },
+        }),
+      ).toBe(420)
+
+      expect(
+        calculateUnifiedDataPanelWidth({
+          view,
+          viewportSize: { width: 720, height: 900 },
+        }),
+      ).toBe(0)
+    }
+  })
+
   it('shows a setup message when AMap credentials are missing', () => {
     render(
       <App
@@ -51,6 +185,48 @@ describe('App', () => {
     expect(screen.getByText('需要配置高德地图密钥')).toBeInTheDocument()
     expect(screen.getByText(/VITE_AMAP_KEY/)).toBeInTheDocument()
     expect(screen.getByText(/VITE_AMAP_SECURITY_CODE/)).toBeInTheDocument()
+  })
+
+  it('renders the global secondary navigation rail inside the shared app shell', () => {
+    render(<App amapConfig={missingAmapConfig} />)
+
+    const secondaryNav = screen.getByRole('navigation', { name: '二级导航' })
+
+    expect(secondaryNav).toBeInTheDocument()
+    expect(secondaryNav).toHaveClass('secondary-nav-rail')
+    expect(within(secondaryNav).getByRole('button', { name: '足迹' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(within(secondaryNav).getByRole('button', { name: '区域' })).toBeInTheDocument()
+    expect(within(secondaryNav).getByRole('button', { name: '统计' })).toBeInTheDocument()
+    expect(within(secondaryNav).queryByRole('button', { name: '流水' })).not.toBeInTheDocument()
+  })
+
+  it('switches secondary navigation content with the top-level page and drives accounting sections', () => {
+    render(<App amapConfig={missingAmapConfig} />)
+
+    fireEvent.click(screen.getByRole('button', { name: '记账' }))
+
+    const secondaryNav = screen.getByRole('navigation', { name: '二级导航' })
+
+    expect(within(secondaryNav).getByRole('button', { name: '流水' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(within(secondaryNav).getByRole('button', { name: '统计' })).toBeInTheDocument()
+    expect(within(secondaryNav).queryByRole('button', { name: '足迹' })).not.toBeInTheDocument()
+    expect(screen.getByLabelText('账户与流水工作台')).toBeInTheDocument()
+    expect(screen.queryByLabelText('统计工作区')).not.toBeInTheDocument()
+
+    fireEvent.click(within(secondaryNav).getByRole('button', { name: '统计' }))
+
+    expect(within(secondaryNav).getByRole('button', { name: '统计' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(screen.getByLabelText('统计工作区')).toBeInTheDocument()
+    expect(screen.queryByLabelText('账户与流水工作台')).not.toBeInTheDocument()
   })
 
   it('does not expose map theme switching in the first version', () => {
@@ -442,14 +618,20 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: '记账' }))
 
     expect(screen.queryByRole('group', { name: '记账工作区' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '流水' })).not.toBeInTheDocument()
+    const secondaryNav = screen.getByRole('navigation', { name: '二级导航' })
+
+    expect(within(secondaryNav).getByRole('button', { name: '流水' })).toBeInTheDocument()
+    expect(within(secondaryNav).getByRole('button', { name: '统计' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '账户' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '统计' })).not.toBeInTheDocument()
     expect(screen.getByLabelText('账户与流水工作台')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '查看统计' }))
 
     expect(screen.getByLabelText('统计工作区')).toBeInTheDocument()
+    expect(within(secondaryNav).getByRole('button', { name: '统计' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
     expect(screen.getByRole('button', { name: '返回流水' })).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '返回流水' }))
