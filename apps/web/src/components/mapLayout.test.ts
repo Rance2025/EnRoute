@@ -425,23 +425,32 @@ describe('map chrome layout', () => {
     expect(focusRule).toContain('outline:')
   })
 
-  it('centers time picker arrow glyphs inside circular buttons', () => {
+  it('centers time picker arrow icons inside circular buttons', () => {
     const rule = cssRule('.time-picker-bar button:not(.time-period-title)')
+    const iconRule = cssRule('.time-picker-bar button:not(.time-period-title) svg')
 
     expect(rule).toContain('display: grid')
     expect(rule).toContain('place-items: center')
     expect(rule).toContain('line-height: 1')
+    expect(iconRule).toContain('display: block')
+    expect(iconRule).toContain('color: currentColor')
   })
 
-  it('centers calendar arrow glyphs inside circular buttons', () => {
+  it('centers calendar arrow icons inside circular buttons', () => {
     const rule = cssRule('.time-picker-bar button:not(.time-period-title)')
+    const iconRule = cssRule('.time-picker-bar button:not(.time-period-title) svg')
 
     expect(appCss).toMatch(
       /\.time-calendar-bar button:not\(\.time-period-title\),\s*\.time-picker-bar button:not\(\.time-period-title\)\s*\{/,
     )
+    expect(appCss).toMatch(
+      /\.time-calendar-bar button:not\(\.time-period-title\) svg,\s*\.time-picker-bar button:not\(\.time-period-title\) svg\s*\{/,
+    )
     expect(rule).toContain('display: grid')
     expect(rule).toContain('place-items: center')
     expect(rule).toContain('line-height: 1')
+    expect(iconRule).toContain('display: block')
+    expect(iconRule).toContain('color: currentColor')
   })
 
   it('gives time picker arrows a clear press state', () => {
@@ -664,6 +673,12 @@ describe('map chrome layout', () => {
     expect(titleHoverRule).toContain('background: transparent')
     expect(titleActiveRule).toContain('transform: none')
     expect(arrowButtonRule).toContain('border-radius: 50%')
+    expect(cssRule('.time-date-picker__bar button:not(.time-date-picker__title) svg')).toContain(
+      'display: block',
+    )
+    expect(cssRule('.time-date-picker__bar button:not(.time-date-picker__title) svg')).toContain(
+      'color: currentColor',
+    )
     expect(appCss).not.toMatch(/\.time-date-picker__bar button\s*\{/)
     expect(monthGridRule).toContain('grid-template-columns: repeat(6, minmax(0, 1fr))')
     expect(monthButtonRule).toContain('height: 34px')
