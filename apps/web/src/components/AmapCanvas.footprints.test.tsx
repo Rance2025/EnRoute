@@ -932,6 +932,35 @@ describe('AmapCanvas footprint layer wiring', () => {
     expect(createAdminRegionLayer).toHaveBeenCalledTimes(1)
   })
 
+  it('removes footprint points and stops footprint refreshes while region mode is enabled', async () => {
+    const {
+      layerRecords,
+      loadAdminRegions,
+      loadFootprintSnapshot,
+      moveEndHandlers,
+      rerenderWithAdminRegionUnlockEnabled,
+    } = await renderFootprintMassMarks()
+
+    await waitFor(() => expect(loadFootprintSnapshot).toHaveBeenCalledTimes(1))
+    const footprintLayer = layerRecords[0]
+
+    rerenderWithAdminRegionUnlockEnabled(true)
+
+    await waitFor(() => {
+      expect(loadAdminRegions).toHaveBeenCalledWith(undefined, 5, expect.any(AbortSignal))
+    })
+    await waitFor(() => {
+      expect(footprintLayer.destroy).toHaveBeenCalledTimes(1)
+    })
+
+    const footprintRequestCount = loadFootprintSnapshot.mock.calls.length
+    act(() => {
+      moveEndHandlers[0]?.()
+    })
+
+    expect(loadFootprintSnapshot).toHaveBeenCalledTimes(footprintRequestCount)
+  })
+
   it('schedules pending footprint style changes onto the existing native layer', async () => {
     const { layerRecords } = await renderFootprintMassMarks()
     vi.useFakeTimers()

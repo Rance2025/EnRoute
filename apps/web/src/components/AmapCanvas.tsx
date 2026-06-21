@@ -114,9 +114,42 @@ function AmapCanvasComponent({
   }, [timeRange])
 
   const destroyFootprintLayer = useCallback(() => {
+    footprintRequestIdRef.current += 1
+    footprintAbortControllerRef.current?.abort()
+    footprintAbortControllerRef.current = null
     footprintLayerRef.current?.destroy()
     footprintLayerRef.current = null
-  }, [])
+    selectedFootprintBoundsRef.current = null
+    setFootprintDebug(EMPTY_FOOTPRINT_DEBUG)
+    onFootprintMetricsChange?.(EMPTY_FOOTPRINT_METRICS)
+  }, [onFootprintMetricsChange])
+
+  const resetDisplayedFootprints = useCallback(() => {
+    footprintRequestIdRef.current += 1
+    footprintAbortControllerRef.current?.abort()
+    footprintAbortControllerRef.current = null
+    selectedFootprintBoundsRef.current = null
+    footprintLayerRef.current?.update([])
+    setFootprintDebug(EMPTY_FOOTPRINT_DEBUG)
+    onFootprintMetricsChange?.(EMPTY_FOOTPRINT_METRICS)
+  }, [onFootprintMetricsChange])
+
+  const clearDisplayedFootprints = useCallback(() => {
+    if (footprintLayerRef.current) {
+      destroyFootprintLayer()
+      return
+    }
+
+    resetDisplayedFootprints()
+  }, [destroyFootprintLayer, resetDisplayedFootprints])
+
+  const footprintLayerEnabled = !adminRegionUnlockEnabled
+
+  useEffect(() => {
+    if (!footprintLayerEnabled) {
+      clearDisplayedFootprints()
+    }
+  }, [clearDisplayedFootprints, footprintLayerEnabled])
 
   const destroyAdminRegionLayer = useCallback(() => {
     adminRegionRequestIdRef.current += 1
@@ -165,6 +198,23 @@ function AmapCanvasComponent({
         }
       })
   }, [onFootprintMetricsChange])
+
+  const footprintLayerReady = useCallback(() => (
+    footprintLayerEnabled &&
+    mapRef.current !== null &&
+    mapNodeRef.current !== null &&
+    footprintLayerRef.current !== null
+  ), [footprintLayerEnabled])
+
+  const refreshDisplayedFootprints = useCallback((range: TimeRangeSelection) => {
+    if (!footprintLayerReady()) return
+
+    updateDisplayedFootprints(range)
+  }, [footprintLayerReady, updateDisplayedFootprints])
+
+  const refreshDisplayedFootprintsForCurrentRange = useCallback(() => {
+    refreshDisplayedFootprints(timeRangeRef.current)
+  }, [refreshDisplayedFootprints])
 
   const updateFootprintStyle = useCallback((nextFootprintStyle: FootprintStyle) => {
     const normalizedFootprintStyle = normalizeFootprintStyle(nextFootprintStyle)
@@ -327,24 +377,37 @@ function AmapCanvasComponent({
   useEffect(() => {
     if (status !== 'ready' || !amapRef.current || !mapRef.current) return
 
+    if (!footprintLayerEnabled) {
+      clearDisplayedFootprints()
+      return
+    }
+
     const layer = createMassFootprintLayer(
       amapRef.current,
       mapRef.current,
       footprintStyleRef.current,
     )
     footprintLayerRef.current = layer
-    updateDisplayedFootprints(timeRangeRef.current)
+    refreshDisplayedFootprintsForCurrentRange()
 
     return () => {
       if (footprintLayerRef.current === layer) {
         destroyFootprintLayer()
       }
     }
-  }, [destroyFootprintLayer, status, updateDisplayedFootprints])
+  }, [
+    clearDisplayedFootprints,
+    destroyFootprintLayer,
+    footprintLayerEnabled,
+    refreshDisplayedFootprintsForCurrentRange,
+    status,
+  ])
 
   useEffect(() => {
-    updateDisplayedFootprints(timeRange)
-  }, [timeRange, updateDisplayedFootprints])
+    if (!footprintLayerEnabled) return
+
+    refreshDisplayedFootprints(timeRange)
+  }, [footprintLayerEnabled, refreshDisplayedFootprints, timeRange])
 
   useEffect(() => {
     if (
@@ -404,7 +467,7 @@ function AmapCanvasComponent({
     if (status !== 'ready' || !mapRef.current) return
     const map = mapRef.current
     const updateAfterViewportSettles = () => {
-      updateDisplayedFootprints(timeRangeRef.current)
+      refreshDisplayedFootprintsForCurrentRange()
     }
 
     map.on('moveend', updateAfterViewportSettles)
@@ -414,13 +477,13 @@ function AmapCanvasComponent({
       map.off('moveend', updateAfterViewportSettles)
       map.off('zoomend', updateAfterViewportSettles)
     }
-  }, [status, updateDisplayedFootprints])
+  }, [refreshDisplayedFootprintsForCurrentRange, status])
 
   useEffect(() => {
     function updateLayoutAfterResize() {
       if (!mapRef.current || !mapNodeRef.current) return
       updatePaneLayout(mapRef.current, mapNodeRef.current)
-      updateDisplayedFootprints(timeRangeRef.current)
+      refreshDisplayedFootprintsForCurrentRange()
     }
 
     window.addEventListener('resize', updateLayoutAfterResize)
@@ -428,7 +491,7 @@ function AmapCanvasComponent({
     return () => {
       window.removeEventListener('resize', updateLayoutAfterResize)
     }
-  }, [updateDisplayedFootprints, updatePaneLayout])
+  }, [refreshDisplayedFootprintsForCurrentRange, updatePaneLayout])
 
   function showWorldMap() {
     if (!mapRef.current || !mapNodeRef.current) return
