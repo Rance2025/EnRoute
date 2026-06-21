@@ -19,6 +19,7 @@ from .csv_loader import iter_footprint_points
 TILE_SIZE = 256
 MAX_MERCATOR_LATITUDE = 85.05112878
 OPEN_ENDED_TIMESTAMP_SECONDS = 8_640_000_000_000
+ADMIN_REGION_LOADER_VERSION = "admin-regions-v2"
 
 
 class FootprintImportResult(TypedDict):
@@ -308,9 +309,9 @@ def load_admin_region_data_if_available(
     admin_region_data_path: Path | None,
 ) -> str:
     if admin_region_data_path is None or not admin_region_data_path.exists():
-        return create_source_signature(admin_region_data_path, "admin-regions")
+        return create_source_signature(admin_region_data_path, ADMIN_REGION_LOADER_VERSION)
 
-    signature = create_source_signature(admin_region_data_path, "admin-regions")
+    signature = create_source_signature(admin_region_data_path, ADMIN_REGION_LOADER_VERSION)
     if get_meta_value(connection, "adminRegionSourceSignature") == signature:
         return signature
 

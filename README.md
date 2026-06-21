@@ -59,12 +59,15 @@ already GCJ-02.
 
 Optional administrative boundary data is read from
 `ADMIN_REGION_DATA_PATH=external/admin-regions.geojson`. Boundary files stay
-local unless their license permits committing them. When boundaries exist, the
-import assigns each footprint to the finest matching `region_id`, updates cached
-unlock counts and stay/travel totals across the full region chain, and
-`GET /api/admin-regions?level=N` serves the current unlock state for the map
-overlay. The frontend only requests `/api/admin-regions` after enabling the
-administrative-region unlock layer.
+local unless their license permits committing them. The importer accepts the
+project's normalized GeoJSON contract and OSM/Geofabrik-style administrative
+GeoJSON with `admin_level*` properties; OSM boundary coordinates are converted
+from WGS84 to GCJ-02 before storage so they align with imported footprints and
+AMap. When boundaries exist, the import assigns each footprint to the finest
+matching `region_id`, updates cached unlock counts and stay/travel totals across
+the available region chain, and `GET /api/admin-regions?level=N` serves the
+current unlock state for the map overlay. The frontend only requests
+`/api/admin-regions` after enabling the administrative-region unlock layer.
 
 The compatibility `GET /api/footprints` route remains available for small/debug
 payloads, but the map no longer loads all raw points into browser memory. The API

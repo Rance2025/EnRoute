@@ -4,7 +4,17 @@ import json
 import sqlite3
 from typing import Any, Iterable
 
+from enroute_api.footprints.coordinates import transform_footprint_coordinate
+
 from .geometry import calculate_geometry_bbox, geometry_contains_point
+
+OSM_ADMIN_LEVEL_TO_ENROUTE_LEVEL = {
+    2: 1,
+    4: 2,
+    5: 3,
+    6: 4,
+    8: 5,
+}
 
 
 def initialize_admin_region_schema(connection: sqlite3.Connection) -> None:
@@ -42,9 +52,7 @@ def initialize_admin_region_schema(connection: sqlite3.Connection) -> None:
 
 
 def load_admin_regions(connection: sqlite3.Connection, feature_collection: dict[str, Any]) -> None:
-    features = feature_collection.get("features")
-    if not isinstance(features, list):
-        raise ValueError("Admin region GeoJSON must be a FeatureCollection")
+    features = normalize_admin_region_features(feature_collection)
 
     with connection:
         connection.execute("DELETE FROM admin_region_tree")
@@ -60,6 +68,142 @@ def load_admin_regions(connection: sqlite3.Connection, feature_collection: dict[
                     "INSERT INTO admin_region_tree (parent_id, child_id) VALUES (?, ?)",
                     (str(parent_id), str(child_id)),
                 )
+
+
+def normalize_admin_region_features(feature_collection: dict[str, Any]) -> list[dict[str, Any]]:
+    features = feature_collection.get("features")
+    if not isinstance(features, list):
+        raise ValueError("Admin region GeoJSON must be a FeatureCollection")
+
+    normalized_features = []
+    for feature in features:
+        normalized_feature = normalize_admin_region_feature(feature)
+        if normalized_feature is not None:
+            normalized_features.append(normalized_feature)
+    return normalized_features
+
+
+def normalize_admin_region_feature(feature: dict[str, Any]) -> dict[str, Any] | None:
+    properties = feature.get("properties") or {}
+    geometry = feature.get("geometry")
+    if not isinstance(properties, dict) or not isinstance(geometry, dict):
+        return feature
+    if properties.get("id") and properties.get("level") is not None:
+        return feature
+
+    osm_admin_level = parse_osm_admin_level(properties)
+    if osm_admin_level is None:
+        return feature
+    enroute_level = OSM_ADMIN_LEVEL_TO_ENROUTE_LEVEL.get(osm_admin_level)
+    if enroute_level is None:
+        return None
+
+    region_id = properties.get("id") or format_osm_region_id(properties)
+    name = properties.get("name")
+    if not region_id or not name:
+        raise ValueError("OSM admin region feature requires osm_id, name, and admin level")
+
+    normalized_properties = {
+        "id": region_id,
+        "name": str(name),
+        "level": enroute_level,
+    }
+    parent_id = (
+        properties.get("parentId")
+        or properties.get("parent_id")
+        or format_osm_parent_region_id(properties)
+    )
+    if parent_id:
+        normalized_properties["parentId"] = parent_id
+
+    return {
+        "type": "Feature",
+        "properties": normalized_properties,
+        "geometry": transform_geometry_coordinates(geometry, source_coordinate_system="wgs84"),
+    }
+
+
+def parse_osm_admin_level(properties: dict[str, Any]) -> int | None:
+    fclass = properties.get("fclass")
+    if isinstance(fclass, str) and fclass.startswith("admin_level"):
+        return parse_int(fclass.removeprefix("admin_level"))
+
+    admin_level = properties.get("admin_level")
+    if admin_level is not None:
+        return parse_int(admin_level)
+
+    code = parse_int(properties.get("code"))
+    if code is not None and 1200 < code < 1300:
+        return code - 1200
+    return None
+
+
+def parse_int(value: Any) -> int | None:
+    try:
+        return int(str(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def format_osm_region_id(properties: dict[str, Any]) -> str | None:
+    osm_id = properties.get("osm_id") or properties.get("osmId")
+    return None if osm_id in {None, ""} else f"osm:{osm_id}"
+
+
+def format_osm_parent_region_id(properties: dict[str, Any]) -> str | None:
+    parent_osm_id = properties.get("parent_osm_id") or properties.get("parentOsmId")
+    return None if parent_osm_id in {None, ""} else f"osm:{parent_osm_id}"
+
+
+def transform_geometry_coordinates(
+    geometry: dict[str, Any],
+    *,
+    source_coordinate_system: str,
+) -> dict[str, Any]:
+    geometry_type = geometry.get("type")
+    coordinates = geometry.get("coordinates")
+    if geometry_type not in {"Polygon", "MultiPolygon"} or not isinstance(coordinates, list):
+        return geometry
+
+    return {
+        "type": geometry_type,
+        "coordinates": transform_nested_coordinates(
+            coordinates,
+            source_coordinate_system=source_coordinate_system,
+        ),
+    }
+
+
+def transform_nested_coordinates(
+    coordinates: list[Any],
+    *,
+    source_coordinate_system: str,
+) -> list[Any]:
+    if is_position(coordinates):
+        longitude, latitude = transform_footprint_coordinate(
+            longitude=float(coordinates[0]),
+            latitude=float(coordinates[1]),
+            source_coordinate_system=source_coordinate_system,
+        )
+        return [longitude, latitude, *coordinates[2:]]
+
+    return [
+        transform_nested_coordinates(coordinate, source_coordinate_system=source_coordinate_system)
+        if isinstance(coordinate, list)
+        else coordinate
+        for coordinate in coordinates
+    ]
+
+
+def is_position(value: list[Any]) -> bool:
+    if len(value) < 2:
+        return False
+    try:
+        float(value[0])
+        float(value[1])
+    except (TypeError, ValueError):
+        return False
+    return True
 
 
 def insert_admin_region_feature(connection: sqlite3.Connection, feature: dict[str, Any]) -> None:

@@ -13,6 +13,7 @@ from enroute_api.admin_regions.store import (
 )
 from enroute_api.config import Settings
 from enroute_api.main import create_app
+from enroute_api.footprints.coordinates import transform_footprint_coordinate
 from enroute_api.footprints.store import FootprintStore, ensure_imported, initialize_schema
 
 
@@ -240,6 +241,92 @@ def test_store_loads_boundary_file_before_incremental_import_and_reports_counts(
     assert second_result["total_count"] == 3
     assert matched_count == 3
     assert region_count == 4
+
+
+def test_store_normalizes_osm_level8_boundary_file_and_converts_geometry_to_gcj02(tmp_path: Path):
+    data_path = tmp_path / "points.csv"
+    data_path.write_text(
+        "\n".join(
+            [
+                "dataTime,locType,longitude,latitude,heading,accuracy,speed,distance,isBackForeground,stepType,altitude",
+                "100,1,121.4,31.2,0,5,-1,0,1,0,3",
+            ],
+        ),
+        encoding="utf-8",
+    )
+    region_path = tmp_path / "osm-regions.geojson"
+    wgs84_polygon = {
+        "type": "Polygon",
+        "coordinates": [
+            [
+                [121.399, 31.199],
+                [121.401, 31.199],
+                [121.401, 31.201],
+                [121.399, 31.201],
+                [121.399, 31.199],
+            ],
+        ],
+    }
+    region_path.write_text(
+        json.dumps(
+            {
+                "type": "FeatureCollection",
+                "features": [
+                    {
+                        "type": "Feature",
+                        "properties": {
+                            "osm_id": "14179226",
+                            "fclass": "admin_level8",
+                            "name": "三林镇",
+                        },
+                        "geometry": wgs84_polygon,
+                    },
+                ],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    store = FootprintStore(
+        db_path=tmp_path / "footprints.sqlite",
+        data_path=data_path,
+        coordinate_system="wgs84",
+        admin_region_data_path=region_path,
+    )
+    try:
+        result = store.import_footprints()
+        footprint = store.connection.execute(
+            "SELECT region_id FROM footprints WHERE timestamp_seconds = 100",
+        ).fetchone()
+        region = store.connection.execute(
+            "SELECT id, name, level, geometry, footprint_count FROM admin_regions",
+        ).fetchone()
+    finally:
+        store.close()
+
+    expected_first_position = transform_footprint_coordinate(
+        longitude=121.399,
+        latitude=31.199,
+        source_coordinate_system="wgs84",
+    )
+    stored_geometry = json.loads(region["geometry"])
+
+    assert result == {
+        "new_count": 1,
+        "total_count": 1,
+        "matched_count": 1,
+        "region_count": 1,
+        "unlocked_region_count": 1,
+    }
+    assert footprint["region_id"] == "osm:14179226"
+    assert dict(region) | {"geometry": {}} == {
+        "id": "osm:14179226",
+        "name": "三林镇",
+        "level": 5,
+        "geometry": {},
+        "footprint_count": 1,
+    }
+    assert stored_geometry["coordinates"][0][0] == list(expected_first_position)
 
 
 def test_serves_admin_regions_by_level_from_cached_region_rows(tmp_path: Path):
