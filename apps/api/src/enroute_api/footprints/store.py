@@ -171,7 +171,9 @@ def import_footprints(
 ) -> FootprintImportResult:
     region_signature = load_admin_region_data_if_available(connection, admin_region_data_path)
     source_signature = create_import_signature(data_path, coordinate_system, region_signature)
+    compatibility_signature = create_import_compatibility_signature(coordinate_system, region_signature)
     stored_signature = get_meta_value(connection, "sourceSignature")
+    stored_compatibility_signature = get_meta_value(connection, "importCompatibilitySignature")
     stored_count = get_footprint_row_count(connection)
     stored_spatial_count = get_spatial_row_count(connection)
 
@@ -180,7 +182,10 @@ def import_footprints(
     if not data_path.exists() and stored_count > 0 and stored_spatial_count == stored_count:
         return get_import_result(connection, new_count=0)
 
-    if stored_signature != source_signature:
+    if stored_compatibility_signature is None and stored_count > 0:
+        stored_compatibility_signature = compatibility_signature
+
+    if stored_compatibility_signature != compatibility_signature:
         clear_imported_footprints(connection)
         stored_count = 0
 
@@ -191,6 +196,7 @@ def import_footprints(
                 new_count += 1
 
         set_meta_value(connection, "sourceSignature", source_signature)
+        set_meta_value(connection, "importCompatibilitySignature", compatibility_signature)
         set_meta_value(connection, "rowCount", str(stored_count + new_count))
 
     return get_import_result(connection, new_count=new_count)
@@ -665,6 +671,16 @@ def create_import_signature(
     return json.dumps(
         {
             "footprints": json.loads(create_source_signature(data_path, coordinate_system)),
+            "adminRegions": json.loads(admin_region_signature),
+        },
+        separators=(",", ":"),
+    )
+
+
+def create_import_compatibility_signature(coordinate_system: str, admin_region_signature: str) -> str:
+    return json.dumps(
+        {
+            "coordinateSystem": coordinate_system,
             "adminRegions": json.loads(admin_region_signature),
         },
         separators=(",", ":"),

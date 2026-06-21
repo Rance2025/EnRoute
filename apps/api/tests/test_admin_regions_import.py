@@ -209,6 +209,74 @@ def test_reimporting_same_csv_does_not_double_count_region_stats(tmp_path: Path)
     assert dict(after) == dict(before)
 
 
+def test_appended_csv_imports_only_new_rows_without_resetting_region_stats(tmp_path: Path):
+    data_path = tmp_path / "points.csv"
+    initial_csv = "\n".join(
+        [
+            "dataTime,locType,longitude,latitude,heading,accuracy,speed,distance,isBackForeground,stepType,altitude",
+            "100,1,10,10,0,5,-1,0,1,0,3",
+            "130,1,12,12,0,5,-1,40,1,0,3",
+        ],
+    )
+    appended_csv = "\n".join(
+        [
+            initial_csv,
+            "160,1,45,45,0,5,-1,60,1,0,3",
+        ],
+    )
+    data_path.write_text(initial_csv, encoding="utf-8")
+    connection = sqlite3.connect(tmp_path / "footprints.sqlite")
+    connection.row_factory = sqlite3.Row
+    try:
+        initialize_schema(connection)
+        load_admin_regions(connection, REGION_COLLECTION)
+
+        first_result = ensure_imported(connection, data_path=data_path, coordinate_system="gcj02")
+        data_path.write_text(appended_csv, encoding="utf-8")
+        second_result = ensure_imported(connection, data_path=data_path, coordinate_system="gcj02")
+        footprints = connection.execute(
+            "SELECT timestamp_seconds, region_id FROM footprints ORDER BY timestamp_seconds",
+        ).fetchall()
+        stats = {
+            row["id"]: dict(row)
+            for row in connection.execute(
+                """
+                SELECT id, footprint_count, stay_duration_seconds, travel_distance_meters
+                FROM admin_regions
+                ORDER BY id
+                """,
+            )
+        }
+    finally:
+        connection.close()
+
+    assert first_result == {
+        "new_count": 2,
+        "total_count": 2,
+        "matched_count": 2,
+        "region_count": 4,
+        "unlocked_region_count": 4,
+    }
+    assert second_result == {
+        "new_count": 1,
+        "total_count": 3,
+        "matched_count": 3,
+        "region_count": 4,
+        "unlocked_region_count": 4,
+    }
+    assert [(row["timestamp_seconds"], row["region_id"]) for row in footprints] == [
+        (100, "sanlin"),
+        (130, "sanlin"),
+        (160, "pudong"),
+    ]
+    assert stats["sanlin"]["footprint_count"] == 2
+    assert stats["sanlin"]["stay_duration_seconds"] == 30
+    assert stats["sanlin"]["travel_distance_meters"] == 40
+    assert stats["pudong"]["footprint_count"] == 3
+    assert stats["pudong"]["stay_duration_seconds"] == 60
+    assert stats["pudong"]["travel_distance_meters"] == 100
+
+
 def test_store_loads_boundary_file_before_incremental_import_and_reports_counts(tmp_path: Path):
     data_path = tmp_path / "points.csv"
     data_path.write_text(CSV, encoding="utf-8")
