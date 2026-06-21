@@ -74,6 +74,9 @@ type TopNavigationThumbMetrics = {
 type TopNavigationPointerPosition = TopNavigationThumbMetrics & {
   view: AppView
 }
+type TopNavigationDragPosition = TopNavigationPointerPosition & {
+  previewLeft: number
+}
 type SettingsPageId = 'general' | 'map' | 'accounting' | 'schedule'
 
 const topNavigationItems: TopNavigationItem[] = [
@@ -119,17 +122,17 @@ function getViewportSize() {
   }
 }
 
-function getClosestTopNavigationPosition(
+function getTopNavigationDragPosition(
   clientX: number,
   tabsElement: HTMLDivElement,
   buttonRefs: Record<AppView, HTMLButtonElement | null>,
-): TopNavigationPointerPosition | undefined {
+): TopNavigationDragPosition | undefined {
   const tabsRect = tabsElement.getBoundingClientRect()
 
   if (tabsRect.width <= 0) return undefined
 
   const boundedClientX = Math.min(Math.max(clientX, tabsRect.left), tabsRect.right)
-  let closestPosition: TopNavigationPointerPosition | undefined
+  let closestPosition: TopNavigationDragPosition | undefined
   let closestDistance = Number.POSITIVE_INFINITY
 
   for (const item of topNavigationItems) {
@@ -147,6 +150,10 @@ function getClosestTopNavigationPosition(
         view: item.value,
         left: buttonRect.left - tabsRect.left,
         width: buttonRect.width,
+        previewLeft: Math.min(
+          Math.max(boundedClientX - tabsRect.left - buttonRect.width / 2, 0),
+          Math.max(tabsRect.width - buttonRect.width, 0),
+        ),
       }
     }
   }
@@ -175,6 +182,7 @@ function App({ amapConfig }: AppProps) {
     left: 0,
     width: 0,
   })
+  const [topNavigationTabsWidth, setTopNavigationTabsWidth] = useState(0)
   const [isTopNavigationDragging, setIsTopNavigationDragging] = useState(false)
   const [topNavigationPreviewThumb, setTopNavigationPreviewThumb] =
     useState<TopNavigationThumbMetrics | null>(null)
@@ -217,7 +225,7 @@ function App({ amapConfig }: AppProps) {
 
     if (!tabsElement) return
 
-    const position = getClosestTopNavigationPosition(
+    const position = getTopNavigationDragPosition(
       clientX,
       tabsElement,
       topNavigationButtonRefs.current,
@@ -225,7 +233,7 @@ function App({ amapConfig }: AppProps) {
 
     if (position) {
       setTopNavigationPreviewThumb({
-        left: position.left,
+        left: position.previewLeft,
         width: position.width,
       })
     }
@@ -235,7 +243,7 @@ function App({ amapConfig }: AppProps) {
 
     if (!tabsElement) return
 
-    const position = getClosestTopNavigationPosition(
+    const position = getTopNavigationDragPosition(
       clientX,
       tabsElement,
       topNavigationButtonRefs.current,
@@ -360,6 +368,7 @@ function App({ amapConfig }: AppProps) {
       left: activeRect.left - tabsRect.left,
       width: activeRect.width,
     })
+    setTopNavigationTabsWidth(tabsRect.width)
   }, [navigationStyle, view, viewportSize])
 
   const dataPanelWidth = calculateUnifiedDataPanelWidth({
@@ -398,6 +407,7 @@ function App({ amapConfig }: AppProps) {
             {
               '--top-nav-thumb-left': `${topNavigationThumb.left}px`,
               '--top-nav-thumb-width': `${topNavigationThumb.width}px`,
+              '--top-nav-tabs-width': `${topNavigationTabsWidth}px`,
               ...(topNavigationPreviewThumb
                 ? {
                     '--top-nav-thumb-preview-left': `${topNavigationPreviewThumb.left}px`,
@@ -424,7 +434,24 @@ function App({ amapConfig }: AppProps) {
             aria-valuetext={topNavigationItems.find((item) => item.value === view)?.label}
             onPointerDown={handleTopNavigationPointerDown}
             onKeyDown={handleTopNavigationKeyDown}
-          />
+          >
+            <span className="app-nav__active-items" aria-hidden="true">
+              {topNavigationItems.map((item) => (
+                <span
+                  className={[
+                    'app-nav__active-item',
+                    `app-nav__active-item--${item.kind}`,
+                    item.kind === 'page' ? `app-nav__active-item--${navigationStyle}` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                  key={item.value}
+                >
+                  <TopNavigationContent item={item} navigationStyle={navigationStyle} />
+                </span>
+              ))}
+            </span>
+          </span>
           {topNavigationItems.map((item) => (
             <TopNavigationButton
               key={item.value}
@@ -634,7 +661,6 @@ function TopNavigationButton({
   navigationStyle: NavigationStyle
   onSelect: (view: AppView) => void
 }) {
-  const Icon = item.icon
   const buttonClassName = [
     'app-nav__button',
     `app-nav__button--${item.kind}`,
@@ -653,20 +679,36 @@ function TopNavigationButton({
       title={item.label}
       onClick={() => onSelect(item.value)}
     >
-      {item.kind === 'brand' ? (
-        <>
-          <span>在途</span>
-          <span>EnRoute</span>
-        </>
-      ) : (
-        <>
-          {Icon ? <Icon size={18} strokeWidth={1.9} aria-hidden="true" /> : null}
-          {navigationStyle === 'mixed' ? (
-            <span className="app-nav__label">{item.label}</span>
-          ) : null}
-        </>
-      )}
+      <TopNavigationContent item={item} navigationStyle={navigationStyle} />
     </button>
+  )
+}
+
+function TopNavigationContent({
+  item,
+  navigationStyle,
+}: {
+  item: TopNavigationItem
+  navigationStyle: NavigationStyle
+}) {
+  const Icon = item.icon
+
+  if (item.kind === 'brand') {
+    return (
+      <>
+        <span>在途</span>
+        <span>EnRoute</span>
+      </>
+    )
+  }
+
+  return (
+    <>
+      {Icon ? <Icon size={18} strokeWidth={1.9} aria-hidden="true" /> : null}
+      {navigationStyle === 'mixed' ? (
+        <span className="app-nav__label">{item.label}</span>
+      ) : null}
+    </>
   )
 }
 

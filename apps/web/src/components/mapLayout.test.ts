@@ -802,6 +802,8 @@ describe('map chrome layout', () => {
     expect(appSource).toContain("className={`app-nav__thumb${isTopNavigationDragging ? ' is-dragging' : ''}`}")
     expect(appSource).toContain('role="slider"')
     expect(appSource).toContain('onPointerDown={handleTopNavigationPointerDown}')
+    expect(appSource).toContain('previewLeft')
+    expect(appSource).toContain('app-nav__active-items')
     expect(appSource).toContain('topNavigationButtonRefs')
     expect(appSource).toContain('getBoundingClientRect()')
     expect(cssRule('.app-nav__tabs')).toContain('cursor: grab')
@@ -812,8 +814,18 @@ describe('map chrome layout', () => {
     expect(cssRule('.app-nav__thumb')).toContain(
       'width: var(--top-nav-thumb-preview-width, var(--top-nav-thumb-width))',
     )
+    expect(cssRule('.app-nav__thumb')).toContain('overflow: hidden')
     expect(cssRule('.app-nav__thumb')).toContain('touch-action: none')
     expect(cssRule('.app-nav__thumb.is-dragging')).toContain('transition: none')
+    expect(cssRule('.app-nav__active-items')).toContain('width: var(--top-nav-tabs-width)')
+    expect(cssRule('.app-nav__active-items')).toContain('color: #f8fbfa')
+    expect(cssRule('.app-nav__active-items')).toContain(
+      'calc(0px - var(--top-nav-thumb-preview-left, var(--top-nav-thumb-left)))',
+    )
+    expect(cssRule('.app-nav__thumb.is-dragging .app-nav__active-items')).toContain(
+      'transition: none',
+    )
+    expect(cssRule(".app-nav__button[aria-pressed='true']")).not.toContain('color: #f8fbfa')
     expect(cssRule('.app-nav__button--page svg')).toContain('color: currentColor')
     expect(cssRule('.app-nav__button:hover')).toContain('color: #17231f')
     expect(cssRule('.app-nav__button:hover')).toContain('background: transparent')
