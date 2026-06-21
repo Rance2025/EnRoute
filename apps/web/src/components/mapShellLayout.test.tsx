@@ -531,7 +531,7 @@ describe('unified shell layout', () => {
     expect(within(monthSelector).getByText('按月聚合')).toBeInTheDocument()
     expect(
       within(monthSelector).getByRole('button', {
-        name: '切换到按年聚合，当前2026年',
+        name: '切换到年份选择，当前2026年',
       }),
     ).toBeInTheDocument()
     expect(within(monthSelector).getAllByRole('button')).toHaveLength(15)
@@ -679,7 +679,7 @@ describe('unified shell layout', () => {
     expect(within(monthPicker).getByText('2026年')).toBeInTheDocument()
     expect(
       within(monthPicker).getByRole('button', {
-        name: '切换到按年聚合，当前2026年',
+        name: '切换到年份选择，当前2026年',
       }),
     ).toBeInTheDocument()
     expect(within(monthPicker).getAllByRole('button')).toHaveLength(15)
