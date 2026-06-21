@@ -1,5 +1,5 @@
 import { useEffect, useState, type CSSProperties } from 'react'
-import { Settings } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Settings } from 'lucide-react'
 
 import { ledgerAtlasDataset } from '../accounting/ledgerAtlasData'
 import { formatCnyFromCents } from '../accounting/money'
@@ -80,6 +80,12 @@ type TimeNavigationState = {
 
 type CustomDatePickerMode = 'day' | 'month'
 type TemporaryPickerMode = 'default' | 'month' | 'year'
+
+function TimeArrowIcon({ direction }: { direction: -1 | 1 }) {
+  const Icon = direction === -1 ? ChevronLeft : ChevronRight
+
+  return <Icon size={18} strokeWidth={3} aria-hidden="true" />
+}
 
 export function TimeContextPanel({
   metricItems,
@@ -587,7 +593,7 @@ function CustomDatePicker({
           aria-label={isMonthPicker ? '上一年' : '上个月'}
           onClick={() => handleMove(-1)}
         >
-          ‹
+          <TimeArrowIcon direction={-1} />
         </button>
         <button
           type="button"
@@ -602,7 +608,7 @@ function CustomDatePicker({
           aria-label={isMonthPicker ? '下一年' : '下个月'}
           onClick={() => handleMove(1)}
         >
-          ›
+          <TimeArrowIcon direction={1} />
         </button>
       </div>
       {isMonthPicker ? null : (
@@ -852,7 +858,7 @@ function DayCalendarSection({
           aria-label={isMonthPicker ? '上一年' : '上一段时间'}
           onClick={() => handleMove(-1)}
         >
-          ‹
+          <TimeArrowIcon direction={-1} />
         </button>
         <button
           type="button"
@@ -867,7 +873,7 @@ function DayCalendarSection({
           aria-label={isMonthPicker ? '下一年' : '下一段时间'}
           onClick={() => handleMove(1)}
         >
-          ›
+          <TimeArrowIcon direction={1} />
         </button>
       </div>
       {isMonthPicker ? (
@@ -1110,7 +1116,7 @@ function TimePickerPage({
           aria-label={isMonthPicker ? '上一年' : '上一页'}
           onClick={() => handleMove(-1)}
         >
-          ‹
+          <TimeArrowIcon direction={-1} />
         </button>
         {supportsTemporaryPickerTitle ? (
           <button
@@ -1129,7 +1135,7 @@ function TimePickerPage({
           aria-label={isMonthPicker ? '下一年' : '下一页'}
           onClick={() => handleMove(1)}
         >
-          ›
+          <TimeArrowIcon direction={1} />
         </button>
       </div>
       <div className="time-picker-grid-window">

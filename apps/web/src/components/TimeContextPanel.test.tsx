@@ -44,6 +44,81 @@ function StatefulMapTimeContextPanel({
 }
 
 describe('TimeContextPanel', () => {
+  it('renders calendar navigation arrows as centered icon components', () => {
+    const { container } = render(
+      <TimeContextPanel
+        view="map"
+        selection={selectDay('2026-06-15')}
+        onSelectionChange={vi.fn()}
+      />,
+    )
+
+    const timeAction = container.querySelector<HTMLButtonElement>('.time-context-card__today')
+    expect(timeAction).not.toBeNull()
+    fireEvent.click(timeAction as HTMLButtonElement)
+
+    const arrowButtons = container.querySelectorAll<HTMLButtonElement>(
+      '.time-calendar-bar button:not(.time-period-title)',
+    )
+
+    expect(arrowButtons).toHaveLength(2)
+    arrowButtons.forEach((button) => {
+      expect(button.textContent?.trim()).toBe('')
+      expect(button.querySelectorAll('svg[aria-hidden="true"]')).toHaveLength(1)
+    })
+  })
+
+  it('renders picker navigation arrows as centered icon components', () => {
+    const { container } = render(
+      <TimeContextPanel
+        view="map"
+        selection={selectMonth(2026, 6)}
+        onSelectionChange={vi.fn()}
+      />,
+    )
+
+    const timeAction = container.querySelector<HTMLButtonElement>('.time-context-card__today')
+    expect(timeAction).not.toBeNull()
+    fireEvent.click(timeAction as HTMLButtonElement)
+
+    const arrowButtons = container.querySelectorAll<HTMLButtonElement>(
+      '.time-picker-bar button:not(.time-period-title)',
+    )
+
+    expect(arrowButtons).toHaveLength(2)
+    arrowButtons.forEach((button) => {
+      expect(button.textContent?.trim()).toBe('')
+      expect(button.querySelectorAll('svg[aria-hidden="true"]')).toHaveLength(1)
+    })
+  })
+
+  it('renders custom date picker navigation arrows as centered icon components', () => {
+    const { container } = render(
+      <TimeContextPanel
+        view="map"
+        selection={setCustomDateRange('2022-03-01', '2026-06-20')}
+        onSelectionChange={vi.fn()}
+      />,
+    )
+
+    const timeAction = container.querySelector<HTMLButtonElement>('.time-context-card__today')
+    expect(timeAction).not.toBeNull()
+    fireEvent.click(timeAction as HTMLButtonElement)
+    const dateButton = container.querySelector<HTMLButtonElement>('.time-date-button')
+    expect(dateButton).not.toBeNull()
+    fireEvent.click(dateButton as HTMLButtonElement)
+
+    const arrowButtons = container.querySelectorAll<HTMLButtonElement>(
+      '.time-date-picker__bar button:not(.time-date-picker__title)',
+    )
+
+    expect(arrowButtons).toHaveLength(2)
+    arrowButtons.forEach((button) => {
+      expect(button.textContent?.trim()).toBe('')
+      expect(button.querySelectorAll('svg[aria-hidden="true"]')).toHaveLength(1)
+    })
+  })
+
   it('keeps the mode switch visible while the time selector stays collapsed', () => {
     render(
       <TimeContextPanel

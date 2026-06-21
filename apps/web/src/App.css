@@ -657,6 +657,12 @@
     inset 0 2px 6px rgba(18, 63, 53, 0.14);
 }
 
+.time-calendar-bar button:not(.time-period-title) svg,
+.time-picker-bar button:not(.time-period-title) svg {
+  display: block;
+  color: currentColor;
+}
+
 .time-period-title {
   min-width: 0;
   width: 100%;
@@ -1226,6 +1232,11 @@
   font-weight: 840;
   line-height: 1;
   cursor: pointer;
+}
+
+.time-date-picker__bar button:not(.time-date-picker__title) svg {
+  display: block;
+  color: currentColor;
 }
 
 .time-date-picker__title {
