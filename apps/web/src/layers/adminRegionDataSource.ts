@@ -1,14 +1,19 @@
-import type { AdminRegion, AdminRegionGeometry, AdminRegionLevel } from './adminRegionTypes'
+import type {
+  AdminRegion,
+  AdminRegionGeometry,
+  AdminRegionLevel,
+  AdminRegionRequestInput,
+} from './adminRegionTypes'
 
 const DEFAULT_ADMIN_REGION_API_URL = '/api/admin-regions'
 
 export async function loadAdminRegions(
   apiUrl: string | undefined,
-  level: AdminRegionLevel,
+  input: AdminRegionRequestInput,
   signal: AbortSignal,
 ): Promise<AdminRegion[]> {
   const baseUrl = apiUrl?.trim() || DEFAULT_ADMIN_REGION_API_URL
-  const response = await fetch(`${baseUrl}?level=${level}`, {
+  const response = await fetch(createAdminRegionUrl(baseUrl, input), {
     method: 'GET',
     signal,
   })
@@ -22,6 +27,18 @@ export async function loadAdminRegions(
   }
 
   return payload.regions
+}
+
+function createAdminRegionUrl(baseUrl: string, input: AdminRegionRequestInput) {
+  const searchParams = new URLSearchParams({
+    level: String(input.level),
+    west: String(input.viewportBounds.west),
+    south: String(input.viewportBounds.south),
+    east: String(input.viewportBounds.east),
+    north: String(input.viewportBounds.north),
+    zoom: String(input.zoom),
+  })
+  return `${baseUrl}?${searchParams.toString()}`
 }
 
 function isAdminRegionResponse(payload: unknown): payload is { regions: AdminRegion[] } {
@@ -48,7 +65,7 @@ function isAdminRegion(value: unknown): value is AdminRegion {
 }
 
 function isAdminRegionLevel(value: unknown): value is AdminRegionLevel {
-  return value === 1 || value === 2 || value === 3 || value === 4 || value === 5
+  return value === 2 || value === 3 || value === 4
 }
 
 function isAdminRegionGeometry(value: unknown): value is AdminRegionGeometry {

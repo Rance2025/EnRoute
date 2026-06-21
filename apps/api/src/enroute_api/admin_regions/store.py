@@ -15,6 +15,11 @@ OSM_ADMIN_LEVEL_TO_ENROUTE_LEVEL = {
     6: 4,
     8: 5,
 }
+AREACITY_LEVEL_TO_ENROUTE_LEVEL = {
+    "province": 2,
+    "city": 3,
+    "district": 4,
+}
 
 
 def initialize_admin_region_schema(connection: sqlite3.Connection) -> None:
@@ -88,6 +93,9 @@ def normalize_admin_region_feature(feature: dict[str, Any]) -> dict[str, Any] | 
     geometry = feature.get("geometry")
     if not isinstance(properties, dict) or not isinstance(geometry, dict):
         return feature
+    areacity_feature = normalize_areacity_admin_region_feature(properties, geometry)
+    if areacity_feature is not None:
+        return areacity_feature
     if properties.get("id") and properties.get("level") is not None:
         return feature
 
@@ -120,6 +128,45 @@ def normalize_admin_region_feature(feature: dict[str, Any]) -> dict[str, Any] | 
         "type": "Feature",
         "properties": normalized_properties,
         "geometry": transform_geometry_coordinates(geometry, source_coordinate_system="wgs84"),
+    }
+
+
+def normalize_areacity_admin_region_feature(
+    properties: dict[str, Any],
+    geometry: dict[str, Any],
+) -> dict[str, Any] | None:
+    adcode = properties.get("adcode") or properties.get("id")
+    level = properties.get("level")
+    if adcode in {None, ""} or not isinstance(level, str):
+        return None
+
+    enroute_level = AREACITY_LEVEL_TO_ENROUTE_LEVEL.get(level)
+    if enroute_level is None:
+        return None
+
+    name = properties.get("name")
+    if not name:
+        raise ValueError("AreaCity admin region feature requires adcode, name, and level")
+
+    normalized_properties = {
+        "id": str(adcode),
+        "name": str(name),
+        "level": enroute_level,
+    }
+    parent_id = (
+        properties.get("parent")
+        or properties.get("parentId")
+        or properties.get("parent_id")
+        or properties.get("pid")
+        or properties.get("parent_adcode")
+    )
+    if parent_id not in {None, ""}:
+        normalized_properties["parentId"] = str(parent_id)
+
+    return {
+        "type": "Feature",
+        "properties": normalized_properties,
+        "geometry": geometry,
     }
 
 
@@ -303,9 +350,44 @@ def get_region_levels(connection: sqlite3.Connection, region_ids: Iterable[str])
 
 
 def query_admin_regions_by_level(connection: sqlite3.Connection, level: int) -> list[sqlite3.Row]:
+    return query_admin_regions(connection, level=level)
+
+
+def query_admin_regions(
+    connection: sqlite3.Connection,
+    *,
+    level: int,
+    west: float | None = None,
+    south: float | None = None,
+    east: float | None = None,
+    north: float | None = None,
+    zoom: float | None = None,
+) -> list[sqlite3.Row]:
+    del zoom
+    parameters: dict[str, float | int] = {"level": level}
+    bbox_filter = ""
+    if None not in {west, south, east, north}:
+        parameters.update(
+            {
+                "west": float(west),
+                "south": float(south),
+                "east": float(east),
+                "north": float(north),
+            },
+        )
+        if float(west) <= float(east):
+            longitude_clause = "min_lng <= :east AND max_lng >= :west"
+        else:
+            longitude_clause = "(min_lng <= :east OR max_lng >= :west)"
+        bbox_filter = f"""
+          AND min_lat <= :north
+          AND max_lat >= :south
+          AND {longitude_clause}
+        """
+
     return list(
         connection.execute(
-            """
+            f"""
             SELECT
               id,
               name,
@@ -316,10 +398,11 @@ def query_admin_regions_by_level(connection: sqlite3.Connection, level: int) -> 
               stay_duration_seconds,
               travel_distance_meters
             FROM admin_regions
-            WHERE level = ?
+            WHERE level = :level
+            {bbox_filter}
             ORDER BY id
             """,
-            (level,),
+            parameters,
         ),
     )
 

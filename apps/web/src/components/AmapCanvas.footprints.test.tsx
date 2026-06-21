@@ -7,7 +7,7 @@ import type {
   FootprintSnapshot,
   FootprintSnapshotRequest,
 } from '../layers/footprintDataSource'
-import type { AdminRegion } from '../layers/adminRegionTypes'
+import type { AdminRegion, AdminRegionRequestInput } from '../layers/adminRegionTypes'
 import type { FootprintPoint, FootprintRenderSnapshot } from '../layers/footprintTypes'
 import {
   selectDay,
@@ -80,7 +80,7 @@ const loadedAdminRegions: AdminRegion[] = [
   {
     id: 'sanlin',
     name: '三林镇',
-    level: 5,
+    level: 4,
     geometry: {
       type: 'Polygon',
       coordinates: [
@@ -156,6 +156,7 @@ async function renderFootprintMassMarks({
   })
   const snapshotRequests: FootprintSnapshotRequest[] = []
   const snapshotSignals: AbortSignal[] = []
+  const adminRegionRequests: AdminRegionRequestInput[] = []
   const adminRegionSignals: AbortSignal[] = []
   const mapConstructorCalls: Array<unknown> = []
   const loadFootprintSnapshot = vi.fn(
@@ -176,9 +177,10 @@ async function renderFootprintMassMarks({
   const loadAdminRegions = vi.fn(
     async (
       _apiUrl: string | undefined,
-      _level: number,
+      input: AdminRegionRequestInput,
       signal: AbortSignal,
     ) => {
+      adminRegionRequests.push(input)
       adminRegionSignals.push(signal)
       return loadedAdminRegions
     },
@@ -285,6 +287,7 @@ async function renderFootprintMassMarks({
   return {
     completeHandlers,
     adminRegionLayerRecords,
+    adminRegionRequests,
     adminRegionSignals,
     createMassFootprintLayer,
     createAdminRegionLayer,
@@ -954,7 +957,11 @@ describe('AmapCanvas footprint layer wiring', () => {
     rerenderWithAdminRegionUnlockEnabled(true)
 
     await waitFor(() => {
-      expect(loadAdminRegions).toHaveBeenCalledWith(undefined, 5, expect.any(AbortSignal))
+      expect(loadAdminRegions).toHaveBeenCalledWith(undefined, {
+        level: 4,
+        zoom: 10,
+        viewportBounds: { west: 120, south: 30, east: 122, north: 32 },
+      }, expect.any(AbortSignal))
     })
     await waitFor(() => {
       expect(adminRegionLayerRecords[0].update).toHaveBeenCalledWith(loadedAdminRegions)
@@ -965,9 +972,11 @@ describe('AmapCanvas footprint layer wiring', () => {
   it('removes footprint points and stops footprint refreshes while region mode is enabled', async () => {
     const {
       layerRecords,
+      adminRegionRequests,
       loadAdminRegions,
       loadFootprintSnapshot,
       moveEndHandlers,
+      zoomEndHandlers,
       rerenderWithAdminRegionUnlockEnabled,
     } = await renderFootprintMassMarks()
 
@@ -977,7 +986,11 @@ describe('AmapCanvas footprint layer wiring', () => {
     rerenderWithAdminRegionUnlockEnabled(true)
 
     await waitFor(() => {
-      expect(loadAdminRegions).toHaveBeenCalledWith(undefined, 5, expect.any(AbortSignal))
+      expect(loadAdminRegions).toHaveBeenCalledWith(undefined, {
+        level: 4,
+        zoom: 10,
+        viewportBounds: { west: 120, south: 30, east: 122, north: 32 },
+      }, expect.any(AbortSignal))
     })
     await waitFor(() => {
       expect(footprintLayer.destroy).toHaveBeenCalledTimes(1)
@@ -989,6 +1002,13 @@ describe('AmapCanvas footprint layer wiring', () => {
     })
 
     expect(loadFootprintSnapshot).toHaveBeenCalledTimes(footprintRequestCount)
+    await waitFor(() => expect(adminRegionRequests.length).toBeGreaterThanOrEqual(2))
+
+    act(() => {
+      zoomEndHandlers.at(-1)?.()
+    })
+
+    await waitFor(() => expect(adminRegionRequests.length).toBeGreaterThanOrEqual(3))
   })
 
   it('schedules pending footprint style changes onto the existing native layer', async () => {

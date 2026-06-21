@@ -66,11 +66,9 @@ const EMPTY_FOOTPRINT_DEBUG: FootprintRenderDebug = {
   renderRatio: 0,
 }
 const ADMIN_REGION_LEVELS: Array<{ level: AdminRegionLevel; label: string }> = [
-  { level: 1, label: '国家' },
-  { level: 2, label: '省/直辖市' },
-  { level: 3, label: '市' },
+  { level: 2, label: '省级' },
+  { level: 3, label: '市级' },
   { level: 4, label: '区县' },
-  { level: 5, label: '街道/乡镇' },
 ]
 
 function AmapCanvasComponent({
@@ -95,6 +93,8 @@ function AmapCanvasComponent({
   const adminRegionRequestIdRef = useRef(0)
   const selectedFootprintBoundsRef = useRef<FootprintLngLatBounds | null>(null)
   const timeRangeRef = useRef(timeRange)
+  const adminRegionUnlockEnabledRef = useRef(adminRegionUnlockEnabled)
+  const adminRegionLevelRef = useRef<AdminRegionLevel>(4)
   const zoomClampTimersRef = useRef<number[]>([])
   const isWorldViewLockedRef = useRef(true)
   const [status, setStatus] = useState<MapStatus>(
@@ -105,7 +105,7 @@ function AmapCanvasComponent({
   const [footprintDebug, setFootprintDebug] = useState<FootprintRenderDebug>(
     EMPTY_FOOTPRINT_DEBUG,
   )
-  const [adminRegionLevel, setAdminRegionLevel] = useState<AdminRegionLevel>(5)
+  const [adminRegionLevel, setAdminRegionLevel] = useState<AdminRegionLevel>(4)
   const footprintStyleRef = useRef(footprintStyle)
 
   const themes = config.themes.length ? config.themes : AMAP_THEMES
@@ -114,6 +114,14 @@ function AmapCanvasComponent({
   useEffect(() => {
     timeRangeRef.current = timeRange
   }, [timeRange])
+
+  useEffect(() => {
+    adminRegionUnlockEnabledRef.current = adminRegionUnlockEnabled
+  }, [adminRegionUnlockEnabled])
+
+  useEffect(() => {
+    adminRegionLevelRef.current = adminRegionLevel
+  }, [adminRegionLevel])
 
   const destroyFootprintLayer = useCallback(() => {
     footprintRequestIdRef.current += 1
@@ -160,6 +168,56 @@ function AmapCanvasComponent({
     adminRegionLayerRef.current?.destroy()
     adminRegionLayerRef.current = null
   }, [])
+
+  const updateDisplayedAdminRegions = useCallback((level: AdminRegionLevel) => {
+    if (
+      !mapRef.current ||
+      !mapNodeRef.current ||
+      !adminRegionLayerRef.current ||
+      !adminRegionUnlockEnabledRef.current
+    ) {
+      return
+    }
+
+    const viewport = calculateCurrentViewportSampleInput(mapRef.current, mapNodeRef.current)
+    const requestId = adminRegionRequestIdRef.current + 1
+    adminRegionRequestIdRef.current = requestId
+    adminRegionAbortControllerRef.current?.abort()
+    const abortController = new AbortController()
+    adminRegionAbortControllerRef.current = abortController
+    const layer = adminRegionLayerRef.current
+
+    loadAdminRegions(
+      import.meta.env.VITE_ADMIN_REGION_API_URL,
+      {
+        level,
+        zoom: viewport.zoom,
+        viewportBounds: viewport.bounds,
+      },
+      abortController.signal,
+    )
+      .then((regions) => {
+        if (requestId !== adminRegionRequestIdRef.current) return
+
+        layer.update(regions)
+      })
+      .catch((error: unknown) => {
+        if (abortController.signal.aborted) return
+
+        if (import.meta.env.DEV) {
+          console.warn(error)
+        }
+      })
+      .finally(() => {
+        if (adminRegionAbortControllerRef.current === abortController) {
+          adminRegionAbortControllerRef.current = null
+        }
+      })
+  }, [])
+
+  const refreshDisplayedAdminRegionsForCurrentLevel = useCallback(() => {
+    updateDisplayedAdminRegions(adminRegionLevelRef.current)
+  }, [updateDisplayedAdminRegions])
 
   const updateDisplayedFootprints = useCallback((range: TimeRangeSelection) => {
     if (!mapRef.current || !mapNodeRef.current || !footprintLayerRef.current) {
@@ -426,49 +484,21 @@ function AmapCanvasComponent({
 
     const layer = createAdminRegionLayer(amapRef.current, mapRef.current)
     adminRegionLayerRef.current = layer
-    const requestId = adminRegionRequestIdRef.current + 1
-    adminRegionRequestIdRef.current = requestId
-    adminRegionAbortControllerRef.current?.abort()
-    const abortController = new AbortController()
-    adminRegionAbortControllerRef.current = abortController
-
-    loadAdminRegions(
-      import.meta.env.VITE_ADMIN_REGION_API_URL,
-      adminRegionLevel,
-      abortController.signal,
-    )
-      .then((regions) => {
-        if (requestId !== adminRegionRequestIdRef.current) return
-
-        layer.update(regions)
-      })
-      .catch((error: unknown) => {
-        if (abortController.signal.aborted) return
-
-        if (import.meta.env.DEV) {
-          console.warn(error)
-        }
-      })
+    updateDisplayedAdminRegions(adminRegionLevel)
 
     return () => {
-      if (requestId === adminRegionRequestIdRef.current) {
-        adminRegionRequestIdRef.current += 1
-      }
-      abortController.abort()
-      if (adminRegionAbortControllerRef.current === abortController) {
-        adminRegionAbortControllerRef.current = null
-      }
       if (adminRegionLayerRef.current === layer) {
         layer.destroy()
         adminRegionLayerRef.current = null
       }
     }
-  }, [adminRegionLevel, adminRegionUnlockEnabled, destroyAdminRegionLayer, status])
+  }, [adminRegionLevel, adminRegionUnlockEnabled, destroyAdminRegionLayer, status, updateDisplayedAdminRegions])
 
   useEffect(() => {
     if (status !== 'ready' || !mapRef.current) return
     const map = mapRef.current
     const updateAfterViewportSettles = () => {
+      refreshDisplayedAdminRegionsForCurrentLevel()
       refreshDisplayedFootprintsForCurrentRange()
     }
 
@@ -479,12 +509,13 @@ function AmapCanvasComponent({
       map.off('moveend', updateAfterViewportSettles)
       map.off('zoomend', updateAfterViewportSettles)
     }
-  }, [refreshDisplayedFootprintsForCurrentRange, status])
+  }, [refreshDisplayedAdminRegionsForCurrentLevel, refreshDisplayedFootprintsForCurrentRange, status])
 
   useEffect(() => {
     function updateLayoutAfterResize() {
       if (!mapRef.current || !mapNodeRef.current) return
       updatePaneLayout(mapRef.current, mapNodeRef.current)
+      refreshDisplayedAdminRegionsForCurrentLevel()
       refreshDisplayedFootprintsForCurrentRange()
     }
 
@@ -493,7 +524,7 @@ function AmapCanvasComponent({
     return () => {
       window.removeEventListener('resize', updateLayoutAfterResize)
     }
-  }, [refreshDisplayedFootprintsForCurrentRange, updatePaneLayout])
+  }, [refreshDisplayedAdminRegionsForCurrentLevel, refreshDisplayedFootprintsForCurrentRange, updatePaneLayout])
 
   function showWorldMap() {
     if (!mapRef.current || !mapNodeRef.current) return

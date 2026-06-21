@@ -1372,7 +1372,7 @@ describe('map chrome layout', () => {
     expect(panelRule).toContain('bottom: calc(var(--map-chrome-y) + 66px)')
     expect(panelRule).toContain('right: var(--map-chrome-x)')
     expect(levelRule).toContain('display: grid')
-    expect(levelRule).toContain('grid-template-columns: repeat(5, minmax(0, 1fr))')
+    expect(levelRule).toContain('grid-template-columns: repeat(3, minmax(0, 1fr))')
   })
 
   it('places the footprint rendering debug panel in the map upper-right corner', () => {

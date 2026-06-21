@@ -98,10 +98,11 @@ def test_serves_get_footprints_as_json(tmp_path: Path):
             "speed": -1,
             "distance": 0,
             "heading": 0,
-            "altitude": 10.146956,
-            "regionId": None,
-        },
-    ]
+                "altitude": 10.146956,
+                "regionId": None,
+                "countryId": None,
+            },
+        ]
 
 
 def test_get_footprints_imports_and_serves_from_sqlite(tmp_path: Path):

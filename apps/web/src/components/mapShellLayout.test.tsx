@@ -192,7 +192,12 @@ describe('unified shell layout', () => {
 
     const levelGroup = screen.getByRole('group', { name: '行政区划层级' })
     expect(levelGroup).toBeInTheDocument()
-    expect(within(levelGroup).getByRole('button', { name: '街道/乡镇' })).toHaveAttribute(
+    expect(within(levelGroup).getAllByRole('button').map((button) => button.textContent)).toEqual([
+      '省级',
+      '市级',
+      '区县',
+    ])
+    expect(within(levelGroup).getByRole('button', { name: '区县' })).toHaveAttribute(
       'aria-pressed',
       'true',
     )

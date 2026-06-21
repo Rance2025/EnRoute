@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 
-from .admin_regions.store import format_admin_region, query_admin_regions_by_level
+from .admin_regions.store import format_admin_region, query_admin_regions
 from .config import Settings
 from .footprints.store import FootprintStore
 
@@ -36,14 +36,29 @@ def create_app(*, settings: Settings | None = None) -> FastAPI:
         return store.get_snapshot(payload)
 
     @app.get("/api/admin-regions")
-    def get_admin_regions(level: int) -> dict[str, object]:
-        if level < 1 or level > 5:
-            raise HTTPException(status_code=400, detail="level must be between 1 and 5")
+    def get_admin_regions(
+        level: int,
+        west: float | None = None,
+        south: float | None = None,
+        east: float | None = None,
+        north: float | None = None,
+        zoom: float | None = None,
+    ) -> dict[str, object]:
+        if level not in {2, 3, 4}:
+            raise HTTPException(status_code=400, detail="level must be one of 2, 3, or 4")
         store.ensure_ready()
         return {
             "regions": [
                 format_admin_region(row)
-                for row in query_admin_regions_by_level(store.connection, level)
+                for row in query_admin_regions(
+                    store.connection,
+                    level=level,
+                    west=west,
+                    south=south,
+                    east=east,
+                    north=north,
+                    zoom=zoom,
+                )
             ],
         }
 
