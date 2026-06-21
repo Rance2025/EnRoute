@@ -18,6 +18,9 @@ import {
   projectLngLat,
 } from '../config/mercator'
 import { installBoundedMapZoom, zoomByStep } from '../config/mapZoomBounds'
+import { loadAdminRegions } from '../layers/adminRegionDataSource'
+import { createAdminRegionLayer } from '../layers/adminRegionLayer'
+import type { AdminRegionLevel } from '../layers/adminRegionTypes'
 import { loadFootprintSnapshot, type FootprintRenderDebug } from '../layers/footprintDataSource'
 import { createMassFootprintLayer } from '../layers/massFootprintLayer'
 import type { FootprintLngLatBounds } from '../layers/footprintTypes'
@@ -35,6 +38,7 @@ type AmapCanvasProps = {
   config: AmapConfig
   timeRange: TimeRangeSelection
   onFootprintMetricsChange?: (metrics: FootprintMetrics) => void
+  adminRegionUnlockEnabled?: boolean
 }
 
 export type FootprintMetrics = {
@@ -60,11 +64,19 @@ const EMPTY_FOOTPRINT_DEBUG: FootprintRenderDebug = {
   renderedCount: 0,
   renderRatio: 0,
 }
+const ADMIN_REGION_LEVELS: Array<{ level: AdminRegionLevel; label: string }> = [
+  { level: 1, label: '国家' },
+  { level: 2, label: '省/直辖市' },
+  { level: 3, label: '市' },
+  { level: 4, label: '区县' },
+  { level: 5, label: '街道/乡镇' },
+]
 
 function AmapCanvasComponent({
   config,
   timeRange,
   onFootprintMetricsChange,
+  adminRegionUnlockEnabled = false,
 }: AmapCanvasProps) {
   const mapNodeRef = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<AMap.Map | null>(null)
@@ -76,6 +88,9 @@ function AmapCanvasComponent({
   const footprintLayerRef = useRef<ReturnType<typeof createMassFootprintLayer> | null>(null)
   const footprintAbortControllerRef = useRef<AbortController | null>(null)
   const footprintRequestIdRef = useRef(0)
+  const adminRegionLayerRef = useRef<ReturnType<typeof createAdminRegionLayer> | null>(null)
+  const adminRegionAbortControllerRef = useRef<AbortController | null>(null)
+  const adminRegionRequestIdRef = useRef(0)
   const selectedFootprintBoundsRef = useRef<FootprintLngLatBounds | null>(null)
   const timeRangeRef = useRef(timeRange)
   const zoomClampTimersRef = useRef<number[]>([])
@@ -88,6 +103,7 @@ function AmapCanvasComponent({
   const [footprintDebug, setFootprintDebug] = useState<FootprintRenderDebug>(
     EMPTY_FOOTPRINT_DEBUG,
   )
+  const [adminRegionLevel, setAdminRegionLevel] = useState<AdminRegionLevel>(5)
   const footprintStyleRef = useRef(footprintStyle)
 
   const themes = config.themes.length ? config.themes : AMAP_THEMES
@@ -100,6 +116,14 @@ function AmapCanvasComponent({
   const destroyFootprintLayer = useCallback(() => {
     footprintLayerRef.current?.destroy()
     footprintLayerRef.current = null
+  }, [])
+
+  const destroyAdminRegionLayer = useCallback(() => {
+    adminRegionRequestIdRef.current += 1
+    adminRegionAbortControllerRef.current?.abort()
+    adminRegionAbortControllerRef.current = null
+    adminRegionLayerRef.current?.destroy()
+    adminRegionLayerRef.current = null
   }, [])
 
   const updateDisplayedFootprints = useCallback((range: TimeRangeSelection) => {
@@ -271,6 +295,7 @@ function AmapCanvasComponent({
       footprintAbortControllerRef.current = null
       clearZoomClampTimers()
       destroyFootprintLayer()
+      destroyAdminRegionLayer()
       selectedFootprintBoundsRef.current = null
       setFootprintDebug(EMPTY_FOOTPRINT_DEBUG)
       onFootprintMetricsChange?.(EMPTY_FOOTPRINT_METRICS)
@@ -292,6 +317,7 @@ function AmapCanvasComponent({
     config,
     mapTheme.style,
     destroyFootprintLayer,
+    destroyAdminRegionLayer,
     updatePaneLayout,
     clearZoomClampTimers,
     updateDisplayedFootprints,
@@ -319,6 +345,60 @@ function AmapCanvasComponent({
   useEffect(() => {
     updateDisplayedFootprints(timeRange)
   }, [timeRange, updateDisplayedFootprints])
+
+  useEffect(() => {
+    if (
+      status !== 'ready' ||
+      !adminRegionUnlockEnabled ||
+      !amapRef.current ||
+      !mapRef.current
+    ) {
+      if (!adminRegionUnlockEnabled) {
+        destroyAdminRegionLayer()
+      }
+      return
+    }
+
+    const layer = createAdminRegionLayer(amapRef.current, mapRef.current)
+    adminRegionLayerRef.current = layer
+    const requestId = adminRegionRequestIdRef.current + 1
+    adminRegionRequestIdRef.current = requestId
+    adminRegionAbortControllerRef.current?.abort()
+    const abortController = new AbortController()
+    adminRegionAbortControllerRef.current = abortController
+
+    loadAdminRegions(
+      import.meta.env.VITE_ADMIN_REGION_API_URL,
+      adminRegionLevel,
+      abortController.signal,
+    )
+      .then((regions) => {
+        if (requestId !== adminRegionRequestIdRef.current) return
+
+        layer.update(regions)
+      })
+      .catch((error: unknown) => {
+        if (abortController.signal.aborted) return
+
+        if (import.meta.env.DEV) {
+          console.warn(error)
+        }
+      })
+
+    return () => {
+      if (requestId === adminRegionRequestIdRef.current) {
+        adminRegionRequestIdRef.current += 1
+      }
+      abortController.abort()
+      if (adminRegionAbortControllerRef.current === abortController) {
+        adminRegionAbortControllerRef.current = null
+      }
+      if (adminRegionLayerRef.current === layer) {
+        layer.destroy()
+        adminRegionLayerRef.current = null
+      }
+    }
+  }, [adminRegionLevel, adminRegionUnlockEnabled, destroyAdminRegionLayer, status])
 
   useEffect(() => {
     if (status !== 'ready' || !mapRef.current) return
@@ -416,6 +496,12 @@ function AmapCanvasComponent({
             footprintStyle={footprintStyle}
             onFootprintStyleChange={updateFootprintStyle}
           />
+          {adminRegionUnlockEnabled ? (
+            <AdminRegionUnlockPanel
+              level={adminRegionLevel}
+              onLevelChange={setAdminRegionLevel}
+            />
+          ) : null}
           {status === 'ready' ? <FootprintDebugPanel debug={footprintDebug} /> : null}
           {status === 'error' ? (
             <div className="map-message" role="alert">
@@ -491,6 +577,31 @@ function FootprintDebugPanel({ debug }: { debug: FootprintRenderDebug }) {
       <div className="footprint-debug-panel__row">
         <span>渲染比例</span>
         <strong>{formatRenderRatio(debug.renderRatio)}</strong>
+      </div>
+    </aside>
+  )
+}
+
+function AdminRegionUnlockPanel({
+  level,
+  onLevelChange,
+}: {
+  level: AdminRegionLevel
+  onLevelChange: (level: AdminRegionLevel) => void
+}) {
+  return (
+    <aside className="admin-region-unlock-panel" role="group" aria-label="行政区划层级">
+      <div className="admin-region-unlock-levels">
+        {ADMIN_REGION_LEVELS.map(({ level: optionLevel, label }) => (
+          <button
+            key={optionLevel}
+            type="button"
+            aria-pressed={level === optionLevel}
+            onClick={() => onLevelChange(optionLevel)}
+          >
+            {label}
+          </button>
+        ))}
       </div>
     </aside>
   )

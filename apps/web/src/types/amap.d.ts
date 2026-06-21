@@ -64,6 +64,23 @@ declare namespace AMap {
     setStyle(style: MassMarksStyle | MassMarksStyle[]): void
   }
 
+  class Polygon {
+    constructor(options: PolygonOptions)
+    setMap(map: Map | null): void
+  }
+
+  type PolygonOptions = {
+    path: LngLatLike[][] | LngLatLike[][][]
+    strokeColor?: string
+    strokeOpacity?: number
+    strokeWeight?: number
+    fillColor?: string
+    fillOpacity?: number
+    bubble?: boolean
+    cursor?: string
+    zIndex?: number
+  }
+
   type MassMarksData = {
     id?: string
     lnglat: LngLatLike

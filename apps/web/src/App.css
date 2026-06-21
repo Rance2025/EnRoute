@@ -1387,6 +1387,7 @@
 }
 
 .map-toolbar,
+.admin-region-unlock-panel,
 .map-message {
   position: absolute;
   z-index: 2;
@@ -2855,6 +2856,49 @@
 .map-toolbar__button:focus-visible {
   outline: 2px solid rgba(38, 58, 54, 0.38);
   outline-offset: 3px;
+}
+
+.admin-region-unlock-panel {
+  position: absolute;
+  right: var(--map-chrome-x);
+  bottom: calc(var(--map-chrome-y) + 66px);
+  width: 258px;
+  max-width: calc(100vw - 28px);
+  padding: 10px;
+  border: 1px solid rgba(23, 31, 29, 0.08);
+  border-radius: 10px;
+  color: #17211f;
+  background: rgba(250, 252, 251, 0.74);
+  box-shadow:
+    0 14px 40px rgba(31, 46, 42, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(18px) saturate(1.1);
+}
+
+.admin-region-unlock-levels {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.admin-region-unlock-levels button {
+  min-width: 0;
+  height: 30px;
+  padding: 0 5px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 999px;
+  color: rgba(23, 35, 31, 0.62);
+  background: rgba(23, 35, 31, 0.06);
+  font-size: 11px;
+  font-weight: 760;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-region-unlock-levels button[aria-pressed='true'] {
+  color: #f8fbfa;
+  background: #123f35;
 }
 
 .footprint-style-popover {

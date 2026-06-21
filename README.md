@@ -46,18 +46,33 @@ and `npm run dev`.
 `npm install` installs the frontend application dependencies. `npm run
 install:api` installs the Python backend service in editable mode with its test
 dependencies from `apps/api/pyproject.toml`. `npm run prepare:footprints`
-imports the local CSV export into the ignored SQLite database before startup.
+incrementally imports new rows from the local CSV export into the ignored SQLite
+database before startup.
 
 Keep personal footprint exports in `external/`, which is ignored by git. The
-Python API reads `FOOTPRINT_DATA_PATH=external/backUpData-all.csv`, streams it
-into SQLite at `FOOTPRINT_DB_PATH=data/footprints.sqlite`, and serves
-viewport snapshots from `POST /api/footprints/snapshot`. The compatibility
-`GET /api/footprints` route remains available for small/debug payloads, but the
-map no longer loads all raw points into browser memory. Footprint CSV
-coordinates default to WGS84 and are converted by the API to GCJ-02 for AMap; set
-`FOOTPRINT_COORDINATE_SYSTEM=gcj02` when the source CSV is already GCJ-02. The
-API also checks the CSV signature at query time and refreshes SQLite when the
-source export changes. After a successful import, the local SQLite database can
+Python API reads `FOOTPRINT_DATA_PATH=external/backUpData-all.csv`, streams new
+rows into SQLite at `FOOTPRINT_DB_PATH=data/footprints.sqlite`, and serves
+viewport snapshots from `POST /api/footprints/snapshot`. Footprint coordinates
+are stored as GCJ-02; CSV coordinates default to WGS84 and are converted by the
+API during import. Set `FOOTPRINT_COORDINATE_SYSTEM=gcj02` when the source CSV is
+already GCJ-02.
+
+Optional administrative boundary data is read from
+`ADMIN_REGION_DATA_PATH=external/admin-regions.geojson`. Boundary files stay
+local unless their license permits committing them. The importer accepts the
+project's normalized GeoJSON contract and OSM/Geofabrik-style administrative
+GeoJSON with `admin_level*` properties; OSM boundary coordinates are converted
+from WGS84 to GCJ-02 before storage so they align with imported footprints and
+AMap. When boundaries exist, the import assigns each footprint to the finest
+matching `region_id`, updates cached unlock counts and stay/travel totals across
+the available region chain, and `GET /api/admin-regions?level=N` serves the
+current unlock state for the map overlay. The frontend only requests
+`/api/admin-regions` after enabling the administrative-region unlock layer.
+
+The compatibility `GET /api/footprints` route remains available for small/debug
+payloads, but the map no longer loads all raw points into browser memory. The API
+checks local source signatures at query time and refreshes SQLite when the CSV or
+boundary source changes. After a successful import, the local SQLite database can
 serve footprint queries even if the original CSV export is removed. Loaded
 footprint samples render through AMap `MassMarks`, so
 AMap owns point projection during drag and zoom instead of a React or custom

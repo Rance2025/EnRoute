@@ -282,6 +282,7 @@ describe('App', () => {
     const mapToolbar = screen.getByLabelText('地图工具')
     expect(mapToolbar).toBeInTheDocument()
     expect(mapToolbar.querySelectorAll('button')).toHaveLength(6)
+    expect(within(mapToolbar).queryByRole('button', { name: '行政区划解锁程度' })).not.toBeInTheDocument()
     expect(within(mapToolbar).getByRole('button', { name: '足迹显示设置' })).toBeInTheDocument()
     expect(within(mapToolbar).getByRole('button', { name: '定位当前位置' })).toBeInTheDocument()
     expect(screen.queryByLabelText('回到默认中国视角')).not.toBeInTheDocument()

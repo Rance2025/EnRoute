@@ -85,9 +85,6 @@ def parse_footprint_row(
             "distance": float(row["distance"]),
             "heading": float(row["heading"]),
             "altitude": float(row["altitude"]),
-            "locType": float(row["locType"]),
-            "isBackForeground": float(row["isBackForeground"]),
-            "stepType": float(row["stepType"]),
         }
     except (TypeError, ValueError):
         return None
@@ -107,7 +104,6 @@ def parse_footprint_row(
     truncated_timestamp = int(timestamp_seconds)
 
     return {
-        "id": f"{truncated_timestamp}-{row_index}",
         "timestampSeconds": truncated_timestamp,
         "longitude": transformed_longitude,
         "latitude": transformed_latitude,

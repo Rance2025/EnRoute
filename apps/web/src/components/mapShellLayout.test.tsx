@@ -149,6 +149,21 @@ describe('unified shell layout', () => {
     expect(colorInput).toHaveValue('#4f7cff')
   })
 
+  it('opens administrative region unlock controls from the map region tab', () => {
+    render(<App amapConfig={configuredAmap} />)
+
+    expect(screen.queryByRole('group', { name: '行政区划层级' })).not.toBeInTheDocument()
+
+    fireEvent.click(within(screen.getByRole('navigation', { name: '二级导航' })).getByRole('button', { name: '区域' }))
+
+    const levelGroup = screen.getByRole('group', { name: '行政区划层级' })
+    expect(levelGroup).toBeInTheDocument()
+    expect(within(levelGroup).getByRole('button', { name: '街道/乡镇' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+  })
+
   it('rounds footprint point opacity controls to 0.01 precision through the slider', () => {
     render(<App amapConfig={configuredAmap} />)
 

@@ -40,7 +40,6 @@ def test_loads_footprint_points_from_configured_csv_path(tmp_path: Path):
     assert payload == {
         "points": [
             {
-                "id": "1768144456-0",
                 "timestampSeconds": 1768144456,
                 "longitude": 121.511383,
                 "latitude": 31.296564,
@@ -49,9 +48,6 @@ def test_loads_footprint_points_from_configured_csv_path(tmp_path: Path):
                 "distance": 0,
                 "heading": 0,
                 "altitude": 10.146956,
-                "locType": 1,
-                "isBackForeground": 1,
-                "stepType": 0,
             },
         ],
     }
@@ -73,7 +69,6 @@ def test_skips_rows_with_invalid_numeric_fields(tmp_path: Path):
 
     assert payload["points"] == [
         {
-            "id": "1768144457-1",
             "timestampSeconds": 1768144457,
             "longitude": 121.511384,
             "latitude": 31.296565,
@@ -82,9 +77,6 @@ def test_skips_rows_with_invalid_numeric_fields(tmp_path: Path):
             "distance": 0,
             "heading": 0,
             "altitude": 10.146956,
-            "locType": 1,
-            "isBackForeground": 1,
-            "stepType": 0,
         },
     ]
 
@@ -99,7 +91,6 @@ def test_serves_get_footprints_as_json(tmp_path: Path):
     assert response.headers["content-type"].startswith("application/json")
     assert response.json()["points"] == [
         {
-            "id": "1768144456-0",
             "timestampSeconds": 1768144456,
             "longitude": 121.511383,
             "latitude": 31.296564,
@@ -108,9 +99,7 @@ def test_serves_get_footprints_as_json(tmp_path: Path):
             "distance": 0,
             "heading": 0,
             "altitude": 10.146956,
-            "locType": 1,
-            "isBackForeground": 1,
-            "stepType": 0,
+            "regionId": None,
         },
     ]
 

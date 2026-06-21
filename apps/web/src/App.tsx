@@ -206,6 +206,7 @@ function App({ amapConfig }: AppProps) {
           config={resolvedAmapConfig}
           timeRange={selectedTimeRange}
           onFootprintMetricsChange={setFootprintMetrics}
+          adminRegionUnlockEnabled={activeSecondaryNavId === 'regions'}
         />
       ) : (
         <section className="main-workspace" aria-label="在途 EnRoute 主工作区">

@@ -7,6 +7,7 @@ import type {
   FootprintSnapshot,
   FootprintSnapshotRequest,
 } from '../layers/footprintDataSource'
+import type { AdminRegion } from '../layers/adminRegionTypes'
 import type { FootprintPoint, FootprintRenderSnapshot } from '../layers/footprintTypes'
 import {
   selectDay,
@@ -75,6 +76,24 @@ const emptyRenderSnapshot: FootprintRenderSnapshot = {
   selectedBounds: null,
 }
 
+const loadedAdminRegions: AdminRegion[] = [
+  {
+    id: 'sanlin',
+    name: '三林镇',
+    level: 5,
+    geometry: {
+      type: 'Polygon',
+      coordinates: [
+        [[121, 31], [122, 31], [122, 32], [121, 32], [121, 31]],
+      ],
+    },
+    firstSeenTimestamp: 100,
+    footprintCount: 2,
+    stayDurationSeconds: 30,
+    travelDistanceMeters: 40,
+  },
+]
+
 const localStorageMock = createLocalStorageMock()
 Object.defineProperty(window, 'localStorage', {
   configurable: true,
@@ -88,6 +107,7 @@ async function renderFootprintMassMarks({
   snapshot = createDefaultSnapshot(),
   snapshots,
   timeRange = selectPresetRange('all'),
+  adminRegionUnlockEnabled = false,
 }: {
   containerSize?: { width: number; height: number }
   mapOverrides?: object
@@ -99,6 +119,7 @@ async function renderFootprintMassMarks({
   snapshot?: FootprintSnapshot
   snapshots?: FootprintSnapshot[]
   timeRange?: TimeRangeSelection
+  adminRegionUnlockEnabled?: boolean
 } = {}) {
   const mapMoveHandlers: Array<() => void> = []
   const moveEndHandlers: Array<() => void> = []
@@ -108,6 +129,10 @@ async function renderFootprintMassMarks({
   const layerRecords: Array<{
     destroy: ReturnType<typeof vi.fn>
     scheduleStyleUpdate: ReturnType<typeof vi.fn>
+    update: ReturnType<typeof vi.fn>
+  }> = []
+  const adminRegionLayerRecords: Array<{
+    destroy: ReturnType<typeof vi.fn>
     update: ReturnType<typeof vi.fn>
   }> = []
   const geolocationGetCurrentPosition = vi.fn()
@@ -129,6 +154,7 @@ async function renderFootprintMassMarks({
   })
   const snapshotRequests: FootprintSnapshotRequest[] = []
   const snapshotSignals: AbortSignal[] = []
+  const adminRegionSignals: AbortSignal[] = []
   const mapConstructorCalls: Array<unknown> = []
   const loadFootprintSnapshot = vi.fn(
     async (
@@ -145,6 +171,25 @@ async function renderFootprintMassMarks({
       ]
     },
   )
+  const loadAdminRegions = vi.fn(
+    async (
+      _apiUrl: string | undefined,
+      _level: number,
+      signal: AbortSignal,
+    ) => {
+      adminRegionSignals.push(signal)
+      return loadedAdminRegions
+    },
+  )
+  const createAdminRegionLayer = vi.fn(() => {
+    const layer = {
+      destroy: vi.fn(),
+      update: vi.fn(),
+    }
+    adminRegionLayerRecords.push(layer)
+
+    return layer
+  })
   class MockMap {
     addControl = vi.fn()
     destroy = vi.fn()
@@ -186,6 +231,12 @@ async function renderFootprintMassMarks({
   vi.doMock('../layers/massFootprintLayer', () => ({
     createMassFootprintLayer,
   }))
+  vi.doMock('../layers/adminRegionDataSource', () => ({
+    loadAdminRegions,
+  }))
+  vi.doMock('../layers/adminRegionLayer', () => ({
+    createAdminRegionLayer,
+  }))
   vi.doMock('../services/amapLoader', () => ({
     loadAmap: vi.fn(async () => ({
       MassMarks: class MassMarks {},
@@ -210,6 +261,7 @@ async function renderFootprintMassMarks({
       config={configuredAmap}
       timeRange={timeRange}
       onFootprintMetricsChange={onFootprintMetricsChange}
+      adminRegionUnlockEnabled={adminRegionUnlockEnabled}
     />,
   )
   const mapSurface = renderResult.container.querySelector('.amap-surface') as HTMLElement
@@ -229,11 +281,15 @@ async function renderFootprintMassMarks({
 
   return {
     completeHandlers,
+    adminRegionLayerRecords,
+    adminRegionSignals,
     createMassFootprintLayer,
+    createAdminRegionLayer,
     amapPlugin,
     geolocationConstructor,
     geolocationGetCurrentPosition,
     layerRecords,
+    loadAdminRegions,
     loadFootprintSnapshot,
     mapConstructorCalls,
     mapMoveHandlers,
@@ -245,6 +301,17 @@ async function renderFootprintMassMarks({
           config={configuredAmap}
           timeRange={nextTimeRange}
           onFootprintMetricsChange={onFootprintMetricsChange}
+          adminRegionUnlockEnabled={adminRegionUnlockEnabled}
+        />,
+      )
+    },
+    rerenderWithAdminRegionUnlockEnabled(nextAdminRegionUnlockEnabled: boolean) {
+      renderResult.rerender(
+        <AmapCanvas
+          config={configuredAmap}
+          timeRange={timeRange}
+          onFootprintMetricsChange={onFootprintMetricsChange}
+          adminRegionUnlockEnabled={nextAdminRegionUnlockEnabled}
         />,
       )
     },
@@ -841,6 +908,28 @@ describe('AmapCanvas footprint layer wiring', () => {
         pixelSize: 2.7,
       },
     )
+  })
+
+  it('loads administrative region polygons only after the region mode is enabled', async () => {
+    const {
+      adminRegionLayerRecords,
+      createAdminRegionLayer,
+      loadAdminRegions,
+      rerenderWithAdminRegionUnlockEnabled,
+    } = await renderFootprintMassMarks()
+
+    expect(loadAdminRegions).not.toHaveBeenCalled()
+    expect(createAdminRegionLayer).not.toHaveBeenCalled()
+
+    rerenderWithAdminRegionUnlockEnabled(true)
+
+    await waitFor(() => {
+      expect(loadAdminRegions).toHaveBeenCalledWith(undefined, 5, expect.any(AbortSignal))
+    })
+    await waitFor(() => {
+      expect(adminRegionLayerRecords[0].update).toHaveBeenCalledWith(loadedAdminRegions)
+    })
+    expect(createAdminRegionLayer).toHaveBeenCalledTimes(1)
   })
 
   it('schedules pending footprint style changes onto the existing native layer', async () => {

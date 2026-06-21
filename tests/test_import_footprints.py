@@ -1,6 +1,8 @@
 import sqlite3
 import tempfile
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
 
 from scripts.import_footprints import main
@@ -24,19 +26,26 @@ class ImportFootprintsTests(unittest.TestCase):
             data_path.parent.mkdir(parents=True)
             data_path.write_text(CSV, encoding="utf-8")
 
-            exit_code = main(
-                [
-                    "--source",
-                    str(data_path),
-                    "--database",
-                    str(db_path),
-                    "--coordinate-system",
-                    "gcj02",
-                ],
-                root_dir=root_dir,
-            )
+            stdout = StringIO()
+
+            with redirect_stdout(stdout):
+                exit_code = main(
+                    [
+                        "--source",
+                        str(data_path),
+                        "--database",
+                        str(db_path),
+                        "--coordinate-system",
+                        "gcj02",
+                    ],
+                    root_dir=root_dir,
+                )
+
+            completed_output = stdout.getvalue()
 
             self.assertEqual(exit_code, 0)
+            self.assertIn("Imported 2 new footprint rows", completed_output)
+            self.assertIn("total rows: 2", completed_output)
             connection = sqlite3.connect(db_path)
             try:
                 self.assertEqual(connection.execute("SELECT COUNT(*) FROM footprints").fetchone(), (2,))
