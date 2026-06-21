@@ -6,6 +6,8 @@ import sqlite3
 from pathlib import Path
 from typing import Any, Iterable
 
+from enroute_api.admin_regions.store import initialize_admin_region_schema
+
 from .csv_loader import iter_footprint_points
 
 TILE_SIZE = 256
@@ -50,6 +52,7 @@ class FootprintStore:
 
 
 def initialize_schema(connection: sqlite3.Connection) -> None:
+    initialize_admin_region_schema(connection)
     connection.executescript(
         """
         CREATE TABLE IF NOT EXISTS footprint_meta (
@@ -57,8 +60,7 @@ def initialize_schema(connection: sqlite3.Connection) -> None:
           value TEXT NOT NULL
         );
         CREATE TABLE IF NOT EXISTS footprints (
-          id TEXT PRIMARY KEY,
-          timestamp_seconds INTEGER NOT NULL,
+          timestamp_seconds INTEGER PRIMARY KEY,
           longitude REAL NOT NULL,
           latitude REAL NOT NULL,
           accuracy REAL NOT NULL,
@@ -66,9 +68,7 @@ def initialize_schema(connection: sqlite3.Connection) -> None:
           distance REAL NOT NULL,
           heading REAL NOT NULL,
           altitude REAL NOT NULL,
-          loc_type REAL NOT NULL,
-          is_back_foreground REAL NOT NULL,
-          step_type REAL NOT NULL
+          region_id TEXT
         );
         CREATE INDEX IF NOT EXISTS idx_footprints_time ON footprints(timestamp_seconds);
         CREATE INDEX IF NOT EXISTS idx_footprints_lng_lat_time
