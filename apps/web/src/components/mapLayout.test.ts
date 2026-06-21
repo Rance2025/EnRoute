@@ -246,6 +246,20 @@ describe('map chrome layout', () => {
     expect(cssRule('.app-shell--schedule .time-context-panel__scroll')).toBe('')
   })
 
+  it('keeps the settings entry in the shared time-panel footer without view-specific placement', () => {
+    expect(timeContextPanelSource).toContain('aria-label="打开设置"')
+    expect(timeContextPanelSource).toContain('className="time-context-panel__footer"')
+    expect(timeContextPanelSource).toContain('className="time-settings-button"')
+    expect(cssRule('.time-context-panel__footer')).toContain('align-self: end')
+    expect(cssRule('.time-context-panel__footer')).toContain('justify-self: start')
+    expect(cssRule('.time-settings-button')).toContain('width: 44px')
+    expect(cssRule('.time-settings-button')).toContain('height: 44px')
+    expect(cssRule('.time-settings-button')).toContain('border-radius: 999px')
+    expect(cssRule('.app-shell--map .time-context-panel__footer')).toBe('')
+    expect(cssRule('.app-shell--accounting .time-context-panel__footer')).toBe('')
+    expect(cssRule('.app-shell--schedule .time-context-panel__footer')).toBe('')
+  })
+
   it('keeps the accounting ledger surface unframed so the center column reads as open content', () => {
     const ledgerRule = cssRule('.ios-ledger-main')
 
@@ -757,9 +771,11 @@ describe('map chrome layout', () => {
     expect(cssRule('.time-mode-tabs')).not.toContain('--segmented-thumb-shadow')
     expect(cssRule('.transaction-type-switch')).not.toContain('--segmented-thumb-shadow')
     expect(cssRule('.time-mode-tabs')).toContain('--segmented-active-label-color: #123f35')
-    expect(cssRule(".app-nav .segmented-control button[aria-pressed='true']")).toContain(
-      'color: var(--segmented-label-color)',
-    )
+    expect(appSource).toContain('className="app-nav__thumb"')
+    expect(cssRule('.app-nav__thumb')).toContain('left: var(--top-nav-thumb-left)')
+    expect(cssRule('.app-nav__thumb')).toContain('width: var(--top-nav-thumb-width)')
+    expect(cssRule('.app-nav__button--page svg')).toContain('color: currentColor')
+    expect(cssRule('.settings-navigation-tabs')).toContain('--segmented-active-label-color: #f8fbfa')
     expect(cssRule('.segmented-control button::after')).toBe('')
     expect(segmentedControlSource).not.toContain('--segmented-active-start')
     expect(segmentedControlSource).not.toContain('--segmented-active-end')
@@ -778,6 +794,20 @@ describe('map chrome layout', () => {
     expect(lastCssRule(".segmented-control button[aria-pressed='true']")).not.toContain(
       'color: transparent',
     )
+  })
+
+  it('renders the settings dialog as a centered non-fullscreen modal', () => {
+    expect(appSource).toContain('className="settings-dialog"')
+    expect(appSource).toContain('className="settings-dialog__panel"')
+    expect(appSource).toContain('aria-labelledby="settings-dialog-title"')
+    expect(cssRule('.settings-dialog')).toContain('position: fixed')
+    expect(cssRule('.settings-dialog')).toContain('place-items: center')
+    expect(cssRule('.settings-dialog__backdrop')).toContain('position: absolute')
+    expect(cssRule('.settings-dialog__panel')).toContain('width: min(360px, calc(100vw - 32px))')
+    expect(cssRule('.settings-dialog__panel')).toContain('max-height: calc(100svh - 32px)')
+    expect(cssRule('.settings-dialog__panel')).not.toContain('width: 100vw')
+    expect(cssRule('.settings-dialog__panel')).not.toContain('height: 100svh')
+    expect(cssRule('.settings-navigation-tabs')).toContain('grid-template-columns: repeat(2, minmax(0, 1fr))')
   })
 
   it('lays month aggregation out as two compact rows', () => {
