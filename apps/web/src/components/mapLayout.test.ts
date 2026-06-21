@@ -772,6 +772,8 @@ describe('map chrome layout', () => {
     expect(cssRule('.transaction-type-switch')).not.toContain('--segmented-thumb-shadow')
     expect(cssRule('.time-mode-tabs')).toContain('--segmented-active-label-color: #123f35')
     expect(appSource).toContain('className="app-nav__thumb"')
+    expect(appSource).toContain('topNavigationButtonRefs')
+    expect(appSource).toContain('getBoundingClientRect()')
     expect(cssRule('.app-nav__thumb')).toContain('left: var(--top-nav-thumb-left)')
     expect(cssRule('.app-nav__thumb')).toContain('width: var(--top-nav-thumb-width)')
     expect(cssRule('.app-nav__button--page svg')).toContain('color: currentColor')

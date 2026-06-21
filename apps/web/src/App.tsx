@@ -1,6 +1,14 @@
 import './App.css'
 
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from 'react'
 import {
   BarChart3,
   CalendarDays,
@@ -55,6 +63,10 @@ type TopNavigationItem = {
   icon?: LucideIcon
   kind: 'brand' | 'page'
 }
+type TopNavigationThumbMetrics = {
+  left: number
+  width: number
+}
 
 const topNavigationItems: TopNavigationItem[] = [
   { value: 'overview', label: '在途 EnRoute', kind: 'brand' },
@@ -66,10 +78,6 @@ const navigationStyleOptions: Array<SegmentedOption<NavigationStyle>> = [
   { value: 'icon', label: '纯 icon' },
   { value: 'mixed', label: '图文混合' },
 ]
-const TOP_NAV_GAP = 2
-const TOP_NAV_BRAND_WIDTH = 132
-const TOP_NAV_ICON_WIDTH = 48
-const TOP_NAV_MIXED_PAGE_WIDTH = 92
 const secondaryNavItemsByView: Record<AppView, SecondaryNavItem[]> = {
   overview: [],
   map: [
@@ -99,9 +107,20 @@ function getViewportSize() {
 
 function App({ amapConfig }: AppProps) {
   const resolvedAmapConfig = useMemo(() => amapConfig ?? getAmapConfig(), [amapConfig])
+  const topNavigationTabsRef = useRef<HTMLDivElement | null>(null)
+  const topNavigationButtonRefs = useRef<Record<AppView, HTMLButtonElement | null>>({
+    overview: null,
+    map: null,
+    accounting: null,
+    schedule: null,
+  })
   const [view, setView] = useState<AppView>('map')
   const [navigationStyle, setNavigationStyle] = useState<NavigationStyle>(readNavigationStyle)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [topNavigationThumb, setTopNavigationThumb] = useState<TopNavigationThumbMetrics>({
+    left: 0,
+    width: 0,
+  })
   const [secondaryNavSelection, setSecondaryNavSelection] = useState<SecondaryNavSelection>(
     defaultSecondaryNavSelection,
   )
@@ -171,6 +190,21 @@ function App({ amapConfig }: AppProps) {
     }
   }, [isSettingsOpen])
 
+  useLayoutEffect(() => {
+    const tabsElement = topNavigationTabsRef.current
+    const activeButton = topNavigationButtonRefs.current[view]
+
+    if (!tabsElement || !activeButton) return
+
+    const tabsRect = tabsElement.getBoundingClientRect()
+    const activeRect = activeButton.getBoundingClientRect()
+
+    setTopNavigationThumb({
+      left: activeRect.left - tabsRect.left,
+      width: activeRect.width,
+    })
+  }, [navigationStyle, view, viewportSize])
+
   const dataPanelWidth = calculateUnifiedDataPanelWidth({
     view,
     viewportSize,
@@ -179,7 +213,6 @@ function App({ amapConfig }: AppProps) {
   const activeSecondaryNavId = secondaryNavSelection[view]
   const activeSecondaryNavItem = secondaryNavItems.find((item) => item.id === activeSecondaryNavId)
     ?? secondaryNavItems[0]
-  const topNavigationThumb = getTopNavigationThumbMetrics(view, navigationStyle)
   const mapMetricItems = useMemo<TimeContextMetricItem[]>(() => [
     { label: '足迹总数', value: formatMetricCount(footprintMetrics.selectedCount) },
     { label: '总距离', value: formatDistanceMeters(footprintMetrics.totalDistanceMeters) },
@@ -205,12 +238,15 @@ function App({ amapConfig }: AppProps) {
           } as CSSProperties
         }
       >
-        <div className="app-nav__tabs" role="group" aria-label="页面">
+        <div ref={topNavigationTabsRef} className="app-nav__tabs" role="group" aria-label="页面">
           <span className="app-nav__thumb" aria-hidden="true" />
           {topNavigationItems.map((item) => (
             <TopNavigationButton
               key={item.value}
               item={item}
+              buttonRef={(element) => {
+                topNavigationButtonRefs.current[item.value] = element
+              }}
               isActive={item.value === view}
               navigationStyle={navigationStyle}
               onSelect={handleViewChange}
@@ -342,11 +378,13 @@ function timeSelectionsAreEqual(
 
 function TopNavigationButton({
   item,
+  buttonRef,
   isActive,
   navigationStyle,
   onSelect,
 }: {
   item: TopNavigationItem
+  buttonRef: (element: HTMLButtonElement | null) => void
   isActive: boolean
   navigationStyle: NavigationStyle
   onSelect: (view: AppView) => void
@@ -362,6 +400,7 @@ function TopNavigationButton({
 
   return (
     <button
+      ref={buttonRef}
       type="button"
       className={buttonClassName}
       aria-label={item.label}
@@ -400,26 +439,4 @@ function PlaceholderWorkspace({ view }: { view: Exclude<AppView, 'map' | 'accoun
       </div>
     </section>
   )
-}
-
-function getTopNavigationThumbMetrics(view: AppView, navigationStyle: NavigationStyle) {
-  let left = 0
-
-  for (const item of topNavigationItems) {
-    const width = getTopNavigationItemWidth(item, navigationStyle)
-
-    if (item.value === view) {
-      return { left, width }
-    }
-
-    left += width + TOP_NAV_GAP
-  }
-
-  return { left: 0, width: TOP_NAV_BRAND_WIDTH }
-}
-
-function getTopNavigationItemWidth(item: TopNavigationItem, navigationStyle: NavigationStyle) {
-  if (item.kind === 'brand') return TOP_NAV_BRAND_WIDTH
-
-  return navigationStyle === 'mixed' ? TOP_NAV_MIXED_PAGE_WIDTH : TOP_NAV_ICON_WIDTH
 }
