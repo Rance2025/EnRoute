@@ -8,6 +8,8 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent,
 } from 'react'
 import {
   BarChart3,
@@ -69,6 +71,9 @@ type TopNavigationThumbMetrics = {
   left: number
   width: number
 }
+type TopNavigationPointerPosition = TopNavigationThumbMetrics & {
+  view: AppView
+}
 type SettingsPageId = 'general' | 'map' | 'accounting' | 'schedule'
 
 const topNavigationItems: TopNavigationItem[] = [
@@ -114,9 +119,45 @@ function getViewportSize() {
   }
 }
 
+function getClosestTopNavigationPosition(
+  clientX: number,
+  tabsElement: HTMLDivElement,
+  buttonRefs: Record<AppView, HTMLButtonElement | null>,
+): TopNavigationPointerPosition | undefined {
+  const tabsRect = tabsElement.getBoundingClientRect()
+
+  if (tabsRect.width <= 0) return undefined
+
+  const boundedClientX = Math.min(Math.max(clientX, tabsRect.left), tabsRect.right)
+  let closestPosition: TopNavigationPointerPosition | undefined
+  let closestDistance = Number.POSITIVE_INFINITY
+
+  for (const item of topNavigationItems) {
+    const buttonElement = buttonRefs[item.value]
+
+    if (!buttonElement) continue
+
+    const buttonRect = buttonElement.getBoundingClientRect()
+    const buttonCenter = buttonRect.left + buttonRect.width / 2
+    const distance = Math.abs(boundedClientX - buttonCenter)
+
+    if (distance < closestDistance) {
+      closestDistance = distance
+      closestPosition = {
+        view: item.value,
+        left: buttonRect.left - tabsRect.left,
+        width: buttonRect.width,
+      }
+    }
+  }
+
+  return closestPosition
+}
+
 function App({ amapConfig }: AppProps) {
   const resolvedAmapConfig = useMemo(() => amapConfig ?? getAmapConfig(), [amapConfig])
   const topNavigationTabsRef = useRef<HTMLDivElement | null>(null)
+  const isTopNavigationDraggingRef = useRef(false)
   const topNavigationButtonRefs = useRef<Record<AppView, HTMLButtonElement | null>>({
     overview: null,
     map: null,
@@ -134,6 +175,9 @@ function App({ amapConfig }: AppProps) {
     left: 0,
     width: 0,
   })
+  const [isTopNavigationDragging, setIsTopNavigationDragging] = useState(false)
+  const [topNavigationPreviewThumb, setTopNavigationPreviewThumb] =
+    useState<TopNavigationThumbMetrics | null>(null)
   const [secondaryNavSelection, setSecondaryNavSelection] = useState<SecondaryNavSelection>(
     defaultSecondaryNavSelection,
   )
@@ -168,6 +212,102 @@ function App({ amapConfig }: AppProps) {
     setIsMapDebugPanelVisible(nextVisible)
     writeMapDebugPanelVisible(nextVisible)
   }, [])
+  const previewTopNavigationPointerPosition = useCallback((clientX: number) => {
+    const tabsElement = topNavigationTabsRef.current
+
+    if (!tabsElement) return
+
+    const position = getClosestTopNavigationPosition(
+      clientX,
+      tabsElement,
+      topNavigationButtonRefs.current,
+    )
+
+    if (position) {
+      setTopNavigationPreviewThumb({
+        left: position.left,
+        width: position.width,
+      })
+    }
+  }, [])
+  const commitTopNavigationPointerPosition = useCallback((clientX: number) => {
+    const tabsElement = topNavigationTabsRef.current
+
+    if (!tabsElement) return
+
+    const position = getClosestTopNavigationPosition(
+      clientX,
+      tabsElement,
+      topNavigationButtonRefs.current,
+    )
+
+    if (position) {
+      handleViewChange(position.view)
+    }
+  }, [handleViewChange])
+  const handleTopNavigationPointerDown = useCallback(
+    (event: PointerEvent<HTMLSpanElement>) => {
+      isTopNavigationDraggingRef.current = true
+      setIsTopNavigationDragging(true)
+      topNavigationTabsRef.current?.setPointerCapture?.(event.pointerId)
+      previewTopNavigationPointerPosition(event.clientX)
+    },
+    [previewTopNavigationPointerPosition],
+  )
+  const handleTopNavigationPointerMove = useCallback(
+    (event: PointerEvent<HTMLDivElement>) => {
+      if (!isTopNavigationDraggingRef.current) return
+      previewTopNavigationPointerPosition(event.clientX)
+    },
+    [previewTopNavigationPointerPosition],
+  )
+  const endTopNavigationDrag = useCallback(
+    (event: PointerEvent<HTMLDivElement | HTMLSpanElement>) => {
+      if (isTopNavigationDraggingRef.current) {
+        commitTopNavigationPointerPosition(event.clientX)
+      }
+
+      isTopNavigationDraggingRef.current = false
+      setIsTopNavigationDragging(false)
+      setTopNavigationPreviewThumb(null)
+
+      if (topNavigationTabsRef.current?.hasPointerCapture?.(event.pointerId)) {
+        topNavigationTabsRef.current.releasePointerCapture(event.pointerId)
+      }
+    },
+    [commitTopNavigationPointerPosition],
+  )
+  const handleTopNavigationKeyDown = useCallback(
+    (event: ReactKeyboardEvent<HTMLSpanElement>) => {
+      const currentIndex = Math.max(
+        topNavigationItems.findIndex((item) => item.value === view),
+        0,
+      )
+      let nextView: AppView | undefined
+
+      if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+        nextView = topNavigationItems[Math.min(currentIndex + 1, topNavigationItems.length - 1)]?.value
+      }
+
+      if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+        nextView = topNavigationItems[Math.max(currentIndex - 1, 0)]?.value
+      }
+
+      if (event.key === 'Home') {
+        nextView = topNavigationItems[0]?.value
+      }
+
+      if (event.key === 'End') {
+        nextView = topNavigationItems.at(-1)?.value
+      }
+
+      if (nextView) {
+        event.preventDefault()
+        handleViewChange(nextView)
+      }
+    },
+    [handleViewChange, view],
+  )
 
   useEffect(() => {
     function updateViewportSize() {
@@ -248,15 +388,43 @@ function App({ amapConfig }: AppProps) {
       <nav
         className={`app-nav app-nav--${navigationStyle}`}
         aria-label="主导航"
-        style={
-          {
-            '--top-nav-thumb-left': `${topNavigationThumb.left}px`,
-            '--top-nav-thumb-width': `${topNavigationThumb.width}px`,
-          } as CSSProperties
-        }
       >
-        <div ref={topNavigationTabsRef} className="app-nav__tabs" role="group" aria-label="页面">
-          <span className="app-nav__thumb" aria-hidden="true" />
+        <div
+          ref={topNavigationTabsRef}
+          className={`app-nav__tabs${isTopNavigationDragging ? ' is-dragging' : ''}`}
+          role="group"
+          aria-label="页面"
+          style={
+            {
+              '--top-nav-thumb-left': `${topNavigationThumb.left}px`,
+              '--top-nav-thumb-width': `${topNavigationThumb.width}px`,
+              ...(topNavigationPreviewThumb
+                ? {
+                    '--top-nav-thumb-preview-left': `${topNavigationPreviewThumb.left}px`,
+                    '--top-nav-thumb-preview-width': `${topNavigationPreviewThumb.width}px`,
+                  }
+                : {}),
+            } as CSSProperties
+          }
+          onPointerMove={handleTopNavigationPointerMove}
+          onPointerUp={endTopNavigationDrag}
+          onPointerCancel={endTopNavigationDrag}
+        >
+          <span
+            className={`app-nav__thumb${isTopNavigationDragging ? ' is-dragging' : ''}`}
+            role="slider"
+            tabIndex={0}
+            aria-label="页面滑块"
+            aria-valuemin={0}
+            aria-valuemax={topNavigationItems.length - 1}
+            aria-valuenow={Math.max(
+              topNavigationItems.findIndex((item) => item.value === view),
+              0,
+            )}
+            aria-valuetext={topNavigationItems.find((item) => item.value === view)?.label}
+            onPointerDown={handleTopNavigationPointerDown}
+            onKeyDown={handleTopNavigationKeyDown}
+          />
           {topNavigationItems.map((item) => (
             <TopNavigationButton
               key={item.value}

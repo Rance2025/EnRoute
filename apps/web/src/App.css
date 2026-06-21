@@ -37,6 +37,12 @@
   align-items: center;
   gap: 2px;
   isolation: isolate;
+  cursor: grab;
+  user-select: none;
+}
+
+.app-nav__tabs.is-dragging {
+  cursor: grabbing;
 }
 
 .app-nav__thumb {
@@ -44,14 +50,26 @@
   z-index: 0;
   top: 0;
   bottom: 0;
-  left: var(--top-nav-thumb-left);
-  width: var(--top-nav-thumb-width);
+  left: var(--top-nav-thumb-preview-left, var(--top-nav-thumb-left));
+  width: var(--top-nav-thumb-preview-width, var(--top-nav-thumb-width));
   border-radius: 999px;
   background: #123f35;
   box-shadow: 0 8px 22px rgba(18, 63, 53, 0.2);
+  cursor: grab;
+  touch-action: none;
   transition:
     left 190ms ease,
     width 190ms ease;
+}
+
+.app-nav__thumb.is-dragging {
+  cursor: grabbing;
+  transition: none;
+}
+
+.app-nav__thumb:focus-visible {
+  outline: 2px solid rgba(248, 251, 250, 0.74);
+  outline-offset: -3px;
 }
 
 .app-nav__button {
@@ -65,7 +83,7 @@
   border-radius: 999px;
   color: rgba(23, 35, 31, 0.72);
   background: transparent;
-  cursor: pointer;
+  cursor: inherit;
   transition:
     color 160ms ease,
     background 160ms ease,
@@ -81,6 +99,7 @@
   color: #f8fbfa;
   background: transparent;
   box-shadow: none;
+  pointer-events: none;
 }
 
 .app-nav__button--brand {
