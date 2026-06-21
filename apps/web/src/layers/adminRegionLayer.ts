@@ -4,9 +4,9 @@ type AdminRegionLayerRuntime = Pick<typeof AMap, 'Polygon'>
 type RegionPolygon = Pick<AMap.Polygon, 'setMap'>
 
 const UNLOCKED_STROKE = '#123f35'
-const UNLOCKED_FILL = 'rgba(18, 63, 53, 0.18)'
-const LOCKED_STROKE = 'rgba(23, 35, 31, 0.24)'
-const LOCKED_FILL = 'rgba(23, 35, 31, 0.045)'
+const UNLOCKED_FILL = '#123f35'
+const LOCKED_STROKE = '#17231f'
+const LOCKED_FILL = '#17231f'
 
 export function createAdminRegionLayer(
   AMapRuntime: AdminRegionLayerRuntime,
@@ -52,10 +52,10 @@ function createRegionPolygons(
     const polygon = new AMapRuntime.Polygon({
       path,
       strokeColor: unlocked ? UNLOCKED_STROKE : LOCKED_STROKE,
-      strokeOpacity: unlocked ? 0.9 : 0.42,
-      strokeWeight: unlocked ? 1.4 : 0.8,
+      strokeOpacity: unlocked ? 0.52 : 0.16,
+      strokeWeight: unlocked ? 1.2 : 0.7,
       fillColor: unlocked ? UNLOCKED_FILL : LOCKED_FILL,
-      fillOpacity: 1,
+      fillOpacity: unlocked ? 0.16 : 0.035,
       bubble: true,
       cursor: 'default',
       zIndex: unlocked ? 18 : 16,

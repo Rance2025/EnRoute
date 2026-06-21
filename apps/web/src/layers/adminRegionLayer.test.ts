@@ -57,10 +57,14 @@ describe('admin region AMap layer', () => {
     expect(runtime.Polygon.mock.calls[0]?.[0]).toMatchObject({
       path: regions[0].geometry.coordinates,
       strokeColor: '#123f35',
+      fillColor: '#123f35',
+      fillOpacity: 0.16,
     })
     expect(runtime.Polygon.mock.calls[1]?.[0]).toMatchObject({
       path: regions[1].geometry.coordinates[0],
-      strokeColor: 'rgba(23, 35, 31, 0.24)',
+      strokeColor: '#17231f',
+      fillColor: '#17231f',
+      fillOpacity: 0.035,
     })
   })
 
