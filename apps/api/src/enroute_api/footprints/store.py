@@ -6,7 +6,12 @@ import sqlite3
 from pathlib import Path
 from typing import Any, Iterable
 
-from enroute_api.admin_regions.store import initialize_admin_region_schema
+from enroute_api.admin_regions.store import (
+    find_finest_region_id,
+    get_region_chain,
+    get_region_levels,
+    initialize_admin_region_schema,
+)
 
 from .csv_loader import iter_footprint_points
 
@@ -59,6 +64,11 @@ def initialize_schema(connection: sqlite3.Connection) -> None:
           key TEXT PRIMARY KEY,
           value TEXT NOT NULL
         );
+        """,
+    )
+    migrate_legacy_footprints_schema(connection)
+    connection.executescript(
+        """
         CREATE TABLE IF NOT EXISTS footprints (
           timestamp_seconds INTEGER PRIMARY KEY,
           longitude REAL NOT NULL,
@@ -85,6 +95,41 @@ def initialize_schema(connection: sqlite3.Connection) -> None:
     connection.commit()
 
 
+def migrate_legacy_footprints_schema(connection: sqlite3.Connection) -> None:
+    row = connection.execute(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'footprints'",
+    ).fetchone()
+    if row is None:
+        return
+
+    columns = [column[1] for column in connection.execute("PRAGMA table_info(footprints)")]
+    if columns == [
+        "timestamp_seconds",
+        "longitude",
+        "latitude",
+        "accuracy",
+        "speed",
+        "distance",
+        "heading",
+        "altitude",
+        "region_id",
+    ]:
+        return
+
+    connection.executescript(
+        """
+        DROP TABLE IF EXISTS footprint_spatial;
+        DROP TABLE IF EXISTS footprints;
+        DELETE FROM footprint_meta;
+        UPDATE admin_regions
+        SET first_seen_timestamp = NULL,
+            footprint_count = 0,
+            stay_duration_seconds = 0,
+            travel_distance_meters = 0;
+        """,
+    )
+
+
 def ensure_imported(
     connection: sqlite3.Connection,
     *,
@@ -93,7 +138,7 @@ def ensure_imported(
 ) -> None:
     source_signature = create_source_signature(data_path, coordinate_system)
     stored_signature = get_meta_value(connection, "sourceSignature")
-    stored_count = int(get_meta_value(connection, "rowCount") or 0)
+    stored_count = get_footprint_row_count(connection)
     stored_spatial_count = get_spatial_row_count(connection)
 
     if stored_signature == source_signature and stored_count > 0 and stored_spatial_count == stored_count:
@@ -102,66 +147,178 @@ def ensure_imported(
         return
 
     with connection:
-        connection.execute("DELETE FROM footprint_spatial")
-        connection.execute("DELETE FROM footprints")
-
-        imported_count = 0
+        new_count = 0
         for point in iter_footprint_points(data_path=data_path, coordinate_system=coordinate_system):
-            cursor = connection.execute(
-                """
-                INSERT INTO footprints (
-                  id,
-                  timestamp_seconds,
-                  longitude,
-                  latitude,
-                  accuracy,
-                  speed,
-                  distance,
-                  heading,
-                  altitude,
-                  loc_type,
-                  is_back_foreground,
-                  step_type
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    point["id"],
-                    point["timestampSeconds"],
-                    point["longitude"],
-                    point["latitude"],
-                    point["accuracy"],
-                    point["speed"],
-                    point["distance"],
-                    point["heading"],
-                    point["altitude"],
-                    point["locType"],
-                    point["isBackForeground"],
-                    point["stepType"],
-                ),
-            )
-            rowid = cursor.lastrowid
-            connection.execute(
-                """
-                INSERT INTO footprint_spatial (
-                  footprint_rowid,
-                  min_lng,
-                  max_lng,
-                  min_lat,
-                  max_lat
-                ) VALUES (?, ?, ?, ?, ?)
-                """,
-                (
-                    rowid,
-                    point["longitude"],
-                    point["longitude"],
-                    point["latitude"],
-                    point["latitude"],
-                ),
-            )
-            imported_count += 1
+            if insert_footprint_if_new(connection, point):
+                new_count += 1
 
         set_meta_value(connection, "sourceSignature", source_signature)
-        set_meta_value(connection, "rowCount", str(imported_count))
+        set_meta_value(connection, "rowCount", str(stored_count + new_count))
+
+
+def insert_footprint_if_new(connection: sqlite3.Connection, point: dict[str, Any]) -> bool:
+    region_id = find_finest_region_id(
+        connection,
+        longitude=float(point["longitude"]),
+        latitude=float(point["latitude"]),
+    )
+    cursor = connection.execute(
+        """
+        INSERT OR IGNORE INTO footprints (
+          timestamp_seconds,
+          longitude,
+          latitude,
+          accuracy,
+          speed,
+          distance,
+          heading,
+          altitude,
+          region_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            int(point["timestampSeconds"]),
+            float(point["longitude"]),
+            float(point["latitude"]),
+            float(point["accuracy"]),
+            float(point["speed"]),
+            float(point["distance"]),
+            float(point["heading"]),
+            float(point["altitude"]),
+            region_id,
+        ),
+    )
+    if cursor.rowcount == 0:
+        validate_existing_footprint_matches(connection, point, region_id)
+        return False
+
+    connection.execute(
+        """
+        INSERT INTO footprint_spatial (
+          footprint_rowid,
+          min_lng,
+          max_lng,
+          min_lat,
+          max_lat
+        ) VALUES (?, ?, ?, ?, ?)
+        """,
+        (
+            int(point["timestampSeconds"]),
+            float(point["longitude"]),
+            float(point["longitude"]),
+            float(point["latitude"]),
+            float(point["latitude"]),
+        ),
+    )
+    update_region_unlock_stats(connection, point, region_id)
+    return True
+
+
+def validate_existing_footprint_matches(
+    connection: sqlite3.Connection,
+    point: dict[str, Any],
+    region_id: str | None,
+) -> None:
+    row = connection.execute(
+        """
+        SELECT
+          longitude,
+          latitude,
+          accuracy,
+          speed,
+          distance,
+          heading,
+          altitude,
+          region_id
+        FROM footprints
+        WHERE timestamp_seconds = ?
+        """,
+        (int(point["timestampSeconds"]),),
+    ).fetchone()
+    if row is None:
+        return
+
+    expected = {
+        "longitude": float(point["longitude"]),
+        "latitude": float(point["latitude"]),
+        "accuracy": float(point["accuracy"]),
+        "speed": float(point["speed"]),
+        "distance": float(point["distance"]),
+        "heading": float(point["heading"]),
+        "altitude": float(point["altitude"]),
+        "region_id": region_id,
+    }
+    actual = {
+        "longitude": float(row["longitude"]),
+        "latitude": float(row["latitude"]),
+        "accuracy": float(row["accuracy"]),
+        "speed": float(row["speed"]),
+        "distance": float(row["distance"]),
+        "heading": float(row["heading"]),
+        "altitude": float(row["altitude"]),
+        "region_id": row["region_id"],
+    }
+    if actual != expected:
+        raise ValueError(
+            f"Conflicting footprint row for timestamp {int(point['timestampSeconds'])}",
+        )
+
+
+def update_region_unlock_stats(
+    connection: sqlite3.Connection,
+    point: dict[str, Any],
+    region_id: str | None,
+) -> None:
+    current_chain = get_region_chain(connection, region_id)
+    timestamp_seconds = int(point["timestampSeconds"])
+    for chain_region_id in current_chain:
+        connection.execute(
+            """
+            UPDATE admin_regions
+            SET footprint_count = footprint_count + 1,
+                first_seen_timestamp = CASE
+                  WHEN first_seen_timestamp IS NULL OR first_seen_timestamp > ?
+                  THEN ?
+                  ELSE first_seen_timestamp
+                END
+            WHERE id = ?
+            """,
+            (timestamp_seconds, timestamp_seconds, chain_region_id),
+        )
+
+    previous = connection.execute(
+        """
+        SELECT timestamp_seconds, region_id
+        FROM footprints
+        WHERE timestamp_seconds < ?
+        ORDER BY timestamp_seconds DESC
+        LIMIT 1
+        """,
+        (timestamp_seconds,),
+    ).fetchone()
+    if previous is None:
+        return
+
+    current_by_level = get_region_levels(connection, current_chain)
+    previous_by_level = get_region_levels(
+        connection,
+        get_region_chain(connection, previous["region_id"]),
+    )
+    delta_seconds = timestamp_seconds - int(previous["timestamp_seconds"])
+    distance = float(point["distance"])
+
+    for level, current_region_id in current_by_level.items():
+        if previous_by_level.get(level) != current_region_id:
+            continue
+        connection.execute(
+            """
+            UPDATE admin_regions
+            SET stay_duration_seconds = stay_duration_seconds + ?,
+                travel_distance_meters = travel_distance_meters + ?
+            WHERE id = ?
+            """,
+            (delta_seconds, distance, current_region_id),
+        )
 
 
 def query_snapshot(connection: sqlite3.Connection, input_payload: dict[str, Any]) -> dict[str, Any]:
@@ -210,7 +367,6 @@ def query_all_points(connection: sqlite3.Connection) -> dict[str, list[dict[str,
     rows = connection.execute(
         """
         SELECT
-          id,
           timestamp_seconds AS timestampSeconds,
           longitude,
           latitude,
@@ -219,11 +375,9 @@ def query_all_points(connection: sqlite3.Connection) -> dict[str, list[dict[str,
           distance,
           heading,
           altitude,
-          loc_type AS locType,
-          is_back_foreground AS isBackForeground,
-          step_type AS stepType
+          region_id AS regionId
         FROM footprints
-        ORDER BY timestamp_seconds, id
+        ORDER BY timestamp_seconds
         """,
     )
     return {"points": [format_raw_point(row) for row in rows]}
@@ -231,7 +385,6 @@ def query_all_points(connection: sqlite3.Connection) -> dict[str, list[dict[str,
 
 def format_raw_point(row: sqlite3.Row) -> dict[str, Any]:
     return {
-        "id": str(row["id"]),
         "timestampSeconds": int(row["timestampSeconds"]),
         "longitude": float(row["longitude"]),
         "latitude": float(row["latitude"]),
@@ -240,9 +393,7 @@ def format_raw_point(row: sqlite3.Row) -> dict[str, Any]:
         "distance": float(row["distance"]),
         "heading": float(row["heading"]),
         "altitude": float(row["altitude"]),
-        "locType": float(row["locType"]),
-        "isBackForeground": float(row["isBackForeground"]),
-        "stepType": float(row["stepType"]),
+        "regionId": None if row["regionId"] is None else str(row["regionId"]),
     }
 
 
@@ -286,7 +437,6 @@ def query_viewport_rows(connection: sqlite3.Connection, input_payload: dict[str,
     cursor = connection.execute(
         f"""
         SELECT
-          f.id,
           f.timestamp_seconds AS timestampSeconds,
           f.longitude,
           f.latitude,
@@ -444,6 +594,11 @@ def create_source_signature(data_path: Path, coordinate_system: str) -> str:
 def get_meta_value(connection: sqlite3.Connection, key: str) -> str | None:
     row = connection.execute("SELECT value FROM footprint_meta WHERE key = ?", (key,)).fetchone()
     return None if row is None else str(row["value"])
+
+
+def get_footprint_row_count(connection: sqlite3.Connection) -> int:
+    row = connection.execute("SELECT COUNT(*) AS count FROM footprints").fetchone()
+    return int(row["count"])
 
 
 def get_spatial_row_count(connection: sqlite3.Connection) -> int:
