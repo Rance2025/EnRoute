@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { siAlipay, siMeituan } from 'simple-icons'
 
 import App from './App'
@@ -10,6 +10,12 @@ import {
   calculateUnifiedDataPanelWidth,
   calculateUnifiedMapPaneWidth,
 } from './appLayout'
+
+const localStorageMock = createLocalStorageMock()
+Object.defineProperty(window, 'localStorage', {
+  configurable: true,
+  value: localStorageMock,
+})
 
 const missingAmapConfig = {
   key: '',
@@ -29,6 +35,10 @@ const missingAmapConfig = {
 
 afterEach(() => {
   cleanup()
+})
+
+beforeEach(() => {
+  window.localStorage.clear()
 })
 
 describe('App', () => {
@@ -185,6 +195,62 @@ describe('App', () => {
     expect(screen.getByText('需要配置高德地图密钥')).toBeInTheDocument()
     expect(screen.getByText(/VITE_AMAP_KEY/)).toBeInTheDocument()
     expect(screen.getByText(/VITE_AMAP_SECURITY_CODE/)).toBeInTheDocument()
+  })
+
+  it('defaults to pure icon top navigation with a selectable logo overview segment', () => {
+    render(<App amapConfig={missingAmapConfig} />)
+
+    const mainNav = screen.getByRole('navigation', { name: '主导航' })
+
+    expect(within(mainNav).getByRole('button', { name: '在途 EnRoute' })).toBeInTheDocument()
+    expect(within(mainNav).getByRole('button', { name: '地图' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(within(mainNav).getByRole('button', { name: '记账' })).toHaveAttribute('title', '记账')
+    expect(within(mainNav).queryByText('地图')).not.toBeInTheDocument()
+    expect(within(mainNav).queryByText('记账')).not.toBeInTheDocument()
+    expect(within(mainNav).queryByText('日程')).not.toBeInTheDocument()
+
+    fireEvent.click(within(mainNav).getByRole('button', { name: '在途 EnRoute' }))
+
+    expect(within(mainNav).getByRole('button', { name: '在途 EnRoute' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(screen.getByRole('main')).toHaveClass('app-shell--overview')
+    expect(screen.getByLabelText('在途 EnRoute 概览工作区')).toBeInTheDocument()
+  })
+
+  it('opens a centered settings dialog from the time panel and toggles mixed navigation labels', () => {
+    render(<App amapConfig={missingAmapConfig} />)
+
+    fireEvent.click(screen.getByRole('button', { name: '打开设置' }))
+
+    const dialog = screen.getByRole('dialog', { name: '设置' })
+    expect(dialog).toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: '纯 icon' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+
+    fireEvent.click(within(dialog).getByRole('button', { name: '图文混合' }))
+
+    const mainNav = screen.getByRole('navigation', { name: '主导航' })
+    expect(within(mainNav).getByText('地图')).toBeInTheDocument()
+    expect(within(mainNav).getByText('记账')).toBeInTheDocument()
+    expect(window.localStorage.getItem('enroute:navigation-style')).toBe('mixed')
+  })
+
+  it('restores the persisted mixed navigation style on reload', () => {
+    window.localStorage.setItem('enroute:navigation-style', 'mixed')
+
+    render(<App amapConfig={missingAmapConfig} />)
+
+    const mainNav = screen.getByRole('navigation', { name: '主导航' })
+
+    expect(within(mainNav).getByText('地图')).toBeInTheDocument()
+    expect(within(mainNav).getByText('记账')).toBeInTheDocument()
   })
 
   it('renders the global secondary navigation rail inside the shared app shell', () => {
@@ -641,3 +707,22 @@ describe('App', () => {
     expect(screen.queryByLabelText('统计工作区')).not.toBeInTheDocument()
   })
 })
+
+function createLocalStorageMock() {
+  const store = new Map<string, string>()
+
+  return {
+    clear() {
+      store.clear()
+    },
+    getItem(key: string) {
+      return store.get(key) ?? null
+    },
+    removeItem(key: string) {
+      store.delete(key)
+    },
+    setItem(key: string, value: string) {
+      store.set(key, value)
+    },
+  }
+}

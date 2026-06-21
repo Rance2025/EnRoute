@@ -3,9 +3,13 @@ import './App.css'
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react'
 import {
   BarChart3,
+  CalendarDays,
   Footprints,
   List,
+  MapPinned,
   Shapes,
+  Wallet,
+  X,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -24,6 +28,11 @@ import {
 } from './appLayout'
 import { getAmapConfig, type AmapConfig } from './config/amap'
 import {
+  readNavigationStyle,
+  writeNavigationStyle,
+  type NavigationStyle,
+} from './navigationPreferences'
+import {
   createCurrentSelection,
   createTodaySelection,
   type TimeRangeSelection,
@@ -40,13 +49,27 @@ type SecondaryNavItem = {
   icon: LucideIcon
 }
 type SecondaryNavSelection = Record<AppView, SecondaryNavId>
+type TopNavigationItem = {
+  value: AppView
+  label: string
+  icon?: LucideIcon
+  kind: 'brand' | 'page'
+}
 
-const viewOptions: Array<SegmentedOption<AppView>> = [
-  { value: 'overview', label: '概览', disabled: true },
-  { value: 'map', label: '地图' },
-  { value: 'schedule', label: '日程', disabled: true },
-  { value: 'accounting', label: '记账' },
+const topNavigationItems: TopNavigationItem[] = [
+  { value: 'overview', label: '在途 EnRoute', kind: 'brand' },
+  { value: 'map', label: '地图', icon: MapPinned, kind: 'page' },
+  { value: 'accounting', label: '记账', icon: Wallet, kind: 'page' },
+  { value: 'schedule', label: '日程', icon: CalendarDays, kind: 'page' },
 ]
+const navigationStyleOptions: Array<SegmentedOption<NavigationStyle>> = [
+  { value: 'icon', label: '纯 icon' },
+  { value: 'mixed', label: '图文混合' },
+]
+const TOP_NAV_GAP = 2
+const TOP_NAV_BRAND_WIDTH = 132
+const TOP_NAV_ICON_WIDTH = 48
+const TOP_NAV_MIXED_PAGE_WIDTH = 92
 const secondaryNavItemsByView: Record<AppView, SecondaryNavItem[]> = {
   overview: [],
   map: [
@@ -77,6 +100,8 @@ function getViewportSize() {
 function App({ amapConfig }: AppProps) {
   const resolvedAmapConfig = useMemo(() => amapConfig ?? getAmapConfig(), [amapConfig])
   const [view, setView] = useState<AppView>('map')
+  const [navigationStyle, setNavigationStyle] = useState<NavigationStyle>(readNavigationStyle)
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [secondaryNavSelection, setSecondaryNavSelection] = useState<SecondaryNavSelection>(
     defaultSecondaryNavSelection,
   )
@@ -103,6 +128,10 @@ function App({ amapConfig }: AppProps) {
       })
     }
   }, [selectedTimeRange, view])
+  const handleNavigationStyleChange = useCallback((nextStyle: NavigationStyle) => {
+    setNavigationStyle(nextStyle)
+    writeNavigationStyle(nextStyle)
+  }, [])
 
   useEffect(() => {
     function updateViewportSize() {
@@ -117,16 +146,30 @@ function App({ amapConfig }: AppProps) {
   }, [])
 
   useEffect(() => {
-    for (const option of viewOptions) {
-      document.body.classList.toggle(`is-${option.value}-view`, view === option.value)
+    for (const item of topNavigationItems) {
+      document.body.classList.toggle(`is-${item.value}-view`, view === item.value)
     }
 
     return () => {
-      for (const option of viewOptions) {
-        document.body.classList.remove(`is-${option.value}-view`)
+      for (const item of topNavigationItems) {
+        document.body.classList.remove(`is-${item.value}-view`)
       }
     }
   }, [view])
+
+  useEffect(() => {
+    if (!isSettingsOpen) return undefined
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') setIsSettingsOpen(false)
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isSettingsOpen])
 
   const dataPanelWidth = calculateUnifiedDataPanelWidth({
     view,
@@ -136,6 +179,7 @@ function App({ amapConfig }: AppProps) {
   const activeSecondaryNavId = secondaryNavSelection[view]
   const activeSecondaryNavItem = secondaryNavItems.find((item) => item.id === activeSecondaryNavId)
     ?? secondaryNavItems[0]
+  const topNavigationThumb = getTopNavigationThumbMetrics(view, navigationStyle)
   const mapMetricItems = useMemo<TimeContextMetricItem[]>(() => [
     { label: '足迹总数', value: formatMetricCount(footprintMetrics.selectedCount) },
     { label: '总距离', value: formatDistanceMeters(footprintMetrics.totalDistanceMeters) },
@@ -151,18 +195,28 @@ function App({ amapConfig }: AppProps) {
       className={`app-shell app-shell--${view}${dataPanelWidth > 0 ? ' has-data-panel' : ''}`}
       style={{ '--data-panel-width': `${dataPanelWidth}px` } as CSSProperties}
     >
-      <nav className="app-nav" aria-label="主导航">
-        <div className="app-nav__brand" aria-label="在途 EnRoute">
-          <span>在途</span>
-          <span>EnRoute</span>
+      <nav
+        className={`app-nav app-nav--${navigationStyle}`}
+        aria-label="主导航"
+        style={
+          {
+            '--top-nav-thumb-left': `${topNavigationThumb.left}px`,
+            '--top-nav-thumb-width': `${topNavigationThumb.width}px`,
+          } as CSSProperties
+        }
+      >
+        <div className="app-nav__tabs" role="group" aria-label="页面">
+          <span className="app-nav__thumb" aria-hidden="true" />
+          {topNavigationItems.map((item) => (
+            <TopNavigationButton
+              key={item.value}
+              item={item}
+              isActive={item.value === view}
+              navigationStyle={navigationStyle}
+              onSelect={handleViewChange}
+            />
+          ))}
         </div>
-        <SegmentedControl
-          ariaLabel="页面"
-          className="app-nav__tabs"
-          options={viewOptions}
-          value={view}
-          onChange={handleViewChange}
-        />
       </nav>
 
       <TimeContextPanel
@@ -171,6 +225,7 @@ function App({ amapConfig }: AppProps) {
         view={view}
         selection={selectedTimeRange}
         onSelectionChange={setSelectedTimeRange}
+        onOpenSettings={() => setIsSettingsOpen(true)}
       />
 
       <nav className="secondary-nav-rail" aria-label="二级导航">
@@ -208,7 +263,7 @@ function App({ amapConfig }: AppProps) {
           onFootprintMetricsChange={setFootprintMetrics}
           adminRegionUnlockEnabled={activeSecondaryNavId === 'regions'}
         />
-      ) : (
+      ) : view === 'accounting' ? (
         <section className="main-workspace" aria-label="在途 EnRoute 主工作区">
           <AccountingPage
             section={activeSecondaryNavId === 'stats' ? 'analytics' : 'workspace'}
@@ -221,7 +276,51 @@ function App({ amapConfig }: AppProps) {
             }
           />
         </section>
+      ) : (
+        <PlaceholderWorkspace view={view} />
       )}
+
+      {isSettingsOpen ? (
+        <div className="settings-dialog">
+          <button
+            type="button"
+            className="settings-dialog__backdrop"
+            aria-label="关闭设置"
+            onClick={() => setIsSettingsOpen(false)}
+          />
+          <section
+            className="settings-dialog__panel"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="settings-dialog-title"
+          >
+            <header className="settings-dialog__header">
+              <div>
+                <span>应用偏好</span>
+                <h2 id="settings-dialog-title">设置</h2>
+              </div>
+              <button
+                type="button"
+                className="settings-dialog__close"
+                aria-label="关闭设置"
+                onClick={() => setIsSettingsOpen(false)}
+              >
+                <X size={18} strokeWidth={1.9} aria-hidden="true" />
+              </button>
+            </header>
+            <section className="settings-dialog__section" aria-label="顶部导航样式">
+              <span>顶部导航样式</span>
+              <SegmentedControl
+                ariaLabel="顶部导航样式"
+                className="settings-navigation-tabs"
+                options={navigationStyleOptions}
+                value={navigationStyle}
+                onChange={handleNavigationStyleChange}
+              />
+            </section>
+          </section>
+        </div>
+      ) : null}
     </main>
   )
 }
@@ -239,4 +338,88 @@ function timeSelectionsAreEqual(
     currentSelection.anchorDate === nextSelection.anchorDate &&
     currentSelection.label === nextSelection.label
   )
+}
+
+function TopNavigationButton({
+  item,
+  isActive,
+  navigationStyle,
+  onSelect,
+}: {
+  item: TopNavigationItem
+  isActive: boolean
+  navigationStyle: NavigationStyle
+  onSelect: (view: AppView) => void
+}) {
+  const Icon = item.icon
+  const buttonClassName = [
+    'app-nav__button',
+    `app-nav__button--${item.kind}`,
+    item.kind === 'page' ? `app-nav__button--${navigationStyle}` : null,
+  ]
+    .filter(Boolean)
+    .join(' ')
+
+  return (
+    <button
+      type="button"
+      className={buttonClassName}
+      aria-label={item.label}
+      aria-pressed={isActive}
+      title={item.label}
+      onClick={() => onSelect(item.value)}
+    >
+      {item.kind === 'brand' ? (
+        <>
+          <span>在途</span>
+          <span>EnRoute</span>
+        </>
+      ) : (
+        <>
+          {Icon ? <Icon size={18} strokeWidth={1.9} aria-hidden="true" /> : null}
+          {navigationStyle === 'mixed' ? (
+            <span className="app-nav__label">{item.label}</span>
+          ) : null}
+        </>
+      )}
+    </button>
+  )
+}
+
+function PlaceholderWorkspace({ view }: { view: Exclude<AppView, 'map' | 'accounting'> }) {
+  const label = view === 'overview'
+    ? '在途 EnRoute 概览工作区'
+    : '在途 EnRoute 日程工作区'
+  const title = view === 'overview' ? '概览' : '日程'
+
+  return (
+    <section className="main-workspace main-workspace--placeholder" aria-label={label}>
+      <div className="workspace-placeholder">
+        <span>在途 EnRoute</span>
+        <h1>{title}</h1>
+      </div>
+    </section>
+  )
+}
+
+function getTopNavigationThumbMetrics(view: AppView, navigationStyle: NavigationStyle) {
+  let left = 0
+
+  for (const item of topNavigationItems) {
+    const width = getTopNavigationItemWidth(item, navigationStyle)
+
+    if (item.value === view) {
+      return { left, width }
+    }
+
+    left += width + TOP_NAV_GAP
+  }
+
+  return { left: 0, width: TOP_NAV_BRAND_WIDTH }
+}
+
+function getTopNavigationItemWidth(item: TopNavigationItem, navigationStyle: NavigationStyle) {
+  if (item.kind === 'brand') return TOP_NAV_BRAND_WIDTH
+
+  return navigationStyle === 'mixed' ? TOP_NAV_MIXED_PAGE_WIDTH : TOP_NAV_ICON_WIDTH
 }

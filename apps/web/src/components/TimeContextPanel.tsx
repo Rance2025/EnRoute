@@ -1,4 +1,5 @@
 import { useEffect, useState, type CSSProperties } from 'react'
+import { Settings } from 'lucide-react'
 
 import { ledgerAtlasDataset } from '../accounting/ledgerAtlasData'
 import { formatCnyFromCents } from '../accounting/money'
@@ -67,6 +68,7 @@ type TimeContextPanelProps = {
   secondaryContextLabel?: string
   metricItems?: TimeContextMetricItem[]
   onSelectionChange: (selection: TimeRangeSelection) => void
+  onOpenSettings?: () => void
 }
 
 type TimeNavigationDirection = 'previous' | 'next'
@@ -85,6 +87,7 @@ export function TimeContextPanel({
   view,
   selection,
   onSelectionChange,
+  onOpenSettings,
 }: TimeContextPanelProps) {
   const [calendarMode, setCalendarMode] = useState<CalendarDisplayMode>('week')
   const [isDayCalendarCollapsingWeek, setIsDayCalendarCollapsingWeek] = useState(false)
@@ -227,6 +230,19 @@ export function TimeContextPanel({
             )}
           </div>
         </div>
+
+        <footer className="time-context-panel__footer" aria-label="应用设置">
+          <button
+            type="button"
+            className="time-settings-button"
+            aria-label="打开设置"
+            title="设置"
+            onClick={onOpenSettings}
+          >
+            <Settings size={18} strokeWidth={1.9} aria-hidden="true" />
+            <span>设置</span>
+          </button>
+        </footer>
       </div>
     </aside>
   )
