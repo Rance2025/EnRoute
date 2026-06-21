@@ -153,7 +153,7 @@ describe('TimeContextPanel', () => {
     expect(getMotion()).toHaveClass('time-range-grid-motion--previous')
   })
 
-  it('lets the day calendar title enter the existing month aggregate picker', () => {
+  it('lets the day calendar title pick a month and return to day mode', () => {
     const onSelectionChange = vi.fn()
 
     render(
@@ -167,21 +167,35 @@ describe('TimeContextPanel', () => {
 
     fireEvent.click(
       within(calendar).getByRole('button', {
-        name: '切换到按月聚合，当前2026年6月',
+        name: '切换到月份选择，当前2026年6月',
       }),
     )
 
+    expect(within(calendar).getByLabelText('月份选择')).toBeInTheDocument()
+    expect(within(calendar).queryByLabelText('日历日期')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '日' })).toHaveAttribute('aria-pressed', 'true')
+
+    fireEvent.click(within(calendar).getByRole('button', { name: '5月' }))
+
+    expect(within(calendar).getByLabelText('日历日期')).toBeInTheDocument()
+    expect(within(calendar).queryByLabelText('月份选择')).not.toBeInTheDocument()
+    expect(
+      within(calendar).getByRole('button', {
+        name: '切换到月份选择，当前2026年5月',
+      }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '日' })).toHaveAttribute('aria-pressed', 'true')
     expect(onSelectionChange).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        mode: 'month',
-        start: '2026-06-01',
-        end: '2026-06-30',
-        anchorDate: '2026-06-01',
+        mode: 'day',
+        start: '2026-05-20',
+        end: '2026-05-20',
+        anchorDate: '2026-05-20',
       }),
     )
   })
 
-  it('keeps day week month and year pickers isomorphic through title clicks', () => {
+  it('lets the week picker title pick a month and return to week mode', () => {
     const onSelectionChange = vi.fn()
 
     render(
@@ -195,36 +209,72 @@ describe('TimeContextPanel', () => {
 
     fireEvent.click(
       within(picker).getByRole('button', {
-        name: '切换到按月聚合，当前2026年6月',
+        name: '切换到月份选择，当前2026年6月',
       }),
     )
 
-    expect(screen.getByText('按月聚合')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '6月' })).toHaveClass('is-active')
-    expect(screen.queryByLabelText('月份选择')).not.toBeInTheDocument()
+    expect(within(picker).getByLabelText('月份选择')).toBeInTheDocument()
+    expect(within(picker).queryByText('第25周')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '周' })).toHaveAttribute('aria-pressed', 'true')
+
+    fireEvent.click(within(picker).getByRole('button', { name: '5月' }))
+
+    expect(within(picker).getByText('按周聚合')).toBeInTheDocument()
+    expect(within(picker).queryByLabelText('月份选择')).not.toBeInTheDocument()
+    expect(
+      within(picker).getByRole('button', {
+        name: '切换到月份选择，当前2026年5月',
+      }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '周' })).toHaveAttribute('aria-pressed', 'true')
+    expect(onSelectionChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        mode: 'week',
+        start: '2026-05-18',
+        end: '2026-05-24',
+        anchorDate: '2026-05-20',
+      }),
+    )
+  })
+
+  it('lets the month picker title pick a year and return to month mode', () => {
+    const onSelectionChange = vi.fn()
+
+    render(
+      <StatefulMapTimeContextPanel
+        initialSelection={selectMonth(2026, 6)}
+        onSelectionChange={onSelectionChange}
+      />,
+    )
+
+    const picker = screen.getByLabelText('时间选择页')
+
+    fireEvent.click(
+      within(picker).getByRole('button', {
+        name: '切换到年份选择，当前2026年',
+      }),
+    )
+
+    expect(within(picker).getByLabelText('年份选择')).toBeInTheDocument()
+    expect(within(picker).queryByRole('button', { name: '6月' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '月' })).toHaveAttribute('aria-pressed', 'true')
+
+    fireEvent.click(within(picker).getByRole('button', { name: '2025年' }))
+
+    expect(within(picker).getByText('按月聚合')).toBeInTheDocument()
+    expect(within(picker).queryByLabelText('年份选择')).not.toBeInTheDocument()
+    expect(
+      within(picker).getByRole('button', {
+        name: '切换到年份选择，当前2025年',
+      }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '月' })).toHaveAttribute('aria-pressed', 'true')
     expect(onSelectionChange).toHaveBeenLastCalledWith(
       expect.objectContaining({
         mode: 'month',
-        start: '2026-06-01',
-        end: '2026-06-30',
-        anchorDate: '2026-06-01',
-      }),
-    )
-
-    fireEvent.click(
-      screen.getByRole('button', {
-        name: '切换到按年聚合，当前2026年',
-      }),
-    )
-
-    expect(screen.getByText('按年聚合')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '2026年' })).toHaveClass('is-active')
-    expect(onSelectionChange).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        mode: 'year',
-        start: '2026-01-01',
-        end: '2026-12-31',
-        anchorDate: '2026-06-30',
+        start: '2025-06-01',
+        end: '2025-06-30',
+        anchorDate: '2025-06-01',
       }),
     )
   })
