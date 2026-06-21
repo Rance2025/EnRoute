@@ -1289,7 +1289,7 @@
   --accounting-blue: #315b68;
 
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(560px, 1fr) minmax(324px, 390px);
+  grid-template-columns: minmax(0, 1fr) minmax(324px, 390px);
   column-gap: 28px;
   align-items: start;
   height: 100%;
@@ -1306,6 +1306,14 @@
 .accounting-page * {
   min-width: 0;
   box-sizing: border-box;
+}
+
+.accounting-content-slot {
+  display: grid;
+  grid-column: 1;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
 }
 
 .accounting-action {
@@ -1391,10 +1399,11 @@
 
 .ios-account-ledger-workspace {
   position: relative;
-  grid-column: 1 / -1;
-  grid-template-columns: minmax(560px, 1fr) minmax(324px, 390px);
+  grid-column: 1;
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
-  gap: 28px;
+  height: 100%;
+  gap: 12px;
   overflow: hidden;
 }
 
@@ -1406,12 +1415,12 @@
 }
 
 .ios-account-filter-panel {
-  grid-column: 2;
+  grid-column: 1;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto;
   gap: 14px;
   width: 100%;
-  height: calc(100svh - 126px);
+  height: calc(100svh - 150px);
   align-self: start;
   margin-top: 0;
   padding: 14px 18px 16px;
@@ -1424,19 +1433,121 @@
   backdrop-filter: blur(22px) saturate(1.08);
 }
 
+.ios-accounting-side-panel {
+  grid-column: 2;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-width: 0;
+  height: calc(100svh - 150px);
+  overflow: hidden;
+  border: 1px solid rgba(23, 35, 31, 0.065);
+  border-radius: 26px;
+  background: rgba(255, 255, 255, 0.46);
+  box-shadow:
+    0 24px 58px rgba(35, 52, 48, 0.09),
+    inset 0 1px 0 rgba(255, 255, 255, 0.68);
+  backdrop-filter: blur(22px) saturate(1.08);
+}
+
+.ios-accounting-secondary-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  padding: 14px;
+  border-bottom: 1px solid rgba(23, 35, 31, 0.055);
+}
+
+.ios-accounting-secondary-tabs button {
+  display: grid;
+  min-width: 0;
+  height: 34px;
+  place-items: center;
+  border: 0;
+  border-radius: 14px;
+  color: rgba(23, 35, 31, 0.62);
+  background: rgba(23, 35, 31, 0.055);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 840;
+  cursor: pointer;
+  transition:
+    color 160ms ease,
+    background 160ms ease,
+    transform 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.ios-accounting-secondary-tabs button:hover {
+  color: var(--accounting-ink);
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.ios-accounting-secondary-tabs button[aria-pressed='true'] {
+  color: #f8fbfa;
+  background: var(--accounting-accent);
+  box-shadow: 0 8px 18px rgba(18, 63, 53, 0.16);
+}
+
+.ios-accounting-side-tools {
+  min-height: 0;
+  overflow: auto;
+  padding: 13px 14px 10px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(23, 62, 53, 0.2) transparent;
+}
+
+.ios-side-section {
+  display: grid;
+  gap: 9px;
+  margin-bottom: 14px;
+}
+
+.ios-side-section header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: rgba(23, 35, 31, 0.52);
+  font-size: 11px;
+  font-weight: 820;
+}
+
+.ios-side-section header b {
+  color: var(--accounting-ink);
+  font-size: 11px;
+  font-weight: 860;
+  white-space: nowrap;
+}
+
+.ios-accounting-side-dock {
+  display: grid;
+  grid-template-columns: 1fr 1.25fr;
+  gap: 8px;
+  padding: 12px 14px 14px;
+  border-top: 1px solid rgba(23, 35, 31, 0.06);
+}
+
+.ios-accounting-side-dock span {
+  display: grid;
+  min-height: 34px;
+  place-items: center;
+  border-radius: 14px;
+  color: rgba(23, 35, 31, 0.68);
+  background: rgba(255, 255, 255, 0.58);
+  font-size: 11px;
+  font-weight: 820;
+}
+
+.ios-accounting-side-dock .is-primary {
+  color: #f8fbfa;
+  background: var(--accounting-accent);
+}
+
 .ios-account-filter-panel__accounts {
   display: grid;
   align-content: start;
   min-height: 0;
   overflow: visible;
-}
-
-.ios-account-filter-panel__secondary {
-  min-height: 0;
-  overflow: hidden;
-  border-top: 1px solid rgba(23, 35, 31, 0.06);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0));
 }
 
 .ios-account-filter-panel .ios-panel-head {
@@ -1846,6 +1957,146 @@
   box-shadow: 0 10px 20px rgba(31, 46, 42, 0.08);
 }
 
+.ios-ledger-control-panel {
+  display: grid;
+  gap: 0;
+}
+
+.ios-ledger-search-line {
+  display: grid;
+  min-height: 36px;
+  align-items: center;
+  padding: 0 12px;
+  border-radius: 999px;
+  color: rgba(23, 35, 31, 0.48);
+  background: rgba(255, 255, 255, 0.62);
+  font-size: 12px;
+  font-weight: 780;
+}
+
+.ios-ledger-control-chips,
+.ios-ledger-grouping {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  align-items: center;
+}
+
+.ios-ledger-control-chips span,
+.ios-ledger-grouping span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  color: rgba(23, 35, 31, 0.68);
+  background: rgba(255, 255, 255, 0.62);
+  font-size: 11px;
+  font-weight: 820;
+  white-space: nowrap;
+}
+
+.ios-ledger-control-chips .is-active,
+.ios-ledger-grouping .is-active {
+  color: #fff;
+  background: rgba(18, 63, 53, 0.92);
+}
+
+.ios-ledger-queue {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+
+.ios-ledger-queue article {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 8px;
+  min-height: 50px;
+  align-content: center;
+  padding: 9px 10px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.56);
+}
+
+.ios-ledger-queue strong,
+.ios-ledger-queue span,
+.ios-ledger-queue b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ios-ledger-queue strong {
+  color: var(--accounting-ink);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.ios-ledger-queue span {
+  color: var(--accounting-muted);
+  font-size: 10px;
+  font-weight: 720;
+}
+
+.ios-ledger-queue b {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  align-self: center;
+  color: var(--accounting-accent);
+  font-size: 12px;
+  font-weight: 880;
+}
+
+.ios-accounting-mini-list {
+  display: grid;
+  gap: 8px;
+}
+
+.ios-accounting-mini-list article {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 9px 10px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.56);
+}
+
+.ios-accounting-mini-list span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ios-accounting-mini-list strong,
+.ios-accounting-mini-list small,
+.ios-accounting-mini-list b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ios-accounting-mini-list strong {
+  color: var(--accounting-ink);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.ios-accounting-mini-list small {
+  color: var(--accounting-muted);
+  font-size: 10px;
+  font-weight: 720;
+}
+
+.ios-accounting-mini-list b {
+  color: var(--accounting-accent);
+  font-size: 12px;
+  font-weight: 870;
+}
+
 .accounting-scroll--ledger {
   display: grid;
   align-content: start;
@@ -2146,6 +2397,80 @@
   color: var(--accounting-muted);
   font-size: 13px;
   font-weight: 760;
+}
+
+.ios-accounts-workspace {
+  grid-column: 1;
+  grid-template-columns: minmax(300px, 0.72fr) minmax(0, 1fr);
+  align-items: start;
+  height: 100%;
+  gap: 18px;
+}
+
+.ios-account-movement-panel {
+  grid-column: 2;
+  height: calc(100svh - 150px);
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.ios-account-movement-row {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 54px;
+  padding: 9px 11px;
+  border-radius: 17px;
+  background: rgba(255, 255, 255, 0.56);
+}
+
+.ios-account-movement-row > span {
+  display: grid;
+  min-height: 30px;
+  place-items: center;
+  border-radius: 999px;
+  color: var(--accounting-accent);
+  background: rgba(18, 63, 53, 0.08);
+  font-size: 11px;
+  font-weight: 830;
+}
+
+.ios-account-movement-row--income > span,
+.ios-account-movement-row--income b {
+  color: var(--accounting-income);
+}
+
+.ios-account-movement-row--expense > span,
+.ios-account-movement-row--expense b {
+  color: var(--accounting-expense);
+}
+
+.ios-account-movement-row--transfer > span,
+.ios-account-movement-row--transfer b {
+  color: var(--accounting-transfer);
+}
+
+.ios-account-movement-row strong,
+.ios-account-movement-row small,
+.ios-account-movement-row b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ios-account-movement-row strong {
+  display: block;
+  color: var(--accounting-ink);
+  font-size: 13px;
+  font-weight: 840;
+}
+
+.ios-account-movement-row small {
+  display: block;
+  margin-top: 3px;
+  color: var(--accounting-muted);
+  font-size: 11px;
+  font-weight: 720;
 }
 
 .accounting-modal-backdrop {
@@ -2918,10 +3243,22 @@
 
   .accounting-page {
     grid-template-columns: minmax(0, 1fr);
-    column-gap: 0;
+    grid-template-rows: minmax(0, 1fr) 252px;
+    gap: 8px;
     height: 100%;
     padding: 92px 10px 12px;
     overflow: hidden;
+  }
+
+  .accounting-content-slot {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .ios-accounting-side-panel {
+    grid-column: 1;
+    grid-row: 2;
+    height: 252px;
   }
 
   .accounting-workspace {
@@ -2942,7 +3279,7 @@
   .ios-account-ledger-workspace {
     grid-column: 1;
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1fr) 252px;
+    grid-template-rows: minmax(0, 1fr);
   }
 
   .ios-ledger-main {
@@ -2952,7 +3289,7 @@
   .ios-account-filter-panel {
     grid-column: 1;
     width: auto;
-    height: auto;
+    height: calc(100svh - 136px);
     min-height: 0;
     display: grid;
     grid-template-rows: minmax(0, 1fr);
@@ -2960,7 +3297,21 @@
     padding: 10px;
   }
 
-  .ios-account-filter-panel__secondary {
+  .ios-ledger-control-panel {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ios-ledger-queue {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ios-accounts-workspace {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .ios-account-movement-panel,
+  .ios-accounting-side-dock {
     display: none;
   }
 
@@ -3161,9 +3512,12 @@
   }
 }
 
-@media (min-width: 721px) and (max-width: 1240px), (min-width: 721px) and (max-height: 790px) {
+@media (min-width: 721px) and (max-width: 1440px), (min-width: 721px) and (max-height: 790px) {
   .accounting-page {
-    grid-template-columns: minmax(0, 1fr) minmax(460px, 1fr) minmax(276px, 330px);
+    --accounting-outer-gutter: 28px;
+    --accounting-internal-gap: 20px;
+
+    grid-template-columns: minmax(0, 1fr) minmax(276px, 330px);
     column-gap: 18px;
     padding: 92px 16px 14px;
   }
@@ -3181,8 +3535,13 @@
   }
 
   .ios-account-ledger-workspace {
-    grid-template-columns: minmax(460px, 1fr) minmax(276px, 330px);
-    gap: 18px;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--accounting-internal-gap);
+  }
+
+  .ios-accounting-side-panel {
+    min-width: 0;
+    height: calc(100svh - 136px);
   }
 
   .ios-ledger-main {
@@ -3190,9 +3549,20 @@
   }
 
   .ios-account-filter-panel {
+    min-width: 0;
     width: 100%;
-    height: calc(100svh - 112px);
+    max-width: none;
+    height: calc(100svh - 136px);
     padding: 12px 14px 14px;
+  }
+
+  .ios-accounts-workspace {
+    grid-template-columns: minmax(236px, 286px) minmax(0, 1fr);
+    gap: 18px;
+  }
+
+  .ios-account-movement-panel {
+    height: calc(100svh - 136px);
   }
 
   .ios-account-filter-stack {

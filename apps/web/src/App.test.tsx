@@ -160,8 +160,23 @@ describe('App', () => {
     expect(screen.queryByText('记账图谱工作台')).not.toBeInTheDocument()
     expect(screen.queryByLabelText('当前账目范围')).not.toBeInTheDocument()
     expect(screen.getByLabelText('账户与流水工作台')).toBeInTheDocument()
-    expect(screen.getByText('新增流水')).toBeInTheDocument()
-    expect(screen.getByText('查看统计')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '新增流水' })).toBeInTheDocument()
+    expect(screen.queryByText('查看统计')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('流水控制面板')).toBeInTheDocument()
+    expect(screen.queryByLabelText('账户筛选卡片')).not.toBeInTheDocument()
+    const secondaryNav = screen.getByRole('navigation', { name: '记账二级导航' })
+    expect(within(secondaryNav).getByRole('button', { name: '流水' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(within(secondaryNav).getByRole('button', { name: '账户' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    )
+    expect(within(secondaryNav).getByRole('button', { name: '统计' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    )
     expect(screen.queryByRole('group', { name: '记账工作区' })).not.toBeInTheDocument()
 
     const timePanel = screen.getByLabelText('时间范围面板')
@@ -182,7 +197,7 @@ describe('App', () => {
     expect(screen.queryByText('本期流水')).not.toBeInTheDocument()
   })
 
-  it('renders accounts and ledger together while account cards stay display-only', async () => {
+  it('renders the accounts subpage while account cards stay display-only', async () => {
     render(
       <App
         amapConfig={{
@@ -204,20 +219,20 @@ describe('App', () => {
     )
 
     fireEvent.click(screen.getByRole('button', { name: '记账' }))
+    expect(screen.getByLabelText('账户与流水工作台')).toBeInTheDocument()
+    expect(screen.queryByLabelText('账户筛选卡片')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '账户' }))
 
-    const workspace = screen.getByLabelText('账户与流水工作台')
+    const workspace = screen.getByLabelText('账户工作台')
     const accountFilter = within(workspace).getByLabelText('账户筛选卡片')
     const accountCardsRegion = accountFilter.querySelector('.ios-account-filter-panel__accounts')
-    const accountSecondaryRegion = accountFilter.querySelector('.ios-account-filter-panel__secondary')
     const accountStack = accountFilter.querySelector('.ios-account-filter-stack')
 
     expect(workspace).toBeInTheDocument()
     expect(accountFilter).toBeInTheDocument()
     expect(accountCardsRegion).not.toBeNull()
-    expect(accountSecondaryRegion).not.toBeNull()
     expect(accountStack).not.toBeNull()
     expect(accountCardsRegion?.querySelectorAll('.ios-account-filter-card')).toHaveLength(4)
-    expect(accountSecondaryRegion?.querySelector('.ios-account-filter-card')).toBeNull()
 
     const allFilter = within(accountFilter).getByRole('button', { name: /全部流水/ })
     expect(allFilter).toHaveAttribute(
@@ -228,18 +243,20 @@ describe('App', () => {
     expect(allFilter).not.toHaveClass('ios-account-filter-card')
     expect(within(accountStack as HTMLElement).queryByRole('button', { name: /全部账户|全部流水/ })).not.toBeInTheDocument()
     expect(accountStack?.querySelectorAll('.ios-account-filter-card')).toHaveLength(4)
-    expect(within(workspace).getByText('流水明细')).toBeInTheDocument()
-    expect(within(workspace).getByLabelText('流水列表')).toBeInTheDocument()
-    expect(within(workspace).getByText('新增流水')).toBeInTheDocument()
-    expect(within(workspace).getByText('查看统计')).toBeInTheDocument()
+    expect(within(workspace).getByText('账户流水')).toBeInTheDocument()
+    expect(within(workspace).getByLabelText('账户流水列表')).toBeInTheDocument()
+    expect(within(workspace).queryByText('新增流水')).not.toBeInTheDocument()
+    expect(within(workspace).queryByText('查看统计')).not.toBeInTheDocument()
     expect(within(workspace).getAllByText('NIBU 酸奶').length).toBeGreaterThan(0)
     expect(within(workspace).getAllByText('鲜嗨发牛肉火锅').length).toBeGreaterThan(0)
-    expect(within(workspace).getAllByText('餐饮 / 饮品').length).toBeGreaterThan(0)
-    expect(within(workspace).getAllByText('地点旅行 / 青岛之行').length).toBeGreaterThan(0)
+    expect(within(workspace).getAllByText('-¥45.78').length).toBeGreaterThan(0)
+    expect(within(workspace).getAllByText('-¥131.00').length).toBeGreaterThan(0)
+    expect(within(workspace).queryByText('餐饮 / 饮品')).not.toBeInTheDocument()
+    expect(within(workspace).queryByText('地点旅行 / 青岛之行')).not.toBeInTheDocument()
     expect(within(workspace).queryByText('分类线索')).not.toBeInTheDocument()
     expect(within(workspace).queryByText('标签线索')).not.toBeInTheDocument()
     expect(within(workspace).queryByText('选中流水')).not.toBeInTheDocument()
-    expect(workspace.querySelector('.accounting-scroll--ledger')).not.toBeNull()
+    expect(workspace.querySelector('.ios-account-movement-panel')).not.toBeNull()
 
     const huabeiCard = within(accountFilter).getByRole('button', { name: /花呗/ })
 
@@ -282,6 +299,7 @@ describe('App', () => {
     render(<App amapConfig={missingAmapConfig} />)
 
     fireEvent.click(screen.getByRole('button', { name: '记账' }))
+    fireEvent.click(screen.getByRole('button', { name: '账户' }))
 
     const accountStack = document.querySelector('.ios-account-filter-stack') as HTMLElement
     const getStackCards = () =>
@@ -403,7 +421,7 @@ describe('App', () => {
     )
 
     fireEvent.click(screen.getByRole('button', { name: '记账' }))
-    fireEvent.click(screen.getByRole('button', { name: '查看统计' }))
+    fireEvent.click(screen.getByRole('button', { name: '统计' }))
 
     const reportWorkspace = screen.getByLabelText('统计工作区')
 
@@ -442,17 +460,30 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: '记账' }))
 
     expect(screen.queryByRole('group', { name: '记账工作区' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '流水' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '账户' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '统计' })).not.toBeInTheDocument()
+    const secondaryNav = screen.getByRole('navigation', { name: '记账二级导航' })
+    expect(within(secondaryNav).getByRole('button', { name: '流水' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(within(secondaryNav).getByRole('button', { name: '账户' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    )
+    expect(within(secondaryNav).getByRole('button', { name: '统计' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    )
     expect(screen.getByLabelText('账户与流水工作台')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: '查看统计' }))
+    fireEvent.click(within(secondaryNav).getByRole('button', { name: '统计' }))
 
     expect(screen.getByLabelText('统计工作区')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '返回流水' })).toBeInTheDocument()
+    expect(within(secondaryNav).getByRole('button', { name: '统计' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
 
-    fireEvent.click(screen.getByRole('button', { name: '返回流水' }))
+    fireEvent.click(within(secondaryNav).getByRole('button', { name: '流水' }))
 
     expect(screen.getByLabelText('账户与流水工作台')).toBeInTheDocument()
     expect(screen.queryByLabelText('统计工作区')).not.toBeInTheDocument()
