@@ -12,6 +12,7 @@ class Settings:
     footprint_data_path: Path = Path("external/backUpData-all.csv")
     footprint_db_path: Path = Path("data/footprints.sqlite")
     footprint_coordinate_system: str = "wgs84"
+    admin_region_data_path: Path = Path("external/admin-regions.geojson")
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -23,4 +24,7 @@ class Settings:
             ),
             footprint_db_path=Path(os.environ.get("FOOTPRINT_DB_PATH", "data/footprints.sqlite")),
             footprint_coordinate_system=os.environ.get("FOOTPRINT_COORDINATE_SYSTEM", "wgs84"),
+            admin_region_data_path=Path(
+                os.environ.get("ADMIN_REGION_DATA_PATH", "external/admin-regions.geojson"),
+            ),
         )

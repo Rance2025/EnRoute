@@ -20,31 +20,28 @@ def main(argv: Sequence[str] | None = None, *, root_dir: Path | str | None = Non
   data_path = resolve_path(resolved_root_dir, args.source or settings.footprint_data_path)
   db_path = resolve_path(resolved_root_dir, args.database or settings.footprint_db_path)
   coordinate_system = args.coordinate_system or settings.footprint_coordinate_system
+  admin_region_data_path = resolve_path(
+    resolved_root_dir,
+    args.admin_region_data_path or settings.admin_region_data_path,
+  )
 
   store = FootprintStore(
     db_path=db_path,
     data_path=data_path,
     coordinate_system=coordinate_system,
+    admin_region_data_path=admin_region_data_path,
   )
   try:
-    snapshot = store.get_snapshot(
-      {
-        "timeRange": {
-          "startTimestampSeconds": 0,
-          "endTimestampSeconds": 8_640_000_000_000,
-          "dayCount": 1,
-        },
-        "zoom": 0,
-        "cellSizePx": 1,
-        "viewportBounds": {"west": -180, "south": -85, "east": 180, "north": 85},
-        "viewportNorthWestWorldPixel": {"x": 0, "y": 0},
-      },
-    )
+    result = store.import_footprints()
   finally:
     store.close()
   print(
     "Imported "
-    f"{snapshot['metrics']['selectedCount']} footprint rows from {data_path} into {db_path}",
+    f"{result['new_count']} new footprint rows from {data_path} into {db_path}; "
+    f"total rows: {result['total_count']}; "
+    f"matched regions: {result['matched_count']}; "
+    f"loaded regions: {result['region_count']}; "
+    f"unlocked regions: {result['unlocked_region_count']}",
   )
   return 0
 
@@ -57,6 +54,11 @@ def parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     "--coordinate-system",
     choices=["wgs84", "gcj02"],
     help="Source coordinate system. Defaults to FOOTPRINT_COORDINATE_SYSTEM.",
+  )
+  parser.add_argument(
+    "--admin-region-data-path",
+    type=Path,
+    help="Local admin region GeoJSON path. Defaults to ADMIN_REGION_DATA_PATH.",
   )
   return parser.parse_args(argv)
 

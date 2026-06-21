@@ -4,13 +4,14 @@ import json
 import math
 import sqlite3
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, TypedDict
 
 from enroute_api.admin_regions.store import (
     find_finest_region_id,
     get_region_chain,
     get_region_levels,
     initialize_admin_region_schema,
+    load_admin_regions,
 )
 
 from .csv_loader import iter_footprint_points
@@ -20,6 +21,14 @@ MAX_MERCATOR_LATITUDE = 85.05112878
 OPEN_ENDED_TIMESTAMP_SECONDS = 8_640_000_000_000
 
 
+class FootprintImportResult(TypedDict):
+    new_count: int
+    total_count: int
+    matched_count: int
+    region_count: int
+    unlocked_region_count: int
+
+
 class FootprintStore:
     def __init__(
         self,
@@ -27,20 +36,28 @@ class FootprintStore:
         db_path: str | Path,
         data_path: str | Path,
         coordinate_system: str,
+        admin_region_data_path: str | Path | None = None,
     ) -> None:
         self.db_path = Path(db_path)
         self.data_path = Path(data_path)
         self.coordinate_system = coordinate_system
+        self.admin_region_data_path = (
+            None if admin_region_data_path is None else Path(admin_region_data_path)
+        )
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.connection = sqlite3.connect(self.db_path, check_same_thread=False)
         self.connection.row_factory = sqlite3.Row
         initialize_schema(self.connection)
 
     def ensure_ready(self) -> None:
-        ensure_imported(
+        self.import_footprints()
+
+    def import_footprints(self) -> FootprintImportResult:
+        return ensure_imported(
             self.connection,
             data_path=self.data_path,
             coordinate_system=self.coordinate_system,
+            admin_region_data_path=self.admin_region_data_path,
         )
 
     def get_snapshot(self, input_payload: dict[str, Any]) -> dict[str, Any]:
@@ -134,16 +151,37 @@ def ensure_imported(
     *,
     data_path: Path,
     coordinate_system: str,
-) -> None:
-    source_signature = create_source_signature(data_path, coordinate_system)
+    admin_region_data_path: Path | None = None,
+) -> FootprintImportResult:
+    return import_footprints(
+        connection,
+        data_path=data_path,
+        coordinate_system=coordinate_system,
+        admin_region_data_path=admin_region_data_path,
+    )
+
+
+def import_footprints(
+    connection: sqlite3.Connection,
+    *,
+    data_path: Path,
+    coordinate_system: str,
+    admin_region_data_path: Path | None = None,
+) -> FootprintImportResult:
+    region_signature = load_admin_region_data_if_available(connection, admin_region_data_path)
+    source_signature = create_import_signature(data_path, coordinate_system, region_signature)
     stored_signature = get_meta_value(connection, "sourceSignature")
     stored_count = get_footprint_row_count(connection)
     stored_spatial_count = get_spatial_row_count(connection)
 
     if stored_signature == source_signature and stored_count > 0 and stored_spatial_count == stored_count:
-        return
+        return get_import_result(connection, new_count=0)
     if not data_path.exists() and stored_count > 0 and stored_spatial_count == stored_count:
-        return
+        return get_import_result(connection, new_count=0)
+
+    if stored_signature != source_signature:
+        clear_imported_footprints(connection)
+        stored_count = 0
 
     with connection:
         new_count = 0
@@ -153,6 +191,8 @@ def ensure_imported(
 
         set_meta_value(connection, "sourceSignature", source_signature)
         set_meta_value(connection, "rowCount", str(stored_count + new_count))
+
+    return get_import_result(connection, new_count=new_count)
 
 
 def insert_footprint_if_new(connection: sqlite3.Connection, point: dict[str, Any]) -> bool:
@@ -261,6 +301,52 @@ def validate_existing_footprint_matches(
         raise ValueError(
             f"Conflicting footprint row for timestamp {int(point['timestampSeconds'])}",
         )
+
+
+def load_admin_region_data_if_available(
+    connection: sqlite3.Connection,
+    admin_region_data_path: Path | None,
+) -> str:
+    if admin_region_data_path is None or not admin_region_data_path.exists():
+        return create_source_signature(admin_region_data_path, "admin-regions")
+
+    signature = create_source_signature(admin_region_data_path, "admin-regions")
+    if get_meta_value(connection, "adminRegionSourceSignature") == signature:
+        return signature
+
+    feature_collection = json.loads(admin_region_data_path.read_text(encoding="utf-8-sig"))
+    load_admin_regions(connection, feature_collection)
+    set_meta_value(connection, "adminRegionSourceSignature", signature)
+    return signature
+
+
+def clear_imported_footprints(connection: sqlite3.Connection) -> None:
+    connection.executescript(
+        """
+        DELETE FROM footprint_spatial;
+        DELETE FROM footprints;
+        DELETE FROM footprint_meta WHERE key IN ('sourceSignature', 'rowCount');
+        UPDATE admin_regions
+        SET first_seen_timestamp = NULL,
+            footprint_count = 0,
+            stay_duration_seconds = 0,
+            travel_distance_meters = 0;
+        """,
+    )
+
+
+def get_import_result(connection: sqlite3.Connection, *, new_count: int) -> FootprintImportResult:
+    total_count = get_footprint_row_count(connection)
+    matched_count = get_matched_footprint_row_count(connection)
+    region_count = get_admin_region_row_count(connection)
+    unlocked_region_count = get_unlocked_admin_region_row_count(connection)
+    return {
+        "new_count": new_count,
+        "total_count": total_count,
+        "matched_count": matched_count,
+        "region_count": region_count,
+        "unlocked_region_count": unlocked_region_count,
+    }
 
 
 def update_region_unlock_stats(
@@ -570,7 +656,32 @@ def normalize_snapshot_input(input_payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def create_source_signature(data_path: Path, coordinate_system: str) -> str:
+def create_import_signature(
+    data_path: Path,
+    coordinate_system: str,
+    admin_region_signature: str,
+) -> str:
+    return json.dumps(
+        {
+            "footprints": json.loads(create_source_signature(data_path, coordinate_system)),
+            "adminRegions": json.loads(admin_region_signature),
+        },
+        separators=(",", ":"),
+    )
+
+
+def create_source_signature(data_path: Path | None, coordinate_system: str) -> str:
+    if data_path is None:
+        return json.dumps(
+            {
+                "dataPath": None,
+                "coordinateSystem": coordinate_system,
+                "mtimeMs": 0,
+                "size": 0,
+            },
+            separators=(",", ":"),
+        )
+
     try:
         stat = data_path.resolve().stat()
         size = stat.st_size
@@ -600,8 +711,27 @@ def get_footprint_row_count(connection: sqlite3.Connection) -> int:
     return int(row["count"])
 
 
+def get_matched_footprint_row_count(connection: sqlite3.Connection) -> int:
+    row = connection.execute(
+        "SELECT COUNT(*) AS count FROM footprints WHERE region_id IS NOT NULL",
+    ).fetchone()
+    return int(row["count"])
+
+
 def get_spatial_row_count(connection: sqlite3.Connection) -> int:
     row = connection.execute("SELECT COUNT(*) AS count FROM footprint_spatial").fetchone()
+    return int(row["count"])
+
+
+def get_admin_region_row_count(connection: sqlite3.Connection) -> int:
+    row = connection.execute("SELECT COUNT(*) AS count FROM admin_regions").fetchone()
+    return int(row["count"])
+
+
+def get_unlocked_admin_region_row_count(connection: sqlite3.Connection) -> int:
+    row = connection.execute(
+        "SELECT COUNT(*) AS count FROM admin_regions WHERE footprint_count > 0",
+    ).fetchone()
     return int(row["count"])
 
 

@@ -15,6 +15,7 @@ def create_app(*, settings: Settings | None = None) -> FastAPI:
         db_path=resolved_settings.footprint_db_path,
         data_path=resolved_settings.footprint_data_path,
         coordinate_system=resolved_settings.footprint_coordinate_system,
+        admin_region_data_path=resolved_settings.admin_region_data_path,
     )
 
     @app.get("/api/health")

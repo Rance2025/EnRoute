@@ -1,3 +1,4 @@
+import json
 import sqlite3
 from pathlib import Path
 
@@ -12,7 +13,7 @@ from enroute_api.admin_regions.store import (
 )
 from enroute_api.config import Settings
 from enroute_api.main import create_app
-from enroute_api.footprints.store import ensure_imported, initialize_schema
+from enroute_api.footprints.store import FootprintStore, ensure_imported, initialize_schema
 
 
 REGION_COLLECTION = {
@@ -205,6 +206,40 @@ def test_reimporting_same_csv_does_not_double_count_region_stats(tmp_path: Path)
         connection.close()
 
     assert dict(after) == dict(before)
+
+
+def test_store_loads_boundary_file_before_incremental_import_and_reports_counts(tmp_path: Path):
+    data_path = tmp_path / "points.csv"
+    data_path.write_text(CSV, encoding="utf-8")
+    region_path = tmp_path / "regions.geojson"
+    region_path.write_text(json.dumps(REGION_COLLECTION), encoding="utf-8")
+    store = FootprintStore(
+        db_path=tmp_path / "footprints.sqlite",
+        data_path=data_path,
+        coordinate_system="gcj02",
+        admin_region_data_path=region_path,
+    )
+    try:
+        first_result = store.import_footprints()
+        second_result = store.import_footprints()
+        matched_count = store.connection.execute(
+            "SELECT COUNT(*) FROM footprints WHERE region_id IS NOT NULL",
+        ).fetchone()[0]
+        region_count = store.connection.execute("SELECT COUNT(*) FROM admin_regions").fetchone()[0]
+    finally:
+        store.close()
+
+    assert first_result == {
+        "new_count": 3,
+        "total_count": 3,
+        "matched_count": 3,
+        "region_count": 4,
+        "unlocked_region_count": 4,
+    }
+    assert second_result["new_count"] == 0
+    assert second_result["total_count"] == 3
+    assert matched_count == 3
+    assert region_count == 4
 
 
 def test_serves_admin_regions_by_level_from_cached_region_rows(tmp_path: Path):
