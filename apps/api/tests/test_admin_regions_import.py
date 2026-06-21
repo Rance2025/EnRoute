@@ -1,6 +1,8 @@
 import sqlite3
 from pathlib import Path
 
+from fastapi.testclient import TestClient
+
 from enroute_api.admin_regions.store import (
     format_admin_region,
     get_region_chain,
@@ -8,6 +10,8 @@ from enroute_api.admin_regions.store import (
     load_admin_regions,
     query_admin_regions_by_level,
 )
+from enroute_api.config import Settings
+from enroute_api.main import create_app
 from enroute_api.footprints.store import ensure_imported, initialize_schema
 
 
@@ -201,3 +205,38 @@ def test_reimporting_same_csv_does_not_double_count_region_stats(tmp_path: Path)
         connection.close()
 
     assert dict(after) == dict(before)
+
+
+def test_serves_admin_regions_by_level_from_cached_region_rows(tmp_path: Path):
+    data_path = tmp_path / "points.csv"
+    data_path.write_text(CSV, encoding="utf-8")
+    db_path = tmp_path / "footprints.sqlite"
+    settings = Settings(
+        footprint_data_path=data_path,
+        footprint_db_path=db_path,
+        footprint_coordinate_system="gcj02",
+    )
+    client = TestClient(create_app(settings=settings))
+
+    connection = sqlite3.connect(db_path)
+    connection.row_factory = sqlite3.Row
+    try:
+        initialize_admin_region_schema(connection)
+        load_admin_regions(connection, REGION_COLLECTION)
+    finally:
+        connection.close()
+
+    client.get("/api/footprints")
+    response = client.get("/api/admin-regions?level=5")
+
+    assert response.status_code == 200
+    assert response.json()["regions"][0] | {"geometry": {}} == {
+        "id": "sanlin",
+        "name": "三林镇",
+        "level": 5,
+        "geometry": {},
+        "firstSeenTimestamp": 100,
+        "footprintCount": 2,
+        "stayDurationSeconds": 30,
+        "travelDistanceMeters": 40,
+    }

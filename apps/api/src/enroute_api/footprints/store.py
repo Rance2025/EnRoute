@@ -36,20 +36,19 @@ class FootprintStore:
         self.connection.row_factory = sqlite3.Row
         initialize_schema(self.connection)
 
-    def get_snapshot(self, input_payload: dict[str, Any]) -> dict[str, Any]:
+    def ensure_ready(self) -> None:
         ensure_imported(
             self.connection,
             data_path=self.data_path,
             coordinate_system=self.coordinate_system,
         )
+
+    def get_snapshot(self, input_payload: dict[str, Any]) -> dict[str, Any]:
+        self.ensure_ready()
         return query_snapshot(self.connection, normalize_snapshot_input(input_payload))
 
     def get_all_points(self) -> dict[str, list[dict[str, Any]]]:
-        ensure_imported(
-            self.connection,
-            data_path=self.data_path,
-            coordinate_system=self.coordinate_system,
-        )
+        self.ensure_ready()
         return query_all_points(self.connection)
 
     def close(self) -> None:
