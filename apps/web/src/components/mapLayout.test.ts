@@ -1084,6 +1084,17 @@ describe('map chrome layout', () => {
     )
   })
 
+  it('places administrative region unlock level controls above the map toolbar without covering it', () => {
+    const panelRule = cssRule('.admin-region-unlock-panel')
+    const levelRule = cssRule('.admin-region-unlock-levels')
+
+    expect(panelRule).toContain('position: absolute')
+    expect(panelRule).toContain('bottom: calc(100% + 12px)')
+    expect(panelRule).toContain('right: 0')
+    expect(levelRule).toContain('display: grid')
+    expect(levelRule).toContain('grid-template-columns: repeat(5, minmax(0, 1fr))')
+  })
+
   it('places the footprint rendering debug panel in the map upper-right corner', () => {
     const stageRule = cssRule('.map-stage')
     const panelRule = cssRule('.footprint-debug-panel')
