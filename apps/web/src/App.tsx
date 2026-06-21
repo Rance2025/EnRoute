@@ -36,7 +36,9 @@ import {
 } from './appLayout'
 import { getAmapConfig, type AmapConfig } from './config/amap'
 import {
+  readMapDebugPanelVisible,
   readNavigationStyle,
+  writeMapDebugPanelVisible,
   writeNavigationStyle,
   type NavigationStyle,
 } from './navigationPreferences'
@@ -67,6 +69,7 @@ type TopNavigationThumbMetrics = {
   left: number
   width: number
 }
+type SettingsPageId = 'general' | 'map' | 'accounting' | 'schedule'
 
 const topNavigationItems: TopNavigationItem[] = [
   { value: 'overview', label: '在途 EnRoute', kind: 'brand' },
@@ -77,6 +80,12 @@ const topNavigationItems: TopNavigationItem[] = [
 const navigationStyleOptions: Array<SegmentedOption<NavigationStyle>> = [
   { value: 'icon', label: '纯 icon' },
   { value: 'mixed', label: '图文混合' },
+]
+const settingsPageItems: Array<{ id: SettingsPageId; label: string }> = [
+  { id: 'general', label: '通用' },
+  { id: 'map', label: '地图' },
+  { id: 'accounting', label: '记账' },
+  { id: 'schedule', label: '日程' },
 ]
 const secondaryNavItemsByView: Record<AppView, SecondaryNavItem[]> = {
   overview: [],
@@ -117,6 +126,10 @@ function App({ amapConfig }: AppProps) {
   const [view, setView] = useState<AppView>('map')
   const [navigationStyle, setNavigationStyle] = useState<NavigationStyle>(readNavigationStyle)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [settingsPage, setSettingsPage] = useState<SettingsPageId>('general')
+  const [isMapDebugPanelVisible, setIsMapDebugPanelVisible] = useState(
+    readMapDebugPanelVisible,
+  )
   const [topNavigationThumb, setTopNavigationThumb] = useState<TopNavigationThumbMetrics>({
     left: 0,
     width: 0,
@@ -150,6 +163,10 @@ function App({ amapConfig }: AppProps) {
   const handleNavigationStyleChange = useCallback((nextStyle: NavigationStyle) => {
     setNavigationStyle(nextStyle)
     writeNavigationStyle(nextStyle)
+  }, [])
+  const handleMapDebugPanelVisibleChange = useCallback((nextVisible: boolean) => {
+    setIsMapDebugPanelVisible(nextVisible)
+    writeMapDebugPanelVisible(nextVisible)
   }, [])
 
   useEffect(() => {
@@ -261,7 +278,10 @@ function App({ amapConfig }: AppProps) {
         view={view}
         selection={selectedTimeRange}
         onSelectionChange={setSelectedTimeRange}
-        onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenSettings={() => {
+          setSettingsPage('general')
+          setIsSettingsOpen(true)
+        }}
       />
 
       <nav className="secondary-nav-rail" aria-label="二级导航">
@@ -298,6 +318,7 @@ function App({ amapConfig }: AppProps) {
           timeRange={selectedTimeRange}
           onFootprintMetricsChange={setFootprintMetrics}
           adminRegionUnlockEnabled={activeSecondaryNavId === 'regions'}
+          debugPanelVisible={isMapDebugPanelVisible}
         />
       ) : view === 'accounting' ? (
         <section className="main-workspace" aria-label="在途 EnRoute 主工作区">
@@ -344,16 +365,72 @@ function App({ amapConfig }: AppProps) {
                 <X size={18} strokeWidth={1.9} aria-hidden="true" />
               </button>
             </header>
-            <section className="settings-dialog__section" aria-label="顶部导航样式">
-              <span>顶部导航样式</span>
-              <SegmentedControl
-                ariaLabel="顶部导航样式"
-                className="settings-navigation-tabs"
-                options={navigationStyleOptions}
-                value={navigationStyle}
-                onChange={handleNavigationStyleChange}
-              />
-            </section>
+            <div className="settings-dialog__body">
+              <nav className="settings-dialog__tabs" aria-label="设置分页">
+                {settingsPageItems.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={
+                      item.id === settingsPage
+                        ? 'settings-dialog__tab is-active'
+                        : 'settings-dialog__tab'
+                    }
+                    aria-pressed={item.id === settingsPage}
+                    onClick={() => setSettingsPage(item.id)}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </nav>
+              <div className="settings-dialog__content">
+                {settingsPage === 'general' ? (
+                  <section className="settings-dialog__section" aria-label="顶部导航样式">
+                    <span>顶部导航样式</span>
+                    <SegmentedControl
+                      ariaLabel="顶部导航样式"
+                      className="settings-navigation-tabs"
+                      options={navigationStyleOptions}
+                      value={navigationStyle}
+                      onChange={handleNavigationStyleChange}
+                    />
+                  </section>
+                ) : null}
+                {settingsPage === 'map' ? (
+                  <section className="settings-dialog__section" aria-label="地图显示">
+                    <span>地图显示</span>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={isMapDebugPanelVisible}
+                      className={
+                        isMapDebugPanelVisible
+                          ? 'settings-switch-row is-active'
+                          : 'settings-switch-row'
+                      }
+                      onClick={() =>
+                        handleMapDebugPanelVisibleChange(!isMapDebugPanelVisible)
+                      }
+                    >
+                      <span>显示地图统计浮窗</span>
+                      <span className="settings-switch-row__control" aria-hidden="true" />
+                    </button>
+                  </section>
+                ) : null}
+                {settingsPage === 'accounting' ? (
+                  <section className="settings-dialog__section" aria-label="记账设置">
+                    <span>记账设置</span>
+                    <p className="settings-dialog__empty">暂无可配置项</p>
+                  </section>
+                ) : null}
+                {settingsPage === 'schedule' ? (
+                  <section className="settings-dialog__section" aria-label="日程设置">
+                    <span>日程设置</span>
+                    <p className="settings-dialog__empty">暂无可配置项</p>
+                  </section>
+                ) : null}
+              </div>
+            </div>
           </section>
         </div>
       ) : null}

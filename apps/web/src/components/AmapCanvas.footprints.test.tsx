@@ -108,6 +108,7 @@ async function renderFootprintMassMarks({
   snapshots,
   timeRange = selectPresetRange('all'),
   adminRegionUnlockEnabled = false,
+  debugPanelVisible,
 }: {
   containerSize?: { width: number; height: number }
   mapOverrides?: object
@@ -120,6 +121,7 @@ async function renderFootprintMassMarks({
   snapshots?: FootprintSnapshot[]
   timeRange?: TimeRangeSelection
   adminRegionUnlockEnabled?: boolean
+  debugPanelVisible?: boolean
 } = {}) {
   const mapMoveHandlers: Array<() => void> = []
   const moveEndHandlers: Array<() => void> = []
@@ -262,6 +264,7 @@ async function renderFootprintMassMarks({
       timeRange={timeRange}
       onFootprintMetricsChange={onFootprintMetricsChange}
       adminRegionUnlockEnabled={adminRegionUnlockEnabled}
+      debugPanelVisible={debugPanelVisible}
     />,
   )
   const mapSurface = renderResult.container.querySelector('.amap-surface') as HTMLElement
@@ -302,6 +305,7 @@ async function renderFootprintMassMarks({
           timeRange={nextTimeRange}
           onFootprintMetricsChange={onFootprintMetricsChange}
           adminRegionUnlockEnabled={adminRegionUnlockEnabled}
+          debugPanelVisible={debugPanelVisible}
         />,
       )
     },
@@ -312,6 +316,7 @@ async function renderFootprintMassMarks({
           timeRange={timeRange}
           onFootprintMetricsChange={onFootprintMetricsChange}
           adminRegionUnlockEnabled={nextAdminRegionUnlockEnabled}
+          debugPanelVisible={debugPanelVisible}
         />,
       )
     },
@@ -495,8 +500,33 @@ describe('AmapCanvas footprint layer wiring', () => {
     })
   })
 
-  it('shows current footprint rendering counts and ratio in a right-side debug panel', async () => {
+  it('hides current footprint rendering counts unless the debug panel is enabled', async () => {
     await renderFootprintMassMarks({
+      snapshot: withDebug(
+        {
+          ...emptyRenderSnapshot,
+          points: [createAggregatedPoint('debug-cell', 354)],
+          metrics: {
+            selectedCount: 40441,
+            totalDistanceMeters: 0,
+            averageDistanceMetersPerDay: 0,
+          },
+          selectedBounds: null,
+        },
+        {
+          rawCount: 40441,
+          renderedCount: 354,
+          renderRatio: 0.00875,
+        },
+      ),
+    })
+
+    await waitFor(() => expect(screen.queryByLabelText('足迹渲染调试')).not.toBeInTheDocument())
+  })
+
+  it('shows current footprint rendering counts and ratio when the debug panel is enabled', async () => {
+    await renderFootprintMassMarks({
+      debugPanelVisible: true,
       snapshot: withDebug(
         {
           ...emptyRenderSnapshot,

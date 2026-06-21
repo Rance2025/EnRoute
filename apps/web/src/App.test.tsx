@@ -222,13 +222,20 @@ describe('App', () => {
     expect(screen.getByLabelText('在途 EnRoute 概览工作区')).toBeInTheDocument()
   })
 
-  it('opens a centered settings dialog from the time panel and toggles mixed navigation labels', () => {
+  it('opens a paged settings dialog from the time panel and toggles mixed navigation labels', () => {
     render(<App amapConfig={missingAmapConfig} />)
 
     fireEvent.click(screen.getByRole('button', { name: '打开设置' }))
 
     const dialog = screen.getByRole('dialog', { name: '设置' })
     expect(dialog).toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: '通用' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(within(dialog).getByRole('button', { name: '地图' })).toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: '记账' })).toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: '日程' })).toBeInTheDocument()
     expect(within(dialog).getByRole('button', { name: '纯 icon' })).toHaveAttribute(
       'aria-pressed',
       'true',
@@ -240,6 +247,72 @@ describe('App', () => {
     expect(within(mainNav).getByText('地图')).toBeInTheDocument()
     expect(within(mainNav).getByText('记账')).toBeInTheDocument()
     expect(window.localStorage.getItem('enroute:navigation-style')).toBe('mixed')
+  })
+
+  it('switches settings pages and leaves accounting and schedule pages as empty states', () => {
+    render(<App amapConfig={missingAmapConfig} />)
+
+    fireEvent.click(screen.getByRole('button', { name: '打开设置' }))
+
+    const dialog = screen.getByRole('dialog', { name: '设置' })
+
+    fireEvent.click(within(dialog).getByRole('button', { name: '记账' }))
+    expect(within(dialog).getByRole('button', { name: '记账' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(within(dialog).getByText('记账设置')).toBeInTheDocument()
+    expect(within(dialog).getByText('暂无可配置项')).toBeInTheDocument()
+
+    fireEvent.click(within(dialog).getByRole('button', { name: '日程' }))
+    expect(within(dialog).getByRole('button', { name: '日程' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(within(dialog).getByText('日程设置')).toBeInTheDocument()
+    expect(within(dialog).getByText('暂无可配置项')).toBeInTheDocument()
+  })
+
+  it('defaults the map render statistics panel to hidden and toggles it from map settings', () => {
+    render(<App amapConfig={missingAmapConfig} />)
+
+    expect(screen.queryByLabelText('足迹渲染调试')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '打开设置' }))
+
+    const dialog = screen.getByRole('dialog', { name: '设置' })
+    fireEvent.click(within(dialog).getByRole('button', { name: '地图' }))
+
+    const debugSwitch = within(dialog).getByRole('switch', { name: '显示地图统计浮窗' })
+
+    expect(debugSwitch).toHaveAttribute('aria-checked', 'false')
+
+    fireEvent.click(debugSwitch)
+
+    expect(debugSwitch).toHaveAttribute('aria-checked', 'true')
+    expect(window.localStorage.getItem('enroute:map-debug-panel-visible')).toBe('true')
+
+    fireEvent.click(debugSwitch)
+
+    expect(debugSwitch).toHaveAttribute('aria-checked', 'false')
+    expect(window.localStorage.getItem('enroute:map-debug-panel-visible')).toBe('false')
+  })
+
+  it('restores the persisted map render statistics preference on reload', () => {
+    window.localStorage.setItem('enroute:map-debug-panel-visible', 'true')
+
+    render(<App amapConfig={missingAmapConfig} />)
+
+    fireEvent.click(screen.getByRole('button', { name: '打开设置' }))
+    fireEvent.click(within(screen.getByRole('dialog', { name: '设置' })).getByRole('button', {
+      name: '地图',
+    }))
+
+    expect(
+      within(screen.getByRole('dialog', { name: '设置' })).getByRole('switch', {
+        name: '显示地图统计浮窗',
+      }),
+    ).toHaveAttribute('aria-checked', 'true')
   })
 
   it('restores the persisted mixed navigation style on reload', () => {
