@@ -1,8 +1,15 @@
 import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { selectDay, selectMonth, setCustomDateRange } from '../time/timeRange'
+import {
+  selectDay,
+  selectMonth,
+  selectWeek,
+  setCustomDateRange,
+  type TimeRangeSelection,
+} from '../time/timeRange'
 import { TimeContextPanel } from './TimeContextPanel'
 
 beforeEach(() => {
@@ -14,6 +21,27 @@ afterEach(() => {
   vi.useRealTimers()
   cleanup()
 })
+
+function StatefulMapTimeContextPanel({
+  initialSelection,
+  onSelectionChange,
+}: {
+  initialSelection: TimeRangeSelection
+  onSelectionChange: (selection: TimeRangeSelection) => void
+}) {
+  const [selection, setSelection] = useState(initialSelection)
+
+  return (
+    <TimeContextPanel
+      view="map"
+      selection={selection}
+      onSelectionChange={(nextSelection) => {
+        onSelectionChange(nextSelection)
+        setSelection(nextSelection)
+      }}
+    />
+  )
+}
 
 describe('TimeContextPanel', () => {
   it('uses the map-only all-time start date when entering custom ranges', () => {
@@ -123,6 +151,104 @@ describe('TimeContextPanel', () => {
 
     expect(within(picker).getByRole('button', { name: /2021年/ })).toBeInTheDocument()
     expect(getMotion()).toHaveClass('time-range-grid-motion--previous')
+  })
+
+  it('lets the day calendar title switch into month selection by year', () => {
+    const onSelectionChange = vi.fn()
+
+    render(
+      <StatefulMapTimeContextPanel
+        initialSelection={selectDay('2026-06-20')}
+        onSelectionChange={onSelectionChange}
+      />,
+    )
+
+    const calendar = screen.getByLabelText('日历选择')
+
+    fireEvent.click(
+      within(calendar).getByRole('button', {
+        name: '切换到月份选择，当前2026年6月',
+      }),
+    )
+
+    expect(within(calendar).getByLabelText('月份选择')).toBeInTheDocument()
+    expect(
+      within(calendar).getByRole('button', {
+        name: '返回日期选择，当前2026年',
+      }),
+    ).toBeInTheDocument()
+    expect(within(calendar).getByRole('button', { name: '上一年' })).toBeInTheDocument()
+    expect(within(calendar).getByRole('button', { name: '下一年' })).toBeInTheDocument()
+    expect(within(calendar).queryByLabelText('日历日期')).not.toBeInTheDocument()
+
+    fireEvent.click(within(calendar).getByRole('button', { name: '下一年' }))
+
+    expect(
+      within(calendar).getByRole('button', {
+        name: '返回日期选择，当前2027年',
+      }),
+    ).toBeInTheDocument()
+    expect(calendar.querySelector('.time-calendar-grid-motion')).toHaveClass(
+      'time-range-grid-motion--next',
+    )
+
+    fireEvent.click(within(calendar).getByRole('button', { name: '5月' }))
+
+    expect(
+      within(calendar).getByRole('button', {
+        name: '切换到月份选择，当前2027年5月',
+      }),
+    ).toBeInTheDocument()
+    expect(within(calendar).getByLabelText('日历日期')).toBeInTheDocument()
+    expect(within(calendar).queryByLabelText('月份选择')).not.toBeInTheDocument()
+    expect(onSelectionChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        mode: 'day',
+        start: '2027-05-20',
+        anchorDate: '2027-05-20',
+      }),
+    )
+  })
+
+  it('lets the week picker title switch into month selection by year', () => {
+    const onSelectionChange = vi.fn()
+
+    render(
+      <StatefulMapTimeContextPanel
+        initialSelection={selectWeek('2026-06-20')}
+        onSelectionChange={onSelectionChange}
+      />,
+    )
+
+    const picker = screen.getByLabelText('时间选择页')
+
+    fireEvent.click(
+      within(picker).getByRole('button', {
+        name: '切换到月份选择，当前2026年6月',
+      }),
+    )
+
+    expect(within(picker).getByLabelText('月份选择')).toBeInTheDocument()
+    expect(within(picker).getByRole('button', { name: '上一年' })).toBeInTheDocument()
+    expect(within(picker).getByRole('button', { name: '下一年' })).toBeInTheDocument()
+    expect(within(picker).queryByText('第25周')).not.toBeInTheDocument()
+
+    fireEvent.click(within(picker).getByRole('button', { name: '5月' }))
+
+    expect(
+      within(picker).getByRole('button', {
+        name: '切换到月份选择，当前2026年5月',
+      }),
+    ).toBeInTheDocument()
+    expect(within(picker).queryByLabelText('月份选择')).not.toBeInTheDocument()
+    expect(onSelectionChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        mode: 'week',
+        start: '2026-05-18',
+        end: '2026-05-24',
+        anchorDate: '2026-05-20',
+      }),
+    )
   })
 
   it('renders accounting summary values through the shared metric strip', () => {

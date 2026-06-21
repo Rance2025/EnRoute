@@ -558,8 +558,7 @@
     inset 0 2px 6px rgba(18, 63, 53, 0.14);
 }
 
-.time-calendar-bar span,
-.time-picker-bar span {
+.time-period-title {
   min-width: 0;
   height: 31px;
   display: grid;
@@ -571,8 +570,32 @@
   background: rgba(17, 40, 35, 0.055);
   font-size: 12px;
   font-weight: 820;
+  font-family: inherit;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.time-period-title--button {
+  border: 0;
+  cursor: pointer;
+  transition:
+    background 150ms ease,
+    color 150ms ease,
+    transform 150ms ease;
+}
+
+.time-period-title--button:hover {
+  color: #123f35;
+  background: rgba(18, 63, 53, 0.09);
+}
+
+.time-period-title--button:active {
+  transform: scale(0.98);
+}
+
+.time-period-title--button:focus-visible {
+  outline: 2px solid rgba(18, 63, 53, 0.28);
+  outline-offset: 2px;
 }
 
 .time-calendar-switch {
