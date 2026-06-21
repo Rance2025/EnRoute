@@ -99,6 +99,7 @@ describe('unified shell layout', () => {
       '定位当前位置',
       '放大地图',
       '缩小地图',
+      '行政区划解锁程度',
       '足迹显示设置',
     ])
     expect(screen.queryByRole('dialog', { name: '足迹显示设置' })).not.toBeInTheDocument()
@@ -139,6 +140,21 @@ describe('unified shell layout', () => {
     expect(opacityInput).toHaveValue('0.64')
     expect(within(popover).getByText('0.64')).toHaveClass('footprint-style-popover__value')
     expect(colorInput).toHaveValue('#4f7cff')
+  })
+
+  it('opens administrative region unlock controls from the map toolbar', () => {
+    render(<App amapConfig={configuredAmap} />)
+
+    expect(screen.queryByRole('group', { name: '行政区划层级' })).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '行政区划解锁程度' }))
+
+    const levelGroup = screen.getByRole('group', { name: '行政区划层级' })
+    expect(levelGroup).toBeInTheDocument()
+    expect(within(levelGroup).getByRole('button', { name: '街道/乡镇' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
   })
 
   it('rounds footprint point opacity controls to 0.01 precision through the slider', () => {

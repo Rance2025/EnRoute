@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react'
 import { useEffect, useId, useRef, useState } from 'react'
-import { Crosshair, Globe2, LocateFixed, Minus, Plus, Settings2 } from 'lucide-react'
+import { Crosshair, Globe2, LocateFixed, MapPinned, Minus, Plus, Settings2 } from 'lucide-react'
+import type { AdminRegionLevel } from '../layers/adminRegionTypes'
 import {
   FOOTPRINT_OPACITY_MAX,
   FOOTPRINT_OPACITY_MIN,
@@ -24,6 +25,14 @@ type MapControlsProps = {
   onZoomOut: () => void
   footprintStyle: FootprintStyle
   onFootprintStyleChange: (style: FootprintStyle) => void
+  adminRegionUnlock?: AdminRegionUnlockControls
+}
+
+type AdminRegionUnlockControls = {
+  enabled: boolean
+  level: AdminRegionLevel
+  onEnabledChange: (enabled: boolean) => void
+  onLevelChange: (level: AdminRegionLevel) => void
 }
 
 type FootprintStylePopoverProps = {
@@ -33,6 +42,13 @@ type FootprintStylePopoverProps = {
 
 const FOOTPRINT_COLOR_SWATCHES = ['#123f35', '#4f7cff', '#b8544c']
 const FOOTPRINT_STYLE_COMMIT_DELAY_MS = 180
+const ADMIN_REGION_LEVELS: Array<{ level: AdminRegionLevel; label: string }> = [
+  { level: 1, label: '国家' },
+  { level: 2, label: '省/直辖市' },
+  { level: 3, label: '市' },
+  { level: 4, label: '区县' },
+  { level: 5, label: '街道/乡镇' },
+]
 
 export function MapControls({
   onFitFootprints,
@@ -42,6 +58,7 @@ export function MapControls({
   onZoomOut,
   footprintStyle,
   onFootprintStyleChange,
+  adminRegionUnlock,
 }: MapControlsProps) {
   const [isFootprintStyleOpen, setIsFootprintStyleOpen] = useState(false)
   const settingsRef = useRef<HTMLDivElement | null>(null)
@@ -109,6 +126,41 @@ export function MapControls({
       >
         <Minus size={18} strokeWidth={1.8} />
       </button>
+      {adminRegionUnlock ? (
+        <div className="map-toolbar__admin-region">
+          {adminRegionUnlock.enabled ? (
+            <div
+              className="admin-region-unlock-panel"
+              role="group"
+              aria-label="行政区划层级"
+            >
+              <div className="admin-region-unlock-levels">
+                {ADMIN_REGION_LEVELS.map(({ level, label }) => (
+                  <button
+                    key={level}
+                    type="button"
+                    aria-pressed={adminRegionUnlock.level === level}
+                    onClick={() => adminRegionUnlock.onLevelChange(level)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          <button
+            type="button"
+            className="map-toolbar__button"
+            aria-label="行政区划解锁程度"
+            title="行政区划解锁程度"
+            aria-expanded={adminRegionUnlock.enabled}
+            aria-pressed={adminRegionUnlock.enabled}
+            onClick={() => adminRegionUnlock.onEnabledChange(!adminRegionUnlock.enabled)}
+          >
+            <MapPinned size={18} strokeWidth={1.8} />
+          </button>
+        </div>
+      ) : null}
       <div className="map-toolbar__settings" ref={settingsRef}>
         {isFootprintStyleOpen ? (
           <FootprintStylePopover
