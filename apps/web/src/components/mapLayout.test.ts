@@ -772,6 +772,8 @@ describe('map chrome layout', () => {
       '--segmented-label-color: rgba(255, 255, 255, 0.66)',
     )
     expect(cssRule('.time-mode-tabs')).toContain('--segmented-gap: 3px')
+    expect(cssRule('.time-mode-tabs')).toContain('padding: 3px')
+    expect(cssRule('.time-mode-tabs button')).toContain('height: 24px')
     expect(cssRule('.time-mode-tabs')).not.toContain('--segmented-thumb-shadow')
     expect(cssRule('.transaction-type-switch')).not.toContain('--segmented-thumb-shadow')
     expect(cssRule('.time-mode-tabs')).toContain('--segmented-active-label-color: #123f35')
