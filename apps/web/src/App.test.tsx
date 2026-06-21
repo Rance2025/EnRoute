@@ -228,6 +228,7 @@ describe('App', () => {
     const mainNav = container.querySelector('.app-nav') as HTMLElement
     const tabs = container.querySelector('.app-nav__tabs') as HTMLElement
     const slider = within(mainNav).getByRole('slider')
+    const activeItems = slider.querySelector('.app-nav__active-items')
 
     Object.assign(tabs, {
       setPointerCapture: () => undefined,
@@ -261,11 +262,13 @@ describe('App', () => {
     })
 
     fireEvent.pointerDown(slider, { clientX: 150, pointerId: 1 })
-    fireEvent.pointerMove(tabs, { clientX: 250, pointerId: 1 })
+    fireEvent.pointerMove(tabs, { clientX: 225, pointerId: 1 })
 
+    expect(activeItems).toHaveAttribute('aria-hidden', 'true')
+    expect(slider.querySelectorAll('.app-nav__active-item')).toHaveLength(4)
     expect(tabs).toHaveClass('is-dragging')
     expect((tabs as HTMLElement).style.getPropertyValue('--top-nav-thumb-preview-left')).toBe(
-      '200px',
+      '175px',
     )
     expect(within(mainNav).getAllByRole('button')[1]).toHaveAttribute('aria-pressed', 'true')
 
@@ -299,8 +302,8 @@ describe('App', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: '图文混合' }))
 
     const mainNav = screen.getByRole('navigation', { name: '主导航' })
-    expect(within(mainNav).getByText('地图')).toBeInTheDocument()
-    expect(within(mainNav).getByText('记账')).toBeInTheDocument()
+    expect(within(mainNav).getByRole('button', { name: '地图' })).toHaveTextContent('地图')
+    expect(within(mainNav).getByRole('button', { name: '记账' })).toHaveTextContent('记账')
     expect(window.localStorage.getItem('enroute:navigation-style')).toBe('mixed')
   })
 
@@ -377,8 +380,8 @@ describe('App', () => {
 
     const mainNav = screen.getByRole('navigation', { name: '主导航' })
 
-    expect(within(mainNav).getByText('地图')).toBeInTheDocument()
-    expect(within(mainNav).getByText('记账')).toBeInTheDocument()
+    expect(within(mainNav).getByRole('button', { name: '地图' })).toHaveTextContent('地图')
+    expect(within(mainNav).getByRole('button', { name: '记账' })).toHaveTextContent('记账')
   })
 
   it('renders the global secondary navigation rail inside the shared app shell', () => {
@@ -469,7 +472,7 @@ describe('App', () => {
     )
 
     expect(screen.getByRole('navigation', { name: '主导航' })).toHaveTextContent('EnRoute')
-    expect(screen.getAllByText('EnRoute')).toHaveLength(1)
+    expect(screen.getByRole('button', { name: '在途 EnRoute' })).toHaveTextContent('EnRoute')
     expect(screen.queryByText('途')).not.toBeInTheDocument()
     expect(screen.queryByText(/地图已就绪/)).not.toBeInTheDocument()
     expect(screen.queryByText(/远山黛/)).not.toBeInTheDocument()
