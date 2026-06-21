@@ -3,7 +3,6 @@ import {
   ArrowRightLeft,
   ArrowUpRight,
   CalendarDays,
-  CircleDollarSign,
   CreditCard,
   Pencil,
   Plus,
@@ -100,25 +99,71 @@ const accountCardBrandConfigs: Record<AccountCardBrand, AccountCardBrandConfig> 
 
 type LedgerWorkspaceProps = {
   dataset: AccountingDataset
-  summaries: AccountPeriodSummary[]
   transactions: Transaction[]
-  selectedAccountId: string
-  onSelectAccount: (accountId: string) => void
   onSelectTransaction: (transaction: Transaction) => void
   onCreateTransaction: () => void
-  onOpenAnalytics: () => void
 }
 
 export function LedgerWorkspace({
   dataset,
+  transactions,
+  onSelectTransaction,
+  onCreateTransaction,
+}: LedgerWorkspaceProps) {
+  return (
+    <div
+      className="accounting-workspace ios-account-ledger-workspace"
+      aria-label="账户与流水工作台"
+    >
+      <section className="ios-panel ios-ledger-main">
+        <header className="ios-ledger-toolbar">
+          <div>
+            <strong>流水明细</strong>
+            <span>全部流水</span>
+          </div>
+          <div className="ios-ledger-toolbar__meta">
+            <span>当前范围</span>
+            <b>{transactions.length} 笔</b>
+          </div>
+          <div className="ios-ledger-toolbar__actions">
+            <button type="button" onClick={onCreateTransaction}>
+              <Plus size={15} strokeWidth={2.2} />
+              新增流水
+            </button>
+          </div>
+        </header>
+
+        <div className="accounting-scroll--ledger" aria-label="流水列表">
+          {transactions.map((transaction) => (
+            <TransactionRow
+              key={transaction.id}
+              dataset={dataset}
+              transaction={transaction}
+              onSelect={() => onSelectTransaction(transaction)}
+            />
+          ))}
+          {transactions.length === 0 ? (
+            <div className="ios-empty-ledger">当前时间范围内没有流水</div>
+          ) : null}
+        </div>
+      </section>
+    </div>
+  )
+}
+
+type AccountsWorkspaceProps = {
+  summaries: AccountPeriodSummary[]
+  transactions: Transaction[]
+  selectedAccountId: string
+  onSelectAccount: (accountId: string) => void
+}
+
+export function AccountsWorkspace({
   summaries,
   transactions,
   selectedAccountId,
   onSelectAccount,
-  onSelectTransaction,
-  onCreateTransaction,
-  onOpenAnalytics,
-}: LedgerWorkspaceProps) {
+}: AccountsWorkspaceProps) {
   const accountStackRef = useRef<HTMLDivElement>(null)
   const [frontAccountId, setFrontAccountId] = useState<string | null>(null)
   const lastAccountStackWheelAtRef = useRef(0)
@@ -130,7 +175,6 @@ export function LedgerWorkspace({
     selectedAccountId === 'all'
       ? transactions
       : transactions.filter((transaction) => transactionBelongsToAccount(transaction, selectedAccountId))
-  const accountTransactionCount = filteredTransactions.length
   const selectedSummary = summaries.find((summary) => summary.account.id === selectedAccountId)
   const activeAccountName = selectedSummary?.account.name ?? '全部账户'
   const fallbackFrontAccountId = summaries[0]?.account.id ?? null
@@ -174,46 +218,9 @@ export function LedgerWorkspace({
 
   return (
     <div
-      className="accounting-workspace ios-account-ledger-workspace"
-      aria-label="账户与流水工作台"
+      className="accounting-workspace ios-accounts-workspace"
+      aria-label="账户工作台"
     >
-      <section className="ios-panel ios-ledger-main">
-        <header className="ios-ledger-toolbar">
-          <div>
-            <strong>流水明细</strong>
-            <span>{selectedAccountId === 'all' ? '全部流水' : '筛选后流水'}</span>
-          </div>
-          <div className="ios-ledger-toolbar__meta">
-            <span>{activeAccountName}</span>
-            <b>{accountTransactionCount} 笔</b>
-          </div>
-          <div className="ios-ledger-toolbar__actions">
-            <button type="button" onClick={onCreateTransaction}>
-              <Plus size={15} strokeWidth={2.2} />
-              新增流水
-            </button>
-            <button type="button" onClick={onOpenAnalytics}>
-              <CircleDollarSign size={15} strokeWidth={2.2} />
-              查看统计
-            </button>
-          </div>
-        </header>
-
-        <div className="accounting-scroll--ledger" aria-label="流水列表">
-          {filteredTransactions.map((transaction) => (
-            <TransactionRow
-              key={transaction.id}
-              dataset={dataset}
-              transaction={transaction}
-              onSelect={() => onSelectTransaction(transaction)}
-            />
-          ))}
-          {filteredTransactions.length === 0 ? (
-            <div className="ios-empty-ledger">当前账户在这个时间范围内没有流水</div>
-          ) : null}
-        </div>
-      </section>
-
       <section className="ios-panel ios-account-filter-panel" aria-label="账户筛选卡片">
         <div className="ios-account-filter-panel__accounts">
           <header className="ios-panel-head">
@@ -265,7 +272,21 @@ export function LedgerWorkspace({
             </motion.div>
           </LayoutGroup>
         </div>
-        <div className="ios-account-filter-panel__secondary" aria-hidden="true" />
+      </section>
+
+      <section className="ios-panel ios-account-movement-panel" aria-label="账户流动">
+        <header className="ios-panel-head">
+          <strong>账户流水</strong>
+          <span>{activeAccountName}</span>
+        </header>
+        <div className="accounting-scroll--ledger" aria-label="账户流水列表">
+          {filteredTransactions.map((transaction) => (
+            <AccountMovementRow key={transaction.id} transaction={transaction} />
+          ))}
+          {filteredTransactions.length === 0 ? (
+            <div className="ios-empty-ledger">当前账户在这个时间范围内没有流水</div>
+          ) : null}
+        </div>
       </section>
     </div>
   )
@@ -488,6 +509,19 @@ function TransactionRow({
         </span>
       </span>
     </button>
+  )
+}
+
+function AccountMovementRow({ transaction }: { transaction: Transaction }) {
+  return (
+    <article className={`ios-account-movement-row ios-account-movement-row--${transaction.type}`}>
+      <span>{typeLabels[transaction.type]}</span>
+      <div>
+        <strong>{transaction.note ?? formatMonthDay(transaction.occurredAt)}</strong>
+        <small>{formatMonthDay(transaction.occurredAt)}</small>
+      </div>
+      <b>{formatTransactionAmount(transaction)}</b>
+    </article>
   )
 }
 

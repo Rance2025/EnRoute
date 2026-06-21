@@ -144,7 +144,6 @@ describe('map chrome layout', () => {
     const accountingPageRule = cssRule('.accounting-page')
     const workspaceRule = cssRule('.ios-account-ledger-workspace')
     const ledgerMainPlacementRule = cssRule('.ios-ledger-main')
-    const accountPanelPlacementRule = cssRule('.ios-account-filter-panel')
     const mobileMedia = mediaBlock('@media (max-width: 720px)')
 
     expect(accountingAppShellRule).toBe('')
@@ -158,7 +157,9 @@ describe('map chrome layout', () => {
     expect(cssRule('.main-workspace')).toContain(
       'inset: 0 var(--secondary-rail-width) 0 var(--data-panel-width)',
     )
-    expect(accountingPageRule).toContain('grid-template-columns: minmax(0, 1fr) minmax(640px, 1fr) minmax(280px, 320px)')
+    expect(accountingPageRule).toContain(
+      'grid-template-columns: minmax(0, 1fr)',
+    )
     expect(accountingPageRule).toContain('--accounting-outer-gutter: 36px')
     expect(accountingPageRule).toContain('--accounting-internal-gap: 24px')
     expect(accountingPageRule).not.toContain('--accounting-left-bleed')
@@ -178,6 +179,7 @@ describe('map chrome layout', () => {
     expect(accountingPageRule).toContain('background: transparent')
     expect(accountingPageRule).not.toContain('#ccd6d7')
     expect(accountingPageRule).not.toContain('rgba(238, 244, 242, 0.66)')
+    expect(cssRule('.accounting-content-slot')).toBe('')
     expect(accountingPageRule).not.toContain('#f2f5f2')
     expect(cssRule('.accounting-page::before')).toBe('')
     expect(cssRule('.app-shell--accounting .time-context-panel::after')).toBe('')
@@ -187,37 +189,30 @@ describe('map chrome layout', () => {
     expect(
       cssRuleIn(
         mediaBlock(
-          '@media (min-width: 721px) and (max-width: 1240px), (min-width: 721px) and (max-height: 790px)',
+          '@media (min-width: 721px) and (max-width: 1440px), (min-width: 721px) and (max-height: 790px)',
         ),
         '.accounting-page',
       ),
     ).toContain('--accounting-outer-gutter: 28px')
-    expect(workspaceRule).toContain('grid-column: 1 / -1')
+    expect(workspaceRule).toContain('grid-column: 1')
     expect(workspaceRule).toContain(
-      'grid-template-columns: minmax(640px, 1fr) minmax(280px, 320px)',
+      'grid-template-columns: minmax(0, 1fr)',
     )
     expect(workspaceRule).toContain('gap: var(--accounting-internal-gap)')
     expect(workspaceRule).toContain('align-items: start')
     expect(workspaceRule).toContain('position: relative')
     expect(ledgerMainPlacementRule).toContain('grid-column: 1')
     expect(ledgerMainPlacementRule).toContain('height: calc(100svh - 114px)')
-    expect(accountPanelPlacementRule).toContain('align-self: start')
-    expect(accountPanelPlacementRule).toContain('grid-column: 2')
-    expect(accountPanelPlacementRule).toContain('width: 100%')
-    expect(accountPanelPlacementRule).toContain('height: calc(100svh - 114px)')
-    expect(accountPanelPlacementRule).toContain('margin-top: 0')
-    expect(accountPanelPlacementRule).not.toContain('position: fixed')
-    expect(accountPanelPlacementRule).not.toContain('right: 24px')
-    expect(accountPanelPlacementRule).not.toContain('top: 92px')
+    expect(cssRule('.ios-accounting-secondary-rail')).toBe('')
+    expect(cssRule('.ios-accounting-side-panel')).toBe('')
+    expect(cssRule('.ios-accounting-secondary-tabs')).toBe('')
     expect(cssRuleIn(mobileMedia, '.ios-account-ledger-workspace')).toContain('grid-column: 1')
     expect(cssRuleIn(mobileMedia, '.ios-account-ledger-workspace')).toContain(
       'grid-template-columns: minmax(0, 1fr)',
     )
     expect(cssRuleIn(mobileMedia, '.ios-ledger-main')).toContain('grid-column: 1')
-    expect(cssRuleIn(mobileMedia, '.ios-account-filter-panel')).toContain('grid-column: 1')
-    expect(cssRuleIn(mobileMedia, '.ios-account-filter-panel')).not.toContain('position: fixed')
-    expect(cssRuleIn(mobileMedia, '.ios-account-filter-panel')).not.toContain('\n    top:')
-    expect(cssRuleIn(mobileMedia, '.ios-account-filter-panel')).not.toContain('\n    right:')
+    expect(cssRuleIn(mobileMedia, '.accounting-content-slot')).toBe('')
+    expect(cssRuleIn(mobileMedia, '.ios-accounting-side-panel')).toBe('')
   })
 
   it('keeps the shared time panel high in the left rail without a fake top spacer', () => {
@@ -342,7 +337,7 @@ describe('map chrome layout', () => {
 
   it('keeps compact desktop accounting columns aligned to the shared rail', () => {
     const compactMedia = mediaBlock(
-      '@media (min-width: 721px) and (max-width: 1240px), (min-width: 721px) and (max-height: 790px)',
+      '@media (min-width: 721px) and (max-width: 1440px), (min-width: 721px) and (max-height: 790px)',
     )
     const compactAccountingRule = cssRuleIn(compactMedia, '.accounting-page')
 
@@ -359,8 +354,11 @@ describe('map chrome layout', () => {
     expect(compactAccountingRule).toContain(
       'padding: 96px var(--accounting-outer-gutter) 14px var(--accounting-outer-gutter)',
     )
+    expect(compactAccountingRule).toContain(
+      'grid-template-columns: minmax(0, 1fr)',
+    )
     expect(cssRuleIn(compactMedia, '.ios-account-ledger-workspace')).toContain(
-      'grid-template-columns: minmax(500px, 1fr) minmax(252px, 286px)',
+      'grid-template-columns: minmax(0, 1fr)',
     )
     expect(cssRuleIn(compactMedia, '.ios-account-ledger-workspace')).toContain(
       'gap: var(--accounting-internal-gap)',
@@ -371,6 +369,7 @@ describe('map chrome layout', () => {
     expect(cssRuleIn(compactMedia, '.ios-ledger-main')).toContain('height: calc(100svh - 110px)')
     expect(cssRuleIn(compactMedia, '.ios-account-filter-panel')).toContain('height: calc(100svh - 110px)')
     expect(cssRuleIn(compactMedia, '.ios-account-filter-panel')).toContain('max-width: 286px')
+    expect(cssRuleIn(compactMedia, '.ios-accounting-side-panel')).toBe('')
     expect(cssRuleIn(compactMedia, '.ios-account-filter-panel')).not.toContain('height: calc(100svh - 112px)')
     expect(cssRuleIn(compactMedia, '.ios-ledger-main')).not.toContain('height: calc(100svh - 136px)')
   })
@@ -399,6 +398,14 @@ describe('map chrome layout', () => {
     expect(rule).toContain('min-height: 24px')
     expect(rule).toContain('padding: 0 8px')
     expect(rule).toContain('font-size: 11px')
+  })
+
+  it('keeps the top-level time mode slider visually compact', () => {
+    const tabsRule = cssRule('.time-mode-tabs')
+    const buttonRule = cssRule('.time-mode-tabs button')
+
+    expect(tabsRule).toContain('padding: 3px')
+    expect(buttonRule).toContain('height: 24px')
   })
 
   it('gives the current-period reset action a clear click feedback state', () => {
@@ -880,40 +887,34 @@ describe('map chrome layout', () => {
     expect(cssRule('.transaction-editor')).toBe('')
   })
 
-  it('keeps ledger rows in the main center column and account cards in the inset right panel', () => {
+  it('keeps ledger rows in the main workspace and leaves account cards out of the ledger page', () => {
     const ledgerSource = readFileSync('src/components/accounting/LedgerWorkspace.tsx', 'utf8')
+    const ledgerWorkspaceSource = ledgerSource.slice(
+      ledgerSource.indexOf('export function LedgerWorkspace'),
+      ledgerSource.indexOf('type AccountsWorkspaceProps'),
+    )
     const workspaceRule = cssRule('.ios-account-ledger-workspace')
-    const accountPanelRule = cssRule('.ios-account-filter-panel')
 
     expect(workspaceRule).toContain(
-      'grid-template-columns: minmax(640px, 1fr) minmax(280px, 320px)',
+      'grid-template-columns: minmax(0, 1fr)',
     )
-    expect(accountPanelRule).toContain('grid-column: 2')
-    expect(accountPanelRule).toContain('width: 100%')
-    expect(accountPanelRule).not.toContain('\n  top:')
-    expect(accountPanelRule).not.toContain('height: 100svh')
-    expect(ledgerSource.indexOf('className="ios-panel ios-ledger-main"')).toBeLessThan(
-      ledgerSource.indexOf('className="ios-panel ios-account-filter-panel"'),
-    )
+    expect(ledgerWorkspaceSource).toContain('className="ios-panel ios-ledger-main"')
+    expect(ledgerWorkspaceSource).not.toContain('className="ios-ledger-control-panel"')
+    expect(ledgerWorkspaceSource).not.toContain('className="ios-panel ios-account-filter-panel"')
   })
 
-  it('keeps account cards in a top-right area and reserves a separate lower-right area', () => {
+  it('keeps account cards in a dedicated accounts workspace', () => {
     const ledgerSource = readFileSync('src/components/accounting/LedgerWorkspace.tsx', 'utf8')
     const panelRule = cssRule('.ios-account-filter-panel')
     const accountRegionRule = cssRule('.ios-account-filter-panel__accounts')
-    const secondaryRegionRule = cssRule('.ios-account-filter-panel__secondary')
     const panelHeadRule = cssRule('.ios-account-filter-panel .ios-panel-head')
     const summaryRule = cssRule('.ios-account-stack-summary')
     const allFilterRule = cssRule('.ios-account-all-filter')
     const stackRule = cssRule('.ios-account-filter-stack')
 
     expect(ledgerSource).toContain('className="ios-account-filter-panel__accounts"')
-    expect(ledgerSource).toContain('className="ios-account-filter-panel__secondary"')
-    expect(ledgerSource.indexOf('className="ios-account-filter-panel__accounts"')).toBeLessThan(
-      ledgerSource.indexOf('className="ios-account-filter-panel__secondary"'),
-    )
     expect(panelRule).toContain('padding: 14px 18px 16px')
-    expect(panelRule).toContain('grid-column: 2')
+    expect(panelRule).toContain('grid-column: 1')
     expect(panelRule).toContain('width: 100%')
     expect(panelRule).toContain('max-width: 320px')
     expect(panelRule).toContain('height: calc(100svh - 114px)')
@@ -925,10 +926,6 @@ describe('map chrome layout', () => {
     expect(accountRegionRule).toContain('display: grid')
     expect(accountRegionRule).toContain('align-content: start')
     expect(accountRegionRule).toContain('overflow: visible')
-    expect(secondaryRegionRule).toContain('min-height: 0')
-    expect(secondaryRegionRule).toContain('border-top: 1px solid rgba(23, 35, 31, 0.06)')
-    expect(secondaryRegionRule).not.toContain('border-radius:')
-    expect(secondaryRegionRule).not.toContain('ios-account-filter-card')
     expect(panelHeadRule).toContain('padding: 8px 0 10px')
     expect(summaryRule).toContain('grid-template-columns: minmax(0, 1fr) auto')
     expect(summaryRule).toContain('padding: 0 0 6px')
@@ -1185,7 +1182,7 @@ describe('map chrome layout', () => {
   it('keeps responsive account-card stacks ordered upward without margin-based overlap', () => {
     const mobileMedia = mediaBlock('@media (max-width: 720px)')
     const compactMedia = mediaBlock(
-      '@media (min-width: 721px) and (max-width: 1240px), (min-width: 721px) and (max-height: 790px)',
+      '@media (min-width: 721px) and (max-width: 1440px), (min-width: 721px) and (max-height: 790px)',
     )
 
     const cases = [
@@ -1271,7 +1268,7 @@ describe('map chrome layout', () => {
 
   it('keeps compact ledger rows as a single readable line instead of wrapping side content under the icon', () => {
     const compactMedia = mediaBlock(
-      '@media (min-width: 721px) and (max-width: 1240px), (min-width: 721px) and (max-height: 790px)',
+      '@media (min-width: 721px) and (max-width: 1440px), (min-width: 721px) and (max-height: 790px)',
     )
     const compactRowRule = cssRuleIn(compactMedia, '.ios-transaction-row')
     const compactTagsRule = cssRuleIn(compactMedia, '.ios-transaction-row__tags')

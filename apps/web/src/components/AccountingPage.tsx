@@ -3,7 +3,6 @@ import { useMemo, useState } from 'react'
 import { ledgerAtlasDataset } from '../accounting/ledgerAtlasData'
 import {
   filterTransactionsByTimeRange,
-  getAccountPeriodSummaries,
   getCategoryTreeStats,
   getPeriodMetrics,
   getTagTreeStats,
@@ -30,7 +29,6 @@ export function AccountingPage({
   timeRange,
   onSectionChange,
 }: AccountingPageProps) {
-  const [selectedAccountId, setSelectedAccountId] = useState<string>('all')
   const [activeTransaction, setActiveTransaction] = useState<Transaction | null>(null)
   const [isNewTransactionOpen, setIsNewTransactionOpen] = useState(false)
   const transactions = useMemo(
@@ -38,10 +36,6 @@ export function AccountingPage({
     [timeRange],
   )
   const metrics = useMemo(() => getPeriodMetrics(ledgerAtlasDataset, timeRange), [timeRange])
-  const accountSummaries = useMemo(
-    () => getAccountPeriodSummaries(ledgerAtlasDataset, timeRange),
-    [timeRange],
-  )
   const categoryStats = useMemo(
     () => getCategoryTreeStats(ledgerAtlasDataset, timeRange),
     [timeRange],
@@ -53,13 +47,9 @@ export function AccountingPage({
       {section === 'workspace' ? (
         <LedgerWorkspace
           dataset={ledgerAtlasDataset}
-          summaries={accountSummaries}
           transactions={transactions}
-          selectedAccountId={selectedAccountId}
-          onSelectAccount={setSelectedAccountId}
           onSelectTransaction={setActiveTransaction}
           onCreateTransaction={() => setIsNewTransactionOpen(true)}
-          onOpenAnalytics={() => onSectionChange('analytics')}
         />
       ) : null}
 

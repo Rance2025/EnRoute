@@ -1,7 +1,6 @@
 import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { siAlipay, siMeituan } from 'simple-icons'
 
 import App from './App'
 import {
@@ -475,9 +474,12 @@ describe('App', () => {
     expect(screen.queryByText('Ledger Atlas')).not.toBeInTheDocument()
     expect(screen.queryByText('记账图谱工作台')).not.toBeInTheDocument()
     expect(screen.queryByLabelText('当前账目范围')).not.toBeInTheDocument()
-    expect(screen.getByLabelText('账户与流水工作台')).toBeInTheDocument()
-    expect(screen.getByText('新增流水')).toBeInTheDocument()
-    expect(screen.getByText('查看统计')).toBeInTheDocument()
+    const ledgerWorkspace = screen.getByLabelText('账户与流水工作台')
+    expect(ledgerWorkspace).toBeInTheDocument()
+    expect(within(ledgerWorkspace).getByRole('button', { name: '新增流水' })).toBeInTheDocument()
+    expect(screen.queryByText('查看统计')).not.toBeInTheDocument()
+    expect(screen.getByRole('navigation', { name: '二级导航' })).toBeInTheDocument()
+    expect(screen.queryByLabelText('账户筛选卡片')).not.toBeInTheDocument()
     expect(screen.queryByRole('group', { name: '记账工作区' })).not.toBeInTheDocument()
 
     const timePanel = screen.getByLabelText('时间范围面板')
@@ -496,162 +498,6 @@ describe('App', () => {
     expect(screen.queryByLabelText('记账概览摘要')).not.toBeInTheDocument()
     expect(screen.queryByLabelText('记账概览卡片')).not.toBeInTheDocument()
     expect(screen.queryByText('本期流水')).not.toBeInTheDocument()
-  })
-
-  it('renders accounts and ledger together while account cards stay display-only', async () => {
-    render(
-      <App
-        amapConfig={{
-          key: '',
-          securityJsCode: '',
-          isConfigured: false,
-          missingKeys: ['VITE_AMAP_KEY', 'VITE_AMAP_SECURITY_CODE'],
-          defaultCenter: [104.195397, 35.86166],
-          defaultZoom: 4.2,
-          defaultBounds: {
-            southWest: [73.3, 17.8],
-            northEast: [135.1, 53.7],
-          },
-          themes: [],
-          features: ['bg', 'road', 'building'],
-          showLabel: false,
-        }}
-      />,
-    )
-
-    fireEvent.click(screen.getByRole('button', { name: '记账' }))
-
-    const workspace = screen.getByLabelText('账户与流水工作台')
-    const accountFilter = within(workspace).getByLabelText('账户筛选卡片')
-    const accountCardsRegion = accountFilter.querySelector('.ios-account-filter-panel__accounts')
-    const accountSecondaryRegion = accountFilter.querySelector('.ios-account-filter-panel__secondary')
-    const accountStack = accountFilter.querySelector('.ios-account-filter-stack')
-
-    expect(workspace).toBeInTheDocument()
-    expect(accountFilter).toBeInTheDocument()
-    expect(accountCardsRegion).not.toBeNull()
-    expect(accountSecondaryRegion).not.toBeNull()
-    expect(accountStack).not.toBeNull()
-    expect(accountCardsRegion?.querySelectorAll('.ios-account-filter-card')).toHaveLength(4)
-    expect(accountSecondaryRegion?.querySelector('.ios-account-filter-card')).toBeNull()
-
-    const allFilter = within(accountFilter).getByRole('button', { name: /全部流水/ })
-    expect(allFilter).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    )
-    expect(allFilter).toHaveClass('ios-account-all-filter')
-    expect(allFilter).not.toHaveClass('ios-account-filter-card')
-    expect(within(accountStack as HTMLElement).queryByRole('button', { name: /全部账户|全部流水/ })).not.toBeInTheDocument()
-    expect(accountStack?.querySelectorAll('.ios-account-filter-card')).toHaveLength(4)
-    expect(within(workspace).getByText('流水明细')).toBeInTheDocument()
-    expect(within(workspace).getByLabelText('流水列表')).toBeInTheDocument()
-    expect(within(workspace).getByText('新增流水')).toBeInTheDocument()
-    expect(within(workspace).getByText('查看统计')).toBeInTheDocument()
-    expect(within(workspace).getAllByText('NIBU 酸奶').length).toBeGreaterThan(0)
-    expect(within(workspace).getAllByText('鲜嗨发牛肉火锅').length).toBeGreaterThan(0)
-    expect(within(workspace).getAllByText('餐饮 / 饮品').length).toBeGreaterThan(0)
-    expect(within(workspace).getAllByText('地点旅行 / 青岛之行').length).toBeGreaterThan(0)
-    expect(within(workspace).queryByText('分类线索')).not.toBeInTheDocument()
-    expect(within(workspace).queryByText('标签线索')).not.toBeInTheDocument()
-    expect(within(workspace).queryByText('选中流水')).not.toBeInTheDocument()
-    expect(workspace.querySelector('.accounting-scroll--ledger')).not.toBeNull()
-
-    const huabeiCard = within(accountFilter).getByRole('button', { name: /花呗/ })
-
-    fireEvent.click(huabeiCard)
-
-    const selectedAccountCards = Array.from(
-      (accountStack as HTMLElement).querySelectorAll('.ios-account-filter-card'),
-    )
-    const frontHuabeiCard = selectedAccountCards[0]
-
-    expect(frontHuabeiCard).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    )
-    expect(frontHuabeiCard).toHaveClass('is-active')
-    expect(frontHuabeiCard).toHaveTextContent('花呗')
-    expect(frontHuabeiCard).not.toHaveClass('is-detached')
-    expect(frontHuabeiCard).not.toHaveClass('is-stack-primary')
-    expect(frontHuabeiCard).not.toHaveClass('is-pulled')
-    expect(accountStack).not.toHaveClass('is-spread')
-    expect(selectedAccountCards).toHaveLength(4)
-    expect(
-      selectedAccountCards.some((card) => card.classList.contains('is-pulled')),
-    ).toBe(false)
-    expect(allFilter).toHaveAttribute('aria-pressed', 'true')
-    expect(within(workspace).queryByText('筛选后流水')).not.toBeInTheDocument()
-    expect(within(workspace).getAllByText('青岛住宿').length).toBeGreaterThan(0)
-
-    fireEvent.click(frontHuabeiCard)
-
-    expect(allFilter).toHaveAttribute('aria-pressed', 'true')
-    expect(within(accountFilter).queryByLabelText('单独显示的选中账户')).not.toBeInTheDocument()
-    expect(accountStack).not.toHaveClass('is-spread')
-    expect(accountStack?.querySelectorAll('.ios-account-filter-card')).toHaveLength(4)
-    expect(within(allFilter).getByText('全部流水')).toBeInTheDocument()
-    expect(within(workspace).getAllByText('青岛住宿').length).toBeGreaterThan(0)
-  })
-
-  it('rotates account cards only for vertical wheel movement and renders brand card variables', async () => {
-    render(<App amapConfig={missingAmapConfig} />)
-
-    fireEvent.click(screen.getByRole('button', { name: '记账' }))
-
-    const accountStack = document.querySelector('.ios-account-filter-stack') as HTMLElement
-    const getStackCards = () =>
-      Array.from(accountStack.querySelectorAll<HTMLButtonElement>('.ios-account-filter-card'))
-    const getFirstCardTitle = () =>
-      getStackCards()[0]?.querySelector('.ios-account-filter-card__body strong')?.textContent
-    const initialTitle = getFirstCardTitle()
-    const firstCard = getStackCards()[0]
-    const firstLogoTitle = firstCard.querySelector('svg title')?.textContent
-
-    expect(accountStack).toBeInTheDocument()
-    expect(document.querySelector('.ios-account-selected-slot')).not.toBeInTheDocument()
-    expect(firstCard).toHaveClass('ios-account-filter-card--brand-wechat')
-    expect(firstCard.querySelector('.ios-account-filter-card__check')).not.toBeInTheDocument()
-    expect(firstCard.querySelector('.ios-account-filter-card__body em')).toBeInTheDocument()
-    expect(firstCard.querySelector('.ios-account-filter-card__side small')).toBeInTheDocument()
-    expect(getStackCards()[1]?.querySelector('.ios-account-filter-card__body em')).not.toBeInTheDocument()
-    expect(getStackCards()[1]?.querySelector('.ios-account-filter-card__side small')).not.toBeInTheDocument()
-    expect(firstCard.style.getPropertyValue('--account-card-bg-start')).toMatch(/^#[0-9a-f]{6}$/i)
-    expect(firstCard.style.getPropertyValue('--account-card-bg-mid')).toMatch(/^#[0-9a-f]{6}$/i)
-    expect(firstCard.style.getPropertyValue('--account-card-bg-end')).toMatch(/^#[0-9a-f]{6}$/i)
-    expect(firstLogoTitle).toBe('WeChat')
-    expect(
-      accountStack.querySelector('.ios-account-filter-card--brand-meituan')?.getAttribute('style'),
-    ).toContain('--account-card-bg-start: #d6a800')
-    expect(
-      accountStack.querySelector('.ios-account-filter-card--brand-alipay path')?.getAttribute('d'),
-    ).not.toBe(siAlipay.path)
-    expect(
-      accountStack.querySelector('.ios-account-filter-card--brand-meituan path')?.getAttribute('d'),
-    ).not.toBe(siMeituan.path)
-    expect(
-      accountStack.querySelector('.ios-account-filter-card--brand-meituan .ios-account-filter-card__brand-logo'),
-    ).not.toHaveClass('ios-account-filter-card__brand-logo--wide')
-    expect(
-      accountStack.querySelector('.ios-account-filter-card--brand-meituan svg')?.getAttribute('viewBox'),
-    ).toBe('0 0 1072 419')
-    expect(
-      accountStack.querySelector('.ios-account-filter-card--brand-meituan image')?.getAttribute('href'),
-    ).toContain('meituan-logo-rabbit-wordmark')
-
-    fireEvent.wheel(accountStack, { deltaX: 220, deltaY: 0 })
-
-    expect(getFirstCardTitle()).toBe(initialTitle)
-
-    await new Promise((resolve) => window.setTimeout(resolve, 180))
-    fireEvent.wheel(accountStack, { deltaY: 260 })
-
-    expect(getFirstCardTitle()).not.toBe(initialTitle)
-
-    await new Promise((resolve) => window.setTimeout(resolve, 180))
-    fireEvent.wheel(accountStack, { deltaY: -260 })
-
-    expect(getFirstCardTitle()).toBe(initialTitle)
   })
 
   it('opens transaction and new-ledger modals from the accounting workspace', async () => {
@@ -719,7 +565,11 @@ describe('App', () => {
     )
 
     fireEvent.click(screen.getByRole('button', { name: '记账' }))
-    fireEvent.click(screen.getByRole('button', { name: '查看统计' }))
+    fireEvent.click(
+      within(screen.getByRole('navigation', { name: '二级导航' })).getByRole('button', {
+        name: '统计',
+      }),
+    )
 
     const reportWorkspace = screen.getByLabelText('统计工作区')
 
@@ -760,12 +610,17 @@ describe('App', () => {
     expect(screen.queryByRole('group', { name: '记账工作区' })).not.toBeInTheDocument()
     const secondaryNav = screen.getByRole('navigation', { name: '二级导航' })
 
-    expect(within(secondaryNav).getByRole('button', { name: '流水' })).toBeInTheDocument()
+    expect(within(secondaryNav).getByRole('button', { name: '流水' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(within(secondaryNav).queryByRole('button', { name: '账户' })).not.toBeInTheDocument()
     expect(within(secondaryNav).getByRole('button', { name: '统计' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '账户' })).not.toBeInTheDocument()
     expect(screen.getByLabelText('账户与流水工作台')).toBeInTheDocument()
+    expect(screen.queryByRole('navigation', { name: '记账二级导航' })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('账户工作台')).not.toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: '查看统计' }))
+    fireEvent.click(within(secondaryNav).getByRole('button', { name: '统计' }))
 
     expect(screen.getByLabelText('统计工作区')).toBeInTheDocument()
     expect(within(secondaryNav).getByRole('button', { name: '统计' })).toHaveAttribute(
@@ -774,7 +629,7 @@ describe('App', () => {
     )
     expect(screen.getByRole('button', { name: '返回流水' })).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: '返回流水' }))
+    fireEvent.click(within(secondaryNav).getByRole('button', { name: '流水' }))
 
     expect(screen.getByLabelText('账户与流水工作台')).toBeInTheDocument()
     expect(screen.queryByLabelText('统计工作区')).not.toBeInTheDocument()

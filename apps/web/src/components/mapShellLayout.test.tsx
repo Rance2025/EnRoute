@@ -385,6 +385,11 @@ describe('unified shell layout', () => {
     expect(shell).toHaveClass('app-shell--accounting')
     expect(shell).toHaveClass('has-data-panel')
     expect(shell).not.toHaveStyle({ '--data-panel-width': '0px' })
+    expect(document.querySelector('.ios-accounting-secondary-rail')).toBeNull()
+    expect(document.querySelector('.ios-accounting-side-panel')).toBeNull()
+    expect(document.querySelector('.ios-accounting-secondary-tabs')).toBeNull()
+    expect(document.querySelector('.ios-ledger-control-panel')).toBeNull()
+    expect(document.querySelector('.ios-account-filter-panel')).toBeNull()
     expect(screen.getByLabelText('在途 EnRoute 主工作区')).toBeInTheDocument()
     expect(screen.queryByRole('group', { name: '记账工作区' })).not.toBeInTheDocument()
     expect(screen.queryByRole('slider', { name: '记账工作区滑块' })).not.toBeInTheDocument()
@@ -395,6 +400,30 @@ describe('unified shell layout', () => {
     expect(within(accountingMetricStrip).getByText('流水')).toBeInTheDocument()
     expect(within(accountingMetricStrip).queryByText('账户')).not.toBeInTheDocument()
     expect(within(accountingMetricStrip).queryByText('当前足迹')).not.toBeInTheDocument()
+  })
+
+  it('keeps accounting secondary navigation in the shared right rail', () => {
+    render(<App amapConfig={configuredAmap} />)
+
+    fireEvent.click(screen.getByRole('button', { name: '记账' }))
+
+    const rail = screen.getByRole('navigation', { name: '二级导航' })
+    const getRailLabels = () =>
+      Array.from(rail.querySelectorAll('button')).map((button) => button.textContent)
+
+    expect(rail).toHaveClass('secondary-nav-rail')
+    expect(getRailLabels()).toEqual(['流水', '统计'])
+    expect(rail.querySelector('[aria-pressed="true"]')).toHaveTextContent('流水')
+    expect(document.querySelector('.ios-accounting-side-panel')).toBeNull()
+    expect(document.querySelector('.ios-ledger-control-panel')).toBeNull()
+    expect(document.querySelector('.ios-account-filter-panel')).toBeNull()
+
+    fireEvent.click(within(rail).getByRole('button', { name: '统计' }))
+
+    expect(getRailLabels()).toEqual(['流水', '统计'])
+    expect(rail.querySelector('[aria-pressed="true"]')).toHaveTextContent('统计')
+    expect(document.querySelector('.ios-analytics-workspace')).not.toBeNull()
+    expect(document.querySelector('.ios-account-filter-panel')).toBeNull()
   })
 
   it('switches the shared time panel between top-level range modes', () => {
