@@ -68,6 +68,7 @@ describe('map chrome layout', () => {
     const secondaryRailRule = cssRule('.secondary-nav-rail')
     const workspaceRule = cssRule('.main-workspace')
     const stageRule = cssRule('.map-stage')
+    const navRule = cssRule('.app-nav')
 
     expect(appShellRule).toContain('position: relative')
     expect(appShellRule).toContain('--page-board-bg:')
@@ -76,6 +77,8 @@ describe('map chrome layout', () => {
     expect(appShellRule).toContain('rgba(204, 214, 215, 0.78)')
     expect(appShellRule).toContain('#ccd6d7')
     expect(appShellRule).toContain('background: var(--page-board-bg)')
+    expect(navRule).toContain('left: calc((100vw - var(--secondary-rail-width)) / 2)')
+    expect(navRule).not.toContain('left: 50%')
     expect(appSource).toContain('aria-label="二级导航"')
     expect(appSource).toContain('className="secondary-nav-rail"')
     expect(appSource).toContain('const secondaryNavItemsByView')
@@ -97,7 +100,8 @@ describe('map chrome layout', () => {
     expect(panelRule).toContain('background: transparent')
     expect(panelRule).not.toContain('backdrop-filter')
     expect(panelRule).not.toContain('border-right')
-    expect(panelRule).toContain('box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.42)')
+    expect(panelRule).toContain('box-shadow: none')
+    expect(panelRule).not.toContain('inset -1px 0 0 rgba(255, 255, 255, 0.42)')
     expect(panelRule).toContain('width: var(--data-panel-width, 0px)')
     expect(panelRule).toContain('overflow: visible')
     expect(panelRule).toContain('pointer-events: none')
@@ -223,7 +227,7 @@ describe('map chrome layout', () => {
     expect(scrollRule).toContain('width: calc(100% + var(--time-panel-shadow-buffer))')
     expect(scrollRule).toContain('margin-right: calc(0px - var(--time-panel-shadow-buffer))')
     expect(scrollRule).toContain(
-      'padding: 96px calc(24px + var(--time-panel-shadow-buffer)) 18px 24px',
+      'padding: 24px calc(24px + var(--time-panel-shadow-buffer)) 18px 24px',
     )
     expect(scrollRule).toContain('gap: 20px')
     expect(scrollRule).toContain('overflow-x: hidden')
@@ -238,7 +242,7 @@ describe('map chrome layout', () => {
     const sharedScrollRule = cssRule('.time-context-panel__scroll')
 
     expect(sharedScrollRule).toContain(
-      'padding: 96px calc(24px + var(--time-panel-shadow-buffer)) 18px 24px',
+      'padding: 24px calc(24px + var(--time-panel-shadow-buffer)) 18px 24px',
     )
     expect(sharedScrollRule).toContain('gap: 20px')
     expect(cssRule('.app-shell--map .time-context-panel__scroll')).toBe('')
@@ -348,7 +352,7 @@ describe('map chrome layout', () => {
       'gap: var(--accounting-internal-gap)',
     )
     expect(cssRuleIn(compactMedia, '.time-context-panel__scroll')).toContain(
-      'padding: 96px calc(24px + var(--time-panel-shadow-buffer)) 18px 24px',
+      'padding: 24px calc(24px + var(--time-panel-shadow-buffer)) 18px 24px',
     )
     expect(cssRuleIn(compactMedia, '.ios-ledger-main')).toContain('height: calc(100svh - 110px)')
     expect(cssRuleIn(compactMedia, '.ios-account-filter-panel')).toContain('height: calc(100svh - 110px)')

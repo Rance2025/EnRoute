@@ -44,14 +44,14 @@ describe('App', () => {
 
     expect(SECONDARY_NAV_RAIL_WIDTH).toBe(60)
     expect(availableMapShellWidth).toBe(1988)
-    expect(dataPanelWidth).toBe(560)
+    expect(dataPanelWidth).toBe(537)
     expect(
       calculateUnifiedMapPaneWidth({
         viewportWidth: 2048,
         secondaryRailWidth: SECONDARY_NAV_RAIL_WIDTH,
         dataPanelWidth,
       }),
-    ).toBe(1428)
+    ).toBe(1451)
 
     for (const view of ['map', 'accounting'] as const) {
       expect(
@@ -74,14 +74,14 @@ describe('App', () => {
     })
 
     expect(availableMapShellWidth).toBe(1988)
-    expect(dataPanelWidth).toBe(560)
+    expect(dataPanelWidth).toBe(537)
     expect(
       calculateUnifiedMapPaneWidth({
         viewportWidth: 2048,
         secondaryRailWidth: SECONDARY_NAV_RAIL_WIDTH,
         dataPanelWidth,
       }),
-    ).toBe(1428)
+    ).toBe(1451)
   })
 
   it('does not let the 360-degree map width squeeze the shared left panel on compact desktop', () => {
@@ -114,10 +114,10 @@ describe('App', () => {
       { viewportSize: { width: 1280, height: 720 }, dataPanelWidth: 420, mapPaneWidth: 800 },
       { viewportSize: { width: 1366, height: 768 }, dataPanelWidth: 420, mapPaneWidth: 886 },
       { viewportSize: { width: 1440, height: 900 }, dataPanelWidth: 420, mapPaneWidth: 960 },
-      { viewportSize: { width: 1536, height: 864 }, dataPanelWidth: 443, mapPaneWidth: 1033 },
-      { viewportSize: { width: 1728, height: 972 }, dataPanelWidth: 500, mapPaneWidth: 1168 },
-      { viewportSize: { width: 1920, height: 1080 }, dataPanelWidth: 558, mapPaneWidth: 1302 },
-      { viewportSize: { width: 2048, height: 1155 }, dataPanelWidth: 560, mapPaneWidth: 1428 },
+      { viewportSize: { width: 1536, height: 864 }, dataPanelWidth: 420, mapPaneWidth: 1056 },
+      { viewportSize: { width: 1728, height: 972 }, dataPanelWidth: 450, mapPaneWidth: 1218 },
+      { viewportSize: { width: 1920, height: 1080 }, dataPanelWidth: 502, mapPaneWidth: 1358 },
+      { viewportSize: { width: 2048, height: 1155 }, dataPanelWidth: 537, mapPaneWidth: 1451 },
     ]
 
     for (const { viewportSize, dataPanelWidth, mapPaneWidth } of desktopWindows) {

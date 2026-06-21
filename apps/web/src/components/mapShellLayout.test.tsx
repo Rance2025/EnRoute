@@ -52,12 +52,35 @@ const configuredAmap = {
   showLabel: false,
 }
 
+function openTimeEditor() {
+  fireEvent.click(screen.getByRole('button', { name: '修改时间' }))
+}
+
 describe('unified shell layout', () => {
   it('renders a shared time panel beside the map workspace', () => {
     render(<App amapConfig={configuredAmap} />)
 
     expect(screen.getByLabelText('时间范围面板')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: '今天' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '修改时间' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    )
+    expect(screen.getByRole('group', { name: '时间模式' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '日' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(screen.getByRole('slider', { name: '时间模式滑块' })).toHaveAttribute(
+      'aria-valuetext',
+      '日',
+    )
+    expect(screen.queryByLabelText('日历选择')).not.toBeInTheDocument()
+    expect(screen.getByRole('slider', { name: '页面滑块' })).toBeInTheDocument()
+    expect(screen.getByText('2026年6月19日')).toBeInTheDocument()
+
+    openTimeEditor()
+
     expect(screen.getByRole('group', { name: '时间模式' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '日' })).toHaveAttribute(
       'aria-pressed',
@@ -74,7 +97,6 @@ describe('unified shell layout', () => {
       'aria-pressed',
       'false',
     )
-    expect(screen.getByRole('slider', { name: '页面滑块' })).toBeInTheDocument()
     expect(screen.getByRole('slider', { name: '时间模式滑块' })).toHaveAttribute(
       'aria-valuetext',
       '日',
@@ -305,6 +327,8 @@ describe('unified shell layout', () => {
   it('uses project-facing time panel copy without implementation notes', () => {
     render(<App amapConfig={configuredAmap} />)
 
+    openTimeEditor()
+
     const pickerHead = screen.getByLabelText('日历选择').querySelector('.time-mode-section-head')
 
     expect(pickerHead).not.toBeNull()
@@ -365,6 +389,7 @@ describe('unified shell layout', () => {
     render(<App amapConfig={configuredAmap} />)
 
     fireEvent.click(screen.getByRole('button', { name: '记账' }))
+    openTimeEditor()
 
     for (const range of ['日', '周', '月', '年', '自定义']) {
       expect(screen.getByRole('button', { name: range })).toBeInTheDocument()
@@ -404,6 +429,8 @@ describe('unified shell layout', () => {
   it('keeps all-time inside custom presets and supports real editable custom dates', () => {
     render(<App amapConfig={configuredAmap} />)
 
+    openTimeEditor()
+
     expect(screen.getByRole('group', { name: '时间模式' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '全部' })).not.toBeInTheDocument()
 
@@ -419,19 +446,27 @@ describe('unified shell layout', () => {
     fireEvent.click(within(customPanel).getByRole('button', { name: '全部' }))
 
     expect(screen.getByRole('heading', { name: '全部' })).toBeInTheDocument()
-    expect(within(customPanel).getByLabelText('开始日期')).toHaveValue('2026-01-11')
-    expect(within(customPanel).getByLabelText('结束日期')).toHaveValue('2026-06-19')
+    expect(screen.queryByLabelText('自定义时间范围')).not.toBeInTheDocument()
 
-    fireEvent.click(within(customPanel).getByRole('button', { name: '最近一年' }))
+    openTimeEditor()
+    let activeCustomPanel = screen.getByLabelText('自定义时间范围')
+    expect(within(activeCustomPanel).getByLabelText('开始日期')).toHaveValue('2026-01-11')
+    expect(within(activeCustomPanel).getByLabelText('结束日期')).toHaveValue('2026-06-19')
+
+    fireEvent.click(within(activeCustomPanel).getByRole('button', { name: '最近一年' }))
 
     expect(screen.getByRole('heading', { name: '最近一年' })).toBeInTheDocument()
-    expect(within(customPanel).getByLabelText('开始日期')).toHaveValue('2025-06-20')
-    expect(within(customPanel).getByLabelText('结束日期')).toHaveValue('2026-06-19')
+    expect(screen.queryByLabelText('自定义时间范围')).not.toBeInTheDocument()
 
-    fireEvent.change(within(customPanel).getByLabelText('开始日期'), {
+    openTimeEditor()
+    activeCustomPanel = screen.getByLabelText('自定义时间范围')
+    expect(within(activeCustomPanel).getByLabelText('开始日期')).toHaveValue('2025-06-20')
+    expect(within(activeCustomPanel).getByLabelText('结束日期')).toHaveValue('2026-06-19')
+
+    fireEvent.change(within(activeCustomPanel).getByLabelText('开始日期'), {
       target: { value: '2026-06-10' },
     })
-    fireEvent.change(within(customPanel).getByLabelText('结束日期'), {
+    fireEvent.change(within(activeCustomPanel).getByLabelText('结束日期'), {
       target: { value: '2026-06-12' },
     })
 
@@ -443,6 +478,7 @@ describe('unified shell layout', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '记账' }))
     expect(screen.getByRole('heading', { name: '6月' })).toBeInTheDocument()
+    openTimeEditor()
 
     fireEvent.click(screen.getByRole('button', { name: '自定义' }))
 
@@ -454,6 +490,7 @@ describe('unified shell layout', () => {
   it('uses the current range granularity for the reset action', () => {
     render(<App amapConfig={configuredAmap} />)
 
+    openTimeEditor()
     fireEvent.click(screen.getByRole('button', { name: '周' }))
 
     expect(screen.getByRole('button', { name: '回到本周' })).toBeInTheDocument()
@@ -465,10 +502,15 @@ describe('unified shell layout', () => {
     fireEvent.click(screen.getByRole('button', { name: /7月/ }))
 
     expect(screen.getByRole('heading', { name: '7月' })).toBeInTheDocument()
+    expect(screen.queryByLabelText('时间选择页')).not.toBeInTheDocument()
 
+    openTimeEditor()
     fireEvent.click(screen.getByRole('button', { name: '回到本月' }))
 
     expect(screen.getByRole('heading', { name: '6月' })).toBeInTheDocument()
+    expect(screen.queryByLabelText('时间选择页')).not.toBeInTheDocument()
+
+    openTimeEditor()
 
     fireEvent.click(screen.getByRole('button', { name: '年' }))
 
@@ -479,6 +521,8 @@ describe('unified shell layout', () => {
     render(<App amapConfig={configuredAmap} />)
     const getActiveGridMotion = () =>
       document.querySelector('.time-calendar-grid-motion, .time-picker-grid-motion')
+
+    openTimeEditor()
 
     expect(screen.getByLabelText('时间范围内容')).not.toHaveClass(
       'time-panel-content__stage--previous',
@@ -521,8 +565,8 @@ describe('unified shell layout', () => {
     fireEvent.click(screen.getByRole('button', { name: '上一页' }))
 
     stage = screen.getByLabelText('时间范围内容')
-    expect(screen.getByRole('heading', { name: '7月' })).toBeInTheDocument()
-    expect(screen.getByText('2025年7月')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '6月' })).toBeInTheDocument()
+    expect(screen.getByText('2025年6月')).toBeInTheDocument()
     expect(stage).not.toHaveClass('time-panel-content__stage--previous')
     expect(stage).not.toHaveClass('time-panel-content__stage--next')
     expect(getActiveGridMotion()).toHaveClass('time-range-grid-motion--previous')
@@ -531,7 +575,7 @@ describe('unified shell layout', () => {
     fireEvent.click(screen.getByRole('button', { name: '下一页' }))
 
     stage = screen.getByLabelText('时间范围内容')
-    expect(screen.getByRole('heading', { name: '2035年' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '2036年' })).toBeInTheDocument()
     expect(stage).not.toHaveClass('time-panel-content__stage--previous')
     expect(stage).not.toHaveClass('time-panel-content__stage--next')
     expect(getActiveGridMotion()).toHaveClass('time-range-grid-motion--next')
@@ -547,6 +591,7 @@ describe('unified shell layout', () => {
   it('renders month aggregation as a compact two-row picker without helper copy', () => {
     render(<App amapConfig={configuredAmap} />)
 
+    openTimeEditor()
     fireEvent.click(screen.getByRole('button', { name: '月' }))
 
     const monthSelector = screen.getByLabelText('时间选择页')
@@ -565,6 +610,8 @@ describe('unified shell layout', () => {
 
   it('keeps day calendar week and month displays on the same date grid', () => {
     render(<App amapConfig={configuredAmap} />)
+
+    openTimeEditor()
 
     const weekCalendar = screen.getByLabelText('日历选择')
     const weekBody = screen.getByLabelText('日历日期').closest('.time-calendar-body')
@@ -628,6 +675,8 @@ describe('unified shell layout', () => {
     vi.useFakeTimers()
     render(<App amapConfig={configuredAmap} />)
 
+    openTimeEditor()
+
     const weekBody = screen.getByLabelText('日历日期').closest('.time-calendar-body')
 
     fireEvent.click(screen.getByRole('button', { name: '月历' }))
@@ -658,6 +707,7 @@ describe('unified shell layout', () => {
   it('keeps calendar display mode local across parent rerenders', () => {
     const { rerender } = render(<App amapConfig={configuredAmap} />)
 
+    openTimeEditor()
     fireEvent.click(screen.getByRole('button', { name: '月历' }))
 
     expect(screen.getByLabelText('日历日期').closest('.time-calendar-body')).toHaveClass(
@@ -674,6 +724,7 @@ describe('unified shell layout', () => {
   it('renders top-level week, month, and year with paged aggregation grids', () => {
     render(<App amapConfig={configuredAmap} />)
 
+    openTimeEditor()
     fireEvent.click(screen.getByRole('button', { name: '周' }))
 
     const weekPicker = screen.getByLabelText('时间选择页')
@@ -719,6 +770,8 @@ describe('unified shell layout', () => {
   it('moves the day calendar active week into the month grid without replacing cells', () => {
     render(<App amapConfig={configuredAmap} />)
 
+    openTimeEditor()
+
     const weekBody = screen.getByLabelText('日历日期').closest('.time-calendar-body')
     const weekGrid = screen.getByLabelText('日历日期')
     const weekButtons = within(weekGrid).getAllByRole('button')
@@ -759,9 +812,13 @@ describe('unified shell layout', () => {
   it('keeps the same week row steady when selecting adjacent days across month end', () => {
     render(<App amapConfig={configuredAmap} />)
 
+    openTimeEditor()
     fireEvent.click(screen.getByRole('button', { name: '月历' }))
     fireEvent.click(screen.getByRole('button', { name: '下一段时间' }))
     fireEvent.click(screen.getByRole('button', { name: '31' }))
+    expect(screen.queryByLabelText('日历选择')).not.toBeInTheDocument()
+
+    openTimeEditor()
     fireEvent.click(screen.getByRole('button', { name: '周历' }))
 
     const julyWeekGrid = screen.getByLabelText('日历日期')
@@ -782,6 +839,9 @@ describe('unified shell layout', () => {
     ])
 
     fireEvent.click(julyWeekButtons[33])
+    expect(screen.queryByLabelText('日历选择')).not.toBeInTheDocument()
+
+    openTimeEditor()
 
     const augustWeekGrid = screen.getByLabelText('日历日期')
     const augustWeekBody = augustWeekGrid.closest('.time-calendar-body')
@@ -804,11 +864,14 @@ describe('unified shell layout', () => {
   it('applies concrete selections from every time panel button group', () => {
     render(<App amapConfig={configuredAmap} />)
 
+    openTimeEditor()
     fireEvent.click(screen.getByRole('button', { name: '21' }))
 
     expect(screen.getByRole('heading', { name: '6月21日' })).toBeInTheDocument()
     expect(screen.getByText('2026年6月21日')).toBeInTheDocument()
+    expect(screen.queryByLabelText('日历选择')).not.toBeInTheDocument()
 
+    openTimeEditor()
     fireEvent.click(screen.getByRole('button', { name: '上一段时间' }))
 
     expect(screen.getByRole('heading', { name: '6月14日' })).toBeInTheDocument()
@@ -823,27 +886,33 @@ describe('unified shell layout', () => {
     expect(screen.getByRole('heading', { name: '7月21日' })).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '周' }))
-    fireEvent.click(screen.getByRole('button', { name: /第30周/ }))
+    fireEvent.click(screen.getByRole('button', { name: /第27周/ }))
 
-    expect(screen.getByRole('heading', { name: '第30周' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '第27周' })).toBeInTheDocument()
     const selectedWeekCardTop = screen.getByText('足迹时间范围').closest('.time-context-card__top')
     expect(selectedWeekCardTop).not.toBeNull()
     expect(
-      within(selectedWeekCardTop as HTMLElement).getByText('2026年 7月20日 - 7月26日'),
+      within(selectedWeekCardTop as HTMLElement).getByText('2026年 6月29日 - 7月5日'),
     ).toBeInTheDocument()
+    expect(screen.queryByLabelText('时间选择页')).not.toBeInTheDocument()
 
+    openTimeEditor()
     fireEvent.click(screen.getByRole('button', { name: '月' }))
     fireEvent.click(screen.getByRole('button', { name: /7月/ }))
 
     expect(screen.getByRole('heading', { name: '7月' })).toBeInTheDocument()
     expect(screen.getByText('2026年7月')).toBeInTheDocument()
+    expect(screen.queryByLabelText('时间选择页')).not.toBeInTheDocument()
 
+    openTimeEditor()
     fireEvent.click(screen.getByRole('button', { name: '年' }))
     fireEvent.click(screen.getByRole('button', { name: /2025/ }))
 
     expect(screen.getByRole('heading', { name: '2025年' })).toBeInTheDocument()
     expect(screen.getAllByText('2025年').length).toBeGreaterThanOrEqual(2)
+    expect(screen.queryByLabelText('时间选择页')).not.toBeInTheDocument()
 
+    openTimeEditor()
     fireEvent.click(screen.getByRole('button', { name: '自定义' }))
     fireEvent.click(screen.getByRole('button', { name: '最近一月' }))
 

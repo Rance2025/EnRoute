@@ -16,7 +16,7 @@
   position: fixed;
   z-index: 10;
   top: max(18px, env(safe-area-inset-top));
-  left: 50%;
+  left: calc((100vw - var(--secondary-rail-width)) / 2);
   display: flex;
   align-items: center;
   gap: 10px;
@@ -235,7 +235,7 @@
   min-width: 0;
   overflow: visible;
   background: transparent;
-  box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.42);
+  box-shadow: none;
   pointer-events: none;
 }
 
@@ -252,7 +252,7 @@
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 20px;
-  padding: 96px calc(24px + var(--time-panel-shadow-buffer)) 18px 24px;
+  padding: 24px calc(24px + var(--time-panel-shadow-buffer)) 18px 24px;
   overflow-x: hidden;
   overflow-y: auto;
   pointer-events: none;
@@ -3047,6 +3047,7 @@
 
   .app-nav {
     top: max(10px, env(safe-area-inset-top));
+    left: 50%;
     width: calc(100vw - 20px);
     justify-content: space-between;
   }
@@ -3343,7 +3344,7 @@
   }
 
   .time-context-panel__scroll {
-    padding: 96px calc(24px + var(--time-panel-shadow-buffer)) 18px 24px;
+    padding: 24px calc(24px + var(--time-panel-shadow-buffer)) 18px 24px;
   }
 
   .accounting-workspace {
