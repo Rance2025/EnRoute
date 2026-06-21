@@ -1,14 +1,17 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import {
+  MAP_DEBUG_PANEL_VISIBLE_STORAGE_KEY,
   NAVIGATION_STYLE_STORAGE_KEY,
+  readMapDebugPanelVisible,
   readNavigationStyle,
+  writeMapDebugPanelVisible,
   writeNavigationStyle,
 } from './navigationPreferences'
 
-function createStorage(initialValue?: string) {
+function createStorage(initialValue?: string, key = NAVIGATION_STYLE_STORAGE_KEY) {
   const values = new Map<string, string>()
-  if (initialValue !== undefined) values.set(NAVIGATION_STYLE_STORAGE_KEY, initialValue)
+  if (initialValue !== undefined) values.set(key, initialValue)
 
   return {
     getItem: vi.fn((key: string) => values.get(key) ?? null),
@@ -46,5 +49,41 @@ describe('navigationPreferences', () => {
 
     expect(readNavigationStyle(storage)).toBe('icon')
     expect(() => writeNavigationStyle('mixed', storage)).not.toThrow()
+  })
+
+  it('defaults the map debug panel to hidden unless storage explicitly enables it', () => {
+    expect(readMapDebugPanelVisible(createStorage())).toBe(false)
+    expect(readMapDebugPanelVisible(createStorage('false', MAP_DEBUG_PANEL_VISIBLE_STORAGE_KEY)))
+      .toBe(false)
+    expect(readMapDebugPanelVisible(createStorage('wide', MAP_DEBUG_PANEL_VISIBLE_STORAGE_KEY)))
+      .toBe(false)
+    expect(readMapDebugPanelVisible(createStorage('true', MAP_DEBUG_PANEL_VISIBLE_STORAGE_KEY)))
+      .toBe(true)
+  })
+
+  it('writes the map debug panel visibility preference', () => {
+    const storage = createStorage()
+
+    writeMapDebugPanelVisible(true, storage)
+
+    expect(storage.setItem).toHaveBeenCalledWith(MAP_DEBUG_PANEL_VISIBLE_STORAGE_KEY, 'true')
+
+    writeMapDebugPanelVisible(false, storage)
+
+    expect(storage.setItem).toHaveBeenCalledWith(MAP_DEBUG_PANEL_VISIBLE_STORAGE_KEY, 'false')
+  })
+
+  it('falls back without throwing when map debug panel storage is unavailable', () => {
+    const storage = {
+      getItem: vi.fn(() => {
+        throw new Error('blocked')
+      }),
+      setItem: vi.fn(() => {
+        throw new Error('blocked')
+      }),
+    } as Pick<Storage, 'getItem' | 'setItem'>
+
+    expect(readMapDebugPanelVisible(storage)).toBe(false)
+    expect(() => writeMapDebugPanelVisible(true, storage)).not.toThrow()
   })
 })

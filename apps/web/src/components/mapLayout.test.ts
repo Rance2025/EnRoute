@@ -801,15 +801,40 @@ describe('map chrome layout', () => {
   it('renders the settings dialog as a centered non-fullscreen modal', () => {
     expect(appSource).toContain('className="settings-dialog"')
     expect(appSource).toContain('className="settings-dialog__panel"')
+    expect(appSource).toContain('className="settings-dialog__body"')
+    expect(appSource).toContain('className="settings-dialog__tabs"')
+    expect(appSource).toContain('className="settings-dialog__content"')
+    expect(appSource).toContain("role=\"switch\"")
     expect(appSource).toContain('aria-labelledby="settings-dialog-title"')
     expect(cssRule('.settings-dialog')).toContain('position: fixed')
     expect(cssRule('.settings-dialog')).toContain('place-items: center')
     expect(cssRule('.settings-dialog__backdrop')).toContain('position: absolute')
-    expect(cssRule('.settings-dialog__panel')).toContain('width: min(360px, calc(100vw - 32px))')
+    expect(cssRule('.settings-dialog__panel')).toContain('width: min(680px, calc(100vw - 32px))')
     expect(cssRule('.settings-dialog__panel')).toContain('max-height: calc(100svh - 32px)')
     expect(cssRule('.settings-dialog__panel')).not.toContain('width: 100vw')
     expect(cssRule('.settings-dialog__panel')).not.toContain('height: 100svh')
+    expect(cssRule('.settings-dialog__body')).toContain(
+      'grid-template-columns: 142px minmax(0, 1fr)',
+    )
+    expect(cssRule('.settings-dialog__tabs')).toContain('display: grid')
+    expect(cssRule('.settings-dialog__tabs')).toContain('align-content: start')
+    expect(cssRule('.settings-dialog__tab')).toContain('text-align: left')
+    expect(cssRule('.settings-dialog__tab.is-active')).toContain('background: #123f35')
+    expect(cssRule('.settings-dialog__content')).toContain('min-width: 0')
+    expect(cssRule('.settings-switch-row')).toContain('grid-template-columns: minmax(0, 1fr) 42px')
+    expect(cssRule('.settings-switch-row__control::after')).toContain('width: 18px')
+    expect(cssRule('.settings-switch-row.is-active .settings-switch-row__control::after')).toContain(
+      'transform: translateX(18px)',
+    )
     expect(cssRule('.settings-navigation-tabs')).toContain('grid-template-columns: repeat(2, minmax(0, 1fr))')
+
+    const mobileSettings = mediaBlock('@media (max-width: 720px)')
+    expect(cssRuleIn(mobileSettings, '.settings-dialog__body')).toContain(
+      'grid-template-columns: 1fr',
+    )
+    expect(cssRuleIn(mobileSettings, '.settings-dialog__tabs')).toContain(
+      'grid-template-columns: repeat(4, minmax(0, 1fr))',
+    )
   })
 
   it('lays month aggregation out as two compact rows', () => {

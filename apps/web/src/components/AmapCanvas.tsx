@@ -39,6 +39,7 @@ type AmapCanvasProps = {
   timeRange: TimeRangeSelection
   onFootprintMetricsChange?: (metrics: FootprintMetrics) => void
   adminRegionUnlockEnabled?: boolean
+  debugPanelVisible?: boolean
 }
 
 export type FootprintMetrics = {
@@ -77,6 +78,7 @@ function AmapCanvasComponent({
   timeRange,
   onFootprintMetricsChange,
   adminRegionUnlockEnabled = false,
+  debugPanelVisible = false,
 }: AmapCanvasProps) {
   const mapNodeRef = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<AMap.Map | null>(null)
@@ -565,7 +567,9 @@ function AmapCanvasComponent({
               onLevelChange={setAdminRegionLevel}
             />
           ) : null}
-          {status === 'ready' ? <FootprintDebugPanel debug={footprintDebug} /> : null}
+          {debugPanelVisible && status === 'ready' ? (
+            <FootprintDebugPanel debug={footprintDebug} />
+          ) : null}
           {status === 'error' ? (
             <div className="map-message" role="alert">
               <h2>地图加载失败</h2>
