@@ -44,6 +44,178 @@ function StatefulMapTimeContextPanel({
 }
 
 describe('TimeContextPanel', () => {
+  it('keeps the mode switch visible while the time selector stays collapsed', () => {
+    render(
+      <TimeContextPanel
+        view="map"
+        selection={selectDay('2026-06-15')}
+        onSelectionChange={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByRole('button', { name: '修改时间' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    )
+    expect(screen.getByRole('group', { name: '时间模式' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '日' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(screen.getByRole('slider', { name: '时间模式滑块' })).toHaveAttribute(
+      'aria-valuetext',
+      '日',
+    )
+    expect(screen.queryByLabelText('日历选择')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('时间选择页')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('自定义时间范围')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '修改时间' }))
+
+    expect(screen.getByRole('button', { name: '回到今天' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    )
+    expect(screen.getByLabelText('日历选择')).toBeInTheDocument()
+  })
+
+  it('resets to today and closes the time selector from the open editor state', () => {
+    const onSelectionChange = vi.fn()
+
+    render(
+      <StatefulMapTimeContextPanel
+        initialSelection={selectDay('2026-06-15')}
+        onSelectionChange={onSelectionChange}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '修改时间' }))
+    fireEvent.click(screen.getByRole('button', { name: '回到今天' }))
+
+    expect(onSelectionChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        mode: 'day',
+        start: '2026-06-20',
+        end: '2026-06-20',
+        anchorDate: '2026-06-20',
+      }),
+    )
+    expect(screen.getByRole('button', { name: '修改时间' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    )
+    expect(screen.queryByLabelText('日历选择')).not.toBeInTheDocument()
+  })
+
+  it('switches time modes to the current range defaults while the editor stays open', () => {
+    const onSelectionChange = vi.fn()
+
+    render(
+      <StatefulMapTimeContextPanel
+        initialSelection={selectDay('2026-06-15')}
+        onSelectionChange={onSelectionChange}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '修改时间' }))
+    fireEvent.click(screen.getByRole('button', { name: '周' }))
+
+    expect(onSelectionChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        mode: 'week',
+        start: '2026-06-15',
+        end: '2026-06-21',
+        anchorDate: '2026-06-20',
+      }),
+    )
+    expect(screen.getByRole('button', { name: '回到本周' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    )
+    expect(screen.getByLabelText('时间选择页')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '自定义' }))
+
+    expect(onSelectionChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        mode: 'custom',
+        start: '2026-01-11',
+        end: '2026-06-20',
+        label: '全部',
+        isOpenEnded: true,
+      }),
+    )
+    expect(screen.getByRole('button', { name: '回到全部' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    )
+    expect(screen.getByLabelText('自定义时间范围')).toBeInTheDocument()
+  })
+
+  it('closes the time selector after the user picks a concrete day', () => {
+    const onSelectionChange = vi.fn()
+
+    render(
+      <StatefulMapTimeContextPanel
+        initialSelection={selectDay('2026-06-20')}
+        onSelectionChange={onSelectionChange}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '修改时间' }))
+    fireEvent.click(within(screen.getByLabelText('日历日期')).getByRole('button', { name: '15' }))
+
+    expect(onSelectionChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        mode: 'day',
+        start: '2026-06-15',
+        end: '2026-06-15',
+        anchorDate: '2026-06-15',
+      }),
+    )
+    expect(screen.getByRole('button', { name: '修改时间' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    )
+    expect(screen.queryByLabelText('日历选择')).not.toBeInTheDocument()
+  })
+
+  it('keeps the custom range editor open while editing date boundaries', () => {
+    const onSelectionChange = vi.fn()
+
+    render(
+      <StatefulMapTimeContextPanel
+        initialSelection={setCustomDateRange('2026-06-10', '2026-06-12')}
+        onSelectionChange={onSelectionChange}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '修改时间' }))
+
+    const customPanel = screen.getByLabelText('自定义时间范围')
+    fireEvent.change(within(customPanel).getByLabelText('开始日期'), {
+      target: { value: '2026-06-08' },
+    })
+
+    expect(screen.getByLabelText('自定义时间范围')).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('结束日期'), {
+      target: { value: '2026-06-15' },
+    })
+
+    expect(onSelectionChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        mode: 'custom',
+        start: '2026-06-08',
+        end: '2026-06-15',
+      }),
+    )
+    expect(screen.getByRole('button', { name: '回到全部' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    )
+  })
+
   it('uses the map-only all-time start date when entering custom ranges', () => {
     const mapSelectionChange = vi.fn()
     render(
@@ -54,6 +226,7 @@ describe('TimeContextPanel', () => {
       />,
     )
 
+    fireEvent.click(screen.getByRole('button', { name: '修改时间' }))
     fireEvent.click(screen.getByRole('button', { name: '自定义' }))
 
     expect(mapSelectionChange).toHaveBeenCalledWith(
@@ -77,6 +250,7 @@ describe('TimeContextPanel', () => {
       />,
     )
 
+    fireEvent.click(screen.getByRole('button', { name: '修改时间' }))
     fireEvent.click(screen.getByRole('button', { name: '自定义' }))
 
     expect(accountingSelectionChange).toHaveBeenCalledWith(
@@ -99,6 +273,7 @@ describe('TimeContextPanel', () => {
       />,
     )
 
+    fireEvent.click(screen.getByRole('button', { name: '修改时间' }))
     fireEvent.click(screen.getByRole('button', { name: /打开开始日期选择器/ }))
 
     const picker = screen.getByRole('dialog', { name: '开始日期选择' })
@@ -133,6 +308,7 @@ describe('TimeContextPanel', () => {
       />,
     )
 
+    fireEvent.click(screen.getByRole('button', { name: '修改时间' }))
     fireEvent.click(screen.getByRole('button', { name: /打开开始日期选择器/ }))
 
     const picker = screen.getByRole('dialog', { name: '开始日期选择' })
@@ -163,6 +339,7 @@ describe('TimeContextPanel', () => {
       />,
     )
 
+    fireEvent.click(screen.getByRole('button', { name: '修改时间' }))
     const calendar = screen.getByLabelText('日历选择')
 
     fireEvent.click(
@@ -177,14 +354,6 @@ describe('TimeContextPanel', () => {
 
     fireEvent.click(within(calendar).getByRole('button', { name: '5月' }))
 
-    expect(within(calendar).getByLabelText('日历日期')).toBeInTheDocument()
-    expect(within(calendar).queryByLabelText('月份选择')).not.toBeInTheDocument()
-    expect(
-      within(calendar).getByRole('button', {
-        name: '切换到月份选择，当前2026年5月',
-      }),
-    ).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '日' })).toHaveAttribute('aria-pressed', 'true')
     expect(onSelectionChange).toHaveBeenLastCalledWith(
       expect.objectContaining({
         mode: 'day',
@@ -193,6 +362,11 @@ describe('TimeContextPanel', () => {
         anchorDate: '2026-05-20',
       }),
     )
+    expect(screen.getByRole('button', { name: '修改时间' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    )
+    expect(screen.queryByLabelText('日历选择')).not.toBeInTheDocument()
   })
 
   it('lets the week picker title pick a month and return to week mode', () => {
@@ -205,6 +379,7 @@ describe('TimeContextPanel', () => {
       />,
     )
 
+    fireEvent.click(screen.getByRole('button', { name: '修改时间' }))
     const picker = screen.getByLabelText('时间选择页')
 
     fireEvent.click(
@@ -219,14 +394,6 @@ describe('TimeContextPanel', () => {
 
     fireEvent.click(within(picker).getByRole('button', { name: '5月' }))
 
-    expect(within(picker).getByText('按周聚合')).toBeInTheDocument()
-    expect(within(picker).queryByLabelText('月份选择')).not.toBeInTheDocument()
-    expect(
-      within(picker).getByRole('button', {
-        name: '切换到月份选择，当前2026年5月',
-      }),
-    ).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '周' })).toHaveAttribute('aria-pressed', 'true')
     expect(onSelectionChange).toHaveBeenLastCalledWith(
       expect.objectContaining({
         mode: 'week',
@@ -235,6 +402,11 @@ describe('TimeContextPanel', () => {
         anchorDate: '2026-05-20',
       }),
     )
+    expect(screen.getByRole('button', { name: '修改时间' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    )
+    expect(screen.queryByLabelText('时间选择页')).not.toBeInTheDocument()
   })
 
   it('lets the month picker title pick a year and return to month mode', () => {
@@ -247,6 +419,7 @@ describe('TimeContextPanel', () => {
       />,
     )
 
+    fireEvent.click(screen.getByRole('button', { name: '修改时间' }))
     const picker = screen.getByLabelText('时间选择页')
 
     fireEvent.click(
@@ -261,14 +434,6 @@ describe('TimeContextPanel', () => {
 
     fireEvent.click(within(picker).getByRole('button', { name: '2025年' }))
 
-    expect(within(picker).getByText('按月聚合')).toBeInTheDocument()
-    expect(within(picker).queryByLabelText('年份选择')).not.toBeInTheDocument()
-    expect(
-      within(picker).getByRole('button', {
-        name: '切换到年份选择，当前2025年',
-      }),
-    ).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '月' })).toHaveAttribute('aria-pressed', 'true')
     expect(onSelectionChange).toHaveBeenLastCalledWith(
       expect.objectContaining({
         mode: 'month',
@@ -277,6 +442,11 @@ describe('TimeContextPanel', () => {
         anchorDate: '2025-06-01',
       }),
     )
+    expect(screen.getByRole('button', { name: '修改时间' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    )
+    expect(screen.queryByLabelText('时间选择页')).not.toBeInTheDocument()
   })
 
   it('renders accounting summary values through the shared metric strip', () => {
@@ -340,6 +510,7 @@ describe('TimeContextPanel', () => {
       />,
     )
 
+    fireEvent.click(screen.getByRole('button', { name: '修改时间' }))
     const customPanel = screen.getByLabelText('自定义时间范围')
     const dateFields = within(customPanel).getByLabelText('自定义日期字段')
 
@@ -358,6 +529,7 @@ describe('TimeContextPanel', () => {
       />,
     )
 
+    fireEvent.click(screen.getByRole('button', { name: '修改时间' }))
     const dateFields = screen.getByLabelText('自定义日期字段')
     const separator = dateFields.querySelector('.time-range-separator')
     const children = Array.from(dateFields.children)

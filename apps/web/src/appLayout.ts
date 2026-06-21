@@ -8,7 +8,7 @@ export type ViewportSize = {
 export const SECONDARY_NAV_RAIL_WIDTH = 60
 const DESKTOP_DATA_PANEL_MIN_WIDTH = 420
 const DESKTOP_DATA_PANEL_MAX_WIDTH = 560
-const DESKTOP_DATA_PANEL_WIDTH_RATIO = 0.3
+const DESKTOP_DATA_PANEL_WIDTH_RATIO = 0.27
 const MOBILE_SHELL_BREAKPOINT = 720
 
 export function calculateAvailableMapShellWidth({

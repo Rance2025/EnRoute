@@ -90,6 +90,7 @@ export function TimeContextPanel({
   onOpenSettings,
 }: TimeContextPanelProps) {
   const [calendarMode, setCalendarMode] = useState<CalendarDisplayMode>('week')
+  const [isTimeEditorOpen, setIsTimeEditorOpen] = useState(false)
   const [isDayCalendarCollapsingWeek, setIsDayCalendarCollapsingWeek] = useState(false)
   const [dayCalendarCollapseSequence, setDayCalendarCollapseSequence] = useState(0)
   const [navigationState, setNavigationState] = useState<TimeNavigationState>({
@@ -98,6 +99,7 @@ export function TimeContextPanel({
   })
   const heading = getTimeRangeDisplay(selection)
   const resetLabel = getCurrentRangeActionLabel(selection.mode)
+  const timeActionLabel = isTimeEditorOpen ? resetLabel : '修改时间'
   const summaryItems = metricItems ?? (view === 'accounting'
     ? getAccountingSummary(selection)
     : [])
@@ -114,13 +116,31 @@ export function TimeContextPanel({
     }
   }, [dayCalendarCollapseSequence, isDayCalendarCollapsingWeek])
 
-  function handleSelectionChange(nextSelection: TimeRangeSelection) {
-    if (timeSelectionsAreEqual(selection, nextSelection)) return
+  function handleSelectionChange(
+    nextSelection: TimeRangeSelection,
+    { closeEditor = false }: { closeEditor?: boolean } = {},
+  ) {
+    if (timeSelectionsAreEqual(selection, nextSelection)) {
+      if (closeEditor) setIsTimeEditorOpen(false)
+      return
+    }
 
     setNavigationState((current) => (
       current.direction === null ? current : { ...current, direction: null }
     ))
     onSelectionChange(nextSelection)
+    if (closeEditor) setIsTimeEditorOpen(false)
+  }
+
+  function handleTimeActionClick() {
+    if (!isTimeEditorOpen) {
+      setIsTimeEditorOpen(true)
+      return
+    }
+
+    handleSelectionChange(createCurrentSelectionForView(selection.mode, view), {
+      closeEditor: true,
+    })
   }
 
   function handleCalendarModeChange(mode: CalendarDisplayMode) {
@@ -151,19 +171,7 @@ export function TimeContextPanel({
     if (range === selection.mode) return
 
     setIsDayCalendarCollapsingWeek(false)
-
-    if (range === 'day') handleSelectionChange(selectDay(selection.anchorDate))
-    if (range === 'week') handleSelectionChange(selectWeek(selection.anchorDate))
-    if (range === 'month') {
-      const anchor = new Date(`${selection.anchorDate}T00:00:00`)
-      handleSelectionChange(selectMonth(anchor.getFullYear(), anchor.getMonth() + 1))
-    }
-    if (range === 'year') {
-      handleSelectionChange(
-        selectYear(new Date(`${selection.anchorDate}T00:00:00`).getFullYear()),
-      )
-    }
-    if (range === 'custom') handleSelectionChange(selectPresetRangeForView('all', view))
+    handleSelectionChange(createCurrentSelectionForView(range, view))
   }
 
   return (
@@ -179,12 +187,12 @@ export function TimeContextPanel({
             <button
               type="button"
               className="time-context-card__today"
-              aria-label={resetLabel}
-              onClick={() =>
-                handleSelectionChange(createCurrentSelectionForView(selection.mode, view))
-              }
+              aria-label={timeActionLabel}
+              aria-controls="time-range-editor"
+              aria-expanded={isTimeEditorOpen}
+              onClick={handleTimeActionClick}
             >
-              {resetLabel}
+              {timeActionLabel}
             </button>
           </div>
 
@@ -213,23 +221,26 @@ export function TimeContextPanel({
           />
         </header>
 
-        <div className="time-panel-content">
-          <div
-            className="time-panel-content__stage"
-            aria-label="时间范围内容"
-          >
-            {renderModeContent(
-              selection,
-              calendarMode,
-              isDayCalendarCollapsingWeek,
-              navigationState,
-              handleCalendarModeChange,
-              handleSelectionChange,
-              handlePeriodNavigate,
-              view,
-            )}
+        {isTimeEditorOpen ? (
+          <div id="time-range-editor" className="time-panel-content">
+            <div
+              className="time-panel-content__stage"
+              aria-label="时间范围内容"
+            >
+              {renderModeContent(
+                selection,
+                calendarMode,
+                isDayCalendarCollapsingWeek,
+                navigationState,
+                handleCalendarModeChange,
+                handleSelectionChange,
+                (nextSelection) => handleSelectionChange(nextSelection, { closeEditor: true }),
+                handlePeriodNavigate,
+                view,
+              )}
+            </div>
           </div>
-        </div>
+        ) : null}
 
         <footer className="time-context-panel__footer" aria-label="应用设置">
           <button
@@ -328,6 +339,7 @@ function renderModeContent(
   isDayCalendarCollapsingWeek: boolean,
   navigationState: TimeNavigationState,
   onCalendarModeChange: (mode: CalendarDisplayMode) => void,
+  onSelectionEdit: (selection: TimeRangeSelection) => void,
   onSelectionChange: (selection: TimeRangeSelection) => void,
   onPeriodNavigate: (
     direction: TimeNavigationDirection,
@@ -378,6 +390,7 @@ function renderModeContent(
     <CustomRangeSection
       view={view}
       selection={selection}
+      onSelectionEdit={onSelectionEdit}
       onSelectionChange={onSelectionChange}
     />
   )
@@ -386,10 +399,12 @@ function renderModeContent(
 function CustomRangeSection({
   view,
   selection,
+  onSelectionEdit,
   onSelectionChange,
 }: {
   view: AppView
   selection: TimeRangeSelection
+  onSelectionEdit: (selection: TimeRangeSelection) => void
   onSelectionChange: (selection: TimeRangeSelection) => void
 }) {
   const [activeBoundary, setActiveBoundary] = useState<'start' | 'end' | null>(null)
@@ -401,7 +416,7 @@ function CustomRangeSection({
   }
 
   function handleBoundaryInput(boundary: 'start' | 'end', value: string) {
-    onSelectionChange(updateCustomDateBoundary(selection, boundary, value))
+    onSelectionEdit(updateCustomDateBoundary(selection, boundary, value))
     if (isDateKey(value)) setPickerAnchorDate(value)
   }
 
