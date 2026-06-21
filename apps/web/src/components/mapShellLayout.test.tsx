@@ -529,7 +529,12 @@ describe('unified shell layout', () => {
     const monthSelector = screen.getByLabelText('时间选择页')
 
     expect(within(monthSelector).getByText('按月聚合')).toBeInTheDocument()
-    expect(within(monthSelector).getAllByRole('button')).toHaveLength(14)
+    expect(
+      within(monthSelector).getByRole('button', {
+        name: '切换到按年聚合，当前2026年',
+      }),
+    ).toBeInTheDocument()
+    expect(within(monthSelector).getAllByRole('button')).toHaveLength(15)
     expect(within(monthSelector).queryByText('选择月份')).not.toBeInTheDocument()
     expect(within(monthSelector).queryByText('选择')).not.toBeInTheDocument()
     expect(within(monthSelector).queryByText('当前')).not.toBeInTheDocument()
@@ -672,7 +677,12 @@ describe('unified shell layout', () => {
 
     const monthPicker = screen.getByLabelText('时间选择页')
     expect(within(monthPicker).getByText('2026年')).toBeInTheDocument()
-    expect(within(monthPicker).getAllByRole('button')).toHaveLength(14)
+    expect(
+      within(monthPicker).getByRole('button', {
+        name: '切换到按年聚合，当前2026年',
+      }),
+    ).toBeInTheDocument()
+    expect(within(monthPicker).getAllByRole('button')).toHaveLength(15)
     expect(within(monthPicker).getByRole('button', { name: '12月' })).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '年' }))

@@ -205,7 +205,7 @@ describe('map chrome layout', () => {
   })
 
   it('centers time picker arrow glyphs inside circular buttons', () => {
-    const rule = cssRule('.time-picker-bar button')
+    const rule = cssRule('.time-picker-bar button:not(.time-period-title)')
 
     expect(rule).toContain('display: grid')
     expect(rule).toContain('place-items: center')
@@ -213,23 +213,41 @@ describe('map chrome layout', () => {
   })
 
   it('centers calendar arrow glyphs inside circular buttons', () => {
-    const rule = cssRule('.time-picker-bar button')
+    const rule = cssRule('.time-picker-bar button:not(.time-period-title)')
 
-    expect(appCss).toMatch(/\.time-calendar-bar button,\s*\.time-picker-bar button\s*\{/)
+    expect(appCss).toMatch(
+      /\.time-calendar-bar button:not\(\.time-period-title\),\s*\.time-picker-bar button:not\(\.time-period-title\)\s*\{/,
+    )
     expect(rule).toContain('display: grid')
     expect(rule).toContain('place-items: center')
     expect(rule).toContain('line-height: 1')
   })
 
   it('gives time picker arrows a clear press state', () => {
-    const buttonRule = cssRule('.time-picker-bar button')
-    const activeRule = cssRule('.time-picker-bar button:active')
+    const buttonRule = cssRule('.time-picker-bar button:not(.time-period-title)')
+    const activeRule = cssRule('.time-picker-bar button:not(.time-period-title):active')
 
     expect(buttonRule).toContain('cursor: pointer')
     expect(buttonRule).toContain('transform')
     expect(buttonRule).toContain('box-shadow')
     expect(activeRule).toContain('transform: scale(0.94)')
     expect(activeRule).toContain('box-shadow')
+  })
+
+  it('keeps clickable period titles in the full-width pill slot, not arrow button chrome', () => {
+    const arrowRule = cssRule('.time-picker-bar button:not(.time-period-title)')
+    const titleRule = cssRule('.time-period-title')
+    const titleButtonRule = cssRule('.time-period-title--button')
+
+    expect(appCss).toMatch(
+      /\.time-calendar-bar button:not\(\.time-period-title\),\s*\.time-picker-bar button:not\(\.time-period-title\)\s*\{/,
+    )
+    expect(arrowRule).toContain('width: 31px')
+    expect(titleRule).toContain('width: 100%')
+    expect(titleRule).toContain('border-radius: 999px')
+    expect(titleRule).not.toContain('width: 31px')
+    expect(titleRule).not.toContain('border-radius: 50%')
+    expect(titleButtonRule).toContain('border: 0')
   })
 
   it('keeps time picker item hover lift restrained and removes click press motion', () => {

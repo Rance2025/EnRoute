@@ -342,6 +342,7 @@ function renderModeContent(
         page={page}
         selection={selection}
         navigationState={navigationState}
+        onTitleSelect={(nextSelection) => onSelectionChange(nextSelection)}
         onMove={(direction) =>
           onPeriodNavigate(
             direction === -1 ? 'previous' : 'next',
@@ -351,7 +352,6 @@ function renderModeContent(
         onSelect={(option) =>
           onSelectionChange(createSelectionFromPickerOption(page.mode, option))
         }
-        onMonthSelect={(date) => onSelectionChange(selectWeek(date))}
       />
     )
   }
@@ -735,37 +735,9 @@ function DayCalendarSection({
     selection: TimeRangeSelection,
   ) => void
 }) {
-  const [pickerMode, setPickerMode] = useState<CustomDatePickerMode>('day')
-  const [monthPickerAnchorDate, setMonthPickerAnchorDate] = useState(selection.anchorDate)
-  const [monthNavigationState, setMonthNavigationState] = useState<TimeNavigationState>({
-    direction: null,
-    sequence: 0,
-  })
-  const isMonthPicker = pickerMode === 'month'
-  const [monthPickerYear] = parseDateKey(monthPickerAnchorDate)
-  const title = isMonthPicker
-    ? `${monthPickerYear}年`
-    : getCalendarLabel(selection, calendarMode)
-  const titleAriaLabel = isMonthPicker
-    ? `返回日期选择，当前${title}`
-    : `切换到月份选择，当前${title}`
-
-  function clearMonthNavigationDirection() {
-    setMonthNavigationState((current) => (
-      current.direction === null ? current : { ...current, direction: null }
-    ))
-  }
+  const title = getCalendarLabel(selection, calendarMode)
 
   function handleMove(direction: -1 | 1) {
-    if (isMonthPicker) {
-      setMonthNavigationState((current) => ({
-        direction: direction === -1 ? 'previous' : 'next',
-        sequence: current.sequence + 1,
-      }))
-      setMonthPickerAnchorDate((current) => moveDateKeyByYears(current, direction))
-      return
-    }
-
     onPeriodNavigate(
       direction === -1 ? 'previous' : 'next',
       moveDayCalendarPage(selection, direction, calendarMode),
@@ -773,23 +745,9 @@ function DayCalendarSection({
   }
 
   function handleTitleClick() {
-    if (isMonthPicker) {
-      clearMonthNavigationDirection()
-      setPickerMode('day')
-      return
-    }
+    const [year, month] = parseDateKey(selection.anchorDate)
 
-    setMonthPickerAnchorDate(selection.anchorDate)
-    clearMonthNavigationDirection()
-    setPickerMode('month')
-  }
-
-  function handleMonthSelect(month: number) {
-    const nextDate = moveDateKeyToMonth(monthPickerAnchorDate, month)
-
-    clearMonthNavigationDirection()
-    setPickerMode('day')
-    onSelectionChange(selectDay(nextDate))
+    onSelectionChange(selectMonth(year, month))
   }
 
   return (
@@ -809,7 +767,7 @@ function DayCalendarSection({
       <div className="time-calendar-bar">
         <button
           type="button"
-          aria-label={isMonthPicker ? '上一年' : '上一段时间'}
+          aria-label="上一段时间"
           onClick={() => handleMove(-1)}
         >
           ‹
@@ -817,48 +775,26 @@ function DayCalendarSection({
         <button
           type="button"
           className="time-period-title time-period-title--button"
-          aria-label={titleAriaLabel}
+          aria-label={`切换到按月聚合，当前${title}`}
           onClick={handleTitleClick}
         >
           {title}
         </button>
         <button
           type="button"
-          aria-label={isMonthPicker ? '下一年' : '下一段时间'}
+          aria-label="下一段时间"
           onClick={() => handleMove(1)}
         >
           ›
         </button>
       </div>
-      {isMonthPicker ? (
-        <div className="time-picker-grid-window">
-          <div
-            key={monthNavigationState.sequence}
-            className={[
-              'time-calendar-grid-motion',
-              monthNavigationState.direction
-                ? `time-range-grid-motion--${monthNavigationState.direction}`
-                : null,
-            ]
-              .filter(Boolean)
-              .join(' ')}
-          >
-            <MonthSelectionGrid
-              anchorDate={monthPickerAnchorDate}
-              className="time-picker-grid time-picker-grid--months"
-              onSelect={handleMonthSelect}
-            />
-          </div>
-        </div>
-      ) : (
-        <AnimatedDayCalendar
-          calendarMode={calendarMode}
-          isCollapsingWeek={isCollapsingWeek}
-          navigationState={navigationState}
-          selection={selection}
-          onSelectionChange={onSelectionChange}
-        />
-      )}
+      <AnimatedDayCalendar
+        calendarMode={calendarMode}
+        isCollapsingWeek={isCollapsingWeek}
+        navigationState={navigationState}
+        selection={selection}
+        onSelectionChange={onSelectionChange}
+      />
     </section>
   )
 }
@@ -942,30 +878,18 @@ function TimePickerPage({
   page,
   selection,
   navigationState,
+  onTitleSelect,
   onMove,
   onSelect,
-  onMonthSelect,
 }: {
   page: PickerPage
   selection: TimeRangeSelection
   navigationState: TimeNavigationState
+  onTitleSelect: (selection: TimeRangeSelection) => void
   onMove: (direction: -1 | 1) => void
   onSelect: (option: PickerPageOption) => void
-  onMonthSelect: (date: string) => void
 }) {
-  const [pickerMode, setPickerMode] = useState<CustomDatePickerMode>('day')
-  const [monthPickerAnchorDate, setMonthPickerAnchorDate] = useState(selection.anchorDate)
-  const [monthNavigationState, setMonthNavigationState] = useState<TimeNavigationState>({
-    direction: null,
-    sequence: 0,
-  })
-  const supportsMonthPickerTitle = page.mode === 'week'
-  const isMonthPicker = supportsMonthPickerTitle && pickerMode === 'month'
-  const [monthPickerYear] = parseDateKey(monthPickerAnchorDate)
-  const title = isMonthPicker ? `${monthPickerYear}年` : page.title
-  const titleAriaLabel = isMonthPicker
-    ? `返回日期选择，当前${title}`
-    : `切换到月份选择，当前${title}`
+  const titleTarget = getPickerTitleTarget(selection)
   const gridClassName = ['time-picker-grid', page.gridClassName].join(' ')
   const optionButtons = page.options.map((option) => (
     <button
@@ -984,45 +908,10 @@ function TimePickerPage({
     </button>
   ))
 
-  function clearMonthNavigationDirection() {
-    setMonthNavigationState((current) => (
-      current.direction === null ? current : { ...current, direction: null }
-    ))
-  }
-
-  function handleMove(direction: -1 | 1) {
-    if (isMonthPicker) {
-      setMonthNavigationState((current) => ({
-        direction: direction === -1 ? 'previous' : 'next',
-        sequence: current.sequence + 1,
-      }))
-      setMonthPickerAnchorDate((current) => moveDateKeyByYears(current, direction))
-      return
-    }
-
-    onMove(direction)
-  }
-
   function handleTitleClick() {
-    if (!supportsMonthPickerTitle) return
+    if (!titleTarget) return
 
-    if (isMonthPicker) {
-      clearMonthNavigationDirection()
-      setPickerMode('day')
-      return
-    }
-
-    setMonthPickerAnchorDate(selection.anchorDate)
-    clearMonthNavigationDirection()
-    setPickerMode('month')
-  }
-
-  function handleMonthSelect(month: number) {
-    const nextDate = moveDateKeyToMonth(monthPickerAnchorDate, month)
-
-    clearMonthNavigationDirection()
-    setPickerMode('day')
-    onMonthSelect(nextDate)
+    onTitleSelect(titleTarget.selection)
   }
 
   return (
@@ -1033,58 +922,68 @@ function TimePickerPage({
       <div className="time-picker-bar">
         <button
           type="button"
-          aria-label={isMonthPicker ? '上一年' : '上一页'}
-          onClick={() => handleMove(-1)}
+          aria-label="上一页"
+          onClick={() => onMove(-1)}
         >
           ‹
         </button>
-        {supportsMonthPickerTitle ? (
+        {titleTarget ? (
           <button
             type="button"
             className="time-period-title time-period-title--button"
-            aria-label={titleAriaLabel}
+            aria-label={titleTarget.ariaLabel}
             onClick={handleTitleClick}
           >
-            {title}
+            {page.title}
           </button>
         ) : (
-          <span className="time-period-title">{title}</span>
+          <span className="time-period-title">{page.title}</span>
         )}
         <button
           type="button"
-          aria-label={isMonthPicker ? '下一年' : '下一页'}
-          onClick={() => handleMove(1)}
+          aria-label="下一页"
+          onClick={() => onMove(1)}
         >
           ›
         </button>
       </div>
       <div className="time-picker-grid-window">
         <div
-          key={isMonthPicker ? monthNavigationState.sequence : navigationState.sequence}
+          key={navigationState.sequence}
           className={[
             'time-picker-grid-motion',
-            (isMonthPicker ? monthNavigationState.direction : navigationState.direction)
-              ? `time-range-grid-motion--${
-                  isMonthPicker
-                    ? monthNavigationState.direction
-                    : navigationState.direction
-                }`
+            navigationState.direction
+              ? `time-range-grid-motion--${navigationState.direction}`
               : null,
           ]
             .filter(Boolean)
             .join(' ')}
         >
-          {isMonthPicker ? (
-            <MonthSelectionGrid
-              anchorDate={monthPickerAnchorDate}
-              className="time-picker-grid time-picker-grid--months"
-              onSelect={handleMonthSelect}
-            />
-          ) : (
-            <div className={gridClassName}>{optionButtons}</div>
-          )}
+          <div className={gridClassName}>{optionButtons}</div>
         </div>
       </div>
     </section>
   )
+}
+
+function getPickerTitleTarget(selection: TimeRangeSelection) {
+  if (selection.mode === 'week') {
+    const [year, month] = parseDateKey(selection.anchorDate)
+
+    return {
+      ariaLabel: `切换到按月聚合，当前${year}年${month}月`,
+      selection: selectMonth(year, month),
+    }
+  }
+
+  if (selection.mode === 'month') {
+    const [year] = parseDateKey(selection.anchorDate)
+
+    return {
+      ariaLabel: `切换到按年聚合，当前${year}年`,
+      selection: selectYear(year),
+    }
+  }
+
+  return null
 }

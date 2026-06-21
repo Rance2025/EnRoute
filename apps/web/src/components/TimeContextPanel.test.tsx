@@ -153,7 +153,7 @@ describe('TimeContextPanel', () => {
     expect(getMotion()).toHaveClass('time-range-grid-motion--previous')
   })
 
-  it('lets the day calendar title switch into month selection by year', () => {
+  it('lets the day calendar title enter the existing month aggregate picker', () => {
     const onSelectionChange = vi.fn()
 
     render(
@@ -167,50 +167,21 @@ describe('TimeContextPanel', () => {
 
     fireEvent.click(
       within(calendar).getByRole('button', {
-        name: '切换到月份选择，当前2026年6月',
+        name: '切换到按月聚合，当前2026年6月',
       }),
     )
 
-    expect(within(calendar).getByLabelText('月份选择')).toBeInTheDocument()
-    expect(
-      within(calendar).getByRole('button', {
-        name: '返回日期选择，当前2026年',
-      }),
-    ).toBeInTheDocument()
-    expect(within(calendar).getByRole('button', { name: '上一年' })).toBeInTheDocument()
-    expect(within(calendar).getByRole('button', { name: '下一年' })).toBeInTheDocument()
-    expect(within(calendar).queryByLabelText('日历日期')).not.toBeInTheDocument()
-
-    fireEvent.click(within(calendar).getByRole('button', { name: '下一年' }))
-
-    expect(
-      within(calendar).getByRole('button', {
-        name: '返回日期选择，当前2027年',
-      }),
-    ).toBeInTheDocument()
-    expect(calendar.querySelector('.time-calendar-grid-motion')).toHaveClass(
-      'time-range-grid-motion--next',
-    )
-
-    fireEvent.click(within(calendar).getByRole('button', { name: '5月' }))
-
-    expect(
-      within(calendar).getByRole('button', {
-        name: '切换到月份选择，当前2027年5月',
-      }),
-    ).toBeInTheDocument()
-    expect(within(calendar).getByLabelText('日历日期')).toBeInTheDocument()
-    expect(within(calendar).queryByLabelText('月份选择')).not.toBeInTheDocument()
     expect(onSelectionChange).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        mode: 'day',
-        start: '2027-05-20',
-        anchorDate: '2027-05-20',
+        mode: 'month',
+        start: '2026-06-01',
+        end: '2026-06-30',
+        anchorDate: '2026-06-01',
       }),
     )
   })
 
-  it('lets the week picker title switch into month selection by year', () => {
+  it('keeps day week month and year pickers isomorphic through title clicks', () => {
     const onSelectionChange = vi.fn()
 
     render(
@@ -224,29 +195,36 @@ describe('TimeContextPanel', () => {
 
     fireEvent.click(
       within(picker).getByRole('button', {
-        name: '切换到月份选择，当前2026年6月',
+        name: '切换到按月聚合，当前2026年6月',
       }),
     )
 
-    expect(within(picker).getByLabelText('月份选择')).toBeInTheDocument()
-    expect(within(picker).getByRole('button', { name: '上一年' })).toBeInTheDocument()
-    expect(within(picker).getByRole('button', { name: '下一年' })).toBeInTheDocument()
-    expect(within(picker).queryByText('第25周')).not.toBeInTheDocument()
-
-    fireEvent.click(within(picker).getByRole('button', { name: '5月' }))
-
-    expect(
-      within(picker).getByRole('button', {
-        name: '切换到月份选择，当前2026年5月',
-      }),
-    ).toBeInTheDocument()
-    expect(within(picker).queryByLabelText('月份选择')).not.toBeInTheDocument()
+    expect(screen.getByText('按月聚合')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '6月' })).toHaveClass('is-active')
+    expect(screen.queryByLabelText('月份选择')).not.toBeInTheDocument()
     expect(onSelectionChange).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        mode: 'week',
-        start: '2026-05-18',
-        end: '2026-05-24',
-        anchorDate: '2026-05-20',
+        mode: 'month',
+        start: '2026-06-01',
+        end: '2026-06-30',
+        anchorDate: '2026-06-01',
+      }),
+    )
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: '切换到按年聚合，当前2026年',
+      }),
+    )
+
+    expect(screen.getByText('按年聚合')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '2026年' })).toHaveClass('is-active')
+    expect(onSelectionChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        mode: 'year',
+        start: '2026-01-01',
+        end: '2026-12-31',
+        anchorDate: '2026-06-30',
       }),
     )
   })
