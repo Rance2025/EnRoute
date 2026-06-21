@@ -74,7 +74,19 @@ describe('unified shell layout', () => {
       'aria-pressed',
       'false',
     )
-    expect(screen.getByRole('slider', { name: '页面滑块' })).toBeInTheDocument()
+    const mainNav = screen.getByRole('navigation', { name: '主导航' })
+    expect(mainNav).toHaveClass('app-nav--icon')
+    expect(mainNav.querySelector('.app-nav__thumb')).not.toBeNull()
+    expect(within(mainNav).getByRole('button', { name: '在途 EnRoute' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    )
+    expect(within(mainNav).getByRole('button', { name: '地图' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(within(mainNav).getByRole('button', { name: '记账' })).toBeInTheDocument()
+    expect(within(mainNav).getByRole('button', { name: '日程' })).toBeInTheDocument()
     expect(screen.getByRole('slider', { name: '时间模式滑块' })).toHaveAttribute(
       'aria-valuetext',
       '日',

@@ -17,9 +17,6 @@
   z-index: 10;
   top: max(18px, env(safe-area-inset-top));
   left: 50%;
-  display: flex;
-  align-items: center;
-  gap: 10px;
   padding: 7px;
   border: 1px solid rgba(23, 31, 29, 0.1);
   border-radius: 999px;
@@ -31,27 +28,106 @@
   transform: translateX(-50%);
 }
 
-.app-nav__brand {
+.app-nav__tabs {
+  position: relative;
   display: flex;
-  align-items: baseline;
+  align-items: center;
+  gap: 2px;
+  isolation: isolate;
+}
+
+.app-nav__thumb {
+  position: absolute;
+  z-index: 0;
+  top: 0;
+  bottom: 0;
+  left: var(--top-nav-thumb-left);
+  width: var(--top-nav-thumb-width);
+  border-radius: 999px;
+  background: #123f35;
+  box-shadow: 0 8px 22px rgba(18, 63, 53, 0.2);
+  transition:
+    left 190ms ease,
+    width 190ms ease;
+}
+
+.app-nav__button {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  height: 38px;
+  display: inline-grid;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  color: rgba(23, 35, 31, 0.72);
+  background: transparent;
+  cursor: pointer;
+  transition:
+    color 160ms ease,
+    background 160ms ease,
+    transform 160ms ease;
+}
+
+.app-nav__button:hover {
+  color: #17231f;
+  background: rgba(23, 35, 31, 0.07);
+}
+
+.app-nav__button[aria-pressed='true'] {
+  color: #f8fbfa;
+  background: transparent;
+  box-shadow: none;
+}
+
+.app-nav__button--brand {
+  width: 132px;
+  grid-template-columns: auto auto;
+  justify-content: center;
   gap: 5px;
-  padding: 0 6px 0 9px;
+  padding: 0 12px;
   color: #17231f;
   font-size: 14px;
-  font-weight: 800;
+  font-weight: 840;
   white-space: nowrap;
 }
 
-.app-nav__brand span:last-child {
+.app-nav__button--brand span:last-child {
   color: rgba(23, 35, 31, 0.62);
   font-weight: 760;
 }
 
-.app-nav__tabs {
-  --segmented-gap: 2px;
+.app-nav__button--brand[aria-pressed='true'] span:last-child {
+  color: rgba(248, 251, 250, 0.76);
+}
 
-  display: flex;
-  gap: var(--segmented-gap);
+.app-nav__button--page {
+  color: rgba(23, 35, 31, 0.72);
+}
+
+.app-nav__button--page svg {
+  color: currentColor;
+}
+
+.app-nav__button--icon {
+  width: 48px;
+  padding: 0;
+}
+
+.app-nav__button--mixed {
+  width: 92px;
+  grid-template-columns: auto auto;
+  gap: 7px;
+  padding: 0 12px;
+}
+
+.app-nav__label {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 820;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .segmented-control {
@@ -184,47 +260,6 @@
   background: transparent;
   box-shadow: none;
   pointer-events: none;
-}
-
-
-.app-nav button {
-  height: 34px;
-  padding: 0 14px;
-  border: 0;
-  border-radius: 999px;
-  color: rgba(23, 35, 31, 0.82);
-  background: transparent;
-  cursor: pointer;
-  transition:
-    color 160ms ease,
-    background 160ms ease,
-    transform 160ms ease;
-}
-
-.app-nav button:hover {
-  color: #17231f;
-  background: rgba(23, 35, 31, 0.07);
-}
-
-.app-nav button[aria-pressed='true'] {
-  color: #f8fbfa;
-  background: #1f3430;
-  box-shadow: 0 8px 22px rgba(31, 52, 48, 0.2);
-}
-
-.app-nav .segmented-control button[aria-pressed='true'] {
-  color: var(--segmented-label-color);
-  background: transparent;
-  box-shadow: none;
-}
-
-.app-nav button:disabled {
-  color: rgba(23, 35, 31, 0.36);
-  cursor: default;
-}
-
-.app-nav button:disabled:hover {
-  background: transparent;
 }
 
 .time-context-panel {
@@ -470,6 +505,61 @@
 .time-panel-content::-webkit-scrollbar-thumb {
   border-radius: 999px;
   background: rgba(23, 62, 53, 0.18);
+}
+
+.time-context-panel__footer {
+  align-self: end;
+  justify-self: start;
+  display: flex;
+  align-items: center;
+}
+
+.time-settings-button {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border: 1px solid rgba(23, 35, 31, 0.08);
+  border-radius: 999px;
+  color: rgba(23, 35, 31, 0.66);
+  background: rgba(250, 252, 251, 0.68);
+  box-shadow:
+    0 10px 26px rgba(31, 46, 42, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  cursor: pointer;
+  backdrop-filter: blur(14px) saturate(1.06);
+  transition:
+    color 160ms ease,
+    background 160ms ease,
+    border-color 160ms ease,
+    transform 160ms ease;
+}
+
+.time-settings-button:hover {
+  border-color: rgba(18, 63, 53, 0.14);
+  color: #123f35;
+  background: rgba(255, 255, 255, 0.82);
+  transform: translateY(-1px);
+}
+
+.time-settings-button:active {
+  transform: scale(0.96);
+}
+
+.time-settings-button:focus-visible {
+  outline: 2px solid rgba(18, 63, 53, 0.28);
+  outline-offset: 3px;
+}
+
+.time-settings-button span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .time-calendar-shell,
@@ -1357,6 +1447,32 @@
   height: 100svh;
   overflow: visible;
   background: transparent;
+}
+
+.main-workspace--placeholder {
+  display: grid;
+  place-items: center;
+  padding: 96px 32px 32px;
+}
+
+.workspace-placeholder {
+  display: grid;
+  gap: 8px;
+  color: rgba(23, 35, 31, 0.66);
+  text-align: center;
+}
+
+.workspace-placeholder span {
+  font-size: 13px;
+  font-weight: 780;
+}
+
+.workspace-placeholder h1 {
+  margin: 0;
+  color: #17231f;
+  font-size: 28px;
+  font-weight: 860;
+  line-height: 1.1;
 }
 
 .map-stage {
@@ -3040,6 +3156,122 @@
   line-height: 1.55;
 }
 
+.settings-dialog {
+  position: fixed;
+  z-index: 40;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+
+.settings-dialog__backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(19, 29, 27, 0.28);
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+}
+
+.settings-dialog__panel {
+  position: relative;
+  z-index: 1;
+  width: min(360px, calc(100vw - 32px));
+  max-height: calc(100svh - 32px);
+  display: grid;
+  gap: 18px;
+  padding: 18px;
+  overflow: auto;
+  border: 1px solid rgba(23, 35, 31, 0.1);
+  border-radius: 18px;
+  color: #17231f;
+  background: rgba(250, 252, 251, 0.92);
+  box-shadow:
+    0 28px 80px rgba(20, 32, 29, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.76);
+  backdrop-filter: blur(22px) saturate(1.1);
+}
+
+.settings-dialog__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.settings-dialog__header span,
+.settings-dialog__section > span {
+  display: block;
+  color: rgba(23, 35, 31, 0.52);
+  font-size: 12px;
+  font-weight: 780;
+}
+
+.settings-dialog__header h2 {
+  margin: 4px 0 0;
+  color: #17231f;
+  font-size: 21px;
+  font-weight: 860;
+  line-height: 1.1;
+}
+
+.settings-dialog__close {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  color: rgba(23, 35, 31, 0.64);
+  background: rgba(23, 35, 31, 0.06);
+  cursor: pointer;
+  transition:
+    color 160ms ease,
+    background 160ms ease,
+    transform 160ms ease;
+}
+
+.settings-dialog__close:hover {
+  color: #17231f;
+  background: rgba(23, 35, 31, 0.1);
+}
+
+.settings-dialog__close:active {
+  transform: scale(0.94);
+}
+
+.settings-dialog__section {
+  display: grid;
+  gap: 10px;
+}
+
+.settings-navigation-tabs {
+  --segmented-thumb-bg: #123f35;
+  --segmented-label-color: rgba(23, 35, 31, 0.62);
+  --segmented-active-label-color: #f8fbfa;
+  --segmented-padding: 4px;
+  --segmented-label-font-size: 12px;
+  --segmented-label-font-weight: 820;
+
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(23, 35, 31, 0.06);
+}
+
+.settings-navigation-tabs button {
+  height: 32px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 820;
+}
+
 @media (max-width: 720px) {
   .app-shell {
     --secondary-rail-width: 0px;
@@ -3047,16 +3279,26 @@
 
   .app-nav {
     top: max(10px, env(safe-area-inset-top));
-    width: calc(100vw - 20px);
-    justify-content: space-between;
+    max-width: calc(100vw - 20px);
   }
 
-  .app-nav__brand {
+  .app-nav__button--brand {
+    width: 118px;
     font-size: 13px;
   }
 
-  .app-nav button {
-    padding: 0 13px;
+  .app-nav__button--icon {
+    width: 44px;
+  }
+
+  .app-nav__button--mixed {
+    width: 78px;
+    gap: 5px;
+    padding: 0 9px;
+  }
+
+  .app-nav__label {
+    font-size: 12px;
   }
 
   .map-stage {
