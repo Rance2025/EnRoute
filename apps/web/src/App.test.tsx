@@ -201,6 +201,23 @@ describe('App', () => {
     )
   })
 
+  it('renders the global layout regions inside one inset app board', () => {
+    render(<App amapConfig={missingAmapConfig} />)
+
+    const shell = screen.getByRole('main')
+    const board = shell.querySelector('.app-board') as HTMLElement | null
+
+    expect(board).not.toBeNull()
+    expect(board?.parentElement).toBe(shell)
+    expect(board?.querySelector('.app-nav')).not.toBeNull()
+    expect(board?.querySelector('.time-context-panel')).not.toBeNull()
+    expect(board?.querySelector('.right-context-panel')).not.toBeNull()
+    expect(board?.querySelector('.map-stage')).not.toBeNull()
+    expect(shell.querySelector(':scope > .app-nav')).toBeNull()
+    expect(shell.querySelector(':scope > .time-context-panel')).toBeNull()
+    expect(shell.querySelector(':scope > .right-context-panel')).toBeNull()
+  })
+
   it('shows a setup message when AMap credentials are missing', () => {
     render(
       <App
