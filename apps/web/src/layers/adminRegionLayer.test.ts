@@ -14,7 +14,7 @@ const regions: AdminRegion[] = [
   {
     id: 'donut',
     name: 'Donut',
-    level: 5,
+    level: 4,
     geometry: {
       type: 'Polygon',
       coordinates: [
@@ -30,7 +30,7 @@ const regions: AdminRegion[] = [
   {
     id: 'multi',
     name: 'Multi',
-    level: 5,
+    level: 4,
     geometry: {
       type: 'MultiPolygon',
       coordinates: [

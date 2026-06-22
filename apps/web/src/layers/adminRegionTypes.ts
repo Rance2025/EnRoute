@@ -1,4 +1,4 @@
-export type AdminRegionLevel = 1 | 2 | 3 | 4 | 5
+export type AdminRegionLevel = 2 | 3 | 4
 
 export type AdminRegionLngLat = [number, number]
 
@@ -15,4 +15,15 @@ export type AdminRegion = {
   footprintCount: number
   stayDurationSeconds: number
   travelDistanceMeters: number
+}
+
+export type AdminRegionRequestInput = {
+  level: AdminRegionLevel
+  zoom: number
+  viewportBounds: {
+    west: number
+    south: number
+    east: number
+    north: number
+  }
 }
