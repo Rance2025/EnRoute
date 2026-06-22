@@ -69,6 +69,7 @@ const ADMIN_REGION_LEVELS: Array<{ level: AdminRegionLevel; label: string }> = [
   { level: 2, label: '省级' },
   { level: 3, label: '市级' },
   { level: 4, label: '区县' },
+  { level: 5, label: '街镇' },
 ]
 
 function AmapCanvasComponent({

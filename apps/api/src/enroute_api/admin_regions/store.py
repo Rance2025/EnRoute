@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from dataclasses import dataclass
 from typing import Any, Iterable
 
 from enroute_api.footprints.coordinates import transform_footprint_coordinate
 
-from .geometry import calculate_geometry_bbox, geometry_contains_point
+from .geometry import BoundingBox, calculate_geometry_bbox, geometry_contains_point
 
 OSM_ADMIN_LEVEL_TO_ENROUTE_LEVEL = {
     2: 1,
@@ -97,6 +98,15 @@ def normalize_admin_region_feature(feature: dict[str, Any]) -> dict[str, Any] | 
     if areacity_feature is not None:
         return areacity_feature
     if properties.get("id") and properties.get("level") is not None:
+        if properties.get("sourceCoordinateSystem") == "wgs84":
+            return {
+                "type": "Feature",
+                "properties": properties,
+                "geometry": transform_geometry_coordinates(
+                    geometry,
+                    source_coordinate_system="wgs84",
+                ),
+            }
         return feature
 
     osm_admin_level = parse_osm_admin_level(properties)
@@ -135,7 +145,8 @@ def normalize_areacity_admin_region_feature(
     properties: dict[str, Any],
     geometry: dict[str, Any],
 ) -> dict[str, Any] | None:
-    adcode = properties.get("adcode") or properties.get("id")
+    explicit_id = properties.get("id")
+    adcode = properties.get("adcode") or explicit_id
     level = properties.get("level")
     if adcode in {None, ""} or not isinstance(level, str):
         return None
@@ -149,7 +160,7 @@ def normalize_areacity_admin_region_feature(
         raise ValueError("AreaCity admin region feature requires adcode, name, and level")
 
     normalized_properties = {
-        "id": str(adcode),
+        "id": str(explicit_id or adcode),
         "name": str(name),
         "level": enroute_level,
     }
@@ -317,6 +328,64 @@ def find_finest_region_id(
         if geometry_contains_point(geometry, longitude=longitude, latitude=latitude):
             return str(row["id"])
     return None
+
+
+@dataclass(frozen=True)
+class CachedRegion:
+    id: str
+    level: int
+    geometry: dict[str, Any]
+    bbox: BoundingBox
+
+
+class RegionMatcher:
+    def __init__(self, regions: list[CachedRegion]) -> None:
+        self.regions = regions
+
+    def find_finest_region_id(
+        self,
+        *,
+        longitude: float,
+        latitude: float,
+    ) -> str | None:
+        for region in self.regions:
+            bbox = region.bbox
+            if (
+                bbox["min_lng"] > longitude
+                or bbox["max_lng"] < longitude
+                or bbox["min_lat"] > latitude
+                or bbox["max_lat"] < latitude
+            ):
+                continue
+            if geometry_contains_point(region.geometry, longitude=longitude, latitude=latitude):
+                return region.id
+        return None
+
+
+def create_region_matcher(connection: sqlite3.Connection) -> RegionMatcher:
+    rows = connection.execute(
+        """
+        SELECT id, level, geometry, min_lng, max_lng, min_lat, max_lat
+        FROM admin_regions
+        ORDER BY level DESC
+        """,
+    ).fetchall()
+    return RegionMatcher(
+        [
+            CachedRegion(
+                id=str(row["id"]),
+                level=int(row["level"]),
+                geometry=json.loads(str(row["geometry"])),
+                bbox={
+                    "min_lng": float(row["min_lng"]),
+                    "max_lng": float(row["max_lng"]),
+                    "min_lat": float(row["min_lat"]),
+                    "max_lat": float(row["max_lat"]),
+                },
+            )
+            for row in rows
+        ],
+    )
 
 
 def get_region_chain(connection: sqlite3.Connection, region_id: str | None) -> list[str]:

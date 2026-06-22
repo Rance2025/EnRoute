@@ -65,7 +65,7 @@ function isAdminRegion(value: unknown): value is AdminRegion {
 }
 
 function isAdminRegionLevel(value: unknown): value is AdminRegionLevel {
-  return value === 2 || value === 3 || value === 4
+  return value === 2 || value === 3 || value === 4 || value === 5
 }
 
 function isAdminRegionGeometry(value: unknown): value is AdminRegionGeometry {

@@ -44,8 +44,8 @@ def create_app(*, settings: Settings | None = None) -> FastAPI:
         north: float | None = None,
         zoom: float | None = None,
     ) -> dict[str, object]:
-        if level not in {2, 3, 4}:
-            raise HTTPException(status_code=400, detail="level must be one of 2, 3, or 4")
+        if level not in {2, 3, 4, 5}:
+            raise HTTPException(status_code=400, detail="level must be one of 2, 3, 4, or 5")
         store.ensure_ready()
         return {
             "regions": [

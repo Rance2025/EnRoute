@@ -1,10 +1,13 @@
 import json
 import sqlite3
+import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from fastapi.testclient import TestClient
 
 from enroute_api.admin_regions.store import (
+    create_region_matcher,
     format_admin_region,
     get_region_chain,
     initialize_admin_region_schema,
@@ -209,6 +212,89 @@ def test_normalizes_areacity_province_city_district_geojson_without_coordinate_t
     assert stored_geometry["coordinates"][0][0] == [120, 30]
 
 
+def test_normalizes_prepared_areacity_features_with_distinct_ids_for_duplicate_adcodes(tmp_path: Path):
+    collection = {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "properties": {
+                    "id": "441900:city",
+                    "adcode": "441900",
+                    "parent": "440000",
+                    "name": "Dongguan City",
+                    "level": "city",
+                },
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [[[113, 22], [114, 22], [114, 24], [113, 24], [113, 22]]],
+                },
+            },
+            {
+                "type": "Feature",
+                "properties": {
+                    "id": "441900:district",
+                    "adcode": "441900",
+                    "parent": "441900:city",
+                    "name": "Dongguan District",
+                    "level": "district",
+                },
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [[[113, 22], [114, 22], [114, 24], [113, 24], [113, 22]]],
+                },
+            },
+        ],
+    }
+    connection = sqlite3.connect(tmp_path / "footprints.sqlite")
+    connection.row_factory = sqlite3.Row
+    try:
+        initialize_admin_region_schema(connection)
+        load_admin_regions(connection, collection)
+
+        rows = connection.execute("SELECT id, level FROM admin_regions ORDER BY level").fetchall()
+        chain = get_region_chain(connection, "441900:district")
+    finally:
+        connection.close()
+
+    assert [(row["id"], row["level"]) for row in rows] == [
+        ("441900:city", 3),
+        ("441900:district", 4),
+    ]
+    assert chain == ["441900:district", "441900:city", "440000"]
+
+
+def test_region_matcher_reuses_parsed_geometries_across_points(tmp_path: Path, monkeypatch):
+    from enroute_api.admin_regions import store as admin_region_store
+
+    connection = sqlite3.connect(tmp_path / "footprints.sqlite")
+    connection.row_factory = sqlite3.Row
+    try:
+        initialize_admin_region_schema(connection)
+        load_admin_regions(connection, REGION_COLLECTION)
+
+        original_json_loads = admin_region_store.json.loads
+        geometry_parse_count = 0
+
+        def counting_json_loads(value, *args, **kwargs):
+            nonlocal geometry_parse_count
+            if isinstance(value, str) and '"coordinates"' in value:
+                geometry_parse_count += 1
+            return original_json_loads(value, *args, **kwargs)
+
+        monkeypatch.setattr(admin_region_store.json, "loads", counting_json_loads)
+
+        matcher = create_region_matcher(connection)
+        first_match = matcher.find_finest_region_id(longitude=10, latitude=10)
+        second_match = matcher.find_finest_region_id(longitude=12, latitude=12)
+    finally:
+        connection.close()
+
+    assert first_match == "sanlin"
+    assert second_match == "sanlin"
+    assert geometry_parse_count == 4
+
+
 def column_names(connection: sqlite3.Connection, table_name: str) -> list[str]:
     return [row[1] for row in connection.execute(f"PRAGMA table_info({table_name})")]
 
@@ -365,6 +451,67 @@ def test_appended_csv_imports_only_new_rows_without_resetting_region_stats(tmp_p
     assert stats["pudong"]["travel_distance_meters"] == 100
 
 
+def test_appended_csv_rebuilds_missing_region_stats_before_counting_new_rows(tmp_path: Path):
+    data_path = tmp_path / "points.csv"
+    initial_csv = "\n".join(
+        [
+            "dataTime,locType,longitude,latitude,heading,accuracy,speed,distance,isBackForeground,stepType,altitude",
+            "100,1,10,10,0,5,-1,0,1,0,3",
+            "130,1,12,12,0,5,-1,40,1,0,3",
+        ],
+    )
+    appended_csv = "\n".join(
+        [
+            initial_csv,
+            "160,1,45,45,0,5,-1,60,1,0,3",
+        ],
+    )
+    data_path.write_text(initial_csv, encoding="utf-8")
+    connection = sqlite3.connect(tmp_path / "footprints.sqlite")
+    connection.row_factory = sqlite3.Row
+    try:
+        initialize_schema(connection)
+        load_admin_regions(connection, REGION_COLLECTION)
+
+        ensure_imported(connection, data_path=data_path, coordinate_system="gcj02")
+        with connection:
+            connection.execute(
+                "DELETE FROM footprint_meta WHERE key = 'adminRegionStatsSignature'",
+            )
+            connection.execute(
+                """
+                UPDATE admin_regions
+                SET first_seen_timestamp = NULL,
+                    footprint_count = 0,
+                    stay_duration_seconds = 0,
+                    travel_distance_meters = 0
+                """,
+            )
+        data_path.write_text(appended_csv, encoding="utf-8")
+
+        result = ensure_imported(connection, data_path=data_path, coordinate_system="gcj02")
+        stats = {
+            row["id"]: dict(row)
+            for row in connection.execute(
+                """
+                SELECT id, footprint_count, stay_duration_seconds, travel_distance_meters
+                FROM admin_regions
+                ORDER BY id
+                """,
+            )
+        }
+    finally:
+        connection.close()
+
+    assert result["new_count"] == 1
+    assert stats["sanlin"]["footprint_count"] == 2
+    assert stats["sanlin"]["stay_duration_seconds"] == 30
+    assert stats["sanlin"]["travel_distance_meters"] == 40
+    assert stats["pudong"]["footprint_count"] == 3
+    assert stats["pudong"]["stay_duration_seconds"] == 60
+    assert stats["pudong"]["travel_distance_meters"] == 100
+
+
 def test_store_loads_boundary_file_before_incremental_import_and_reports_counts(tmp_path: Path):
     data_path = tmp_path / "points.csv"
     data_path.write_text(CSV, encoding="utf-8")
@@ -397,6 +544,94 @@ def test_store_loads_boundary_file_before_incremental_import_and_reports_counts(
     assert second_result["total_count"] == 3
     assert matched_count == 3
     assert region_count == 4
+
+
+def test_store_rebuilds_region_stats_when_boundary_reload_clears_cached_rows(tmp_path: Path):
+    data_path = tmp_path / "points.csv"
+    data_path.write_text(CSV, encoding="utf-8")
+    region_path = tmp_path / "regions.geojson"
+    region_path.write_text(json.dumps(REGION_COLLECTION), encoding="utf-8")
+    store = FootprintStore(
+        db_path=tmp_path / "footprints.sqlite",
+        data_path=data_path,
+        coordinate_system="gcj02",
+        admin_region_data_path=region_path,
+    )
+    try:
+        first_result = store.import_footprints()
+        with store.connection:
+            store.connection.execute(
+                "DELETE FROM footprint_meta WHERE key = 'adminRegionSourceSignature'",
+            )
+            store.connection.execute(
+                """
+                UPDATE admin_regions
+                SET first_seen_timestamp = NULL,
+                    footprint_count = 0,
+                    stay_duration_seconds = 0,
+                    travel_distance_meters = 0
+                """,
+            )
+
+        second_result = store.import_footprints()
+        stats = store.connection.execute(
+            """
+            SELECT footprint_count, stay_duration_seconds, travel_distance_meters
+            FROM admin_regions
+            WHERE id = 'pudong'
+            """,
+        ).fetchone()
+    finally:
+        store.close()
+
+    assert first_result["unlocked_region_count"] == 4
+    assert second_result["new_count"] == 0
+    assert second_result["unlocked_region_count"] == 4
+    assert dict(stats) == {
+        "footprint_count": 3,
+        "stay_duration_seconds": 60,
+        "travel_distance_meters": 100,
+    }
+
+
+def test_store_serializes_concurrent_initial_imports(tmp_path: Path, monkeypatch):
+    from enroute_api.footprints import store as footprint_store
+
+    data_path = tmp_path / "points.csv"
+    data_path.write_text(CSV, encoding="utf-8")
+    store = FootprintStore(
+        db_path=tmp_path / "footprints.sqlite",
+        data_path=data_path,
+        coordinate_system="gcj02",
+    )
+    active_imports = 0
+    overlapped = False
+
+    def slow_ensure_imported(*args, **kwargs):
+        nonlocal active_imports, overlapped
+        active_imports += 1
+        if active_imports > 1:
+            overlapped = True
+        time.sleep(0.05)
+        active_imports -= 1
+        return {
+            "new_count": 0,
+            "total_count": 0,
+            "matched_count": 0,
+            "region_count": 0,
+            "unlocked_region_count": 0,
+        }
+
+    monkeypatch.setattr(footprint_store, "ensure_imported", slow_ensure_imported)
+    try:
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = [executor.submit(store.ensure_ready) for _ in range(2)]
+            for future in futures:
+                future.result(timeout=1)
+    finally:
+        store.close()
+
+    assert overlapped is False
 
 
 def test_store_normalizes_osm_level8_boundary_file_and_converts_geometry_to_gcj02(tmp_path: Path):
@@ -547,6 +782,32 @@ def test_serves_admin_regions_intersecting_viewport_bbox(tmp_path: Path):
     assert excluded.json()["regions"] == []
 
 
+def test_serves_shanghai_level5_admin_regions_from_cached_rows(tmp_path: Path):
+    data_path = tmp_path / "points.csv"
+    data_path.write_text(CSV, encoding="utf-8")
+    db_path = tmp_path / "footprints.sqlite"
+    settings = Settings(
+        footprint_data_path=data_path,
+        footprint_db_path=db_path,
+        footprint_coordinate_system="gcj02",
+    )
+    client = TestClient(create_app(settings=settings))
+
+    connection = sqlite3.connect(db_path)
+    connection.row_factory = sqlite3.Row
+    try:
+        initialize_admin_region_schema(connection)
+        load_admin_regions(connection, REGION_COLLECTION)
+    finally:
+        connection.close()
+
+    client.get("/api/footprints")
+    response = client.get("/api/admin-regions?level=5")
+
+    assert response.status_code == 200
+    assert [region["id"] for region in response.json()["regions"]] == ["sanlin"]
+
+
 def test_rejects_unavailable_admin_region_levels(tmp_path: Path):
     data_path = tmp_path / "points.csv"
     data_path.write_text(CSV, encoding="utf-8")
@@ -557,7 +818,7 @@ def test_rejects_unavailable_admin_region_levels(tmp_path: Path):
     )
     client = TestClient(create_app(settings=settings))
 
-    response = client.get("/api/admin-regions?level=5")
+    response = client.get("/api/admin-regions?level=6")
 
     assert response.status_code == 400
-    assert response.json()["detail"] == "level must be one of 2, 3, or 4"
+    assert response.json()["detail"] == "level must be one of 2, 3, 4, or 5"
