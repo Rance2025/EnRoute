@@ -76,6 +76,7 @@ type TopNavigationPointerPosition = TopNavigationThumbMetrics & {
 }
 type TopNavigationDragPosition = TopNavigationPointerPosition & {
   previewLeft: number
+  previewWidth: number
 }
 type SettingsPageId = 'general' | 'map' | 'accounting' | 'schedule'
 
@@ -134,31 +135,72 @@ function getTopNavigationDragPosition(
   const boundedClientX = Math.min(Math.max(clientX, tabsRect.left), tabsRect.right)
   let closestPosition: TopNavigationDragPosition | undefined
   let closestDistance = Number.POSITIVE_INFINITY
+  const positions = topNavigationItems
+    .map((item) => {
+      const buttonElement = buttonRefs[item.value]
 
-  for (const item of topNavigationItems) {
-    const buttonElement = buttonRefs[item.value]
+      if (!buttonElement) return undefined
 
-    if (!buttonElement) continue
+      const buttonRect = buttonElement.getBoundingClientRect()
 
-    const buttonRect = buttonElement.getBoundingClientRect()
-    const buttonCenter = buttonRect.left + buttonRect.width / 2
-    const distance = Math.abs(boundedClientX - buttonCenter)
+      return {
+        view: item.value,
+        left: buttonRect.left - tabsRect.left,
+        width: buttonRect.width,
+        center: buttonRect.left + buttonRect.width / 2,
+      }
+    })
+    .filter((position): position is TopNavigationPointerPosition & { center: number } => Boolean(position))
+
+  for (const position of positions) {
+    const distance = Math.abs(boundedClientX - position.center)
 
     if (distance < closestDistance) {
       closestDistance = distance
       closestPosition = {
-        view: item.value,
-        left: buttonRect.left - tabsRect.left,
-        width: buttonRect.width,
-        previewLeft: Math.min(
-          Math.max(boundedClientX - tabsRect.left - buttonRect.width / 2, 0),
-          Math.max(tabsRect.width - buttonRect.width, 0),
-        ),
+        view: position.view,
+        left: position.left,
+        width: position.width,
+        previewLeft: position.left,
+        previewWidth: position.width,
       }
     }
   }
 
-  return closestPosition
+  if (!closestPosition) return undefined
+
+  const nextPositionIndex = positions.findIndex((position) => boundedClientX <= position.center)
+  const rightPosition = positions[nextPositionIndex] ?? positions.at(-1)
+  const leftPosition = positions[Math.max(nextPositionIndex - 1, 0)] ?? positions[0]
+
+  if (!leftPosition || !rightPosition || leftPosition === rightPosition) {
+    return {
+      ...closestPosition,
+      previewLeft: Math.min(
+        Math.max(boundedClientX - tabsRect.left - closestPosition.width / 2, 0),
+        Math.max(tabsRect.width - closestPosition.width, 0),
+      ),
+      previewWidth: closestPosition.width,
+    }
+  }
+
+  const centerDistance = rightPosition.center - leftPosition.center
+  const progress = centerDistance <= 0
+    ? 0
+    : Math.min(Math.max((boundedClientX - leftPosition.center) / centerDistance, 0), 1)
+  const previewWidth = leftPosition.width
+    + (rightPosition.width - leftPosition.width) * progress
+  const previewLeft = leftPosition.left
+    + (rightPosition.left - leftPosition.left) * progress
+
+  return {
+    ...closestPosition,
+    previewLeft: Math.min(
+      Math.max(previewLeft, 0),
+      Math.max(tabsRect.width - previewWidth, 0),
+    ),
+    previewWidth,
+  }
 }
 
 function App({ amapConfig }: AppProps) {
@@ -234,7 +276,7 @@ function App({ amapConfig }: AppProps) {
     if (position) {
       setTopNavigationPreviewThumb({
         left: position.previewLeft,
-        width: position.width,
+        width: position.previewWidth,
       })
     }
   }, [])
