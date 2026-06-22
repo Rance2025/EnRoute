@@ -440,6 +440,7 @@ function App({ amapConfig }: AppProps) {
         '--right-panel-width': `${rightPanelWidth}px`,
       } as CSSProperties}
     >
+      <div className="app-board">
       <nav
         className={`app-nav app-nav--${navigationStyle}`}
         aria-label="主导航"
@@ -579,6 +580,8 @@ function App({ amapConfig }: AppProps) {
       ) : (
         <PlaceholderWorkspace view={view} />
       )}
+
+      </div>
 
       {isSettingsOpen ? (
         <div className="settings-dialog">

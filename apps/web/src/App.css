@@ -1,13 +1,18 @@
 .app-shell {
   --secondary-rail-width: 300px;
   --right-panel-width: var(--secondary-rail-width);
+  --shell-board-inset-x: clamp(18px, 1.45vw, 30px);
+  --shell-board-inset-y: clamp(16px, 1.55vw, 30px);
+  --shell-board-top-reserve: 86px;
+  --shell-board-column-gutter: clamp(18px, 1.2vw, 24px);
+  --shell-board-radius: 28px;
   --glass-panel-bg:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.64), rgba(242, 248, 247, 0.36));
-  --glass-panel-border: rgba(255, 255, 255, 0.58);
+    linear-gradient(145deg, rgba(255, 255, 255, 0.72), rgba(242, 248, 247, 0.38));
+  --glass-panel-border: rgba(255, 255, 255, 0.64);
   --glass-panel-shadow:
-    0 26px 70px rgba(25, 38, 36, 0.16),
-    0 7px 20px rgba(25, 38, 36, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 28px 82px rgba(25, 38, 36, 0.18),
+    0 9px 24px rgba(25, 38, 36, 0.09),
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
     inset 0 -1px 0 rgba(21, 34, 32, 0.04);
   --glass-panel-filter: blur(28px) saturate(1.28) brightness(1.04);
   --page-board-bg:
@@ -22,10 +27,40 @@
   background: var(--page-board-bg);
 }
 
+.app-board {
+  position: absolute;
+  inset: var(--shell-board-inset-y) var(--shell-board-inset-x);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.66);
+  border-radius: var(--shell-board-radius);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.42), rgba(232, 241, 240, 0.22)),
+    rgba(248, 251, 250, 0.26);
+  box-shadow:
+    0 34px 90px rgba(22, 35, 34, 0.22),
+    0 10px 30px rgba(22, 35, 34, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    inset 0 -1px 0 rgba(24, 39, 36, 0.08);
+  isolation: isolate;
+  backdrop-filter: var(--glass-panel-filter);
+  -webkit-backdrop-filter: var(--glass-panel-filter);
+}
+
+.app-board::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.46), transparent 18%, transparent 82%, rgba(255, 255, 255, 0.34)),
+    radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.52), transparent 34%);
+  pointer-events: none;
+}
+
 .app-nav {
-  position: fixed;
+  position: absolute;
   z-index: 10;
-  top: max(18px, env(safe-area-inset-top));
+  top: 22px;
   left: 50%;
   display: flex;
   align-items: center;
@@ -354,16 +389,20 @@
 
 .time-context-panel {
   position: absolute;
-  inset: 0 auto 0 0;
+  inset:
+    var(--shell-board-top-reserve)
+    auto
+    var(--shell-board-column-gutter)
+    var(--shell-board-column-gutter);
   box-sizing: border-box;
   z-index: 1;
   width: var(--data-panel-width, 0px);
   min-width: 0;
   overflow: visible;
   border-right: 1px solid var(--glass-panel-border);
-  background: var(--glass-panel-bg);
+  background: rgba(255, 255, 255, 0.22);
   box-shadow:
-    18px 0 52px rgba(25, 38, 36, 0.12),
+    18px 0 46px rgba(25, 38, 36, 0.08),
     inset -1px 0 0 rgba(255, 255, 255, 0.36);
   backdrop-filter: var(--glass-panel-filter);
   -webkit-backdrop-filter: var(--glass-panel-filter);
@@ -1476,18 +1515,21 @@
   position: absolute;
   box-sizing: border-box;
   z-index: 2;
-  inset: 0 0 0 auto;
+  inset:
+    var(--shell-board-top-reserve)
+    var(--shell-board-column-gutter)
+    var(--shell-board-column-gutter)
+    auto;
   width: var(--right-panel-width);
-  height: 100svh;
   min-width: 0;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   gap: 14px;
-  padding: 24px 24px 18px;
+  padding: 0 18px 18px;
   border-left: 1px solid var(--glass-panel-border);
-  background: var(--glass-panel-bg);
+  background: rgba(255, 255, 255, 0.22);
   box-shadow:
-    -18px 0 52px rgba(25, 38, 36, 0.12),
+    -18px 0 46px rgba(25, 38, 36, 0.08),
     inset 1px 0 0 rgba(255, 255, 255, 0.36);
   backdrop-filter: var(--glass-panel-filter);
   -webkit-backdrop-filter: var(--glass-panel-filter);
@@ -1573,10 +1615,13 @@
 
 .main-workspace {
   position: absolute;
-  inset: 0 var(--right-panel-width) 0 var(--data-panel-width);
-  width: calc(100vw - var(--data-panel-width) - var(--right-panel-width));
+  z-index: 1;
+  inset:
+    var(--shell-board-top-reserve)
+    calc(var(--right-panel-width) + var(--shell-board-column-gutter))
+    var(--shell-board-column-gutter)
+    calc(var(--data-panel-width) + var(--shell-board-column-gutter));
   min-width: 0;
-  height: 100svh;
   overflow: visible;
   background: transparent;
 }
@@ -1613,9 +1658,12 @@
   --map-chrome-top: max(24px, env(safe-area-inset-top));
 
   position: absolute;
-  inset: 0 var(--right-panel-width) 0 var(--data-panel-width);
-  min-height: 100svh;
-  width: calc(100vw - var(--data-panel-width) - var(--right-panel-width));
+  z-index: 1;
+  inset:
+    var(--shell-board-top-reserve)
+    calc(var(--right-panel-width) + var(--shell-board-column-gutter))
+    var(--shell-board-column-gutter)
+    calc(var(--data-panel-width) + var(--shell-board-column-gutter));
   overflow: hidden;
   color: #18211f;
   background: transparent;
@@ -1765,7 +1813,7 @@
 
 .ios-ledger-main {
   grid-column: 1;
-  height: calc(100svh - 114px);
+  height: 100%;
   overflow: visible;
   border: 0;
   background: transparent;
@@ -1780,7 +1828,7 @@
   gap: 14px;
   width: 100%;
   max-width: 320px;
-  height: calc(100svh - 114px);
+  height: 100%;
   align-self: start;
   margin-top: 0;
   padding: 14px 18px 16px;
@@ -3573,13 +3621,18 @@
 @media (max-width: 720px) {
   .app-shell {
     --secondary-rail-width: 0px;
+    --shell-board-inset-x: 10px;
+    --shell-board-inset-y: 10px;
+    --shell-board-top-reserve: 74px;
+    --shell-board-column-gutter: 0px;
+    --shell-board-radius: 22px;
   }
 
   .app-nav {
-    top: max(10px, env(safe-area-inset-top));
+    top: 10px;
     left: 50%;
-    max-width: calc(100vw - 20px);
-    width: calc(100vw - 20px);
+    max-width: calc(100% - 20px);
+    width: calc(100% - 20px);
     justify-content: space-between;
   }
 
@@ -3613,8 +3666,7 @@
   }
 
   .main-workspace {
-    inset: 0;
-    width: 100vw;
+    inset: var(--shell-board-top-reserve) 0 0;
   }
 
   .secondary-nav-rail {
@@ -3695,7 +3747,7 @@
   .ios-account-filter-panel {
     grid-column: 1;
     width: auto;
-    height: calc(100svh - 136px);
+    height: 100%;
     min-height: 0;
     display: grid;
     grid-template-rows: minmax(0, 1fr);
@@ -3936,14 +3988,14 @@
   }
 
   .ios-ledger-main {
-    height: calc(100svh - 110px);
+    height: 100%;
   }
 
   .ios-account-filter-panel {
     min-width: 0;
     width: 100%;
     max-width: 286px;
-    height: calc(100svh - 110px);
+    height: 100%;
     padding: 12px 14px 14px;
   }
 
@@ -3953,7 +4005,7 @@
   }
 
   .ios-account-movement-panel {
-    height: calc(100svh - 110px);
+    height: 100%;
   }
 
   .ios-account-filter-stack {
