@@ -360,7 +360,7 @@ describe('map chrome layout', () => {
     expect(accountPanelRule).not.toContain('rgba(255, 255, 255, 0.46)')
   })
 
-  it('lets the time header card shadow render past the rail edge without a hard clip', () => {
+  it('keeps the time overview unframed inside the single left glass rail', () => {
     const panelRule = cssRule('.time-context-panel')
     const scrollRule = cssRule('.time-context-panel__scroll')
     const cardRule = cssRule('.time-context-card')
@@ -372,10 +372,12 @@ describe('map chrome layout', () => {
     expect(scrollRule).toContain('margin-right: calc(0px - var(--time-panel-shadow-buffer))')
     expect(scrollRule).toContain('pointer-events: none')
     expect(cssRule('.time-context-panel__scroll > *')).toContain('pointer-events: auto')
-    expect(cardRule).toContain('box-shadow:')
-    expect(cardRule).toContain('rgba(13, 46, 39, 0.22)')
-    expect(cardRule).not.toContain('0 18px 42px rgba(13, 46, 39, 0.24)')
-    expect(cardRule).toContain('0 18px 34px -12px')
+    expect(cardRule).toContain('border-radius: 0')
+    expect(cardRule).toContain('background: transparent')
+    expect(cardRule).toContain('box-shadow: none')
+    expect(cardRule).toContain('backdrop-filter: none')
+    expect(cardRule).not.toContain('0 18px 34px')
+    expect(cardRule).not.toContain('rgba(255, 255, 255, 0.72)')
   })
 
   it('balances the accounting page with the shared rail and keeps ledger content unframed', () => {

@@ -76,6 +76,7 @@ describe('TimeContextPanel', () => {
     expect(editor).toBeInTheDocument()
     expect(within(editor).getByRole('button', { name: '取消' })).toBeInTheDocument()
     expect(within(editor).getByRole('button', { name: '应用时间' })).toBeInTheDocument()
+    expect(screen.queryByLabelText('本月足迹趋势')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: '回到本月' })).toHaveAttribute(
       'aria-expanded',
       'true',

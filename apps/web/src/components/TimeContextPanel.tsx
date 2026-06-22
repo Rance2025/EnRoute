@@ -246,7 +246,7 @@ export function TimeContextPanel({
             onChange={handleModeChange}
           />
 
-          {view === 'map' ? (
+          {view === 'map' && !isTimeEditorOpen ? (
             <section className="time-context-trend" aria-label={trendLabel}>
               <div className="time-context-trend__head">
                 <span>{trendLabel}</span>

@@ -123,6 +123,7 @@ describe('unified shell layout', () => {
     expect(within(mapMetricStrip).getByText('总距离')).toBeInTheDocument()
     expect(within(mapMetricStrip).getByText('日均距离')).toBeInTheDocument()
     expect(within(mapMetricStrip).getAllByText('0 m')).toHaveLength(2)
+    expect(within(mapMetricStrip).queryByText('日均足迹')).not.toBeInTheDocument()
     expect(within(mapMetricStrip).queryByText('当前足迹')).not.toBeInTheDocument()
     expect(within(mapMetricStrip).queryByText('全部足迹')).not.toBeInTheDocument()
     expect(within(mapMetricStrip).queryByText('活跃天数')).not.toBeInTheDocument()
