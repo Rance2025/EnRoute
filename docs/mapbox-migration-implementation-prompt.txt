@@ -1,0 +1,356 @@
+请你作为资深全栈地图工程师，基于当前 EnRoute 仓库完成一次“从高德地图彻底切换到 Mapbox”的实施。不要做概念验证式的短期接入，目标是从第一版开始就按百万/千万级足迹点和大量行政区划多边形的最高承载路径设计。
+
+项目背景
+
+- 仓库：D:\Coding\EnRoute
+- 前端：apps/web，Vite + React + TypeScript。
+- 后端：apps/api，FastAPI + SQLite。
+- 当前地图实现基于高德 JS API 2.0。
+- 当前足迹数据运行时已经不是直接读 CSV，而是导入 SQLite：data/footprints.sqlite。
+- 当前足迹导入入口：scripts/import_footprints.py。
+- 当前后端足迹核心：apps/api/src/enroute_api/footprints/store.py。
+- 当前前端地图核心：apps/web/src/components/AmapCanvas.tsx。
+- 当前高德配置/加载相关：apps/web/src/config/amap.ts、apps/web/src/services/amapLoader.ts、apps/web/src/types/amap.d.ts。
+- 当前足迹前端数据源/渲染层：apps/web/src/layers/footprintDataSource.ts、apps/web/src/layers/massFootprintLayer.ts。
+- 当前行政区划前端数据源/渲染层：apps/web/src/layers/adminRegionDataSource.ts、apps/web/src/layers/adminRegionLayer.ts、apps/web/src/layers/adminRegionTypes.ts。
+- 当前后端行政区划核心：apps/api/src/enroute_api/admin_regions/store.py、apps/api/src/enroute_api/admin_regions/geometry.py。
+- 当前 API 入口：apps/api/src/enroute_api/main.py。
+- 当前环境示例：.env.example。
+
+总目标
+
+把地图底座、足迹点渲染、行政区划多边形渲染从高德迁移到 Mapbox。迁移后不再兼容高德，不保留高德运行时分支，不再依赖 AMap 类型、AMap loader、AMap MassMarks、AMap Polygon 或高德样式 URL。最终地图页应使用 Mapbox 的球形地图能力，支持自定义主题，显示足迹点和行政区划，并保留现有页面布局框架和地图工具栏交互。
+
+必须满足的规模前提
+
+- 足迹点未来会达到百万到千万量级。
+- 行政区划多边形数量多、层级多、几何复杂，包含 Polygon、MultiPolygon 和 holes。
+- 不允许用 React DOM marker、单次全量 GeoJSON、全量 JSON 点列表、前端一次性聚合全部数据来承载主路径。
+- 允许视觉等价抽稀足迹点，但抽稀必须发生在服务端/瓦片生成层或 WebGL tile 渲染路径中，不能把海量原始点送进浏览器。
+- 行政区划即使交互上只显示部分层级，也必须按瓦片化、多 zoom 简化、clip、cache 的方式设计，不能把全国多层级复杂边界作为一个大 JSON 发给前端。
+- 浏览器侧永远只加载当前视口相关的有限瓦片，典型情况下是几十个 tile，而不是按数据集规模增长。
+- 每个 tile 的 payload 必须有预算：常规目标小于 250KB gzip，硬上限建议不超过 1MB gzip；超限时必须继续抽稀、聚合、简化或拆分。
+
+技术选型要求
+
+- 前端地图使用 Mapbox GL JS，也就是 mapbox-gl。
+- 使用 Mapbox access token，不要提交真实 token。
+- .env.local 中使用：
+  - VITE_MAPBOX_ACCESS_TOKEN=你的 Mapbox access token
+  - VITE_MAPBOX_STYLE_URL=可选的 Mapbox style URL
+- .env.example 中保留占位符，移除或废弃高德 key 相关变量。
+- Mapbox 地图初始化必须设置 globe projection：
+  - projection: "globe"
+- 地图主题优先使用可自定义 Mapbox style URL。默认可先提供一个无标签、低干扰、深色或浅色的本地 style 配置/Mapbox style URL，但必须让用户之后可以换主题。
+- 目前不考虑商业、公开发布和公开访问限制，只考虑本地个人使用；但实现上不要把 token 写死到源码中。
+
+坐标系要求
+
+- 迁移后系统内部统一使用 WGS84/EPSG:4326，经纬度字段语义为 longitude/latitude。
+- Mapbox 接收 GeoJSON/MVT feature 坐标应是 WGS84 经纬度语义；Mapbox 内部瓦片渲染和 WebMercator 投影由 Mapbox/瓦片规范处理。
+- CSV 里留存的通用坐标系字段优先作为权威坐标来源。导入脚本必须明确读取 WGS84/通用坐标列，并把数据库中的 canonical 坐标写为 WGS84。
+- 不要在运行时为了 Mapbox 显示做 GCJ-02 转换。
+- 如果历史库里已经混入 GCJ-02 或其他坐标系，只允许做一次性离线迁移脚本，并在数据库元数据中记录 source coordinate system、target coordinate system、migration version、import timestamp。不要在前端或请求时动态猜测坐标系。
+- 后端所有 bbox、tile、点、polygon API 都按 WGS84 lon/lat 输入输出。
+- 必须补测试验证坐标列选择、经纬度范围、bbox 包含关系、跨 180 度经线的处理，以及中国境内点不会再经过高德偏移链路。
+
+目标架构
+
+采用“Mapbox GL JS + 后端 MVT 瓦片服务 + 离线/按需瓦片缓存”的架构。
+
+核心原则：
+
+1. 前端只负责 Mapbox source/layer 配置、交互状态、样式表达式、可视参数和 feature-state。
+2. 足迹点和行政区划几何都通过 vector tile source 加载，格式为 MVT，Content-Type 使用 application/vnd.mapbox-vector-tile。
+3. 后端暴露 z/x/y tile API，并负责时间过滤、视口/瓦片边界过滤、聚合、抽稀、简化、裁剪和缓存。
+4. 静态或低频变化的行政区划几何尽量预生成 MBTiles 或本地 tile cache。
+5. 动态的足迹点因为有 timeRange 等筛选条件，可以按请求参数生成 tile，并用 datasetVersion + timeRange + z/x/y + style/filter 参数作为 cache key。
+6. 区域统计、解锁状态、当前选中状态等轻量数据尽量走单独 metadata/state API 或 Mapbox feature-state，不要为了状态变化重复下发复杂多边形几何。
+
+建议新增/调整的后端 API
+
+- GET /api/map/tiles/footprints/{z}/{x}/{y}.mvt
+  - query 参数至少支持 start、end、mode、datasetVersion。
+  - start/end 使用 timestamp seconds 或 ISO 时间，必须和现有时间选择器一致。
+  - mode 可支持 points、density、clusters、screenGrid 等，但默认必须是可承载千万级的聚合/抽稀模式。
+  - 返回 MVT，source-layer 名称建议为 footprints。
+
+- GET /api/map/tiles/admin-regions/{z}/{x}/{y}.mvt
+  - query 参数至少支持 levels 或 level。
+  - 返回 MVT，source-layer 名称建议为 admin_regions。
+  - geometry 必须按 zoom 简化、tile clip、保留 MultiPolygon holes。
+
+- GET /api/map/metadata
+  - 返回 datasetVersion、footprint row count、time extent、admin region levels、tile schema version。
+
+- GET /api/footprints/metrics
+  - 根据 timeRange 返回总数、总距离、日均距离、selected bounds 等轻量指标。
+  - 不要把指标强绑定在旧 /api/footprints/snapshot 的点列表响应里。
+
+- GET /api/admin-regions/state
+  - 根据当前 timeRange 或 datasetVersion 返回 region id 到 footprintCount、stayDuration、firstSeen 等状态映射。
+  - 前端通过 feature-state 或 join-by-id 的方式改变 fill/line 样式。
+
+旧 API 处理策略
+
+- 迁移完成后不要保留高德兼容逻辑。
+- /api/footprints/snapshot 和 /api/admin-regions 旧 JSON 接口可以在迁移过程中临时存在，但最终地图页不应依赖它们。
+- 前端旧的 footprintDataSource/adminRegionDataSource 可以被新 tile source 模块替代，不要为了兼容旧 AMap 路径保留双分支。
+
+足迹点瓦片策略
+
+足迹点不能按原始点全量送浏览器。按 zoom 分层处理：
+
+- 低 zoom：返回聚合后的网格点、density/heatmap cell 或 cluster centroid。feature 属性包含 count、firstTimestamp、lastTimestamp、代表点坐标、可选 distance/stay 指标。
+- 中 zoom：返回更细网格聚合或抽样代表点。每个 tile 必须限制 feature 数量，例如以屏幕像素网格或 tile extent 网格做上限控制。
+- 高 zoom：允许返回更多原始点或近似原始点，但仍必须按 tile 范围、timeRange 和上限限制，避免某个城市高密区域 tile 爆炸。
+- 每个 tile 生成必须先做 tile bbox 过滤，再做 timeRange 过滤，再聚合/抽稀。
+- 现阶段可以继续以 SQLite + RTree + 时间索引作为本地存储，但 tile 生成逻辑必须封装在独立模块里，未来可以替换为 DuckDB/Parquet/PostGIS，不影响前端。
+- SQLite 侧要保留或加强：
+  - timestamp_seconds 索引
+  - longitude/latitude/time 组合索引
+  - RTree 或等价空间索引
+  - dataset metadata/version 表
+- 对千万级数据，需要提供 synthetic benchmark 或导入压测脚本，证明 tile API 不会退化为全表扫描。
+
+行政区划瓦片策略
+
+行政区划是多边形主路径，也必须 MVT 化。
+
+- 数据库表仍可保留 admin_regions、admin_region_tree 这样的核心模型，但浏览器渲染不要再请求完整 JSON 几何。
+- 几何字段必须支持 Polygon、MultiPolygon、holes。
+- 预处理时按 level、zoom 生成简化几何。低 zoom 只显示省/国家级轮廓，中 zoom 显示市/区县，高 zoom 才显示街道/乡镇或更细层级。
+- 简化必须拓扑安全，不能明显破坏边界闭合、holes 或 MultiPolygon 结构。
+- tile 生成必须 clip 到 tile buffer，避免超大 polygon 重复传输。
+- 每个 feature 必须有稳定 id，例如 region_id，并在 Mapbox source 中使用 promoteId，方便 feature-state 和 hover/select。
+- 样式层建议拆分：
+  - admin-regions-fill
+  - admin-regions-line
+  - admin-regions-selected-line
+  - admin-regions-hover-fill
+- 区域解锁/足迹覆盖等状态通过 feature-state 或单独 state source 更新，不重复下发 geometry。
+
+前端 Mapbox 模块设计
+
+建议把高德相关模块改名并重构：
+
+- apps/web/src/components/AmapCanvas.tsx -> apps/web/src/components/MapboxCanvas.tsx 或 MapCanvas.tsx
+- apps/web/src/config/amap.ts -> apps/web/src/config/mapbox.ts
+- apps/web/src/services/amapLoader.ts 删除，改为直接 import mapbox-gl 或创建 apps/web/src/services/mapboxRuntime.ts
+- apps/web/src/types/amap.d.ts 删除
+- apps/web/src/layers/massFootprintLayer.ts 删除或替换为 apps/web/src/layers/mapboxFootprintLayers.ts
+- apps/web/src/layers/adminRegionLayer.ts 删除 AMap Polygon 实现，替换为 apps/web/src/layers/mapboxAdminRegionLayers.ts
+- apps/web/src/layers/footprintDataSource.ts 从 snapshot POST 改为 tile URL/source 配置和 metrics API。
+- apps/web/src/layers/adminRegionDataSource.ts 从 GeoJSON JSON 请求改为 tile source + state API。
+
+MapboxCanvas 需要负责：
+
+- 创建 mapboxgl.Map。
+- 设置 accessToken。
+- 设置 projection: "globe"。
+- 读取 style URL 或本地 style JSON。
+- 初始化 center、zoom、minZoom、maxZoom、bounds。
+- 关闭不需要的交互，如 pitch/rotation，如果当前产品仍要求 2D 操作手感；但 globe projection 本身仍可启用。
+- 添加 footprint vector source。
+- 添加 admin region vector source。
+- 添加 circle/heatmap/fill/line layers。
+- 监听 moveend、zoomend、styledata、sourcedata、error。
+- 保留现有工具栏能力：缩放、回正、定位、足迹样式调整、区域模式切换。
+- 在组件卸载时销毁 map，清理事件。
+
+Mapbox layer 建议
+
+足迹：
+
+- source id: enroute-footprints
+- type: vector
+- tiles: ["/api/map/tiles/footprints/{z}/{x}/{y}.mvt?start=...&end=...&datasetVersion=..."]
+- source-layer: footprints
+- 低 zoom 可用 heatmap layer 或 circle layer 表达 count。
+- 中高 zoom 用 circle layer，circle-radius/circle-opacity/circle-color 用 Mapbox expression 根据 count、zoom、用户样式配置计算。
+
+行政区划：
+
+- source id: enroute-admin-regions
+- type: vector
+- tiles: ["/api/map/tiles/admin-regions/{z}/{x}/{y}.mvt?levels=2,3,4,5&datasetVersion=..."]
+- source-layer: admin_regions
+- fill/line layer 使用 region_id promoteId。
+- filter 根据当前二级导航/层级开关控制显示。
+- 解锁状态、hover、selected 通过 feature-state 控制透明度、描边和高亮。
+
+Mapbox token 和样式要求
+
+- Mapbox 需要 access token。实现时不要假设用户已经给 token，但要有缺失 token 的清晰占位 UI。
+- .env.example 应更新为：
+  - VITE_MAPBOX_ACCESS_TOKEN=replace-with-your-mapbox-access-token
+  - VITE_MAPBOX_STYLE_URL=mapbox://styles/your-account/your-style-id
+  - VITE_FOOTPRINT_TILE_URL=/api/map/tiles/footprints/{z}/{x}/{y}.mvt
+  - VITE_ADMIN_REGION_TILE_URL=/api/map/tiles/admin-regions/{z}/{x}/{y}.mvt
+- 移除 VITE_AMAP_KEY、VITE_AMAP_SECURITY_CODE 的主路径依赖。
+- 如果默认 style 使用 Mapbox 官方底图，仍然可能出现 label/POI。因为当前产品不考虑各类标注显示，所以要么使用自定义 style 去掉 symbol layers，要么在 style load 后隐藏/移除 label、poi、road label、place label 等 symbol layers。
+- 主题要可扩展：不要把颜色散落在组件里，抽到 map style/theme 配置或 layer paint builder 中。
+
+数据管线要求
+
+足迹导入：
+
+- scripts/import_footprints.py 继续作为导入入口，但要明确 WGS84 canonical 坐标。
+- 检查 CSV 必备列：dataTime、longitude、latitude，以及当前保留的 locType、heading、accuracy、speed、distance、altitude 等字段。
+- 如果 CSV 有多个坐标列，优先读取通用/WGS84 坐标列，并在导入报告里输出 source/target coordinate system。
+- 写入 footprints 表时保留 timestamp_seconds、longitude、latitude、region_id、country_id、distance 等查询字段。
+- 导入结束后更新 metadata/datasetVersion。
+
+足迹 tile cache：
+
+- 新增后端 tile 服务模块，例如 apps/api/src/enroute_api/map_tiles/。
+- cache key 必须包含 datasetVersion、z/x/y、timeRange、mode、tile schema version。
+- cache 文件可放 data/map_tiles_cache/，不要提交。
+- 同一个 timeRange/viewport 反复移动时要命中缓存。
+- tile 生成必须支持 Abort/超时或至少避免长时间阻塞主 API。
+
+行政区划预处理：
+
+- scripts/prepare_admin_regions.py 可继续作为入口，但输出应支持 MBTiles 或 data/admin_region_tiles/。
+- 保留原始行政区划 GeoJSON/SQLite 几何，同时生成按 zoom 简化后的瓦片。
+- 输出 metadata：levels、feature counts、bounds、generation time、schema version。
+
+依赖建议
+
+前端：
+
+- mapbox-gl
+- 如 TypeScript 类型需要，使用 mapbox-gl 自带类型或对应声明。
+
+后端 Python：
+
+- 需要生成 MVT。可评估并选择稳定方案，例如 mapbox-vector-tile、morecantile、mercantile、shapely、pyproj。
+- 行政区划预处理可以用 shapely 做几何修复、简化、clip。
+- 如 SQLite 继续承载，需要确保 Python 依赖安装脚本 scripts/install_api.py 同步更新。
+- 如果引入 Tippecanoe 生成 MBTiles，需要写清 Windows 本地可用替代方案；不能让项目在 Windows 上无法准备数据。
+
+测试要求
+
+前端单元测试：
+
+- mapbox config：缺 token、style URL、tile URL 模板、默认主题。
+- MapboxCanvas：缺 token 占位 UI、创建 map 参数包含 projection: "globe"、source/layer 添加顺序正确、卸载 destroy。
+- layer builder：footprint/admin Mapbox source/layer 配置、source-layer、promoteId、paint expressions。
+- 样式控制：足迹点大小、透明度、颜色仍可转为 Mapbox paint expression。
+- 不再出现 AMap 相关 import、类型或 env 依赖。
+
+后端测试：
+
+- z/x/y 到 WGS84 bbox 的转换。
+- 足迹 tile API 返回 MVT content-type。
+- timeRange 过滤正确。
+- tile bbox 过滤正确。
+- 聚合/抽稀使 feature 数量有上限。
+- admin region tile 保留 Polygon/MultiPolygon/holes。
+- promote id/region_id 稳定。
+- datasetVersion/cache key 改变时缓存失效。
+- 坐标系导入测试：WGS84 输入不被 GCJ-02 转换。
+
+性能/容量测试：
+
+- 生成 synthetic 1,000,000 和 10,000,000 足迹点样本，至少验证 tile API 查询不会全量返回。
+- 对高密城市 tile 做 worst-case 测试，断言单 tile feature 数量和 payload 大小有上限。
+- 行政区划用多层级复杂 polygon 样本验证 tile payload、simplification 和 render source 数量。
+- 浏览器验证时打开地图只应产生当前视口附近 tile 请求，不应一次请求全量足迹/全量行政区划 JSON。
+
+浏览器验收：
+
+- npm run dev 或 python start.py start 后打开本地页面。
+- 地图能显示 Mapbox globe，不是空白 canvas。
+- 缺 token 时显示明确配置提示。
+- 有 token 时地图加载成功，控制台无 Mapbox 初始化错误。
+- 默认样式不显示 POI/业务标注；如显示，必须通过 style 或 layer visibility 处理掉。
+- 足迹点通过 vector tile source 渲染，不是 DOM marker，不是 AMap MassMarks。
+- 行政区划通过 vector tile source 渲染，不是 AMap Polygon，也不是一次性全量 GeoJSON。
+- 时间范围变化时更新 footprint tile source/cache key 或重新加载对应 tiles。
+- 区域模式切换时足迹/行政区划 layer 显隐正确。
+- 回正、缩放、定位、样式调整等现有工具栏能力仍可用。
+- 桌面和窄屏下现有左中右布局不被破坏。
+
+实施阶段建议
+
+阶段 1：依赖和配置
+
+- 安装 mapbox-gl。
+- 新增 apps/web/src/config/mapbox.ts 和测试。
+- 更新 .env.example。
+- 在 App 层把 amapConfig 概念替换为 mapboxConfig。
+- 保留测试先覆盖缺 token UI。
+
+阶段 2：MapboxCanvas 基础接入
+
+- 新建 MapboxCanvas。
+- 初始化 mapboxgl.Map，projection: "globe"。
+- 保留现有布局容器类名或迁移为更中性的 map-surface，避免破坏 shell 布局。
+- 接入现有 MapControls。
+- 删除 AMap loader 依赖。
+
+阶段 3：坐标系收口
+
+- 确认导入脚本只写 WGS84 canonical longitude/latitude。
+- 移除运行时 GCJ-02/高德坐标转换路径。
+- 更新坐标测试和导入测试。
+
+阶段 4：行政区划 MVT
+
+- 建立后端 map_tiles 模块。
+- 实现 admin region z/x/y tile API。
+- 前端用 Mapbox vector source + fill/line layers 渲染。
+- 通过 feature-state 或 state API 处理解锁/选中状态。
+
+阶段 5：足迹点 MVT
+
+- 实现 footprint z/x/y tile API。
+- 低/中/高 zoom 分层聚合与抽稀。
+- 前端替换 snapshot JSON 请求为 vector tile source。
+- metrics 从单独 API 获取。
+
+阶段 6：清理高德
+
+- 删除 @amap/amap-jsapi-loader 依赖。
+- 删除 apps/web/src/types/amap.d.ts。
+- 删除 services/amapLoader.ts、config/amap.ts 和对应测试。
+- 删除或重写所有 AMap/MassMarks/Polygon 相关测试。
+- 全仓搜索 AMap、amap、VITE_AMAP，确保没有主路径残留。
+
+阶段 7：性能和视觉验收
+
+- 跑 synthetic 数据容量测试。
+- 用浏览器实际查看 globe、足迹点、行政区划、时间切换、区域模式。
+- 保存本地截图到 output/ 或 ignored 文件，不提交截图。
+
+完成标准
+
+- master 分支最终不再依赖高德地图。
+- npm test、npm run lint、npm run build 通过。
+- 后端 API 测试覆盖 footprint/admin MVT tile。
+- 前端测试覆盖 Mapbox 初始化、source/layer 配置和缺 token UI。
+- .env.example 只要求 Mapbox token/style/tile URL，不再要求高德 key。
+- 浏览器验证 Mapbox globe 可见，地图非空白。
+- 足迹点和行政区划都从 vector tile source 渲染。
+- WGS84 是唯一 canonical 坐标系，前端和 API 不再做 GCJ-02 显示转换。
+- 百万/千万级数据路径依赖 tile、cache、聚合、抽稀和 payload 上限，不依赖全量 JSON。
+- 全仓搜索 AMap/amap/VITE_AMAP 没有运行时主路径残留；如果测试名或历史文档中保留，需要明确不是运行时代码。
+
+不要做的事
+
+- 不要保留高德/Mapbox 双地图兼容层。
+- 不要为了快速看到点而把所有足迹点 fetch 到浏览器。
+- 不要把全国行政区划全量 GeoJSON 放进前端 bundle 或一次性 API 响应。
+- 不要把 Mapbox token 写死在源码、测试快照或提交历史中。
+- 不要在前端运行时做坐标系猜测和批量转换。
+- 不要为了 UI 暂时可见而牺牲 tile 架构；这个迁移的核心价值就是球形地图和高容量渲染底座。
+
+交付物
+
+- 完整代码修改。
+- 必要的数据准备/迁移脚本。
+- 更新后的 .env.example。
+- 更新后的 README 或 docs，说明 Mapbox token、数据准备、tile 服务、坐标系。
+- 单元测试、后端测试、构建验证结果。
+- 浏览器验证记录，至少说明 globe、足迹点、行政区划、无标注主题、工具栏是否通过。
