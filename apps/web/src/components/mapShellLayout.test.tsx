@@ -348,9 +348,10 @@ describe('unified shell layout', () => {
 
     openTimeEditor()
 
-    const pickerHead = screen.getByLabelText('日历选择').querySelector('.time-mode-section-head')
+    const pickerHead = screen.getByLabelText('日历选择').querySelector('.time-calendar-head')
 
     expect(pickerHead).not.toBeNull()
+    expect(within(pickerHead as HTMLElement).getByText('按日选择')).toBeInTheDocument()
     expect(within(pickerHead as HTMLElement).queryByText('只在日模式显示日历')).not.toBeInTheDocument()
     expect(screen.queryByText('只在日模式显示日历')).not.toBeInTheDocument()
 

@@ -74,13 +74,43 @@ describe('TimeContextPanel', () => {
     const editor = screen.getByRole('region', { name: '时间编辑器' })
 
     expect(editor).toBeInTheDocument()
-    expect(within(editor).getByRole('button', { name: '取消' })).toBeInTheDocument()
-    expect(within(editor).getByRole('button', { name: '应用时间' })).toBeInTheDocument()
+    expect(within(editor).queryByText('选择范围')).not.toBeInTheDocument()
+    expect(within(editor).queryByRole('button', { name: '取消' })).not.toBeInTheDocument()
+    expect(within(editor).queryByRole('button', { name: '应用时间' })).not.toBeInTheDocument()
     expect(screen.queryByLabelText('本月足迹趋势')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: '回到本月' })).toHaveAttribute(
       'aria-expanded',
       'true',
     )
+  })
+
+  it('uses the day calendar header for either calendar mode controls or month selection context', () => {
+    render(
+      <TimeContextPanel
+        view="map"
+        selection={selectDay('2026-06-26')}
+        onSelectionChange={vi.fn()}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '修改时间' }))
+
+    const calendar = screen.getByLabelText('日历选择')
+
+    expect(within(calendar).getByText('按日选择')).toBeInTheDocument()
+    expect(within(calendar).getByRole('group', { name: '日历显示方式' })).toBeInTheDocument()
+
+    fireEvent.click(
+      within(calendar).getByRole('button', {
+        name: '切换到月份选择，当前2026年6月',
+      }),
+    )
+
+    expect(within(calendar).getByText('选择月份')).toBeInTheDocument()
+    expect(
+      within(calendar).queryByRole('group', { name: '日历显示方式' }),
+    ).not.toBeInTheDocument()
+    expect(within(calendar).getByLabelText('月份选择')).toBeInTheDocument()
   })
 
   it('renders calendar navigation arrows as centered icon components', () => {

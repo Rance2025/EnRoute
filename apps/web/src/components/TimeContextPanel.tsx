@@ -271,21 +271,6 @@ export function TimeContextPanel({
             role="region"
             aria-label="时间编辑器"
           >
-            <div className="time-panel-content__actions">
-              <span>选择范围</span>
-              <div>
-                <button type="button" onClick={() => setIsTimeEditorOpen(false)}>
-                  取消
-                </button>
-                <button
-                  type="button"
-                  className="is-primary"
-                  onClick={() => setIsTimeEditorOpen(false)}
-                >
-                  应用时间
-                </button>
-              </div>
-            </div>
             <div
               className="time-panel-content__stage"
               aria-label="时间范围内容"
@@ -907,17 +892,19 @@ function DayCalendarSection({
 
   return (
     <section className="time-calendar-shell" aria-label="日历选择">
-      <div className="time-mode-section-head">
-        <strong>按日选择</strong>
-        <SegmentedControl
-          ariaLabel="日历显示方式"
-          className="time-calendar-switch"
-          options={calendarModeOptions}
-          value={calendarMode}
-          onChange={(mode) => {
-            if (mode !== calendarMode) onCalendarModeChange(mode)
-          }}
-        />
+      <div className="time-calendar-head">
+        <strong>{isMonthPicker ? '选择月份' : '按日选择'}</strong>
+        {isMonthPicker ? null : (
+          <SegmentedControl
+            ariaLabel="日历显示方式"
+            className="time-calendar-switch"
+            options={calendarModeOptions}
+            value={calendarMode}
+            onChange={(mode) => {
+              if (mode !== calendarMode) onCalendarModeChange(mode)
+            }}
+          />
+        )}
       </div>
       <div className="time-calendar-bar">
         <button

@@ -660,52 +660,6 @@
   box-shadow: 0 6px 14px rgba(15, 106, 92, 0.2);
 }
 
-.time-panel-content__actions {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 10px;
-  padding: 10px 12px;
-  border: 1px solid rgba(23, 35, 31, 0.08);
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.62);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.66);
-}
-
-.time-panel-content__actions > span {
-  min-width: 0;
-  overflow: hidden;
-  color: rgba(23, 35, 31, 0.58);
-  font-size: 12px;
-  font-weight: 840;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.time-panel-content__actions div {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.time-panel-content__actions button {
-  min-height: 28px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: 999px;
-  color: rgba(23, 35, 31, 0.62);
-  background: rgba(23, 35, 31, 0.06);
-  font-size: 11px;
-  font-weight: 820;
-  cursor: pointer;
-}
-
-.time-panel-content__actions button.is-primary {
-  color: #f8fbfa;
-  background: #123f35;
-}
-
 .time-panel-content__stage {
   min-width: 0;
 }
@@ -790,6 +744,27 @@
   --time-calendar-grid-gap: 5px;
   --time-calendar-grid-top-gap: 10px;
   --time-calendar-active-week-index: 0;
+}
+
+.time-calendar-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  color: rgba(23, 35, 31, 0.54);
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.time-calendar-head strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #12201c;
+  font-size: 13px;
+  font-weight: 820;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .time-mode-section-head {

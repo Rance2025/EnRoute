@@ -465,7 +465,8 @@ describe('map chrome layout', () => {
     expect(cssRule('.time-context-metric-strip')).toContain('grid-template-columns: repeat(2, minmax(0, 1fr))')
     expect(cssRule('.time-context-metric-strip__label')).toContain('display: inline-flex')
     expect(cssRule('.time-context-trend__chart')).toContain('grid-template-columns: repeat(17, minmax(0, 1fr))')
-    expect(cssRule('.time-panel-content__actions')).toContain('grid-template-columns: minmax(0, 1fr) auto')
+    expect(timeContextPanelSource).not.toContain('className="time-panel-content__actions"')
+    expect(cssRule('.time-panel-content__actions')).toBe('')
     expect(cssRule('.time-context-accounting-summary')).toBe('')
     expect(cssRule('.time-context-summary')).toBe('')
     expect(cssRule('.ios-summary-strip')).toBe('')
@@ -591,6 +592,7 @@ describe('map chrome layout', () => {
 
   it('animates the day calendar by clipping and translating one stable month grid', () => {
     const shellRule = cssRule('.time-calendar-shell')
+    const headRule = cssRule('.time-calendar-head')
     const switchRule = cssRule('.time-calendar-switch')
     const bodyRule = cssRule('.time-calendar-body')
     const weekBodyRule = cssRule('.time-calendar-body--week')
@@ -604,6 +606,8 @@ describe('map chrome layout', () => {
     expect(shellRule).toContain('--time-calendar-day-height: 37px')
     expect(shellRule).toContain('--time-calendar-weekday-height: 17px')
     expect(shellRule).toContain('--time-calendar-grid-gap: 5px')
+    expect(headRule).toContain('grid-template-columns: minmax(0, 1fr) auto')
+    expect(headRule).toContain('margin-bottom: 10px')
     expect(switchRule).toContain('grid-template-columns: repeat(2, auto)')
     expect(bodyRule).not.toContain('overflow: hidden')
     expect(bodyRule).toContain(
