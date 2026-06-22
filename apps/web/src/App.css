@@ -368,7 +368,7 @@
 .time-context-panel {
   position: absolute;
   inset:
-    calc(var(--shell-board-top-reserve) + var(--shell-board-inset-y))
+    var(--shell-board-inset-y)
     auto
     var(--shell-board-inset-y)
     var(--shell-board-inset-x);
@@ -1493,7 +1493,7 @@
   box-sizing: border-box;
   z-index: 2;
   inset:
-    calc(var(--shell-board-top-reserve) + var(--shell-board-inset-y))
+    var(--shell-board-inset-y)
     var(--shell-board-inset-x)
     var(--shell-board-inset-y)
     auto;
@@ -1510,13 +1510,18 @@
 }
 
 .right-context-panel__stack {
+  --right-panel-shadow-buffer: 24px;
+
+  box-sizing: border-box;
   min-width: 0;
   min-height: 0;
+  width: calc(100% + (var(--right-panel-shadow-buffer) * 2));
+  margin: calc(0px - var(--right-panel-shadow-buffer));
   display: grid;
   align-content: start;
   gap: 14px;
-  overflow-x: hidden;
-  overflow-y: auto;
+  padding: var(--right-panel-shadow-buffer);
+  overflow: visible;
   scrollbar-width: thin;
   scrollbar-color: rgba(23, 62, 53, 0.2) transparent;
 }
@@ -1686,7 +1691,7 @@
   position: absolute;
   z-index: 1;
   inset:
-    calc(var(--shell-board-top-reserve) + var(--shell-board-inset-y))
+    var(--shell-board-inset-y)
     calc(var(--right-panel-width) + var(--shell-board-inset-x) + var(--shell-board-column-gutter))
     var(--shell-board-inset-y)
     calc(var(--data-panel-width) + var(--shell-board-inset-x) + var(--shell-board-column-gutter));
@@ -1729,7 +1734,7 @@
   position: absolute;
   z-index: 1;
   inset:
-    calc(var(--shell-board-top-reserve) + var(--shell-board-inset-y))
+    var(--shell-board-inset-y)
     calc(var(--right-panel-width) + var(--shell-board-inset-x) + var(--shell-board-column-gutter))
     var(--shell-board-inset-y)
     calc(var(--data-panel-width) + var(--shell-board-inset-x) + var(--shell-board-column-gutter));
@@ -3735,7 +3740,7 @@
 
   .main-workspace {
     inset:
-      calc(var(--shell-board-top-reserve) + var(--shell-board-inset-y))
+      var(--shell-board-inset-y)
       var(--shell-board-inset-x)
       var(--shell-board-inset-y);
   }
