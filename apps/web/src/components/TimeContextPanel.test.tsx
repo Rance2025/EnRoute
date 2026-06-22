@@ -44,6 +44,44 @@ function StatefulMapTimeContextPanel({
 }
 
 describe('TimeContextPanel', () => {
+  it('presents a compact travel dashboard and staged time editor actions', () => {
+    render(
+      <TimeContextPanel
+        view="map"
+        selection={selectMonth(2026, 6)}
+        secondaryContextLabel="区域"
+        metricItems={[
+          { label: '足迹总数', value: '56' },
+          { label: '国家/地区', value: '12' },
+          { label: '飞行里程', value: '48,260 km' },
+          { label: '旅行天数', value: '126 天' },
+        ]}
+        onSelectionChange={vi.fn()}
+      />,
+    )
+
+    const overview = screen.getByLabelText('时间概览')
+
+    expect(within(overview).getByText('区域时间范围')).toBeInTheDocument()
+    expect(within(overview).getByRole('heading', { name: '6月' })).toBeInTheDocument()
+    expect(within(overview).getByText('2026年6月')).toBeInTheDocument()
+    expect(screen.getByLabelText('本月足迹趋势')).toBeInTheDocument()
+    expect(screen.getByText('本月足迹趋势')).toBeInTheDocument()
+    expect(screen.getByText('48,260 km')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '修改时间' }))
+
+    const editor = screen.getByRole('region', { name: '时间编辑器' })
+
+    expect(editor).toBeInTheDocument()
+    expect(within(editor).getByRole('button', { name: '取消' })).toBeInTheDocument()
+    expect(within(editor).getByRole('button', { name: '应用时间' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '回到本月' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    )
+  })
+
   it('renders calendar navigation arrows as centered icon components', () => {
     const { container } = render(
       <TimeContextPanel

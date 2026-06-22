@@ -460,7 +460,10 @@ describe('map chrome layout', () => {
     expect(timeContextPanelSource).toContain('aria-label="全局范围指标"')
     expect(timeContextPanelSource).not.toContain('aria-label="记账概览卡片"')
     expect(timeContextPanelSource).not.toContain('aria-label="当前范围摘要"')
-    expect(cssRule('.time-context-metric-strip')).toContain('grid-template-columns: repeat(auto-fit, minmax(68px, 1fr))')
+    expect(cssRule('.time-context-metric-strip')).toContain('grid-template-columns: repeat(2, minmax(0, 1fr))')
+    expect(cssRule('.time-context-metric-strip__label')).toContain('display: inline-flex')
+    expect(cssRule('.time-context-trend__chart')).toContain('grid-template-columns: repeat(17, minmax(0, 1fr))')
+    expect(cssRule('.time-panel-content__actions')).toContain('grid-template-columns: minmax(0, 1fr) auto')
     expect(cssRule('.time-context-accounting-summary')).toBe('')
     expect(cssRule('.time-context-summary')).toBe('')
     expect(cssRule('.ios-summary-strip')).toBe('')
@@ -478,7 +481,7 @@ describe('map chrome layout', () => {
     const rule = cssRule('.time-context-card__today')
 
     expect(rule).toContain('min-height: 24px')
-    expect(rule).toContain('padding: 0 8px')
+    expect(rule).toContain('padding: 0 10px')
     expect(rule).toContain('font-size: 11px')
   })
 
@@ -873,14 +876,14 @@ describe('map chrome layout', () => {
     ).toContain('transition: none')
     expect(cssRule('.segmented-control__active-label')).toContain('place-items: center')
     expect(cssRule('.time-mode-tabs')).toContain(
-      '--segmented-label-color: rgba(255, 255, 255, 0.66)',
+      '--segmented-label-color: rgba(21, 48, 42, 0.66)',
     )
     expect(cssRule('.time-mode-tabs')).toContain('--segmented-gap: 3px')
     expect(cssRule('.time-mode-tabs')).toContain('padding: 3px')
     expect(cssRule('.time-mode-tabs button')).toContain('height: 24px')
     expect(cssRule('.time-mode-tabs')).not.toContain('--segmented-thumb-shadow')
     expect(cssRule('.transaction-type-switch')).not.toContain('--segmented-thumb-shadow')
-    expect(cssRule('.time-mode-tabs')).toContain('--segmented-active-label-color: #123f35')
+    expect(cssRule('.time-mode-tabs')).toContain('--segmented-active-label-color: #f8fbfa')
     expect(appSource).toContain("className={`app-nav__thumb${isTopNavigationDragging ? ' is-dragging' : ''}`}")
     expect(appSource).toContain('role="slider"')
     expect(appSource).toContain('onPointerDown={handleTopNavigationPointerDown}')
