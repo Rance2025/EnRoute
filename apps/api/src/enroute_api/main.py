@@ -3,7 +3,6 @@ from __future__ import annotations
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 
-from .admin_regions.store import format_admin_region, query_admin_regions
 from .config import Settings
 from .footprints.store import FootprintStore
 
@@ -46,21 +45,14 @@ def create_app(*, settings: Settings | None = None) -> FastAPI:
     ) -> dict[str, object]:
         if level not in {2, 3, 4, 5}:
             raise HTTPException(status_code=400, detail="level must be one of 2, 3, 4, or 5")
-        store.ensure_ready()
-        return {
-            "regions": [
-                format_admin_region(row)
-                for row in query_admin_regions(
-                    store.connection,
-                    level=level,
-                    west=west,
-                    south=south,
-                    east=east,
-                    north=north,
-                    zoom=zoom,
-                )
-            ],
-        }
+        return store.get_admin_regions(
+            level=level,
+            west=west,
+            south=south,
+            east=east,
+            north=north,
+            zoom=zoom,
+        )
 
     @app.exception_handler(Exception)
     async def json_exception_handler(_request: Request, error: Exception) -> JSONResponse:

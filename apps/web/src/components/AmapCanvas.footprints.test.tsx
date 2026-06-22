@@ -943,7 +943,7 @@ describe('AmapCanvas footprint layer wiring', () => {
     )
   })
 
-  it('loads administrative region polygons only after the region mode is enabled', async () => {
+  it('loads city administrative regions by default after the region mode is enabled', async () => {
     const {
       adminRegionLayerRecords,
       createAdminRegionLayer,
@@ -958,7 +958,7 @@ describe('AmapCanvas footprint layer wiring', () => {
 
     await waitFor(() => {
       expect(loadAdminRegions).toHaveBeenCalledWith(undefined, {
-        level: 4,
+        level: 3,
         zoom: 10,
         viewportBounds: { west: 120, south: 30, east: 122, north: 32 },
       }, expect.any(AbortSignal))
@@ -987,7 +987,7 @@ describe('AmapCanvas footprint layer wiring', () => {
 
     await waitFor(() => {
       expect(loadAdminRegions).toHaveBeenCalledWith(undefined, {
-        level: 4,
+        level: 3,
         zoom: 10,
         viewportBounds: { west: 120, south: 30, east: 122, north: 32 },
       }, expect.any(AbortSignal))
@@ -1009,6 +1009,63 @@ describe('AmapCanvas footprint layer wiring', () => {
     })
 
     await waitFor(() => expect(adminRegionRequests.length).toBeGreaterThanOrEqual(3))
+  })
+
+  it('keeps district selection at city detail until the viewport is zoomed in enough', async () => {
+    const {
+      adminRegionRequests,
+      loadAdminRegions,
+      rerenderWithAdminRegionUnlockEnabled,
+    } = await renderFootprintMassMarks({
+      mapOverrides: {
+        containerToLngLat: (point: { x: number; y: number }) => ({
+          getLng: () => (point.x === 0 ? 70 : 140),
+          getLat: () => (point.y === 0 ? 60 : 0),
+        }),
+        getZoom: () => 4,
+      },
+    })
+
+    rerenderWithAdminRegionUnlockEnabled(true)
+    await waitFor(() => expect(loadAdminRegions).toHaveBeenCalled())
+
+    fireEvent.click(screen.getByRole('button', { name: '区县' }))
+
+    await waitFor(() => expect(adminRegionRequests.length).toBeGreaterThanOrEqual(2))
+    expect(adminRegionRequests.at(-1)).toMatchObject({
+      level: 3,
+      zoom: 4,
+      viewportBounds: { west: 70, south: 0, east: 140, north: 60 },
+    })
+    expect(screen.getByRole('button', { name: '区县' })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('loads district administrative regions after the selected viewport is detailed enough', async () => {
+    const {
+      adminRegionRequests,
+      loadAdminRegions,
+      rerenderWithAdminRegionUnlockEnabled,
+    } = await renderFootprintMassMarks({
+      mapOverrides: {
+        containerToLngLat: (point: { x: number; y: number }) => ({
+          getLng: () => (point.x === 0 ? 120 : 122),
+          getLat: () => (point.y === 0 ? 32 : 30),
+        }),
+        getZoom: () => 8,
+      },
+    })
+
+    rerenderWithAdminRegionUnlockEnabled(true)
+    await waitFor(() => expect(loadAdminRegions).toHaveBeenCalled())
+
+    fireEvent.click(screen.getByRole('button', { name: '区县' }))
+
+    await waitFor(() => expect(adminRegionRequests.length).toBeGreaterThanOrEqual(2))
+    expect(adminRegionRequests.at(-1)).toMatchObject({
+      level: 4,
+      zoom: 8,
+      viewportBounds: { west: 120, south: 30, east: 122, north: 32 },
+    })
   })
 
   it('schedules pending footprint style changes onto the existing native layer', async () => {

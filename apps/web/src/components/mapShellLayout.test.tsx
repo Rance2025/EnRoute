@@ -198,7 +198,7 @@ describe('unified shell layout', () => {
       '区县',
       '街镇',
     ])
-    expect(within(levelGroup).getByRole('button', { name: '区县' })).toHaveAttribute(
+    expect(within(levelGroup).getByRole('button', { name: '市级' })).toHaveAttribute(
       'aria-pressed',
       'true',
     )

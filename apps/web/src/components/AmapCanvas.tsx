@@ -71,6 +71,10 @@ const ADMIN_REGION_LEVELS: Array<{ level: AdminRegionLevel; label: string }> = [
   { level: 4, label: '区县' },
   { level: 5, label: '街镇' },
 ]
+const DEFAULT_ADMIN_REGION_LEVEL: AdminRegionLevel = 3
+const DETAILED_ADMIN_REGION_MIN_ZOOM = 7
+const DETAILED_ADMIN_REGION_MAX_LONGITUDE_SPAN = 12
+const DETAILED_ADMIN_REGION_MAX_LATITUDE_SPAN = 10
 
 function AmapCanvasComponent({
   config,
@@ -95,7 +99,7 @@ function AmapCanvasComponent({
   const selectedFootprintBoundsRef = useRef<FootprintLngLatBounds | null>(null)
   const timeRangeRef = useRef(timeRange)
   const adminRegionUnlockEnabledRef = useRef(adminRegionUnlockEnabled)
-  const adminRegionLevelRef = useRef<AdminRegionLevel>(4)
+  const adminRegionLevelRef = useRef<AdminRegionLevel>(DEFAULT_ADMIN_REGION_LEVEL)
   const zoomClampTimersRef = useRef<number[]>([])
   const isWorldViewLockedRef = useRef(true)
   const [status, setStatus] = useState<MapStatus>(
@@ -106,7 +110,9 @@ function AmapCanvasComponent({
   const [footprintDebug, setFootprintDebug] = useState<FootprintRenderDebug>(
     EMPTY_FOOTPRINT_DEBUG,
   )
-  const [adminRegionLevel, setAdminRegionLevel] = useState<AdminRegionLevel>(4)
+  const [adminRegionLevel, setAdminRegionLevel] = useState<AdminRegionLevel>(
+    DEFAULT_ADMIN_REGION_LEVEL,
+  )
   const footprintStyleRef = useRef(footprintStyle)
 
   const themes = config.themes.length ? config.themes : AMAP_THEMES
@@ -188,10 +194,12 @@ function AmapCanvasComponent({
     adminRegionAbortControllerRef.current = abortController
     const layer = adminRegionLayerRef.current
 
+    const renderLevel = resolveRenderableAdminRegionLevel(level, viewport)
+
     loadAdminRegions(
       import.meta.env.VITE_ADMIN_REGION_API_URL,
       {
-        level,
+        level: renderLevel,
         zoom: viewport.zoom,
         viewportBounds: viewport.bounds,
       },
@@ -660,6 +668,38 @@ function calculateCurrentViewportSampleInput(map: AMap.Map, container: HTMLEleme
     },
     northWestWorldPixel: projectLngLat(northWestLngLat, zoom),
   }
+}
+
+function resolveRenderableAdminRegionLevel(
+  selectedLevel: AdminRegionLevel,
+  viewport: ReturnType<typeof calculateCurrentViewportSampleInput>,
+): AdminRegionLevel {
+  if (selectedLevel < 4) {
+    return selectedLevel
+  }
+
+  return isDetailedAdminRegionViewport(viewport) ? selectedLevel : DEFAULT_ADMIN_REGION_LEVEL
+}
+
+function isDetailedAdminRegionViewport({
+  bounds,
+  zoom,
+}: ReturnType<typeof calculateCurrentViewportSampleInput>) {
+  if (zoom < DETAILED_ADMIN_REGION_MIN_ZOOM) {
+    return false
+  }
+
+  const longitudeSpan = calculateLongitudeSpan(bounds.west, bounds.east)
+  const latitudeSpan = Math.abs(bounds.north - bounds.south)
+  return (
+    longitudeSpan <= DETAILED_ADMIN_REGION_MAX_LONGITUDE_SPAN &&
+    latitudeSpan <= DETAILED_ADMIN_REGION_MAX_LATITUDE_SPAN
+  )
+}
+
+function calculateLongitudeSpan(west: number, east: number) {
+  const span = east >= west ? east - west : 360 - west + east
+  return Math.min(Math.abs(span), 360)
 }
 
 function FootprintDebugPanel({ debug }: { debug: FootprintRenderDebug }) {
