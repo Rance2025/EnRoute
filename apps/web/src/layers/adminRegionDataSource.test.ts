@@ -80,7 +80,7 @@ describe('admin region data source', () => {
           {
             id: 'legacy-street',
             name: 'Street',
-            level: 5,
+            level: 6,
             geometry: {
               type: 'Polygon',
               coordinates: [
@@ -102,5 +102,42 @@ describe('admin region data source', () => {
       viewportBounds: { west: 120, south: 30, east: 122, north: 32 },
     }, new AbortController().signal))
       .rejects.toThrow('Invalid admin regions API response')
+  })
+
+  it('accepts Shanghai level 5 administrative region payloads', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        regions: [
+          {
+            id: 'osm:12867438',
+            name: 'Huamu',
+            level: 5,
+            geometry: {
+              type: 'Polygon',
+              coordinates: [
+                [[121, 31], [122, 31], [122, 32], [121, 32], [121, 31]],
+              ],
+            },
+            firstSeenTimestamp: null,
+            footprintCount: 0,
+            stayDurationSeconds: 0,
+            travelDistanceMeters: 0,
+          },
+        ],
+      }),
+    }))
+
+    await expect(loadAdminRegions('/api/admin-regions', {
+      level: 5,
+      zoom: 12,
+      viewportBounds: { west: 121, south: 31, east: 122, north: 32 },
+    }, new AbortController().signal))
+      .resolves.toEqual([
+        expect.objectContaining({
+          id: 'osm:12867438',
+          level: 5,
+        }),
+      ])
   })
 })

@@ -60,19 +60,20 @@ already GCJ-02.
 Optional administrative boundary data is read from
 `ADMIN_REGION_DATA_PATH=external/admin-regions.geojson`. Boundary files stay
 local unless their license permits committing them. The preferred China source
-is an AreaCity-derived province/city/district GeoJSON from
-`xiangyuecn/AreaCity-JsSpider-StatsGov`; its boundary coordinates are treated as
-GCJ-02 and are not converted again. The importer also accepts the project's
-normalized GeoJSON contract and OSM/Geofabrik-style administrative GeoJSON with
-`admin_level*` properties; OSM boundary coordinates are converted from WGS84 to
-GCJ-02 before storage so they align with imported footprints and AMap. When
+is `ok_geo.csv` from `xiangyuecn/AreaCity-JsSpider-StatsGov`, converted by
+`npm run prepare:admin-regions` into the project GeoJSON contract for China
+province/city/district levels. The same command can append
+`external/osm/shanghai-admin-level8.geojson` as the current Shanghai-only level
+5 source. AreaCity boundary coordinates are treated as GCJ-02 and are not
+converted again; appended OSM boundaries are marked as WGS84 and converted to
+GCJ-02 during import so they align with imported footprints and AMap. When
 boundaries exist, the import assigns each footprint to the finest matching
 `region_id`, writes `country_id=CHN` for local China matches, updates cached
 unlock counts and stay/travel totals across the available region chain, and
 serves the map overlay from `GET /api/admin-regions?level=N&west=...&south=...&east=...&north=...&zoom=...`.
 The frontend only requests `/api/admin-regions` after enabling the
-administrative-region unlock layer, and currently exposes province, city, and
-district/county levels.
+administrative-region unlock layer, and currently exposes China levels 2-5:
+province, city, district/county, and the Shanghai-only street/township layer.
 
 Future non-China imports should first run the conservative local China bbox
 check. Points that may be in China should try the local AreaCity region match

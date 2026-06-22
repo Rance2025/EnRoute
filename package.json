@@ -13,6 +13,7 @@
     "install:api": "python scripts/install_api.py",
     "build": "npm --workspace apps/web run build",
     "lint": "npm --workspace apps/web run lint",
+    "prepare:admin-regions": "python scripts/prepare_admin_regions.py",
     "prepare:footprints": "python scripts/import_footprints.py",
     "test": "npm run test:web && npm run test:api && npm run test:repo",
     "test:web": "node scripts/run-web-tests.mjs",
