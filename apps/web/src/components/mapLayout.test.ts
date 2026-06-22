@@ -62,45 +62,63 @@ describe('map chrome layout', () => {
     expect(cssRule('.brand-header h1')).toBe('')
   })
 
-  it('reserves a left shared time panel, a right secondary navigation rail, and keeps the map between them', () => {
+  it('reserves symmetric side panels and keeps the map workspace between them', () => {
     const appShellRule = cssRule('.app-shell')
     const panelRule = cssRule('.time-context-panel')
+    const rightPanelRule = cssRule('.right-context-panel')
     const secondaryRailRule = cssRule('.secondary-nav-rail')
+    const secondaryItemsRule = cssRule('.secondary-nav-rail__items')
     const workspaceRule = cssRule('.main-workspace')
     const stageRule = cssRule('.map-stage')
     const navRule = cssRule('.app-nav')
 
     expect(appShellRule).toContain('position: relative')
     expect(appShellRule).toContain('--page-board-bg:')
-    expect(appShellRule).toContain('--secondary-rail-width: 60px')
+    expect(appShellRule).toContain('--secondary-rail-width: 300px')
+    expect(appShellRule).toContain('--right-panel-width: var(--secondary-rail-width)')
+    expect(appShellRule).toContain('--glass-panel-bg:')
+    expect(appShellRule).toContain('--glass-panel-filter: blur(28px) saturate(1.28) brightness(1.04)')
     expect(appShellRule).toContain('rgba(238, 244, 242, 0.66)')
     expect(appShellRule).toContain('rgba(204, 214, 215, 0.78)')
     expect(appShellRule).toContain('#ccd6d7')
     expect(appShellRule).toContain('background: var(--page-board-bg)')
-    expect(navRule).toContain('left: calc((100vw - var(--secondary-rail-width)) / 2)')
-    expect(navRule).not.toContain('left: 50%')
+    expect(navRule).toContain('left: 50%')
+    expect(navRule).toContain('background: var(--glass-panel-bg)')
+    expect(navRule).toContain('box-shadow: var(--glass-panel-shadow)')
+    expect(navRule).toContain('backdrop-filter: var(--glass-panel-filter)')
     expect(appSource).toContain('aria-label="二级导航"')
     expect(appSource).toContain('className="secondary-nav-rail"')
+    expect(appSource).toContain('className="right-context-panel"')
+    expect(appSource).toContain('aria-label="右侧上下文栏"')
     expect(appSource).toContain('const secondaryNavItemsByView')
     expect(appSource).toContain("label: '足迹'")
     expect(appSource).toContain("label: '区域'")
     expect(appSource).toContain("label: '统计'")
     expect(appSource).toContain("label: '流水'")
-    expect(secondaryRailRule).toContain('position: absolute')
-    expect(secondaryRailRule).toContain('inset: 0 0 0 auto')
-    expect(secondaryRailRule).toContain('width: var(--secondary-rail-width)')
-    expect(secondaryRailRule).toContain('height: 100svh')
-    expect(secondaryRailRule).toContain('align-items: center')
-    expect(secondaryRailRule).toContain('justify-content: center')
-    expect(secondaryRailRule).toContain('padding: 0 8px')
-    expect(secondaryRailRule).toContain('box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.42)')
-    expect(secondaryRailRule).toContain('background: transparent')
-    expect(secondaryRailRule).toContain('pointer-events: auto')
+    expect(rightPanelRule).toContain('position: absolute')
+    expect(rightPanelRule).toContain('box-sizing: border-box')
+    expect(rightPanelRule).toContain('inset: 0 0 0 auto')
+    expect(rightPanelRule).toContain('width: var(--right-panel-width)')
+    expect(rightPanelRule).toContain('height: 100svh')
+    expect(rightPanelRule).toContain('grid-template-rows: auto minmax(0, 1fr)')
+    expect(rightPanelRule).toContain('padding: 24px 24px 18px')
+    expect(rightPanelRule).toContain('border-left: 1px solid var(--glass-panel-border)')
+    expect(rightPanelRule).toContain('background: var(--glass-panel-bg)')
+    expect(rightPanelRule).toContain('box-shadow:')
+    expect(rightPanelRule).toContain('backdrop-filter: var(--glass-panel-filter)')
+    expect(rightPanelRule).toContain('pointer-events: auto')
+    expect(secondaryRailRule).toContain('display: grid')
+    expect(secondaryItemsRule).toContain('display: flex')
+    expect(secondaryItemsRule).toContain('padding: 5px')
+    expect(secondaryItemsRule).toContain('border-radius: 999px')
+    expect(secondaryItemsRule).toContain('background: var(--glass-panel-bg)')
+    expect(secondaryItemsRule).toContain('backdrop-filter: var(--glass-panel-filter)')
     expect(panelRule).toContain('inset: 0 auto 0 0')
-    expect(panelRule).toContain('background: transparent')
-    expect(panelRule).not.toContain('backdrop-filter')
-    expect(panelRule).not.toContain('border-right')
-    expect(panelRule).toContain('box-shadow: none')
+    expect(panelRule).toContain('box-sizing: border-box')
+    expect(panelRule).toContain('background: var(--glass-panel-bg)')
+    expect(panelRule).toContain('backdrop-filter: var(--glass-panel-filter)')
+    expect(panelRule).toContain('border-right: 1px solid var(--glass-panel-border)')
+    expect(panelRule).toContain('box-shadow:')
     expect(panelRule).not.toContain('inset -1px 0 0 rgba(255, 255, 255, 0.42)')
     expect(panelRule).toContain('width: var(--data-panel-width, 0px)')
     expect(panelRule).toContain('overflow: visible')
@@ -109,18 +127,18 @@ describe('map chrome layout', () => {
       'display: none',
     )
     expect(workspaceRule).toContain(
-      'inset: 0 var(--secondary-rail-width) 0 var(--data-panel-width)',
+      'inset: 0 var(--right-panel-width) 0 var(--data-panel-width)',
     )
     expect(workspaceRule).toContain(
-      'width: calc(100vw - var(--data-panel-width) - var(--secondary-rail-width))',
+      'width: calc(100vw - var(--data-panel-width) - var(--right-panel-width))',
     )
     expect(workspaceRule).toContain('overflow: visible')
     expect(workspaceRule).toContain('background: transparent')
     expect(stageRule).toContain(
-      'inset: 0 var(--secondary-rail-width) 0 var(--data-panel-width)',
+      'inset: 0 var(--right-panel-width) 0 var(--data-panel-width)',
     )
     expect(stageRule).toContain(
-      'width: calc(100vw - var(--data-panel-width) - var(--secondary-rail-width))',
+      'width: calc(100vw - var(--data-panel-width) - var(--right-panel-width))',
     )
     expect(stageRule).toContain('background: transparent')
     expect(stageRule).not.toContain('var(--page-board-bg)')
@@ -128,9 +146,9 @@ describe('map chrome layout', () => {
     expect(cssRule('.app-shell--accounting .secondary-nav-rail')).toBe('')
     expect(cssRule('.app-shell--schedule .secondary-nav-rail')).toBe('')
     expect(cssRule('.secondary-nav-rail__button')).toContain('box-sizing: border-box')
-    expect(cssRule('.secondary-nav-rail__button')).toContain('width: 44px')
-    expect(cssRule('.secondary-nav-rail__button')).toContain('height: 44px')
-    expect(cssRule('.secondary-nav-rail__button')).toContain('aspect-ratio: 1 / 1')
+    expect(cssRule('.secondary-nav-rail__button')).toContain('flex: 1 1 0')
+    expect(cssRule('.secondary-nav-rail__button')).toContain('height: 34px')
+    expect(cssRule('.secondary-nav-rail__button')).toContain('grid-template-columns: auto minmax(0, 1fr)')
     expect(cssRule('.secondary-nav-rail__button.is-active')).toContain('background: #123f35')
     expect(cssRule('.amap-surface')).toContain('background: transparent')
     expect(cssRule('.amap-surface')).not.toContain('var(--page-board-bg)')
@@ -155,7 +173,7 @@ describe('map chrome layout', () => {
     expect(accountingRailScrollRule).toBe('')
     expect(cssRule('.time-context-panel')).toContain('width: var(--data-panel-width, 0px)')
     expect(cssRule('.main-workspace')).toContain(
-      'inset: 0 var(--secondary-rail-width) 0 var(--data-panel-width)',
+      'inset: 0 var(--right-panel-width) 0 var(--data-panel-width)',
     )
     expect(accountingPageRule).toContain(
       'grid-template-columns: minmax(0, 1fr)',
@@ -186,6 +204,7 @@ describe('map chrome layout', () => {
     expect(cssRuleIn(mobileMedia, '.accounting-page')).toContain('padding: 92px 10px 12px')
     expect(cssRuleIn(mobileMedia, '.accounting-page::before')).toBe('')
     expect(cssRuleIn(mobileMedia, '.app-shell--accounting .time-context-panel::after')).toBe('')
+    expect(cssRuleIn(mobileMedia, '.right-context-panel')).toContain('display: none')
     expect(
       cssRuleIn(
         mediaBlock(
@@ -1384,9 +1403,10 @@ describe('map chrome layout', () => {
     expect(popoverRule).toContain('width: 218px')
     expect(popoverRule).toContain('max-width: calc(100vw - 28px)')
     expect(popoverRule).toContain('border-radius: 10px')
-    expect(popoverRule).toContain('background: rgba(250, 252, 251, 0.74)')
-    expect(popoverRule).toContain('0 14px 40px rgba(31, 46, 42, 0.12)')
-    expect(popoverRule).toContain('backdrop-filter: blur(18px) saturate(1.1)')
+    expect(popoverRule).toContain('background: var(--glass-panel-bg)')
+    expect(popoverRule).toContain('box-shadow: var(--glass-panel-shadow)')
+    expect(popoverRule).toContain('backdrop-filter: var(--glass-panel-filter)')
+    expect(popoverRule).toContain('-webkit-backdrop-filter: var(--glass-panel-filter)')
     expect(rowRule).toContain('grid-template-columns:')
     const valueRule = cssRule('.footprint-style-popover__value')
     expect(valueRule).toContain('display: grid')
