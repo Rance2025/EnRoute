@@ -119,7 +119,7 @@ describe('map chrome layout', () => {
     expect(rightPanelRule).toContain('box-sizing: border-box')
     expect(rightPanelRule).toContain('var(--shell-board-inset-x)')
     expect(rightPanelRule).toContain('var(--shell-board-inset-y)')
-    expect(rightPanelRule).toContain('inset:\n    var(--shell-board-inset-y)')
+    expect(rightPanelRule).toMatch(/inset:\s*var\(--shell-board-inset-y\)/)
     expect(rightPanelRule).not.toContain('calc(var(--shell-board-top-reserve) + var(--shell-board-inset-y))')
     expect(rightPanelRule).not.toContain('inset: var(--shell-board-top-reserve) 0 0 auto')
     expect(rightPanelRule).toContain('width: var(--right-panel-width)')
@@ -159,7 +159,7 @@ describe('map chrome layout', () => {
     expect(secondaryItemsRule).toContain('backdrop-filter: var(--glass-panel-filter)')
     expect(panelRule).toContain('var(--shell-board-inset-x)')
     expect(panelRule).toContain('var(--shell-board-inset-y)')
-    expect(panelRule).toContain('inset:\n    var(--shell-board-inset-y)')
+    expect(panelRule).toMatch(/inset:\s*var\(--shell-board-inset-y\)/)
     expect(panelRule).not.toContain('calc(var(--shell-board-top-reserve) + var(--shell-board-inset-y))')
     expect(panelRule).not.toContain('inset: var(--shell-board-top-reserve) auto 0 0')
     expect(panelRule).toContain('box-sizing: border-box')
@@ -181,7 +181,7 @@ describe('map chrome layout', () => {
     expect(workspaceRule).toContain(
       'calc(var(--data-panel-width) + var(--shell-board-inset-x) + var(--shell-board-column-gutter))',
     )
-    expect(workspaceRule).toContain('inset:\n    var(--shell-board-inset-y)')
+    expect(workspaceRule).toMatch(/inset:\s*var\(--shell-board-inset-y\)/)
     expect(workspaceRule).not.toContain('calc(var(--shell-board-top-reserve) + var(--shell-board-inset-y))')
     expect(workspaceRule).not.toContain('100vw')
     expect(workspaceRule).not.toContain('height: 100svh')
@@ -193,7 +193,7 @@ describe('map chrome layout', () => {
     expect(stageRule).toContain(
       'calc(var(--data-panel-width) + var(--shell-board-inset-x) + var(--shell-board-column-gutter))',
     )
-    expect(stageRule).toContain('inset:\n    var(--shell-board-inset-y)')
+    expect(stageRule).toMatch(/inset:\s*var\(--shell-board-inset-y\)/)
     expect(stageRule).not.toContain('calc(var(--shell-board-top-reserve) + var(--shell-board-inset-y))')
     expect(stageRule).not.toContain('100vw')
     expect(stageRule).not.toContain('100svh')
