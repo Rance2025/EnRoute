@@ -280,6 +280,64 @@ describe('App', () => {
     expect(screen.getByRole('main')).toHaveClass('app-shell--accounting')
   })
 
+  it('smoothly interpolates the top navigation slider width across uneven buttons', () => {
+    const { container } = render(<App amapConfig={missingAmapConfig} />)
+
+    const mainNav = container.querySelector('.app-nav') as HTMLElement
+    const tabs = container.querySelector('.app-nav__tabs') as HTMLElement
+    const slider = within(mainNav).getByRole('slider')
+    const buttonRects = [
+      { left: 0, width: 132 },
+      { left: 134, width: 48 },
+      { left: 184, width: 48 },
+      { left: 234, width: 48 },
+    ]
+
+    Object.assign(tabs, {
+      setPointerCapture: () => undefined,
+      hasPointerCapture: () => true,
+      releasePointerCapture: () => undefined,
+    })
+
+    vi.spyOn(tabs, 'getBoundingClientRect').mockReturnValue({
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      right: 282,
+      bottom: 52,
+      width: 282,
+      height: 52,
+      toJSON: () => ({}),
+    } as DOMRect)
+    within(mainNav).getAllByRole('button').forEach((button, index) => {
+      const rect = buttonRects[index]
+
+      vi.spyOn(button, 'getBoundingClientRect').mockReturnValue({
+        x: rect.left,
+        y: 0,
+        top: 0,
+        left: rect.left,
+        right: rect.left + rect.width,
+        bottom: 52,
+        width: rect.width,
+        height: 52,
+        toJSON: () => ({}),
+      } as DOMRect)
+    })
+
+    fireEvent.pointerDown(slider, { clientX: 158, pointerId: 1 })
+    fireEvent.pointerMove(tabs, { clientX: 112, pointerId: 1 })
+
+    expect((tabs as HTMLElement).style.getPropertyValue('--top-nav-thumb-preview-left')).toBe(
+      '67px',
+    )
+    expect((tabs as HTMLElement).style.getPropertyValue('--top-nav-thumb-preview-width')).toBe(
+      '90px',
+    )
+    expect(within(mainNav).getAllByRole('button')[1]).toHaveAttribute('aria-pressed', 'true')
+  })
+
   it('opens a paged settings dialog from the time panel and toggles mixed navigation labels', () => {
     render(<App amapConfig={missingAmapConfig} />)
 
