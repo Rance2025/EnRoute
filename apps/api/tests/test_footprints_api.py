@@ -314,5 +314,6 @@ def create_test_client(*, data_path: Path, db_path: Path) -> TestClient:
         footprint_data_path=data_path,
         footprint_db_path=db_path,
         footprint_coordinate_system="gcj02",
+        admin_region_data_path=db_path.parent / "missing-admin-regions.geojson",
     )
     return TestClient(create_app(settings=settings))

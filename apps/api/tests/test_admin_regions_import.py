@@ -728,6 +728,7 @@ def test_serves_admin_regions_by_level_from_cached_region_rows(tmp_path: Path):
         footprint_data_path=data_path,
         footprint_db_path=db_path,
         footprint_coordinate_system="gcj02",
+        admin_region_data_path=tmp_path / "missing-admin-regions.geojson",
     )
     client = TestClient(create_app(settings=settings))
 
@@ -790,6 +791,7 @@ def test_serves_shanghai_level5_admin_regions_from_cached_rows(tmp_path: Path):
         footprint_data_path=data_path,
         footprint_db_path=db_path,
         footprint_coordinate_system="gcj02",
+        admin_region_data_path=tmp_path / "missing-admin-regions.geojson",
     )
     client = TestClient(create_app(settings=settings))
 
@@ -815,6 +817,7 @@ def test_rejects_unavailable_admin_region_levels(tmp_path: Path):
         footprint_data_path=data_path,
         footprint_db_path=tmp_path / "footprints.sqlite",
         footprint_coordinate_system="gcj02",
+        admin_region_data_path=tmp_path / "missing-admin-regions.geojson",
     )
     client = TestClient(create_app(settings=settings))
 
