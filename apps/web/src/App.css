@@ -5,16 +5,16 @@
   --shell-board-inset-y: clamp(16px, 1.55vw, 30px);
   --shell-board-top-reserve: 86px;
   --shell-board-column-gutter: clamp(18px, 1.2vw, 24px);
-  --shell-board-radius: 28px;
   --glass-panel-bg:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.72), rgba(242, 248, 247, 0.38));
-  --glass-panel-border: rgba(255, 255, 255, 0.64);
+    radial-gradient(circle at 18% 0%, rgba(255, 255, 255, 0.76), transparent 34%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.56), rgba(242, 248, 247, 0.24));
+  --glass-panel-border: rgba(255, 255, 255, 0.7);
   --glass-panel-shadow:
-    0 28px 82px rgba(25, 38, 36, 0.18),
-    0 9px 24px rgba(25, 38, 36, 0.09),
-    inset 0 1px 0 rgba(255, 255, 255, 0.82),
-    inset 0 -1px 0 rgba(21, 34, 32, 0.04);
-  --glass-panel-filter: blur(28px) saturate(1.28) brightness(1.04);
+    0 28px 78px rgba(25, 38, 36, 0.16),
+    0 8px 22px rgba(25, 38, 36, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.86),
+    inset 0 -1px 0 rgba(21, 34, 32, 0.035);
+  --glass-panel-filter: blur(30px) saturate(1.34) brightness(1.04);
   --page-board-bg:
     radial-gradient(circle at 46% 6%, rgba(255, 255, 255, 0.68), transparent 34%),
     linear-gradient(145deg, rgba(238, 244, 242, 0.66), rgba(204, 214, 215, 0.78)),
@@ -29,32 +29,10 @@
 
 .app-board {
   position: absolute;
-  inset: var(--shell-board-inset-y) var(--shell-board-inset-x);
-  overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.66);
-  border-radius: var(--shell-board-radius);
-  background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.42), rgba(232, 241, 240, 0.22)),
-    rgba(248, 251, 250, 0.26);
-  box-shadow:
-    0 34px 90px rgba(22, 35, 34, 0.22),
-    0 10px 30px rgba(22, 35, 34, 0.12),
-    inset 0 1px 0 rgba(255, 255, 255, 0.78),
-    inset 0 -1px 0 rgba(24, 39, 36, 0.08);
-  isolation: isolate;
-  backdrop-filter: var(--glass-panel-filter);
-  -webkit-backdrop-filter: var(--glass-panel-filter);
-}
-
-.app-board::before {
-  content: "";
-  position: absolute;
   inset: 0;
-  z-index: 0;
-  background:
-    linear-gradient(90deg, rgba(255, 255, 255, 0.46), transparent 18%, transparent 82%, rgba(255, 255, 255, 0.34)),
-    radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.52), transparent 34%);
-  pointer-events: none;
+  overflow: hidden;
+  background: transparent;
+  isolation: isolate;
 }
 
 .app-nav {
@@ -390,20 +368,19 @@
 .time-context-panel {
   position: absolute;
   inset:
-    var(--shell-board-top-reserve)
+    calc(var(--shell-board-top-reserve) + var(--shell-board-inset-y))
     auto
-    var(--shell-board-column-gutter)
-    var(--shell-board-column-gutter);
+    var(--shell-board-inset-y)
+    var(--shell-board-inset-x);
   box-sizing: border-box;
   z-index: 1;
   width: var(--data-panel-width, 0px);
   min-width: 0;
   overflow: visible;
-  border-right: 1px solid var(--glass-panel-border);
-  background: rgba(255, 255, 255, 0.22);
-  box-shadow:
-    18px 0 46px rgba(25, 38, 36, 0.08),
-    inset -1px 0 0 rgba(255, 255, 255, 0.36);
+  border: 1px solid var(--glass-panel-border);
+  border-radius: 28px;
+  background: var(--glass-panel-bg);
+  box-shadow: var(--glass-panel-shadow);
   backdrop-filter: var(--glass-panel-filter);
   -webkit-backdrop-filter: var(--glass-panel-filter);
   pointer-events: none;
@@ -1516,24 +1493,116 @@
   box-sizing: border-box;
   z-index: 2;
   inset:
-    var(--shell-board-top-reserve)
-    var(--shell-board-column-gutter)
-    var(--shell-board-column-gutter)
+    calc(var(--shell-board-top-reserve) + var(--shell-board-inset-y))
+    var(--shell-board-inset-x)
+    var(--shell-board-inset-y)
     auto;
   width: var(--right-panel-width);
   min-width: 0;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   gap: 14px;
-  padding: 0 18px 18px;
-  border-left: 1px solid var(--glass-panel-border);
-  background: rgba(255, 255, 255, 0.22);
-  box-shadow:
-    -18px 0 46px rgba(25, 38, 36, 0.08),
-    inset 1px 0 0 rgba(255, 255, 255, 0.36);
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  pointer-events: auto;
+}
+
+.right-context-panel__stack {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(23, 62, 53, 0.2) transparent;
+}
+
+.right-context-panel__glass {
+  min-width: 0;
+  padding: 16px;
+  overflow: hidden;
+  border: 1px solid var(--glass-panel-border);
+  border-radius: 24px;
+  color: #17231f;
+  background: var(--glass-panel-bg);
+  box-shadow: var(--glass-panel-shadow);
   backdrop-filter: var(--glass-panel-filter);
   -webkit-backdrop-filter: var(--glass-panel-filter);
-  pointer-events: auto;
+}
+
+.right-context-panel__summary {
+  display: grid;
+  gap: 8px;
+}
+
+.right-context-panel__eyebrow {
+  color: rgba(23, 35, 31, 0.52);
+  font-size: 10px;
+  font-weight: 860;
+  line-height: 1;
+}
+
+.right-context-panel__summary strong {
+  min-width: 0;
+  color: #17231f;
+  font-size: 18px;
+  font-weight: 860;
+  line-height: 1.05;
+}
+
+.right-context-panel__summary p {
+  margin: 0;
+  color: rgba(23, 35, 31, 0.6);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.45;
+}
+
+.right-context-panel__legend {
+  display: grid;
+  gap: 12px;
+}
+
+.right-context-panel__rows {
+  display: grid;
+  gap: 8px;
+}
+
+.right-context-panel__row {
+  min-width: 0;
+  min-height: 34px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 0 2px 8px;
+  border-bottom: 1px solid rgba(23, 35, 31, 0.08);
+}
+
+.right-context-panel__row:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.right-context-panel__row span {
+  min-width: 0;
+  overflow: hidden;
+  color: rgba(23, 35, 31, 0.52);
+  font-size: 11px;
+  font-weight: 760;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.right-context-panel__row strong {
+  color: #17231f;
+  font-size: 12px;
+  font-weight: 840;
+  white-space: nowrap;
 }
 
 .secondary-nav-rail {
@@ -1617,10 +1686,10 @@
   position: absolute;
   z-index: 1;
   inset:
-    var(--shell-board-top-reserve)
-    calc(var(--right-panel-width) + var(--shell-board-column-gutter))
-    var(--shell-board-column-gutter)
-    calc(var(--data-panel-width) + var(--shell-board-column-gutter));
+    calc(var(--shell-board-top-reserve) + var(--shell-board-inset-y))
+    calc(var(--right-panel-width) + var(--shell-board-inset-x) + var(--shell-board-column-gutter))
+    var(--shell-board-inset-y)
+    calc(var(--data-panel-width) + var(--shell-board-inset-x) + var(--shell-board-column-gutter));
   min-width: 0;
   overflow: visible;
   background: transparent;
@@ -1660,10 +1729,10 @@
   position: absolute;
   z-index: 1;
   inset:
-    var(--shell-board-top-reserve)
-    calc(var(--right-panel-width) + var(--shell-board-column-gutter))
-    var(--shell-board-column-gutter)
-    calc(var(--data-panel-width) + var(--shell-board-column-gutter));
+    calc(var(--shell-board-top-reserve) + var(--shell-board-inset-y))
+    calc(var(--right-panel-width) + var(--shell-board-inset-x) + var(--shell-board-column-gutter))
+    var(--shell-board-inset-y)
+    calc(var(--data-panel-width) + var(--shell-board-inset-x) + var(--shell-board-column-gutter));
   overflow: hidden;
   color: #18211f;
   background: transparent;
@@ -3625,7 +3694,6 @@
     --shell-board-inset-y: 10px;
     --shell-board-top-reserve: 74px;
     --shell-board-column-gutter: 0px;
-    --shell-board-radius: 22px;
   }
 
   .app-nav {
@@ -3666,7 +3734,10 @@
   }
 
   .main-workspace {
-    inset: var(--shell-board-top-reserve) 0 0;
+    inset:
+      calc(var(--shell-board-top-reserve) + var(--shell-board-inset-y))
+      var(--shell-board-inset-x)
+      var(--shell-board-inset-y);
   }
 
   .secondary-nav-rail {
