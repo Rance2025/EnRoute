@@ -79,6 +79,10 @@ type TopNavigationDragPosition = TopNavigationPointerPosition & {
   previewWidth: number
 }
 type SettingsPageId = 'general' | 'map' | 'accounting' | 'schedule'
+type RightContextRow = {
+  label: string
+  value: string
+}
 
 const topNavigationItems: TopNavigationItem[] = [
   { value: 'overview', label: '在途 EnRoute', kind: 'brand' },
@@ -554,6 +558,26 @@ function App({ amapConfig }: AppProps) {
             })}
           </div>
         </nav>
+        <div className="right-context-panel__stack" aria-label="右侧信息面板">
+          <section className="right-context-panel__glass right-context-panel__summary" aria-label="当前分区摘要">
+            <span className="right-context-panel__eyebrow">当前分区</span>
+            <strong>{activeSecondaryNavItem?.label ?? '概览'}</strong>
+            <p>{getRightContextSummary(view, activeSecondaryNavId)}</p>
+          </section>
+          <section className="right-context-panel__glass right-context-panel__legend" aria-label="图层与状态">
+            <span className="right-context-panel__eyebrow">
+              {view === 'map' ? '图层与状态' : '工作区状态'}
+            </span>
+            <div className="right-context-panel__rows">
+              {getRightContextRows(view, activeSecondaryNavId, footprintMetrics).map((row) => (
+                <div className="right-context-panel__row" key={row.label}>
+                  <span>{row.label}</span>
+                  <strong>{row.value}</strong>
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
       </aside>
 
       {view === 'map' ? (
@@ -697,6 +721,62 @@ function timeSelectionsAreEqual(
     currentSelection.anchorDate === nextSelection.anchorDate &&
     currentSelection.label === nextSelection.label
   )
+}
+
+function getRightContextSummary(view: AppView, activeSecondaryNavId: SecondaryNavId) {
+  if (view === 'map') {
+    if (activeSecondaryNavId === 'regions') return '行政区划查看与解锁状态集中在这里，地图中心保持最大可视面积。'
+    if (activeSecondaryNavId === 'stats') return '当前时间范围内的位置统计会以轻量信息面板承载。'
+
+    return '足迹点与轨迹作为主图层显示，右侧只保留辅助状态与筛选入口。'
+  }
+
+  if (view === 'accounting') {
+    if (activeSecondaryNavId === 'stats') return '记账统计占用中间工作区，右侧保留切换和状态摘要。'
+
+    return '流水录入与账户分析在中间展开，右侧不再形成整块大侧栏。'
+  }
+
+  return '该页面沿用同一套全局三栏壳层，后续内容可以按分区逐步接入。'
+}
+
+function getRightContextRows(
+  view: AppView,
+  activeSecondaryNavId: SecondaryNavId,
+  footprintMetrics: FootprintMetrics,
+): RightContextRow[] {
+  if (view === 'map') {
+    return [
+      {
+        label: activeSecondaryNavId === 'regions' ? '区划面' : '足迹点',
+        value: activeSecondaryNavId === 'regions'
+          ? '按需解锁'
+          : formatMetricCount(footprintMetrics.selectedCount),
+      },
+      {
+        label: '距离',
+        value: formatDistanceMeters(footprintMetrics.totalDistanceMeters),
+      },
+      {
+        label: '渲染方式',
+        value: activeSecondaryNavId === 'regions' ? '边界层' : 'WebGL 点层',
+      },
+    ]
+  }
+
+  if (view === 'accounting') {
+    return [
+      { label: '模式', value: activeSecondaryNavId === 'stats' ? '统计' : '流水' },
+      { label: '范围', value: '跟随左侧' },
+      { label: '状态', value: '本地原型' },
+    ]
+  }
+
+  return [
+    { label: '布局', value: '三栏固定' },
+    { label: '左栏', value: '时间范围' },
+    { label: '右栏', value: '辅助面板' },
+  ]
 }
 
 function TopNavigationButton({

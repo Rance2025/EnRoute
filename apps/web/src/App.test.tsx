@@ -201,6 +201,23 @@ describe('App', () => {
     )
   })
 
+  it('renders the right rail as separated glass panels on the shared base board', () => {
+    render(<App amapConfig={missingAmapConfig} />)
+
+    const rightPanel = screen.getByRole('complementary', { name: '右侧上下文栏' })
+    const secondaryNav = within(rightPanel).getByRole('navigation', { name: '二级导航' })
+    const stack = within(rightPanel).getByLabelText('右侧信息面板')
+    const summary = within(stack).getByLabelText('当前分区摘要')
+    const legend = within(stack).getByLabelText('图层与状态')
+
+    expect(Array.from(rightPanel.children)).toEqual([secondaryNav, stack])
+    expect(stack).toHaveClass('right-context-panel__stack')
+    expect(summary).toHaveClass('right-context-panel__glass', 'right-context-panel__summary')
+    expect(legend).toHaveClass('right-context-panel__glass', 'right-context-panel__legend')
+    expect(within(summary).getByText('足迹')).toBeInTheDocument()
+    expect(within(legend).getByText('WebGL 点层')).toBeInTheDocument()
+  })
+
   it('renders the global layout regions inside one inset app board', () => {
     render(<App amapConfig={missingAmapConfig} />)
 

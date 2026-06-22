@@ -66,6 +66,8 @@ describe('map chrome layout', () => {
     const appShellRule = cssRule('.app-shell')
     const panelRule = cssRule('.time-context-panel')
     const rightPanelRule = cssRule('.right-context-panel')
+    const rightPanelStackRule = cssRule('.right-context-panel__stack')
+    const rightPanelGlassRule = cssRule('.right-context-panel__glass')
     const secondaryRailRule = cssRule('.secondary-nav-rail')
     const secondaryItemsRule = cssRule('.secondary-nav-rail__items')
     const workspaceRule = cssRule('.main-workspace')
@@ -79,24 +81,24 @@ describe('map chrome layout', () => {
     expect(appShellRule).toContain('--shell-board-inset-y:')
     expect(appShellRule).toContain('--shell-board-top-reserve:')
     expect(appShellRule).toContain('--shell-board-column-gutter:')
-    expect(appShellRule).toContain('--shell-board-radius:')
     expect(appShellRule).toContain('--secondary-rail-width: 300px')
     expect(appShellRule).toContain('--right-panel-width: var(--secondary-rail-width)')
     expect(appShellRule).toContain('--glass-panel-bg:')
-    expect(appShellRule).toContain('--glass-panel-filter: blur(28px) saturate(1.28) brightness(1.04)')
+    expect(appShellRule).toContain('--glass-panel-filter: blur(30px) saturate(1.34) brightness(1.04)')
     expect(appShellRule).toContain('rgba(238, 244, 242, 0.66)')
     expect(appShellRule).toContain('rgba(204, 214, 215, 0.78)')
     expect(appShellRule).toContain('#ccd6d7')
     expect(appShellRule).toContain('background: var(--page-board-bg)')
     expect(appSource).toContain('className="app-board"')
     expect(boardRule).toContain('position: absolute')
-    expect(boardRule).toContain('inset: var(--shell-board-inset-y) var(--shell-board-inset-x)')
-    expect(boardRule).toContain('border-radius: var(--shell-board-radius)')
+    expect(boardRule).toContain('inset: 0')
+    expect(boardRule).not.toContain('border:')
+    expect(boardRule).not.toContain('border-radius:')
+    expect(boardRule).not.toContain('box-shadow:')
     expect(boardRule).toContain('overflow: hidden')
-    expect(boardRule).toContain('background:')
-    expect(boardRule).toContain('backdrop-filter: var(--glass-panel-filter)')
-    expect(boardRule).toContain('box-shadow:')
+    expect(boardRule).toContain('background: transparent')
     expect(boardRule).toContain('isolation: isolate')
+    expect(cssRule('.app-board::before')).not.toContain('linear-gradient(90deg')
     expect(navRule).toContain('position: absolute')
     expect(navRule).not.toContain('position: fixed')
     expect(navRule).toContain('top: 22px')
@@ -115,29 +117,43 @@ describe('map chrome layout', () => {
     expect(appSource).toContain("label: '流水'")
     expect(rightPanelRule).toContain('position: absolute')
     expect(rightPanelRule).toContain('box-sizing: border-box')
-    expect(rightPanelRule).toContain('var(--shell-board-column-gutter)')
+    expect(rightPanelRule).toContain('var(--shell-board-inset-x)')
+    expect(rightPanelRule).toContain('var(--shell-board-inset-y)')
     expect(rightPanelRule).not.toContain('inset: var(--shell-board-top-reserve) 0 0 auto')
     expect(rightPanelRule).toContain('width: var(--right-panel-width)')
     expect(rightPanelRule).not.toContain('height: 100svh')
     expect(rightPanelRule).toContain('grid-template-rows: auto minmax(0, 1fr)')
-    expect(rightPanelRule).toContain('padding: 0 18px 18px')
-    expect(rightPanelRule).toContain('border-left: 1px solid var(--glass-panel-border)')
-    expect(rightPanelRule).toContain('background: rgba(255, 255, 255, 0.22)')
-    expect(rightPanelRule).toContain('box-shadow:')
-    expect(rightPanelRule).toContain('backdrop-filter: var(--glass-panel-filter)')
+    expect(rightPanelRule).toContain('padding: 0')
+    expect(rightPanelRule).not.toContain('border-left:')
+    expect(rightPanelRule).toContain('background: transparent')
+    expect(rightPanelRule).toContain('box-shadow: none')
+    expect(rightPanelRule).toContain('backdrop-filter: none')
     expect(rightPanelRule).toContain('pointer-events: auto')
+    expect(appSource).toContain('className="right-context-panel__stack"')
+    expect(appSource).toContain('className="right-context-panel__glass right-context-panel__summary"')
+    expect(appSource).toContain('className="right-context-panel__glass right-context-panel__legend"')
+    expect(rightPanelStackRule).toContain('display: grid')
+    expect(rightPanelStackRule).toContain('gap: 14px')
+    expect(rightPanelStackRule).toContain('align-content: start')
+    expect(rightPanelGlassRule).toContain('border: 1px solid var(--glass-panel-border)')
+    expect(rightPanelGlassRule).toContain('border-radius: 24px')
+    expect(rightPanelGlassRule).toContain('background: var(--glass-panel-bg)')
+    expect(rightPanelGlassRule).toContain('box-shadow: var(--glass-panel-shadow)')
+    expect(rightPanelGlassRule).toContain('backdrop-filter: var(--glass-panel-filter)')
     expect(secondaryRailRule).toContain('display: grid')
     expect(secondaryItemsRule).toContain('display: flex')
     expect(secondaryItemsRule).toContain('padding: 5px')
     expect(secondaryItemsRule).toContain('border-radius: 999px')
     expect(secondaryItemsRule).toContain('background: var(--glass-panel-bg)')
     expect(secondaryItemsRule).toContain('backdrop-filter: var(--glass-panel-filter)')
-    expect(panelRule).toContain('var(--shell-board-column-gutter)')
+    expect(panelRule).toContain('var(--shell-board-inset-x)')
+    expect(panelRule).toContain('var(--shell-board-inset-y)')
     expect(panelRule).not.toContain('inset: var(--shell-board-top-reserve) auto 0 0')
     expect(panelRule).toContain('box-sizing: border-box')
-    expect(panelRule).toContain('background: rgba(255, 255, 255, 0.22)')
+    expect(panelRule).toContain('border: 1px solid var(--glass-panel-border)')
+    expect(panelRule).toContain('border-radius: 28px')
+    expect(panelRule).toContain('background: var(--glass-panel-bg)')
     expect(panelRule).toContain('backdrop-filter: var(--glass-panel-filter)')
-    expect(panelRule).toContain('border-right: 1px solid var(--glass-panel-border)')
     expect(panelRule).toContain('box-shadow:')
     expect(panelRule).not.toContain('inset -1px 0 0 rgba(255, 255, 255, 0.42)')
     expect(panelRule).toContain('width: var(--data-panel-width, 0px)')
@@ -147,20 +163,20 @@ describe('map chrome layout', () => {
       'display: none',
     )
     expect(workspaceRule).toContain(
-      'calc(var(--right-panel-width) + var(--shell-board-column-gutter))',
+      'calc(var(--right-panel-width) + var(--shell-board-inset-x) + var(--shell-board-column-gutter))',
     )
     expect(workspaceRule).toContain(
-      'calc(var(--data-panel-width) + var(--shell-board-column-gutter))',
+      'calc(var(--data-panel-width) + var(--shell-board-inset-x) + var(--shell-board-column-gutter))',
     )
     expect(workspaceRule).not.toContain('100vw')
     expect(workspaceRule).not.toContain('height: 100svh')
     expect(workspaceRule).toContain('overflow: visible')
     expect(workspaceRule).toContain('background: transparent')
     expect(stageRule).toContain(
-      'calc(var(--right-panel-width) + var(--shell-board-column-gutter))',
+      'calc(var(--right-panel-width) + var(--shell-board-inset-x) + var(--shell-board-column-gutter))',
     )
     expect(stageRule).toContain(
-      'calc(var(--data-panel-width) + var(--shell-board-column-gutter))',
+      'calc(var(--data-panel-width) + var(--shell-board-inset-x) + var(--shell-board-column-gutter))',
     )
     expect(stageRule).not.toContain('100vw')
     expect(stageRule).not.toContain('100svh')
@@ -197,10 +213,10 @@ describe('map chrome layout', () => {
     expect(accountingRailScrollRule).toBe('')
     expect(cssRule('.time-context-panel')).toContain('width: var(--data-panel-width, 0px)')
     expect(cssRule('.main-workspace')).toContain(
-      'calc(var(--right-panel-width) + var(--shell-board-column-gutter))',
+      'calc(var(--right-panel-width) + var(--shell-board-inset-x) + var(--shell-board-column-gutter))',
     )
     expect(cssRule('.main-workspace')).toContain(
-      'calc(var(--data-panel-width) + var(--shell-board-column-gutter))',
+      'calc(var(--data-panel-width) + var(--shell-board-inset-x) + var(--shell-board-column-gutter))',
     )
     expect(accountingPageRule).toContain(
       'grid-template-columns: minmax(0, 1fr)',
