@@ -1,5 +1,15 @@
 .app-shell {
-  --secondary-rail-width: 60px;
+  --secondary-rail-width: 300px;
+  --right-panel-width: var(--secondary-rail-width);
+  --glass-panel-bg:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.64), rgba(242, 248, 247, 0.36));
+  --glass-panel-border: rgba(255, 255, 255, 0.58);
+  --glass-panel-shadow:
+    0 26px 70px rgba(25, 38, 36, 0.16),
+    0 7px 20px rgba(25, 38, 36, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    inset 0 -1px 0 rgba(21, 34, 32, 0.04);
+  --glass-panel-filter: blur(28px) saturate(1.28) brightness(1.04);
   --page-board-bg:
     radial-gradient(circle at 46% 6%, rgba(255, 255, 255, 0.68), transparent 34%),
     linear-gradient(145deg, rgba(238, 244, 242, 0.66), rgba(204, 214, 215, 0.78)),
@@ -16,18 +26,17 @@
   position: fixed;
   z-index: 10;
   top: max(18px, env(safe-area-inset-top));
-  left: calc((100vw - var(--secondary-rail-width)) / 2);
+  left: 50%;
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 7px;
-  border: 1px solid rgba(23, 31, 29, 0.1);
+  border: 1px solid var(--glass-panel-border);
   border-radius: 999px;
-  background: rgba(250, 252, 251, 0.78);
-  box-shadow:
-    0 16px 44px rgba(31, 46, 42, 0.14),
-    inset 0 1px 0 rgba(255, 255, 255, 0.72);
-  backdrop-filter: blur(22px) saturate(1.12);
+  background: var(--glass-panel-bg);
+  box-shadow: var(--glass-panel-shadow);
+  backdrop-filter: var(--glass-panel-filter);
+  -webkit-backdrop-filter: var(--glass-panel-filter);
   transform: translateX(-50%);
 }
 
@@ -346,12 +355,18 @@
 .time-context-panel {
   position: absolute;
   inset: 0 auto 0 0;
+  box-sizing: border-box;
   z-index: 1;
   width: var(--data-panel-width, 0px);
   min-width: 0;
   overflow: visible;
-  background: transparent;
-  box-shadow: none;
+  border-right: 1px solid var(--glass-panel-border);
+  background: var(--glass-panel-bg);
+  box-shadow:
+    18px 0 52px rgba(25, 38, 36, 0.12),
+    inset -1px 0 0 rgba(255, 255, 255, 0.36);
+  backdrop-filter: var(--glass-panel-filter);
+  -webkit-backdrop-filter: var(--glass-panel-filter);
   pointer-events: none;
 }
 
@@ -600,15 +615,14 @@
   width: 44px;
   height: 44px;
   place-items: center;
-  border: 1px solid rgba(23, 35, 31, 0.08);
+  border: 1px solid var(--glass-panel-border);
   border-radius: 999px;
   color: rgba(23, 35, 31, 0.66);
-  background: rgba(250, 252, 251, 0.68);
-  box-shadow:
-    0 10px 26px rgba(31, 46, 42, 0.1),
-    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  background: var(--glass-panel-bg);
+  box-shadow: var(--glass-panel-shadow);
   cursor: pointer;
-  backdrop-filter: blur(14px) saturate(1.06);
+  backdrop-filter: var(--glass-panel-filter);
+  -webkit-backdrop-filter: var(--glass-panel-filter);
   transition:
     color 160ms ease,
     background 160ms ease,
@@ -1458,39 +1472,61 @@
   box-shadow: 0 8px 18px rgba(18, 63, 53, 0.18);
 }
 
-.secondary-nav-rail {
+.right-context-panel {
   position: absolute;
+  box-sizing: border-box;
   z-index: 2;
   inset: 0 0 0 auto;
-  width: var(--secondary-rail-width);
+  width: var(--right-panel-width);
   height: 100svh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 8px;
-  background: transparent;
-  box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.42);
+  min-width: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 14px;
+  padding: 24px 24px 18px;
+  border-left: 1px solid var(--glass-panel-border);
+  background: var(--glass-panel-bg);
+  box-shadow:
+    -18px 0 52px rgba(25, 38, 36, 0.12),
+    inset 1px 0 0 rgba(255, 255, 255, 0.36);
+  backdrop-filter: var(--glass-panel-filter);
+  -webkit-backdrop-filter: var(--glass-panel-filter);
   pointer-events: auto;
 }
 
-.secondary-nav-rail__items {
+.secondary-nav-rail {
   display: grid;
-  justify-items: center;
-  gap: 8px;
+  min-width: 0;
+}
+
+.secondary-nav-rail__items {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
   width: 100%;
+  padding: 5px;
+  border: 1px solid var(--glass-panel-border);
+  border-radius: 999px;
+  background: var(--glass-panel-bg);
+  box-shadow: var(--glass-panel-shadow);
+  backdrop-filter: var(--glass-panel-filter);
+  -webkit-backdrop-filter: var(--glass-panel-filter);
 }
 
 .secondary-nav-rail__button {
-  display: grid;
+  display: inline-grid;
+  grid-template-columns: auto minmax(0, 1fr);
   box-sizing: border-box;
-  width: 44px;
-  height: 44px;
-  aspect-ratio: 1 / 1;
-  place-items: center;
-  gap: 2px;
-  padding: 4px 0;
+  flex: 1 1 0;
+  min-width: 0;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 8px;
   border: 1px solid transparent;
-  border-radius: 14px;
+  border-radius: 999px;
   color: rgba(23, 35, 31, 0.62);
   background: transparent;
   cursor: pointer;
@@ -1503,9 +1539,11 @@
 
 .secondary-nav-rail__button span {
   color: inherit;
-  font-size: 10px;
+  overflow: hidden;
+  font-size: 11px;
   font-weight: 820;
   line-height: 1;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -1519,7 +1557,9 @@
   color: #f8fbfa;
   background: #123f35;
   border-color: transparent;
-  box-shadow: 0 12px 28px rgba(18, 63, 53, 0.18);
+  box-shadow:
+    0 10px 24px rgba(18, 63, 53, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
 }
 
 .secondary-nav-rail__button:active {
@@ -1533,8 +1573,8 @@
 
 .main-workspace {
   position: absolute;
-  inset: 0 var(--secondary-rail-width) 0 var(--data-panel-width);
-  width: calc(100vw - var(--data-panel-width) - var(--secondary-rail-width));
+  inset: 0 var(--right-panel-width) 0 var(--data-panel-width);
+  width: calc(100vw - var(--data-panel-width) - var(--right-panel-width));
   min-width: 0;
   height: 100svh;
   overflow: visible;
@@ -1573,9 +1613,9 @@
   --map-chrome-top: max(24px, env(safe-area-inset-top));
 
   position: absolute;
-  inset: 0 var(--secondary-rail-width) 0 var(--data-panel-width);
+  inset: 0 var(--right-panel-width) 0 var(--data-panel-width);
   min-height: 100svh;
-  width: calc(100vw - var(--data-panel-width) - var(--secondary-rail-width));
+  width: calc(100vw - var(--data-panel-width) - var(--right-panel-width));
   overflow: hidden;
   color: #18211f;
   background: transparent;
@@ -1680,13 +1720,12 @@
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  border: 1px solid rgba(23, 35, 31, 0.065);
+  border: 1px solid var(--glass-panel-border);
   border-radius: 26px;
-  background: var(--accounting-panel);
-  box-shadow:
-    0 24px 58px rgba(35, 52, 48, 0.09),
-    inset 0 1px 0 rgba(255, 255, 255, 0.72);
-  backdrop-filter: blur(22px) saturate(1.1);
+  background: var(--glass-panel-bg);
+  box-shadow: var(--glass-panel-shadow);
+  backdrop-filter: var(--glass-panel-filter);
+  -webkit-backdrop-filter: var(--glass-panel-filter);
 }
 
 .ios-panel-head {
@@ -3047,13 +3086,12 @@
   align-items: center;
   gap: 2px;
   padding: 7px 8px;
-  border: 1px solid rgba(23, 31, 29, 0.08);
+  border: 1px solid var(--glass-panel-border);
   border-radius: 999px;
-  background: rgba(250, 252, 251, 0.72);
-  box-shadow:
-    0 14px 40px rgba(31, 46, 42, 0.13),
-    inset 0 1px 0 rgba(255, 255, 255, 0.76);
-  backdrop-filter: blur(20px) saturate(1.12);
+  background: var(--glass-panel-bg);
+  box-shadow: var(--glass-panel-shadow);
+  backdrop-filter: var(--glass-panel-filter);
+  -webkit-backdrop-filter: var(--glass-panel-filter);
   overflow: visible;
 }
 
@@ -3066,14 +3104,13 @@
   width: 168px;
   gap: 6px;
   padding: 10px 12px;
-  border: 1px solid rgba(23, 31, 29, 0.08);
+  border: 1px solid var(--glass-panel-border);
   border-radius: 10px;
   color: #17211f;
-  background: rgba(250, 252, 251, 0.74);
-  box-shadow:
-    0 14px 40px rgba(31, 46, 42, 0.12),
-    inset 0 1px 0 rgba(255, 255, 255, 0.72);
-  backdrop-filter: blur(18px) saturate(1.1);
+  background: var(--glass-panel-bg);
+  box-shadow: var(--glass-panel-shadow);
+  backdrop-filter: var(--glass-panel-filter);
+  -webkit-backdrop-filter: var(--glass-panel-filter);
 }
 
 .footprint-debug-panel__row {
@@ -3140,14 +3177,13 @@
   width: 258px;
   max-width: calc(100vw - 28px);
   padding: 10px;
-  border: 1px solid rgba(23, 31, 29, 0.08);
+  border: 1px solid var(--glass-panel-border);
   border-radius: 10px;
   color: #17211f;
-  background: rgba(250, 252, 251, 0.74);
-  box-shadow:
-    0 14px 40px rgba(31, 46, 42, 0.12),
-    inset 0 1px 0 rgba(255, 255, 255, 0.72);
-  backdrop-filter: blur(18px) saturate(1.1);
+  background: var(--glass-panel-bg);
+  box-shadow: var(--glass-panel-shadow);
+  backdrop-filter: var(--glass-panel-filter);
+  -webkit-backdrop-filter: var(--glass-panel-filter);
 }
 
 .admin-region-unlock-levels {
@@ -3183,14 +3219,13 @@
   width: 218px;
   max-width: calc(100vw - 28px);
   padding: 12px;
-  border: 1px solid rgba(23, 31, 29, 0.08);
+  border: 1px solid var(--glass-panel-border);
   border-radius: 10px;
   color: #17211f;
-  background: rgba(250, 252, 251, 0.74);
-  box-shadow:
-    0 14px 40px rgba(31, 46, 42, 0.12),
-    inset 0 1px 0 rgba(255, 255, 255, 0.72);
-  backdrop-filter: blur(18px) saturate(1.1);
+  background: var(--glass-panel-bg);
+  box-shadow: var(--glass-panel-shadow);
+  backdrop-filter: var(--glass-panel-filter);
+  -webkit-backdrop-filter: var(--glass-panel-filter);
 }
 
 .footprint-style-popover__row {
@@ -3282,12 +3317,13 @@
   left: 50%;
   width: min(440px, calc(100vw - 40px));
   padding: 22px;
-  border: 1px solid rgba(23, 31, 29, 0.1);
+  border: 1px solid var(--glass-panel-border);
   border-radius: 18px;
   color: #18211f;
-  background: rgba(247, 249, 248, 0.88);
-  box-shadow: 0 24px 90px rgba(29, 43, 40, 0.14);
-  backdrop-filter: blur(20px);
+  background: var(--glass-panel-bg);
+  box-shadow: var(--glass-panel-shadow);
+  backdrop-filter: var(--glass-panel-filter);
+  -webkit-backdrop-filter: var(--glass-panel-filter);
   transform: translate(-50%, -50%);
 }
 
@@ -3331,6 +3367,7 @@
   background: rgba(19, 29, 27, 0.28);
   cursor: pointer;
   backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
 }
 
 .settings-dialog__panel {
@@ -3342,14 +3379,13 @@
   gap: 18px;
   padding: 18px;
   overflow: auto;
-  border: 1px solid rgba(23, 35, 31, 0.1);
+  border: 1px solid var(--glass-panel-border);
   border-radius: 18px;
   color: #17231f;
-  background: rgba(250, 252, 251, 0.92);
-  box-shadow:
-    0 28px 80px rgba(20, 32, 29, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.76);
-  backdrop-filter: blur(22px) saturate(1.1);
+  background: var(--glass-panel-bg);
+  box-shadow: var(--glass-panel-shadow);
+  backdrop-filter: var(--glass-panel-filter);
+  -webkit-backdrop-filter: var(--glass-panel-filter);
 }
 
 .settings-dialog__header {
@@ -3582,6 +3618,10 @@
   }
 
   .secondary-nav-rail {
+    display: none;
+  }
+
+  .right-context-panel {
     display: none;
   }
 

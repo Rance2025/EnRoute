@@ -417,6 +417,7 @@ function App({ amapConfig }: AppProps) {
     view,
     viewportSize,
   })
+  const rightPanelWidth = dataPanelWidth
   const secondaryNavItems = secondaryNavItemsByView[view]
   const activeSecondaryNavId = secondaryNavSelection[view]
   const activeSecondaryNavItem = secondaryNavItems.find((item) => item.id === activeSecondaryNavId)
@@ -434,7 +435,10 @@ function App({ amapConfig }: AppProps) {
   return (
     <main
       className={`app-shell app-shell--${view}${dataPanelWidth > 0 ? ' has-data-panel' : ''}`}
-      style={{ '--data-panel-width': `${dataPanelWidth}px` } as CSSProperties}
+      style={{
+        '--data-panel-width': `${dataPanelWidth}px`,
+        '--right-panel-width': `${rightPanelWidth}px`,
+      } as CSSProperties}
     >
       <nav
         className={`app-nav app-nav--${navigationStyle}`}
@@ -521,33 +525,35 @@ function App({ amapConfig }: AppProps) {
         }}
       />
 
-      <nav className="secondary-nav-rail" aria-label="二级导航">
-        <div className="secondary-nav-rail__items">
-          {secondaryNavItems.map((item) => {
-            const Icon = item.icon
-            const isActive = item.id === activeSecondaryNavId
+      <aside className="right-context-panel" aria-label="右侧上下文栏">
+        <nav className="secondary-nav-rail" aria-label="二级导航">
+          <div className="secondary-nav-rail__items">
+            {secondaryNavItems.map((item) => {
+              const Icon = item.icon
+              const isActive = item.id === activeSecondaryNavId
 
-            return (
-              <button
-                key={item.id}
-                type="button"
-                className={isActive ? 'secondary-nav-rail__button is-active' : 'secondary-nav-rail__button'}
-                aria-pressed={isActive}
-                title={item.label}
-                onClick={() =>
-                  setSecondaryNavSelection((current) => ({
-                    ...current,
-                    [view]: item.id,
-                  }))
-                }
-              >
-                <Icon size={18} strokeWidth={1.85} aria-hidden="true" />
-                <span>{item.label}</span>
-              </button>
-            )
-          })}
-        </div>
-      </nav>
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={isActive ? 'secondary-nav-rail__button is-active' : 'secondary-nav-rail__button'}
+                  aria-pressed={isActive}
+                  title={item.label}
+                  onClick={() =>
+                    setSecondaryNavSelection((current) => ({
+                      ...current,
+                      [view]: item.id,
+                    }))
+                  }
+                >
+                  <Icon size={16} strokeWidth={1.9} aria-hidden="true" />
+                  <span>{item.label}</span>
+                </button>
+              )
+            })}
+          </div>
+        </nav>
+      </aside>
 
       {view === 'map' ? (
         <AmapCanvas

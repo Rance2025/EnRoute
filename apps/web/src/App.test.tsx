@@ -42,77 +42,77 @@ beforeEach(() => {
 })
 
 describe('App', () => {
-  it('calculates the shared left time panel from the shell rhythm instead of the map world width', () => {
-    const availableMapShellWidth = calculateAvailableMapShellWidth({
-      viewportWidth: 2048,
-      secondaryRailWidth: SECONDARY_NAV_RAIL_WIDTH,
-    })
+  it('calculates symmetric side panels and leaves the map workspace between them', () => {
     const dataPanelWidth = calculateUnifiedDataPanelWidth({
       view: 'map',
-      viewportSize: { width: 2048, height: 1080 },
+      viewportSize: { width: 1366, height: 768 },
+    })
+    const availableMapShellWidth = calculateAvailableMapShellWidth({
+      viewportWidth: 1366,
+      rightPanelWidth: dataPanelWidth,
     })
 
-    expect(SECONDARY_NAV_RAIL_WIDTH).toBe(60)
-    expect(availableMapShellWidth).toBe(1988)
-    expect(dataPanelWidth).toBe(537)
+    expect(SECONDARY_NAV_RAIL_WIDTH).toBe(300)
+    expect(dataPanelWidth).toBe(301)
+    expect(availableMapShellWidth).toBe(1065)
     expect(
       calculateUnifiedMapPaneWidth({
-        viewportWidth: 2048,
-        secondaryRailWidth: SECONDARY_NAV_RAIL_WIDTH,
+        viewportWidth: 1366,
+        rightPanelWidth: dataPanelWidth,
         dataPanelWidth,
       }),
-    ).toBe(1451)
+    ).toBe(764)
 
     for (const view of ['map', 'accounting'] as const) {
       expect(
         calculateUnifiedDataPanelWidth({
           view,
-          viewportSize: { width: 2048, height: 1080 },
+          viewportSize: { width: 1366, height: 768 },
         }),
       ).toBe(dataPanelWidth)
     }
   })
 
   it('keeps the shared left panel wide on taller desktop windows', () => {
-    const availableMapShellWidth = calculateAvailableMapShellWidth({
-      viewportWidth: 2048,
-      secondaryRailWidth: SECONDARY_NAV_RAIL_WIDTH,
-    })
     const dataPanelWidth = calculateUnifiedDataPanelWidth({
       view: 'map',
       viewportSize: { width: 2048, height: 1155 },
     })
+    const availableMapShellWidth = calculateAvailableMapShellWidth({
+      viewportWidth: 2048,
+      rightPanelWidth: dataPanelWidth,
+    })
 
-    expect(availableMapShellWidth).toBe(1988)
-    expect(dataPanelWidth).toBe(537)
+    expect(availableMapShellWidth).toBe(1688)
+    expect(dataPanelWidth).toBe(360)
     expect(
       calculateUnifiedMapPaneWidth({
         viewportWidth: 2048,
-        secondaryRailWidth: SECONDARY_NAV_RAIL_WIDTH,
+        rightPanelWidth: dataPanelWidth,
         dataPanelWidth,
       }),
-    ).toBe(1451)
+    ).toBe(1328)
   })
 
   it('does not let the 360-degree map width squeeze the shared left panel on compact desktop', () => {
-    const availableMapShellWidth = calculateAvailableMapShellWidth({
-      viewportWidth: 1366,
-      secondaryRailWidth: SECONDARY_NAV_RAIL_WIDTH,
-    })
     const dataPanelWidth = calculateUnifiedDataPanelWidth({
       view: 'map',
       viewportSize: { width: 1366, height: 768 },
     })
+    const availableMapShellWidth = calculateAvailableMapShellWidth({
+      viewportWidth: 1366,
+      rightPanelWidth: dataPanelWidth,
+    })
 
-    expect(availableMapShellWidth).toBe(1306)
-    expect(dataPanelWidth).toBe(420)
+    expect(availableMapShellWidth).toBe(1065)
+    expect(dataPanelWidth).toBe(301)
     expect(
       calculateUnifiedMapPaneWidth({
         viewportWidth: 1366,
-        secondaryRailWidth: SECONDARY_NAV_RAIL_WIDTH,
+        rightPanelWidth: dataPanelWidth,
         dataPanelWidth,
       }),
-    ).toBe(886)
+    ).toBe(764)
   })
 
   it('keeps the shared panel and map pane deterministic across desktop windows', () => {
@@ -121,19 +121,19 @@ describe('App', () => {
       dataPanelWidth: number
       mapPaneWidth: number
     }> = [
-      { viewportSize: { width: 1280, height: 720 }, dataPanelWidth: 420, mapPaneWidth: 800 },
-      { viewportSize: { width: 1366, height: 768 }, dataPanelWidth: 420, mapPaneWidth: 886 },
-      { viewportSize: { width: 1440, height: 900 }, dataPanelWidth: 420, mapPaneWidth: 960 },
-      { viewportSize: { width: 1536, height: 864 }, dataPanelWidth: 420, mapPaneWidth: 1056 },
-      { viewportSize: { width: 1728, height: 972 }, dataPanelWidth: 450, mapPaneWidth: 1218 },
-      { viewportSize: { width: 1920, height: 1080 }, dataPanelWidth: 502, mapPaneWidth: 1358 },
-      { viewportSize: { width: 2048, height: 1155 }, dataPanelWidth: 537, mapPaneWidth: 1451 },
+      { viewportSize: { width: 1280, height: 720 }, dataPanelWidth: 300, mapPaneWidth: 680 },
+      { viewportSize: { width: 1366, height: 768 }, dataPanelWidth: 301, mapPaneWidth: 764 },
+      { viewportSize: { width: 1440, height: 900 }, dataPanelWidth: 317, mapPaneWidth: 806 },
+      { viewportSize: { width: 1536, height: 864 }, dataPanelWidth: 338, mapPaneWidth: 860 },
+      { viewportSize: { width: 1728, height: 972 }, dataPanelWidth: 360, mapPaneWidth: 1008 },
+      { viewportSize: { width: 1920, height: 1080 }, dataPanelWidth: 360, mapPaneWidth: 1200 },
+      { viewportSize: { width: 2048, height: 1155 }, dataPanelWidth: 360, mapPaneWidth: 1328 },
     ]
 
     for (const { viewportSize, dataPanelWidth, mapPaneWidth } of desktopWindows) {
       const availableMapShellWidth = calculateAvailableMapShellWidth({
         viewportWidth: viewportSize.width,
-        secondaryRailWidth: SECONDARY_NAV_RAIL_WIDTH,
+        rightPanelWidth: dataPanelWidth,
       })
       const actualDataPanelWidth = calculateUnifiedDataPanelWidth({
         view: 'accounting',
@@ -144,10 +144,13 @@ describe('App', () => {
       expect(
         calculateUnifiedMapPaneWidth({
           viewportWidth: viewportSize.width,
-          secondaryRailWidth: SECONDARY_NAV_RAIL_WIDTH,
+          rightPanelWidth: actualDataPanelWidth,
           dataPanelWidth: actualDataPanelWidth,
         }),
       ).toBe(mapPaneWidth)
+      expect(actualDataPanelWidth + mapPaneWidth + actualDataPanelWidth).toBe(
+        viewportSize.width,
+      )
       expect(actualDataPanelWidth + mapPaneWidth).toBe(availableMapShellWidth)
     }
   })
@@ -159,7 +162,7 @@ describe('App', () => {
           view,
           viewportSize: { width: 1366, height: 768 },
         }),
-      ).toBe(420)
+      ).toBe(301)
 
       expect(
         calculateUnifiedDataPanelWidth({
@@ -168,6 +171,34 @@ describe('App', () => {
         }),
       ).toBe(0)
     }
+  })
+
+  it('places secondary navigation at the top of the right context panel', () => {
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      value: 1366,
+    })
+    Object.defineProperty(window, 'innerHeight', {
+      configurable: true,
+      value: 768,
+    })
+
+    render(<App amapConfig={missingAmapConfig} />)
+
+    const shell = screen.getByRole('main')
+    const rightPanel = screen.getByRole('complementary', { name: '右侧上下文栏' })
+    const secondaryNav = within(rightPanel).getByRole('navigation', { name: '二级导航' })
+
+    expect(shell).toHaveStyle({
+      '--data-panel-width': '301px',
+      '--right-panel-width': '301px',
+    })
+    expect(rightPanel).toHaveClass('right-context-panel')
+    expect(secondaryNav.parentElement).toBe(rightPanel)
+    expect(within(secondaryNav).getByRole('button', { name: '足迹' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
   })
 
   it('shows a setup message when AMap credentials are missing', () => {
