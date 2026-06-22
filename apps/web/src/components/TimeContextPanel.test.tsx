@@ -84,6 +84,25 @@ describe('TimeContextPanel', () => {
     )
   })
 
+  it('marks the rail as editing so the time editor can use the available height', () => {
+    const { container } = render(
+      <TimeContextPanel
+        view="map"
+        selection={setCustomDateRange('2026-01-11', '2026-06-23')}
+        onSelectionChange={vi.fn()}
+      />,
+    )
+    const panel = container.querySelector('.time-context-panel')
+
+    expect(panel).not.toHaveClass('is-editing-time')
+    expect(container.querySelector('.time-context-panel__footer')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '修改时间' }))
+
+    expect(panel).toHaveClass('is-editing-time')
+    expect(container.querySelector('.time-panel-content')).toBeInTheDocument()
+  })
+
   it('uses the day calendar header for either calendar mode controls or month selection context', () => {
     render(
       <TimeContextPanel

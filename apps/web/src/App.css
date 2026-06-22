@@ -397,18 +397,20 @@
   width: calc(100% + var(--time-panel-shadow-buffer));
   margin-right: calc(0px - var(--time-panel-shadow-buffer));
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto 1fr;
   gap: 20px;
   padding: 24px calc(24px + var(--time-panel-shadow-buffer)) 18px 24px;
-  overflow-x: hidden;
-  overflow-y: auto;
+  overflow: visible;
   pointer-events: none;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(23, 62, 53, 0.22) transparent;
 }
 
 .time-context-panel__scroll > * {
   pointer-events: auto;
+}
+
+.time-context-panel.is-editing-time .time-context-panel__scroll {
+  grid-template-rows: auto auto;
+  gap: 14px;
 }
 
 .time-context-card {
@@ -497,12 +499,13 @@
 
 .time-mode-tabs {
   --segmented-gap: 3px;
-  --segmented-thumb-bg: #0f6a5c;
+  --segmented-thumb-bg: #123f35;
+  --segmented-padding: 2px;
   --segmented-label-color: rgba(21, 48, 42, 0.66);
   --segmented-active-label-color: #f8fbfa;
   --segmented-disabled-label-color: rgba(21, 48, 42, 0.34);
-  --segmented-label-font-size: 12px;
-  --segmented-label-font-weight: 860;
+  --segmented-label-font-size: 11px;
+  --segmented-label-font-weight: 780;
 
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -590,8 +593,8 @@
   border-radius: 999px;
   color: rgba(21, 48, 42, 0.66);
   background: transparent;
-  font-size: 12px;
-  font-weight: 860;
+  font-size: 11px;
+  font-weight: 780;
   cursor: pointer;
   transition:
     color 160ms ease,
@@ -601,7 +604,7 @@
 
 .time-mode-tabs button[aria-pressed='true'] {
   color: #f8fbfa;
-  background: #0f6a5c;
+  background: #123f35;
   box-shadow: 0 8px 18px rgba(0, 0, 0, 0.13);
 }
 
@@ -613,10 +616,8 @@
 
 .time-panel-content {
   min-height: 0;
-  overflow: auto;
-  padding-right: 2px;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(23, 62, 53, 0.18) transparent;
+  overflow: visible;
+  padding-right: 0;
 }
 
 .time-context-trend {
@@ -664,20 +665,15 @@
   min-width: 0;
 }
 
-.time-panel-content::-webkit-scrollbar {
-  width: 5px;
-}
-
-.time-panel-content::-webkit-scrollbar-thumb {
-  border-radius: 999px;
-  background: rgba(23, 62, 53, 0.18);
-}
-
 .time-context-panel__footer {
   align-self: end;
   justify-self: start;
   display: flex;
   align-items: center;
+}
+
+.time-context-panel.is-editing-time .time-context-panel__footer {
+  display: none;
 }
 
 .time-settings-button {
@@ -739,9 +735,9 @@
 }
 
 .time-calendar-shell {
-  --time-calendar-day-height: 37px;
+  --time-calendar-day-height: 34px;
   --time-calendar-weekday-height: 17px;
-  --time-calendar-grid-gap: 5px;
+  --time-calendar-grid-gap: 4px;
   --time-calendar-grid-top-gap: 10px;
   --time-calendar-active-week-index: 0;
 }
@@ -751,6 +747,7 @@
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
+  min-height: 26px;
   margin-bottom: 10px;
   color: rgba(23, 35, 31, 0.54);
   font-size: 12px;
@@ -890,27 +887,27 @@
 .time-calendar-switch {
   --segmented-thumb-bg: #123f35;
   --segmented-thumb-shadow: 0 7px 17px rgba(18, 63, 53, 0.18);
-  --segmented-padding: 3px;
-  --segmented-label-font-size: 11px;
-  --segmented-label-font-weight: 820;
+  --segmented-padding: 2px;
+  --segmented-label-font-size: 10px;
+  --segmented-label-font-weight: 760;
 
   display: inline-grid;
   grid-template-columns: repeat(2, auto);
   gap: 3px;
-  padding: 3px;
+  padding: 2px;
   border-radius: 999px;
   background: rgba(17, 40, 35, 0.075);
 }
 
 .time-calendar-switch button {
-  height: 26px;
-  padding: 0 9px;
+  height: 22px;
+  padding: 0 7px;
   border: 0;
   border-radius: 999px;
   color: rgba(17, 40, 35, 0.58);
   background: transparent;
-  font-size: 11px;
-  font-weight: 820;
+  font-size: 10px;
+  font-weight: 760;
 }
 
 .time-calendar-switch button[aria-pressed='true'] {
@@ -926,7 +923,7 @@
 
 .time-picker-grid {
   display: grid;
-  gap: 6px;
+  gap: 5px;
 }
 
 .time-calendar-body {
@@ -1062,7 +1059,7 @@
 }
 
 .time-picker-grid--months button {
-  min-height: 46px;
+  min-height: 34px;
 }
 
 .time-picker-grid--years {
@@ -1084,11 +1081,11 @@
   height: var(--time-calendar-day-height);
   min-height: var(--time-calendar-day-height);
   border: 1px solid transparent;
-  border-radius: 13px;
+  border-radius: 11px;
   color: rgba(17, 40, 35, 0.66);
   background: rgba(17, 40, 35, 0.055);
-  font-size: 12px;
-  font-weight: 820;
+  font-size: 11px;
+  font-weight: 760;
   cursor: pointer;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.58);
   transition:
@@ -1101,16 +1098,16 @@
 
 .time-picker-grid button {
   min-width: 0;
-  min-height: 37px;
+  min-height: 34px;
   display: grid;
   place-items: center;
   gap: 3px;
   border: 1px solid transparent;
-  border-radius: 13px;
+  border-radius: 11px;
   color: rgba(17, 40, 35, 0.66);
   background: rgba(17, 40, 35, 0.055);
-  font-size: 12px;
-  font-weight: 820;
+  font-size: 11px;
+  font-weight: 760;
   cursor: pointer;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.58);
   transition:
@@ -1122,11 +1119,12 @@
 }
 
 .time-picker-grid--weeks button {
-  min-height: 52px;
+  min-height: 46px;
   align-content: center;
 }
 
 .time-picker-grid--years button {
+  border-radius: 10px;
   font-size: 9px;
   font-weight: 720;
   white-space: nowrap;
@@ -1481,7 +1479,7 @@
 }
 
 .time-date-picker__grid--months button {
-  height: 34px;
+  height: 32px;
 }
 
 .time-date-picker__weekdays span {
@@ -1497,11 +1495,11 @@
   height: 30px;
   min-width: 0;
   border: 1px solid transparent;
-  border-radius: 11px;
+  border-radius: 10px;
   color: rgba(17, 40, 35, 0.66);
   background: rgba(17, 40, 35, 0.055);
-  font-size: 11px;
-  font-weight: 820;
+  font-size: 10px;
+  font-weight: 760;
   cursor: pointer;
   transition:
     border-color 150ms ease,

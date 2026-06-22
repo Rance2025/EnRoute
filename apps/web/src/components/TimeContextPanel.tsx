@@ -194,7 +194,10 @@ export function TimeContextPanel({
   }
 
   return (
-    <aside className="time-context-panel" aria-label="时间范围面板">
+    <aside
+      className={`time-context-panel${isTimeEditorOpen ? ' is-editing-time' : ''}`}
+      aria-label="时间范围面板"
+    >
       <div className="time-context-panel__scroll">
         <header className="time-context-card" aria-label="时间概览">
           <div className="time-context-card__top">
