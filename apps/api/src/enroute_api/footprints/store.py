@@ -3,17 +3,19 @@ from __future__ import annotations
 import json
 import math
 import sqlite3
-from threading import Lock
+from threading import RLock
 from pathlib import Path
 from typing import Any, Iterable, TypedDict
 
 from enroute_api.admin_regions.store import (
+    format_admin_region,
     RegionMatcher,
     create_region_matcher,
     get_region_chain,
     get_region_levels,
     initialize_admin_region_schema,
     load_admin_regions,
+    query_admin_regions,
 )
 
 from .country import country_id_for_region_match
@@ -50,7 +52,7 @@ class FootprintStore:
             None if admin_region_data_path is None else Path(admin_region_data_path)
         )
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._import_lock = Lock()
+        self._connection_lock = RLock()
         self.connection = sqlite3.connect(self.db_path, check_same_thread=False)
         self.connection.row_factory = sqlite3.Row
         initialize_schema(self.connection)
@@ -59,7 +61,7 @@ class FootprintStore:
         self.import_footprints()
 
     def import_footprints(self) -> FootprintImportResult:
-        with self._import_lock:
+        with self._connection_lock:
             return ensure_imported(
                 self.connection,
                 data_path=self.data_path,
@@ -68,15 +70,45 @@ class FootprintStore:
             )
 
     def get_snapshot(self, input_payload: dict[str, Any]) -> dict[str, Any]:
-        self.ensure_ready()
-        return query_snapshot(self.connection, normalize_snapshot_input(input_payload))
+        with self._connection_lock:
+            self.ensure_ready()
+            return query_snapshot(self.connection, normalize_snapshot_input(input_payload))
 
     def get_all_points(self) -> dict[str, list[dict[str, Any]]]:
-        self.ensure_ready()
-        return query_all_points(self.connection)
+        with self._connection_lock:
+            self.ensure_ready()
+            return query_all_points(self.connection)
+
+    def get_admin_regions(
+        self,
+        *,
+        level: int,
+        west: float | None = None,
+        south: float | None = None,
+        east: float | None = None,
+        north: float | None = None,
+        zoom: float | None = None,
+    ) -> dict[str, object]:
+        with self._connection_lock:
+            self.ensure_ready()
+            return {
+                "regions": [
+                    format_admin_region(row)
+                    for row in query_admin_regions(
+                        self.connection,
+                        level=level,
+                        west=west,
+                        south=south,
+                        east=east,
+                        north=north,
+                        zoom=zoom,
+                    )
+                ],
+            }
 
     def close(self) -> None:
-        self.connection.close()
+        with self._connection_lock:
+            self.connection.close()
 
 
 def initialize_schema(connection: sqlite3.Connection) -> None:

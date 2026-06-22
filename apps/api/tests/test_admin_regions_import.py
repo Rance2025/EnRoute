@@ -783,6 +783,54 @@ def test_serves_admin_regions_intersecting_viewport_bbox(tmp_path: Path):
     assert excluded.json()["regions"] == []
 
 
+def test_serves_admin_regions_while_snapshot_requests_share_store_connection(tmp_path: Path):
+    data_path = tmp_path / "points.csv"
+    data_path.write_text(CSV, encoding="utf-8")
+    db_path = tmp_path / "footprints.sqlite"
+    settings = Settings(
+        footprint_data_path=data_path,
+        footprint_db_path=db_path,
+        footprint_coordinate_system="gcj02",
+        admin_region_data_path=tmp_path / "missing-admin-regions.geojson",
+    )
+    client = TestClient(create_app(settings=settings))
+
+    connection = sqlite3.connect(db_path)
+    connection.row_factory = sqlite3.Row
+    try:
+        initialize_admin_region_schema(connection)
+        load_admin_regions(connection, REGION_COLLECTION)
+    finally:
+        connection.close()
+
+    snapshot_payload = {
+        "timeRange": {
+            "startTimestampSeconds": 0,
+            "endTimestampSeconds": 200,
+            "dayCount": 1,
+        },
+        "zoom": 10,
+        "cellSizePx": 8,
+        "viewportBounds": {"west": 0, "south": 0, "east": 80, "north": 80},
+        "viewportNorthWestWorldPixel": {"x": 0, "y": 0},
+    }
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        snapshot_future = executor.submit(
+            client.post,
+            "/api/footprints/snapshot",
+            json=snapshot_payload,
+        )
+        regions_future = executor.submit(client.get, "/api/admin-regions?level=4")
+
+        snapshot_response = snapshot_future.result(timeout=3)
+        regions_response = regions_future.result(timeout=3)
+
+    assert snapshot_response.status_code == 200
+    assert regions_response.status_code == 200
+    assert [region["id"] for region in regions_response.json()["regions"]] == ["pudong"]
+
+
 def test_serves_shanghai_level5_admin_regions_from_cached_rows(tmp_path: Path):
     data_path = tmp_path / "points.csv"
     data_path.write_text(CSV, encoding="utf-8")
