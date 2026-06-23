@@ -329,6 +329,8 @@ describe('map chrome layout', () => {
 
     expect(editingScrollRule).toContain('grid-template-rows: auto auto')
     expect(editingScrollRule).toContain('gap: 14px')
+    expect(editingScrollRule).toContain('align-content: start')
+    expect(editingScrollRule).toContain('align-items: start')
     expect(editingScrollRule).not.toContain('auto auto 0')
     expect(editingFooterRule).toContain('display: none')
   })
