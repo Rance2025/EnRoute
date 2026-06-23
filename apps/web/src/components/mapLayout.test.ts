@@ -673,6 +673,7 @@ describe('map chrome layout', () => {
     const pickerCellRule = cssRule('.time-picker-grid button')
     const monthCellRule = cssRule('.time-picker-grid--months button')
     const weekCellRule = cssRule('.time-picker-grid--weeks button')
+    const weekDetailRule = cssRule('.time-picker-grid--weeks button small')
     const yearCellRule = cssRule('.time-picker-grid--years button')
     const customDateCellRule = cssRule('.time-date-picker__grid button')
     const customMonthCellRule = cssRule('.time-date-picker__grid--months button')
@@ -690,7 +691,8 @@ describe('map chrome layout', () => {
     expect(appCss.indexOf('.time-picker-grid--months button')).toBeGreaterThan(
       appCss.indexOf('.time-picker-grid button {'),
     )
-    expect(weekCellRule).toContain('min-height: 46px')
+    expect(weekCellRule).toContain('min-height: 42px')
+    expect(weekDetailRule).toContain('font-size: 8px')
     expect(yearCellRule).toContain('border-radius: 10px')
     expect(customDateCellRule).toContain('height: 26px')
     expect(customDateCellRule).toContain('border-radius: 10px')
@@ -729,7 +731,7 @@ describe('map chrome layout', () => {
       'grid-template-columns: repeat(7, minmax(0, 1fr))',
     )
     expect(cssRule('.time-picker-grid--weeks')).toContain(
-      'grid-template-columns: repeat(2, minmax(0, 1fr))',
+      'grid-template-columns: repeat(3, minmax(0, 1fr))',
     )
     expect(cssRule('.time-picker-grid--months')).toContain(
       'grid-template-columns: repeat(6, minmax(0, 1fr))',
@@ -746,7 +748,7 @@ describe('map chrome layout', () => {
     const weekDetailSeparatorRule = lastCssRule(".time-picker-grid--weeks button small span[aria-hidden='true']")
 
     expect(detailRule).toContain('white-space: nowrap')
-    expect(weekDetailRule).toBe('')
+    expect(weekDetailRule).toContain('font-size: 8px')
     expect(weekDetailLineRule).toContain('white-space: nowrap')
     expect(weekDetailLineRule).toContain('text-overflow: ellipsis')
     expect(weekDetailSeparatorRule).toBe('')
