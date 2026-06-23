@@ -1,6 +1,7 @@
 import sqlite3
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from enroute_api.config import Settings
@@ -30,6 +31,33 @@ def test_defaults_to_data_directory_for_footprint_database():
     settings = Settings()
 
     assert settings.footprint_db_path == Path("data/footprints.sqlite")
+
+
+def test_import_stores_wgs84_coordinates_without_gcj02_shift(tmp_path: Path):
+    data_path = tmp_path / "footprints.csv"
+    data_path.write_text(
+        "\n".join(
+            [
+                "dataTime,locType,longitude,latitude,heading,accuracy,speed,distance,isBackForeground,stepType,altitude",
+                "1768144456,0,121.473700,31.230400,0,5,0,0,0,0,3",
+            ],
+        ),
+        encoding="utf-8",
+    )
+    db_path = tmp_path / "footprints.sqlite"
+    client = create_test_client(
+        data_path=data_path,
+        db_path=db_path,
+    )
+
+    response = client.get("/api/footprints")
+
+    assert response.status_code == 200
+    with sqlite3.connect(db_path) as connection:
+        row = connection.execute(
+            "SELECT longitude, latitude FROM footprints WHERE timestamp_seconds IS NOT NULL",
+        ).fetchone()
+    assert row == pytest.approx((121.473700, 31.230400))
 
 
 def test_loads_footprint_points_from_configured_csv_path(tmp_path: Path):
@@ -309,11 +337,16 @@ def write_csv(tmp_path: Path, content: str) -> Path:
     return data_path
 
 
-def create_test_client(*, data_path: Path, db_path: Path) -> TestClient:
+def create_test_client(
+    *,
+    data_path: Path,
+    db_path: Path,
+    coordinate_system: str = "wgs84",
+) -> TestClient:
     settings = Settings(
         footprint_data_path=data_path,
         footprint_db_path=db_path,
-        footprint_coordinate_system="gcj02",
+        footprint_coordinate_system=coordinate_system,
         admin_region_data_path=db_path.parent / "missing-admin-regions.geojson",
     )
     return TestClient(create_app(settings=settings))

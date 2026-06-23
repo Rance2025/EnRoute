@@ -16,7 +16,7 @@ from enroute_api.admin_regions.store import (
 )
 from enroute_api.config import Settings
 from enroute_api.main import create_app
-from enroute_api.footprints.coordinates import transform_footprint_coordinate
+from enroute_api.footprints.coordinates import transform_wgs84_to_gcj02_coordinate
 from enroute_api.footprints.country import classify_country_lookup, country_id_for_region_match
 from enroute_api.footprints.store import FootprintStore, ensure_imported, initialize_schema
 
@@ -695,10 +695,9 @@ def test_store_normalizes_osm_level8_boundary_file_and_converts_geometry_to_gcj0
     finally:
         store.close()
 
-    expected_first_position = transform_footprint_coordinate(
+    expected_first_position = transform_wgs84_to_gcj02_coordinate(
         longitude=121.399,
         latitude=31.199,
-        source_coordinate_system="wgs84",
     )
     stored_geometry = json.loads(region["geometry"])
 
@@ -718,6 +717,69 @@ def test_store_normalizes_osm_level8_boundary_file_and_converts_geometry_to_gcj0
         "footprint_count": 1,
     }
     assert stored_geometry["coordinates"][0][0] == list(expected_first_position)
+
+
+def test_wgs84_raw_footprint_storage_keeps_region_matching_working(tmp_path: Path):
+    data_path = tmp_path / "points.csv"
+    data_path.write_text(
+        "\n".join(
+            [
+                "dataTime,locType,longitude,latitude,heading,accuracy,speed,distance,isBackForeground,stepType,altitude",
+                "100,1,121.4,31.2,0,5,-1,0,1,0,3",
+            ],
+        ),
+        encoding="utf-8",
+    )
+    region_path = tmp_path / "regions.geojson"
+    region_path.write_text(
+        json.dumps(
+            {
+                "type": "FeatureCollection",
+                "features": [
+                    {
+                        "type": "Feature",
+                        "properties": {
+                            "id": "wgs84-region",
+                            "name": "WGS84 Region",
+                            "level": 5,
+                            "sourceCoordinateSystem": "wgs84",
+                        },
+                        "geometry": {
+                            "type": "Polygon",
+                            "coordinates": [
+                                [
+                                    [121.399, 31.199],
+                                    [121.401, 31.199],
+                                    [121.401, 31.201],
+                                    [121.399, 31.201],
+                                    [121.399, 31.199],
+                                ],
+                            ],
+                        },
+                    },
+                ],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    store = FootprintStore(
+        db_path=tmp_path / "footprints.sqlite",
+        data_path=data_path,
+        coordinate_system="wgs84",
+        admin_region_data_path=region_path,
+    )
+    try:
+        result = store.import_footprints()
+        footprint = store.connection.execute(
+            "SELECT longitude, latitude, region_id FROM footprints WHERE timestamp_seconds = 100",
+        ).fetchone()
+    finally:
+        store.close()
+
+    assert result["matched_count"] == 1
+    assert tuple(footprint[:2]) == (121.4, 31.2)
+    assert footprint["region_id"] == "wgs84-region"
 
 
 def test_serves_admin_regions_by_level_from_cached_region_rows(tmp_path: Path):
