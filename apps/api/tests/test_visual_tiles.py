@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import calendar
 import sqlite3
 
 from fastapi.testclient import TestClient
@@ -15,10 +16,12 @@ from enroute_api.footprints.visual_tile_codec import (
 from enroute_api.footprints.visual_tiles import (
     STATUS_DIRTY,
     STATUS_READY,
+    TIME_BUCKET_ALL,
     TIME_BUCKET_DAY,
     TIME_BUCKET_MONTH,
     TIME_BUCKET_YEAR,
     build_visual_tile,
+    build_visual_tiles,
     mark_visual_tile_dirty,
     split_time_range_into_buckets,
 )
@@ -97,6 +100,111 @@ def test_builds_first_timestamp_representative_per_cell(tmp_path):
         records = decode_visual_cells(row["cells"])
         assert records
         assert records[0].footprint_id == 100
+    finally:
+        connection.close()
+
+
+def test_builds_visual_tiles_only_for_existing_all_bucket_tile_keys(tmp_path):
+    connection = sqlite3.connect(tmp_path / "footprints.sqlite")
+    connection.row_factory = sqlite3.Row
+    try:
+        initialize_schema(connection)
+        rows = [
+            (100, -100.0, 10.0),
+            (200, 100.0, -10.0),
+        ]
+        for timestamp, longitude, latitude in rows:
+            connection.execute(
+                """
+                INSERT INTO footprints (
+                  timestamp_seconds, longitude, latitude, accuracy, speed, distance, heading, altitude
+                ) VALUES (?, ?, ?, 5, 0, 0, 0, 0)
+                """,
+                (timestamp, longitude, latitude),
+            )
+            connection.execute(
+                """
+                INSERT INTO footprint_spatial (
+                  footprint_rowid, min_lng, max_lng, min_lat, max_lat
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (timestamp, longitude, longitude, latitude, latitude),
+            )
+
+        result = build_visual_tiles(
+            connection,
+            min_zoom=1,
+            max_zoom=1,
+            bucket="all",
+            updated_at=1234,
+            commit_interval=1,
+        )
+
+        rows = connection.execute(
+            """
+            SELECT z, x, y, t_type, t, status, cells, updated_at
+            FROM visual_tiles
+            ORDER BY z, x, y, t_type, t
+            """,
+        ).fetchall()
+        assert result.built_count == 2
+        assert [(row["z"], row["x"], row["y"], row["t_type"], row["t"]) for row in rows] == [
+            (1, 0, 0, TIME_BUCKET_ALL, 0),
+            (1, 1, 1, TIME_BUCKET_ALL, 0),
+        ]
+        assert [row["status"] for row in rows] == [STATUS_READY, STATUS_READY]
+        assert [row["updated_at"] for row in rows] == [1234, 1234]
+        assert [decode_visual_cells(row["cells"])[0].footprint_id for row in rows] == [100, 200]
+    finally:
+        connection.close()
+
+
+def test_builds_visual_tiles_for_shanghai_day_month_and_year_buckets(tmp_path):
+    connection = sqlite3.connect(tmp_path / "footprints.sqlite")
+    connection.row_factory = sqlite3.Row
+    try:
+        initialize_schema(connection)
+        timestamp = calendar.timegm((2024, 2, 9, 16, 0, 0))
+        connection.execute(
+            """
+            INSERT INTO footprints (
+              timestamp_seconds, longitude, latitude, accuracy, speed, distance, heading, altitude
+            ) VALUES (?, 0, 0, 5, 0, 0, 0, 0)
+            """,
+            (timestamp,),
+        )
+        connection.execute(
+            """
+            INSERT INTO footprint_spatial (
+              footprint_rowid, min_lng, max_lng, min_lat, max_lat
+            ) VALUES (?, 0, 0, 0, 0)
+            """,
+            (timestamp,),
+        )
+
+        for bucket in ["day", "month", "year"]:
+            build_visual_tiles(
+                connection,
+                min_zoom=1,
+                max_zoom=1,
+                bucket=bucket,
+                updated_at=1234,
+                commit_interval=0,
+            )
+
+        rows = connection.execute(
+            """
+            SELECT z, x, y, t_type, t
+            FROM visual_tiles
+            ORDER BY t_type, t
+            """,
+        ).fetchall()
+
+        assert [(row["z"], row["x"], row["y"], row["t_type"], row["t"]) for row in rows] == [
+            (1, 1, 1, TIME_BUCKET_YEAR, 2024),
+            (1, 1, 1, TIME_BUCKET_MONTH, 202402),
+            (1, 1, 1, TIME_BUCKET_DAY, 20240210),
+        ]
     finally:
         connection.close()
 

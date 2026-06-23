@@ -111,6 +111,69 @@ class ImportFootprintsTests(unittest.TestCase):
             self.assertEqual(row, (121.4737, 31.2304))
             self.assertIsNone(stale_table)
 
+    def test_build_footprint_visual_tiles_cli_builds_small_zoom_range(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root_dir = Path(tmp_dir)
+            database = root_dir / "data" / "footprints.sqlite"
+            database.parent.mkdir(parents=True)
+            connection = sqlite3.connect(database)
+            try:
+                sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "apps" / "api" / "src"))
+                from enroute_api.footprints.store import initialize_schema
+
+                initialize_schema(connection)
+                for timestamp, longitude, latitude in [
+                    (100, -100.0, 10.0),
+                    (200, 100.0, -10.0),
+                ]:
+                    connection.execute(
+                        """
+                        INSERT INTO footprints (
+                          timestamp_seconds, longitude, latitude, accuracy, speed, distance, heading, altitude
+                        ) VALUES (?, ?, ?, 5, 0, 0, 0, 0)
+                        """,
+                        (timestamp, longitude, latitude),
+                    )
+                    connection.execute(
+                        """
+                        INSERT INTO footprint_spatial (
+                          footprint_rowid, min_lng, max_lng, min_lat, max_lat
+                        ) VALUES (?, ?, ?, ?, ?)
+                        """,
+                        (timestamp, longitude, longitude, latitude, latitude),
+                    )
+                connection.commit()
+            finally:
+                connection.close()
+
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(Path(__file__).resolve().parents[1] / "scripts" / "build_footprint_visual_tiles.py"),
+                    "--database",
+                    str(database),
+                    "--min-zoom",
+                    "1",
+                    "--max-zoom",
+                    "1",
+                ],
+                cwd=root_dir,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertIn("Built 2 footprint visual tile rows", completed.stdout)
+            connection = sqlite3.connect(database)
+            try:
+                rows = connection.execute(
+                    "SELECT z, x, y, t_type, t FROM visual_tiles ORDER BY z, x, y, t_type, t",
+                ).fetchall()
+            finally:
+                connection.close()
+            self.assertEqual(rows, [(1, 0, 0, 0, 0), (1, 1, 1, 0, 0)])
+
 
 if __name__ == "__main__":
     unittest.main()
