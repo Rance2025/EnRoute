@@ -1,5 +1,16 @@
 import { useEffect, useState, type CSSProperties } from 'react'
-import { ChevronLeft, ChevronRight, Settings } from 'lucide-react'
+import {
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  Footprints,
+  Globe2,
+  MapPinned,
+  Plane,
+  Route,
+  Settings,
+  type LucideIcon,
+} from 'lucide-react'
 
 import { ledgerAtlasDataset } from '../accounting/ledgerAtlasData'
 import { formatCnyFromCents } from '../accounting/money'
@@ -61,6 +72,7 @@ const calendarModeOptions: Array<SegmentedOption<CalendarDisplayMode>> = [
 ]
 
 const weekdayLabels = ['一', '二', '三', '四', '五', '六', '日']
+const monthlyTrendValues = [1, 8, 2, 4, 2, 12, 1, 5, 14, 20, 2, 14, 10, 3, 8, 1, 5]
 
 type TimeContextPanelProps = {
   view: AppView
@@ -109,6 +121,7 @@ export function TimeContextPanel({
   const summaryItems = metricItems ?? (view === 'accounting'
     ? getAccountingSummary(selection)
     : [])
+  const trendLabel = selection.mode === 'month' ? '本月足迹趋势' : '当前范围趋势'
 
   useEffect(() => {
     if (!isDayCalendarCollapsingWeek) return undefined
@@ -181,11 +194,14 @@ export function TimeContextPanel({
   }
 
   return (
-    <aside className="time-context-panel" aria-label="时间范围面板">
+    <aside
+      className={`time-context-panel${isTimeEditorOpen ? ' is-editing-time' : ''}`}
+      aria-label="时间范围面板"
+    >
       <div className="time-context-panel__scroll">
-        <header className="time-context-card">
+        <header className="time-context-card" aria-label="时间概览">
           <div className="time-context-card__top">
-            <div>
+            <div className="time-context-card__headline">
               <span>{secondaryContextLabel ? `${secondaryContextLabel}时间范围` : '全局时间范围'}</span>
               <h2>{heading.title}</h2>
               <p>{heading.detail}</p>
@@ -207,14 +223,21 @@ export function TimeContextPanel({
               className="time-context-metric-strip"
               aria-label="全局范围指标"
             >
-              {summaryItems.map((item) => (
+              {summaryItems.map((item) => {
+                const Icon = getMetricIcon(item.label)
+
+                return (
                 <div key={item.label}>
-                  <span>{item.label}</span>
+                  <span className="time-context-metric-strip__label">
+                    <Icon size={13} strokeWidth={2.05} aria-hidden="true" />
+                    <span>{item.label}</span>
+                  </span>
                   <strong className={item.tone ? `is-${item.tone}` : undefined}>
                     {item.value}
                   </strong>
                 </div>
-              ))}
+                )
+              })}
             </section>
           ) : null}
 
@@ -225,10 +248,32 @@ export function TimeContextPanel({
             value={selection.mode}
             onChange={handleModeChange}
           />
+
+          {view === 'map' && !isTimeEditorOpen ? (
+            <section className="time-context-trend" aria-label={trendLabel}>
+              <div className="time-context-trend__head">
+                <span>{trendLabel}</span>
+              </div>
+              <div className="time-context-trend__chart" aria-hidden="true">
+                {monthlyTrendValues.map((value, index) => (
+                  <span
+                    key={`${value}-${index}`}
+                    className={index === 9 || index === 10 ? 'is-emphasis' : undefined}
+                    style={{ '--trend-value': value } as CSSProperties}
+                  />
+                ))}
+              </div>
+            </section>
+          ) : null}
         </header>
 
         {isTimeEditorOpen ? (
-          <div id="time-range-editor" className="time-panel-content">
+          <div
+            id="time-range-editor"
+            className="time-panel-content"
+            role="region"
+            aria-label="时间编辑器"
+          >
             <div
               className="time-panel-content__stage"
               aria-label="时间范围内容"
@@ -263,6 +308,16 @@ export function TimeContextPanel({
       </div>
     </aside>
   )
+}
+
+function getMetricIcon(label: string): LucideIcon {
+  if (label.includes('国家') || label.includes('地区')) return Globe2
+  if (label.includes('飞行')) return Plane
+  if (label.includes('天')) return CalendarDays
+  if (label.includes('距离') || label.includes('里程')) return Route
+  if (label.includes('足迹')) return Footprints
+
+  return MapPinned
 }
 
 function getAccountingSummary(selection: TimeRangeSelection): TimeContextMetricItem[] {
@@ -840,17 +895,19 @@ function DayCalendarSection({
 
   return (
     <section className="time-calendar-shell" aria-label="日历选择">
-      <div className="time-mode-section-head">
-        <strong>按日选择</strong>
-        <SegmentedControl
-          ariaLabel="日历显示方式"
-          className="time-calendar-switch"
-          options={calendarModeOptions}
-          value={calendarMode}
-          onChange={(mode) => {
-            if (mode !== calendarMode) onCalendarModeChange(mode)
-          }}
-        />
+      <div className="time-calendar-head">
+        <strong>{isMonthPicker ? '选择月份' : '按日选择'}</strong>
+        {isMonthPicker ? null : (
+          <SegmentedControl
+            ariaLabel="日历显示方式"
+            className="time-calendar-switch"
+            options={calendarModeOptions}
+            value={calendarMode}
+            onChange={(mode) => {
+              if (mode !== calendarMode) onCalendarModeChange(mode)
+            }}
+          />
+        )}
       </div>
       <div className="time-calendar-bar">
         <button

@@ -123,6 +123,7 @@ describe('unified shell layout', () => {
     expect(within(mapMetricStrip).getByText('总距离')).toBeInTheDocument()
     expect(within(mapMetricStrip).getByText('日均距离')).toBeInTheDocument()
     expect(within(mapMetricStrip).getAllByText('0 m')).toHaveLength(2)
+    expect(within(mapMetricStrip).queryByText('日均足迹')).not.toBeInTheDocument()
     expect(within(mapMetricStrip).queryByText('当前足迹')).not.toBeInTheDocument()
     expect(within(mapMetricStrip).queryByText('全部足迹')).not.toBeInTheDocument()
     expect(within(mapMetricStrip).queryByText('活跃天数')).not.toBeInTheDocument()
@@ -347,9 +348,10 @@ describe('unified shell layout', () => {
 
     openTimeEditor()
 
-    const pickerHead = screen.getByLabelText('日历选择').querySelector('.time-mode-section-head')
+    const pickerHead = screen.getByLabelText('日历选择').querySelector('.time-calendar-head')
 
     expect(pickerHead).not.toBeNull()
+    expect(within(pickerHead as HTMLElement).getByText('按日选择')).toBeInTheDocument()
     expect(within(pickerHead as HTMLElement).queryByText('只在日模式显示日历')).not.toBeInTheDocument()
     expect(screen.queryByText('只在日模式显示日历')).not.toBeInTheDocument()
 

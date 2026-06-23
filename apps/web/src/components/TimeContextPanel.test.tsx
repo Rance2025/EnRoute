@@ -44,6 +44,94 @@ function StatefulMapTimeContextPanel({
 }
 
 describe('TimeContextPanel', () => {
+  it('presents a compact travel dashboard and staged time editor actions', () => {
+    render(
+      <TimeContextPanel
+        view="map"
+        selection={selectMonth(2026, 6)}
+        secondaryContextLabel="区域"
+        metricItems={[
+          { label: '足迹总数', value: '56' },
+          { label: '国家/地区', value: '12' },
+          { label: '飞行里程', value: '48,260 km' },
+          { label: '旅行天数', value: '126 天' },
+        ]}
+        onSelectionChange={vi.fn()}
+      />,
+    )
+
+    const overview = screen.getByLabelText('时间概览')
+
+    expect(within(overview).getByText('区域时间范围')).toBeInTheDocument()
+    expect(within(overview).getByRole('heading', { name: '6月' })).toBeInTheDocument()
+    expect(within(overview).getByText('2026年6月')).toBeInTheDocument()
+    expect(screen.getByLabelText('本月足迹趋势')).toBeInTheDocument()
+    expect(screen.getByText('本月足迹趋势')).toBeInTheDocument()
+    expect(screen.getByText('48,260 km')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '修改时间' }))
+
+    const editor = screen.getByRole('region', { name: '时间编辑器' })
+
+    expect(editor).toBeInTheDocument()
+    expect(within(editor).queryByText('选择范围')).not.toBeInTheDocument()
+    expect(within(editor).queryByRole('button', { name: '取消' })).not.toBeInTheDocument()
+    expect(within(editor).queryByRole('button', { name: '应用时间' })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('本月足迹趋势')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '回到本月' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    )
+  })
+
+  it('marks the rail as editing so the time editor can use the available height', () => {
+    const { container } = render(
+      <TimeContextPanel
+        view="map"
+        selection={setCustomDateRange('2026-01-11', '2026-06-23')}
+        onSelectionChange={vi.fn()}
+      />,
+    )
+    const panel = container.querySelector('.time-context-panel')
+
+    expect(panel).not.toHaveClass('is-editing-time')
+    expect(container.querySelector('.time-context-panel__footer')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '修改时间' }))
+
+    expect(panel).toHaveClass('is-editing-time')
+    expect(container.querySelector('.time-panel-content')).toBeInTheDocument()
+  })
+
+  it('uses the day calendar header for either calendar mode controls or month selection context', () => {
+    render(
+      <TimeContextPanel
+        view="map"
+        selection={selectDay('2026-06-26')}
+        onSelectionChange={vi.fn()}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '修改时间' }))
+
+    const calendar = screen.getByLabelText('日历选择')
+
+    expect(within(calendar).getByText('按日选择')).toBeInTheDocument()
+    expect(within(calendar).getByRole('group', { name: '日历显示方式' })).toBeInTheDocument()
+
+    fireEvent.click(
+      within(calendar).getByRole('button', {
+        name: '切换到月份选择，当前2026年6月',
+      }),
+    )
+
+    expect(within(calendar).getByText('选择月份')).toBeInTheDocument()
+    expect(
+      within(calendar).queryByRole('group', { name: '日历显示方式' }),
+    ).not.toBeInTheDocument()
+    expect(within(calendar).getByLabelText('月份选择')).toBeInTheDocument()
+  })
+
   it('renders calendar navigation arrows as centered icon components', () => {
     const { container } = render(
       <TimeContextPanel

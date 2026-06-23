@@ -301,16 +301,38 @@ describe('map chrome layout', () => {
     expect(scrollRule).toContain('--time-panel-shadow-buffer: 34px')
     expect(scrollRule).toContain('width: calc(100% + var(--time-panel-shadow-buffer))')
     expect(scrollRule).toContain('margin-right: calc(0px - var(--time-panel-shadow-buffer))')
+    expect(scrollRule).toContain('grid-template-rows: auto auto 1fr')
+    expect(scrollRule).not.toContain('grid-template-rows: auto minmax(0, 1fr) auto')
     expect(scrollRule).toContain(
       'padding: 24px calc(24px + var(--time-panel-shadow-buffer)) 18px 24px',
     )
     expect(scrollRule).toContain('gap: 20px')
-    expect(scrollRule).toContain('overflow-x: hidden')
-    expect(scrollRule).toContain('overflow-y: auto')
+    expect(scrollRule).toContain('overflow: visible')
+    expect(scrollRule).not.toContain('overflow-x: hidden')
+    expect(scrollRule).not.toContain('overflow-y: auto')
+    expect(scrollRule).not.toContain('scrollbar-width')
+    expect(cssRule('.time-panel-content')).toContain('overflow: visible')
+    expect(cssRule('.time-panel-content')).not.toContain('overflow: auto')
+    expect(cssRule('.time-panel-content::-webkit-scrollbar')).toBe('')
+    expect(cssRule('.time-context-panel.is-editing-time .time-context-panel__footer')).toContain(
+      'display: none',
+    )
     expect(scrollRule).toContain('pointer-events: none')
     expect(scrollRule).not.toContain('padding: 16px')
     expect(scrollRule).not.toContain('padding: 88px')
     expect(cssRule('.time-context-panel__scroll > *')).toContain('pointer-events: auto')
+  })
+
+  it('lets the open time editor fit without relying on internal overflow', () => {
+    const editingScrollRule = cssRule('.time-context-panel.is-editing-time .time-context-panel__scroll')
+    const editingFooterRule = cssRule('.time-context-panel.is-editing-time .time-context-panel__footer')
+
+    expect(editingScrollRule).toContain('grid-template-rows: auto auto')
+    expect(editingScrollRule).toContain('gap: 14px')
+    expect(editingScrollRule).toContain('align-content: start')
+    expect(editingScrollRule).toContain('align-items: start')
+    expect(editingScrollRule).not.toContain('auto auto 0')
+    expect(editingFooterRule).toContain('display: none')
   })
 
   it('keeps the left time panel layout isomorphic across navigation views', () => {
@@ -360,7 +382,7 @@ describe('map chrome layout', () => {
     expect(accountPanelRule).not.toContain('rgba(255, 255, 255, 0.46)')
   })
 
-  it('lets the time header card shadow render past the rail edge without a hard clip', () => {
+  it('keeps the time overview unframed inside the single left glass rail', () => {
     const panelRule = cssRule('.time-context-panel')
     const scrollRule = cssRule('.time-context-panel__scroll')
     const cardRule = cssRule('.time-context-card')
@@ -372,10 +394,12 @@ describe('map chrome layout', () => {
     expect(scrollRule).toContain('margin-right: calc(0px - var(--time-panel-shadow-buffer))')
     expect(scrollRule).toContain('pointer-events: none')
     expect(cssRule('.time-context-panel__scroll > *')).toContain('pointer-events: auto')
-    expect(cardRule).toContain('box-shadow:')
-    expect(cardRule).toContain('rgba(13, 46, 39, 0.22)')
-    expect(cardRule).not.toContain('0 18px 42px rgba(13, 46, 39, 0.24)')
-    expect(cardRule).toContain('0 18px 34px -12px')
+    expect(cardRule).toContain('border-radius: 0')
+    expect(cardRule).toContain('background: transparent')
+    expect(cardRule).toContain('box-shadow: none')
+    expect(cardRule).toContain('backdrop-filter: none')
+    expect(cardRule).not.toContain('0 18px 34px')
+    expect(cardRule).not.toContain('rgba(255, 255, 255, 0.72)')
   })
 
   it('balances the accounting page with the shared rail and keeps ledger content unframed', () => {
@@ -460,7 +484,11 @@ describe('map chrome layout', () => {
     expect(timeContextPanelSource).toContain('aria-label="全局范围指标"')
     expect(timeContextPanelSource).not.toContain('aria-label="记账概览卡片"')
     expect(timeContextPanelSource).not.toContain('aria-label="当前范围摘要"')
-    expect(cssRule('.time-context-metric-strip')).toContain('grid-template-columns: repeat(auto-fit, minmax(68px, 1fr))')
+    expect(cssRule('.time-context-metric-strip')).toContain('grid-template-columns: repeat(2, minmax(0, 1fr))')
+    expect(cssRule('.time-context-metric-strip__label')).toContain('display: inline-flex')
+    expect(cssRule('.time-context-trend__chart')).toContain('grid-template-columns: repeat(17, minmax(0, 1fr))')
+    expect(timeContextPanelSource).not.toContain('className="time-panel-content__actions"')
+    expect(cssRule('.time-panel-content__actions')).toBe('')
     expect(cssRule('.time-context-accounting-summary')).toBe('')
     expect(cssRule('.time-context-summary')).toBe('')
     expect(cssRule('.ios-summary-strip')).toBe('')
@@ -478,7 +506,7 @@ describe('map chrome layout', () => {
     const rule = cssRule('.time-context-card__today')
 
     expect(rule).toContain('min-height: 24px')
-    expect(rule).toContain('padding: 0 8px')
+    expect(rule).toContain('padding: 0 10px')
     expect(rule).toContain('font-size: 11px')
   })
 
@@ -486,8 +514,14 @@ describe('map chrome layout', () => {
     const tabsRule = cssRule('.time-mode-tabs')
     const buttonRule = cssRule('.time-mode-tabs button')
 
+    expect(tabsRule).toContain('--segmented-thumb-bg: #123f35')
+    expect(tabsRule).toContain('--segmented-padding: 2px')
+    expect(tabsRule).toContain('--segmented-label-font-size: 11px')
+    expect(tabsRule).toContain('--segmented-label-font-weight: 780')
     expect(tabsRule).toContain('padding: 3px')
     expect(buttonRule).toContain('height: 24px')
+    expect(buttonRule).toContain('font-size: 11px')
+    expect(buttonRule).toContain('font-weight: 780')
   })
 
   it('gives the current-period reset action a clear click feedback state', () => {
@@ -586,6 +620,7 @@ describe('map chrome layout', () => {
 
   it('animates the day calendar by clipping and translating one stable month grid', () => {
     const shellRule = cssRule('.time-calendar-shell')
+    const headRule = cssRule('.time-calendar-head')
     const switchRule = cssRule('.time-calendar-switch')
     const bodyRule = cssRule('.time-calendar-body')
     const weekBodyRule = cssRule('.time-calendar-body--week')
@@ -596,9 +631,11 @@ describe('map chrome layout', () => {
     const gridRule = cssRule('.time-calendar-grid')
     const buttonRule = cssRule('.time-calendar-grid button')
 
-    expect(shellRule).toContain('--time-calendar-day-height: 37px')
+    expect(shellRule).toContain('--time-calendar-day-height: 34px')
     expect(shellRule).toContain('--time-calendar-weekday-height: 17px')
-    expect(shellRule).toContain('--time-calendar-grid-gap: 5px')
+    expect(shellRule).toContain('--time-calendar-grid-gap: 4px')
+    expect(headRule).toContain('grid-template-columns: minmax(0, 1fr) auto')
+    expect(headRule).toContain('margin-bottom: 10px')
     expect(switchRule).toContain('grid-template-columns: repeat(2, auto)')
     expect(bodyRule).not.toContain('overflow: hidden')
     expect(bodyRule).toContain(
@@ -631,6 +668,48 @@ describe('map chrome layout', () => {
     expect(buttonRule).toContain('min-height: var(--time-calendar-day-height)')
   })
 
+  it('keeps every time selection grid button compact and close to square', () => {
+    const calendarCellRule = cssRule('.time-calendar-grid button')
+    const pickerCellRule = cssRule('.time-picker-grid button')
+    const monthCellRule = cssRule('.time-picker-grid--months button')
+    const weekCellRule = cssRule('.time-picker-grid--weeks button')
+    const yearCellRule = cssRule('.time-picker-grid--years button')
+    const customDateCellRule = cssRule('.time-date-picker__grid button')
+    const customMonthCellRule = cssRule('.time-date-picker__grid--months button')
+
+    expect(calendarCellRule).toContain('border-radius: 11px')
+    expect(calendarCellRule).toContain('font-size: 11px')
+    expect(calendarCellRule).toContain('font-weight: 760')
+    expect(pickerCellRule).toContain('min-height: 34px')
+    expect(pickerCellRule).toContain('border-radius: 11px')
+    expect(pickerCellRule).toContain('font-size: 11px')
+    expect(pickerCellRule).toContain('font-weight: 760')
+    expect(monthCellRule).toContain('min-height: 34px')
+    expect(weekCellRule).toContain('min-height: 46px')
+    expect(yearCellRule).toContain('border-radius: 10px')
+    expect(customDateCellRule).toContain('height: 30px')
+    expect(customDateCellRule).toContain('border-radius: 10px')
+    expect(customDateCellRule).toContain('font-size: 10px')
+    expect(customDateCellRule).toContain('font-weight: 760')
+    expect(customMonthCellRule).toContain('height: 32px')
+  })
+
+  it('keeps the day calendar header stable when switching into month selection', () => {
+    const headRule = cssRule('.time-calendar-head')
+    const switchRule = cssRule('.time-calendar-switch')
+    const switchButtonRule = cssRule('.time-calendar-switch button')
+
+    expect(headRule).toContain('min-height: 26px')
+    expect(switchRule).toContain('--segmented-padding: 2px')
+    expect(switchRule).toContain('--segmented-label-font-size: 10px')
+    expect(switchRule).toContain('--segmented-label-font-weight: 760')
+    expect(switchRule).toContain('padding: 2px')
+    expect(switchButtonRule).toContain('height: 22px')
+    expect(switchButtonRule).toContain('padding: 0 7px')
+    expect(switchButtonRule).toContain('font-size: 10px')
+    expect(switchButtonRule).toContain('font-weight: 760')
+  })
+
   it('starts the day calendar collapse transition from the calendar switch event', () => {
     expect(timeContextPanelSource).toContain('function handleCalendarModeChange')
     expect(timeContextPanelSource).toContain("calendarMode === 'month' && mode === 'week'")
@@ -640,7 +719,7 @@ describe('map chrome layout', () => {
   })
 
   it('keeps unified top-level time picker grids compact across week month and year modes', () => {
-    expect(cssRule('.time-picker-grid')).toContain('gap: 6px')
+    expect(cssRule('.time-picker-grid')).toContain('gap: 5px')
     expect(cssRule('.time-picker-grid--days')).toContain(
       'grid-template-columns: repeat(7, minmax(0, 1fr))',
     )
@@ -763,7 +842,7 @@ describe('map chrome layout', () => {
     )
     expect(appCss).not.toMatch(/\.time-date-picker__bar button\s*\{/)
     expect(monthGridRule).toContain('grid-template-columns: repeat(6, minmax(0, 1fr))')
-    expect(monthButtonRule).toContain('height: 34px')
+    expect(monthButtonRule).toContain('height: 32px')
   })
 
   it('frames custom date ranges with the outer shell instead of inner date buttons', () => {
@@ -873,14 +952,16 @@ describe('map chrome layout', () => {
     ).toContain('transition: none')
     expect(cssRule('.segmented-control__active-label')).toContain('place-items: center')
     expect(cssRule('.time-mode-tabs')).toContain(
-      '--segmented-label-color: rgba(255, 255, 255, 0.66)',
+      '--segmented-label-color: rgba(21, 48, 42, 0.66)',
     )
     expect(cssRule('.time-mode-tabs')).toContain('--segmented-gap: 3px')
+    expect(cssRule('.time-mode-tabs')).toContain('--segmented-thumb-bg: #123f35')
+    expect(cssRule('.time-mode-tabs')).toContain('--segmented-padding: 2px')
     expect(cssRule('.time-mode-tabs')).toContain('padding: 3px')
     expect(cssRule('.time-mode-tabs button')).toContain('height: 24px')
     expect(cssRule('.time-mode-tabs')).not.toContain('--segmented-thumb-shadow')
     expect(cssRule('.transaction-type-switch')).not.toContain('--segmented-thumb-shadow')
-    expect(cssRule('.time-mode-tabs')).toContain('--segmented-active-label-color: #123f35')
+    expect(cssRule('.time-mode-tabs')).toContain('--segmented-active-label-color: #f8fbfa')
     expect(appSource).toContain("className={`app-nav__thumb${isTopNavigationDragging ? ' is-dragging' : ''}`}")
     expect(appSource).toContain('role="slider"')
     expect(appSource).toContain('onPointerDown={handleTopNavigationPointerDown}')
@@ -976,7 +1057,7 @@ describe('map chrome layout', () => {
     expect(cssRule('.time-picker-grid--months')).toContain(
       'grid-template-columns: repeat(6, minmax(0, 1fr))',
     )
-    expect(cssRule('.time-picker-grid--months button')).toContain('min-height: 46px')
+    expect(cssRule('.time-picker-grid--months button')).toContain('min-height: 34px')
   })
 
   it('keeps decade year cells on one readable line', () => {
