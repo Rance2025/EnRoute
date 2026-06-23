@@ -146,6 +146,17 @@ def initialize_schema(connection: sqlite3.Connection) -> None:
           min_lat,
           max_lat
         );
+        CREATE TABLE IF NOT EXISTS visual_tiles (
+          z INTEGER NOT NULL,
+          x INTEGER NOT NULL,
+          y INTEGER NOT NULL,
+          t_type INTEGER NOT NULL,
+          t INTEGER NOT NULL,
+          status INTEGER NOT NULL,
+          cells BLOB,
+          updated_at INTEGER NOT NULL,
+          PRIMARY KEY (z, x, y, t_type, t)
+        ) WITHOUT ROWID;
         """,
     )
     connection.commit()
