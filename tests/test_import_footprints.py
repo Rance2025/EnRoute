@@ -1,4 +1,6 @@
 import sqlite3
+import subprocess
+import sys
 import tempfile
 import unittest
 from contextlib import redirect_stdout
@@ -58,6 +60,56 @@ class ImportFootprintsTests(unittest.TestCase):
                 )
             finally:
                 connection.close()
+
+    def test_rebuild_footprints_wgs84_recreates_database(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root_dir = Path(tmp_dir)
+            (root_dir / "external").mkdir()
+            (root_dir / "data").mkdir()
+            source = root_dir / "external" / "backUpData-all.csv"
+            source.write_text(
+                "\n".join(
+                    [
+                        "dataTime,locType,longitude,latitude,heading,accuracy,speed,distance,isBackForeground,stepType,altitude",
+                        "1768144456,0,121.473700,31.230400,0,5,0,0,0,0,3",
+                    ],
+                ),
+                encoding="utf-8",
+            )
+            database = root_dir / "data" / "footprints.sqlite"
+            connection = sqlite3.connect(database)
+            try:
+                connection.execute("CREATE TABLE stale(value TEXT)")
+                connection.commit()
+            finally:
+                connection.close()
+
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(Path(__file__).resolve().parents[1] / "scripts" / "rebuild_footprints_wgs84.py"),
+                    "--source",
+                    str(source),
+                    "--database",
+                    str(database),
+                ],
+                cwd=root_dir,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            connection = sqlite3.connect(database)
+            try:
+                row = connection.execute("SELECT longitude, latitude FROM footprints").fetchone()
+                stale_table = connection.execute(
+                    "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'stale'",
+                ).fetchone()
+            finally:
+                connection.close()
+            self.assertEqual(row, (121.4737, 31.2304))
+            self.assertIsNone(stale_table)
 
 
 if __name__ == "__main__":
