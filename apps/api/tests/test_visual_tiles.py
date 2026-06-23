@@ -2,8 +2,16 @@ from __future__ import annotations
 
 import sqlite3
 
+from fastapi.testclient import TestClient
+
+from enroute_api.config import Settings
+from enroute_api.footprints.store import FootprintStore
 from enroute_api.footprints.store import initialize_schema
-from enroute_api.footprints.visual_tile_codec import decode_visual_cells
+from enroute_api.footprints.visual_tile_codec import (
+    VisualCellRecord,
+    decode_visual_cells,
+    encode_visual_cells,
+)
 from enroute_api.footprints.visual_tiles import (
     STATUS_DIRTY,
     STATUS_READY,
@@ -14,6 +22,7 @@ from enroute_api.footprints.visual_tiles import (
     mark_visual_tile_dirty,
     split_time_range_into_buckets,
 )
+from enroute_api.main import create_app
 
 
 def column_names(connection: sqlite3.Connection, table_name: str) -> list[str]:
@@ -195,3 +204,76 @@ def test_splits_custom_range_into_year_month_day_buckets():
     assert (TIME_BUCKET_MONTH, 202602) in buckets
     assert (TIME_BUCKET_DAY, 20240210) in buckets
     assert (TIME_BUCKET_DAY, 20260309) in buckets
+
+
+def test_serves_footprint_mvt_from_ready_visual_tile(tmp_path):
+    db_path = tmp_path / "footprints.sqlite"
+    store = FootprintStore(
+        db_path=db_path,
+        data_path=tmp_path / "missing.csv",
+        coordinate_system="wgs84",
+        admin_region_data_path=tmp_path / "missing-admin-regions.geojson",
+    )
+    try:
+        blob = encode_visual_cells(
+            [
+                VisualCellRecord(cell_id=1, footprint_id=100, geom_x=2048, geom_y=2048),
+            ],
+        )
+        store.connection.execute(
+            """
+            INSERT INTO visual_tiles (z, x, y, t_type, t, status, cells, updated_at)
+            VALUES (1, 1, 1, 0, 0, 1, ?, 1234)
+            """,
+            (blob,),
+        )
+        store.connection.commit()
+        client = TestClient(
+            create_app(
+                settings=Settings(
+                    footprint_db_path=db_path,
+                    footprint_data_path=tmp_path / "missing.csv",
+                    footprint_coordinate_system="wgs84",
+                    admin_region_data_path=tmp_path / "missing-admin-regions.geojson",
+                ),
+            ),
+        )
+
+        response = client.get("/api/map/tiles/footprints/1/1/1.mvt?range=all")
+
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/vnd.mapbox-vector-tile"
+        assert response.content
+    finally:
+        store.close()
+
+
+def test_missing_visual_tile_row_means_empty_without_creating_row(tmp_path):
+    db_path = tmp_path / "footprints.sqlite"
+    store = FootprintStore(
+        db_path=db_path,
+        data_path=tmp_path / "missing.csv",
+        coordinate_system="wgs84",
+        admin_region_data_path=tmp_path / "missing-admin-regions.geojson",
+    )
+    try:
+        client = TestClient(
+            create_app(
+                settings=Settings(
+                    footprint_db_path=db_path,
+                    footprint_data_path=tmp_path / "missing.csv",
+                    footprint_coordinate_system="wgs84",
+                    admin_region_data_path=tmp_path / "missing-admin-regions.geojson",
+                ),
+            ),
+        )
+
+        response = client.get("/api/map/tiles/footprints/1/1/1.mvt?range=all")
+
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/vnd.mapbox-vector-tile"
+        assert response.content == b""
+        count = store.connection.execute("SELECT COUNT(*) FROM visual_tiles").fetchone()[0]
+        assert count == 0
+    finally:
+        store.close()

@@ -4,7 +4,7 @@ import math
 import sqlite3
 from datetime import date, timedelta
 
-from .visual_tile_codec import VisualCellRecord, encode_visual_cells
+from .visual_tile_codec import VisualCellRecord, decode_visual_cells, encode_visual_cells
 
 TIME_BUCKET_ALL = 0
 TIME_BUCKET_YEAR = 1
@@ -159,6 +159,48 @@ def split_time_range_into_buckets(start_date: str, end_date: str) -> list[tuple[
         current += timedelta(days=1)
 
     return buckets
+
+
+def resolve_time_buckets(
+    *,
+    range_value: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+) -> list[tuple[int, int]]:
+    if (range_value or "").strip().lower() == "all":
+        return [(TIME_BUCKET_ALL, 0)]
+    if start_date and end_date:
+        return split_time_range_into_buckets(start_date, end_date)
+    return [(TIME_BUCKET_ALL, 0)]
+
+
+def read_visual_tile_records(
+    connection: sqlite3.Connection,
+    *,
+    z: int,
+    x: int,
+    y: int,
+    buckets: list[tuple[int, int]],
+) -> list[VisualCellRecord]:
+    records_by_cell: dict[int, VisualCellRecord] = {}
+    for t_type, t in buckets:
+        row = connection.execute(
+            """
+            SELECT cells
+            FROM visual_tiles
+            WHERE z = ? AND x = ? AND y = ? AND t_type = ? AND t = ?
+              AND status IN (?, ?)
+              AND cells IS NOT NULL
+            """,
+            (z, x, y, t_type, t, STATUS_READY, STATUS_DIRTY),
+        ).fetchone()
+        if row is None:
+            continue
+
+        cells = row["cells"] if isinstance(row, sqlite3.Row) else row[0]
+        for record in decode_visual_cells(cells):
+            records_by_cell.setdefault(record.cell_id, record)
+    return list(records_by_cell.values())
 
 
 def last_day_of_month(value: date) -> date:

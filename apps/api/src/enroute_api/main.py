@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 
 from .config import Settings
 from .footprints.store import FootprintStore
@@ -33,6 +33,25 @@ def create_app(*, settings: Settings | None = None) -> FastAPI:
             raise HTTPException(status_code=400, detail="Invalid JSON body") from error
 
         return store.get_snapshot(payload)
+
+    @app.get("/api/map/tiles/footprints/{z}/{x}/{y}.mvt")
+    def get_footprint_tile(
+        z: int,
+        x: int,
+        y: int,
+        range: str | None = None,
+        start: str | None = None,
+        end: str | None = None,
+    ) -> Response:
+        content = store.get_footprint_mvt(
+            z=z,
+            x=x,
+            y=y,
+            range_value=range,
+            start_date=start,
+            end_date=end,
+        )
+        return Response(content=content, media_type="application/vnd.mapbox-vector-tile")
 
     @app.get("/api/admin-regions")
     def get_admin_regions(

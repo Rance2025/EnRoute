@@ -20,6 +20,8 @@ from enroute_api.admin_regions.store import (
 
 from .country import country_id_for_region_match
 from .csv_loader import iter_footprint_points
+from .visual_tiles import read_visual_tile_records, resolve_time_buckets
+from enroute_api.map_tiles.mvt import encode_footprint_mvt
 
 TILE_SIZE = 256
 MAX_MERCATOR_LATITUDE = 85.05112878
@@ -105,6 +107,30 @@ class FootprintStore:
                     )
                 ],
             }
+
+    def get_footprint_mvt(
+        self,
+        *,
+        z: int,
+        x: int,
+        y: int,
+        range_value: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> bytes:
+        with self._connection_lock:
+            records = read_visual_tile_records(
+                self.connection,
+                z=z,
+                x=x,
+                y=y,
+                buckets=resolve_time_buckets(
+                    range_value=range_value,
+                    start_date=start_date,
+                    end_date=end_date,
+                ),
+            )
+            return encode_footprint_mvt(records)
 
     def close(self) -> None:
         with self._connection_lock:
