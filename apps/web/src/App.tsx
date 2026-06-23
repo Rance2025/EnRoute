@@ -24,7 +24,7 @@ import {
 } from 'lucide-react'
 
 import { AccountingPage } from './components/AccountingPage'
-import { AmapCanvas, type FootprintMetrics } from './components/AmapCanvas'
+import { MapboxCanvas, type FootprintMetrics } from './components/MapboxCanvas'
 import {
   formatAverageDistanceMeters,
   formatDistanceMeters,
@@ -36,7 +36,7 @@ import {
   calculateUnifiedDataPanelWidth,
   type AppView,
 } from './appLayout'
-import { getAmapConfig, type AmapConfig } from './config/amap'
+import type { AmapConfig } from './config/amap'
 import {
   readMapDebugPanelVisible,
   readNavigationStyle,
@@ -207,8 +207,9 @@ function getTopNavigationDragPosition(
   }
 }
 
-function App({ amapConfig }: AppProps) {
-  const resolvedAmapConfig = useMemo(() => amapConfig ?? getAmapConfig(), [amapConfig])
+function App(props: AppProps) {
+  void props.amapConfig
+
   const topNavigationTabsRef = useRef<HTMLDivElement | null>(null)
   const isTopNavigationDraggingRef = useRef(false)
   const topNavigationButtonRefs = useRef<Record<AppView, HTMLButtonElement | null>>({
@@ -581,8 +582,7 @@ function App({ amapConfig }: AppProps) {
       </aside>
 
       {view === 'map' ? (
-        <AmapCanvas
-          config={resolvedAmapConfig}
+        <MapboxCanvas
           timeRange={selectedTimeRange}
           onFootprintMetricsChange={setFootprintMetrics}
           adminRegionUnlockEnabled={activeSecondaryNavId === 'regions'}

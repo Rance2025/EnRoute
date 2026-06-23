@@ -34,6 +34,18 @@ def create_app(*, settings: Settings | None = None) -> FastAPI:
 
         return store.get_snapshot(payload)
 
+    @app.get("/api/footprints/metrics")
+    def get_footprint_metrics(
+        range: str | None = None,
+        start: str | None = None,
+        end: str | None = None,
+    ) -> dict[str, object]:
+        return store.get_footprint_metrics(
+            range_value=range,
+            start_date=start,
+            end_date=end,
+        )
+
     @app.get("/api/map/tiles/footprints/{z}/{x}/{y}.mvt")
     def get_footprint_tile(
         z: int,
@@ -51,6 +63,8 @@ def create_app(*, settings: Settings | None = None) -> FastAPI:
             start_date=start,
             end_date=end,
         )
+        if not content:
+            return Response(status_code=204)
         return Response(content=content, media_type="application/vnd.mapbox-vector-tile")
 
     @app.get("/api/admin-regions")

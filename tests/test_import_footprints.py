@@ -111,7 +111,79 @@ class ImportFootprintsTests(unittest.TestCase):
             self.assertEqual(row, (121.4737, 31.2304))
             self.assertIsNone(stale_table)
 
-    def test_build_footprint_visual_tiles_cli_builds_small_zoom_range(self):
+    def test_rebuild_footprints_wgs84_preserves_existing_database_when_source_missing(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root_dir = Path(tmp_dir)
+            (root_dir / "data").mkdir()
+            source = root_dir / "external" / "missing.csv"
+            database = root_dir / "data" / "footprints.sqlite"
+            connection = sqlite3.connect(database)
+            try:
+                connection.execute("CREATE TABLE preserved(value TEXT)")
+                connection.execute("INSERT INTO preserved(value) VALUES ('still-here')")
+                connection.commit()
+            finally:
+                connection.close()
+
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(Path(__file__).resolve().parents[1] / "scripts" / "rebuild_footprints_wgs84.py"),
+                    "--source",
+                    str(source),
+                    "--database",
+                    str(database),
+                ],
+                cwd=root_dir,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertNotEqual(completed.returncode, 0)
+            connection = sqlite3.connect(database)
+            try:
+                row = connection.execute("SELECT value FROM preserved").fetchone()
+            finally:
+                connection.close()
+            self.assertEqual(row, ("still-here",))
+
+    def test_build_footprint_visual_tiles_cli_imports_raw_footprints_before_building(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root_dir = Path(tmp_dir)
+            source = root_dir / "external" / "backUpData-all.csv"
+            database = root_dir / "data" / "footprints.sqlite"
+            source.parent.mkdir(parents=True)
+            source.write_text(CSV, encoding="utf-8")
+
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(Path(__file__).resolve().parents[1] / "scripts" / "build_footprint_visual_tiles.py"),
+                    "--database",
+                    str(database),
+                    "--min-zoom",
+                    "18",
+                    "--max-zoom",
+                    "18",
+                ],
+                cwd=root_dir,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            connection = sqlite3.connect(database)
+            try:
+                footprint_count = connection.execute("SELECT COUNT(*) FROM footprints").fetchone()
+                visual_tile_count = connection.execute("SELECT COUNT(*) FROM visual_tiles").fetchone()
+            finally:
+                connection.close()
+            self.assertEqual(footprint_count, (2,))
+            self.assertGreater(visual_tile_count[0], 0)
+
+    def test_build_footprint_visual_tiles_cli_builds_all_time_buckets_by_default(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
             root_dir = Path(tmp_dir)
             database = root_dir / "data" / "footprints.sqlite"
@@ -123,8 +195,8 @@ class ImportFootprintsTests(unittest.TestCase):
 
                 initialize_schema(connection)
                 for timestamp, longitude, latitude in [
-                    (100, -100.0, 10.0),
-                    (200, 100.0, -10.0),
+                    (1768144456, -100.0, 10.0),
+                    (1768144457, 100.0, -10.0),
                 ]:
                     connection.execute(
                         """
@@ -164,15 +236,28 @@ class ImportFootprintsTests(unittest.TestCase):
             )
 
             self.assertEqual(completed.returncode, 0, completed.stderr)
-            self.assertIn("Built 2 footprint visual tile rows", completed.stdout)
+            self.assertIn("bucket all,day,month,year", completed.stdout)
             connection = sqlite3.connect(database)
             try:
                 rows = connection.execute(
-                    "SELECT z, x, y, t_type, t FROM visual_tiles ORDER BY z, x, y, t_type, t",
+                    """
+                    SELECT t_type, t, COUNT(*)
+                    FROM visual_tiles
+                    GROUP BY t_type, t
+                    ORDER BY t_type, t
+                    """,
                 ).fetchall()
             finally:
                 connection.close()
-            self.assertEqual(rows, [(1, 0, 0, 0, 0), (1, 1, 1, 0, 0)])
+            self.assertEqual(
+                rows,
+                [
+                    (0, 0, 2),
+                    (1, 2026, 2),
+                    (2, 202601, 2),
+                    (3, 20260111, 2),
+                ],
+            )
 
 
 if __name__ == "__main__":

@@ -2,6 +2,80 @@ import '@testing-library/jest-dom/vitest'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+vi.mock('./MapboxCanvas', async () => {
+  const React = await import('react')
+  const { MapControls } = await import('./MapControls')
+  const {
+    DEFAULT_FOOTPRINT_STYLE,
+    normalizeFootprintStyle,
+  } = await import('../layers/footprintStyle')
+
+  const FOOTPRINT_STYLE_STORAGE_KEY = 'enroute.footprintStyle'
+  const MAP_STAGE_LABEL = '\u5728\u9014 EnRoute \u5730\u56fe\u5de5\u4f5c\u533a'
+  const REGION_NOTICE_TITLE = '\u884c\u653f\u533a\u5212\u56fe\u5c42\u8fc1\u79fb\u4e2d'
+  const REGION_NOTICE_COPY = '\u5f53\u524d Mapbox \u5e95\u5ea7\u5df2\u5207\u6362\u5230\u8db3\u8ff9 MVT \u74e6\u7247\uff0c\u884c\u653f\u533a\u5212\u56fe\u5c42\u4f1a\u5728\u540e\u7eed\u72ec\u7acb\u8fc1\u79fb\u3002'
+
+  function readStoredFootprintStyle() {
+    const storedValue = window.localStorage.getItem(FOOTPRINT_STYLE_STORAGE_KEY)
+
+    if (!storedValue) return DEFAULT_FOOTPRINT_STYLE
+
+    try {
+      return normalizeFootprintStyle(JSON.parse(storedValue))
+    } catch {
+      return DEFAULT_FOOTPRINT_STYLE
+    }
+  }
+
+  function writeStoredFootprintStyle(footprintStyle: typeof DEFAULT_FOOTPRINT_STYLE) {
+    window.localStorage.setItem(
+      FOOTPRINT_STYLE_STORAGE_KEY,
+      JSON.stringify(normalizeFootprintStyle(footprintStyle)),
+    )
+  }
+
+  return {
+    MapboxCanvas: ({ adminRegionUnlockEnabled = false }: { adminRegionUnlockEnabled?: boolean }) => {
+      const [footprintStyle, setFootprintStyle] = React.useState(readStoredFootprintStyle)
+      const updateFootprintStyle = React.useCallback((nextFootprintStyle: typeof DEFAULT_FOOTPRINT_STYLE) => {
+        const normalizedFootprintStyle = normalizeFootprintStyle(nextFootprintStyle)
+
+        writeStoredFootprintStyle(normalizedFootprintStyle)
+        setFootprintStyle(normalizedFootprintStyle)
+      }, [])
+
+      return React.createElement(
+        'section',
+        {
+          className: 'map-stage',
+          'aria-label': MAP_STAGE_LABEL,
+        },
+        React.createElement('div', { className: 'amap-surface mapbox-surface' }),
+        React.createElement(MapControls, {
+          onFitFootprints: vi.fn(),
+          onLocate: vi.fn(),
+          onShowWorld: vi.fn(),
+          onZoomIn: vi.fn(),
+          onZoomOut: vi.fn(),
+          footprintStyle,
+          onFootprintStyleChange: updateFootprintStyle,
+        }),
+        adminRegionUnlockEnabled
+          ? React.createElement(
+            'div',
+            {
+              className: 'map-message map-message--compat',
+              role: 'status',
+            },
+            React.createElement('h2', null, REGION_NOTICE_TITLE),
+            React.createElement('p', null, REGION_NOTICE_COPY),
+          )
+          : null,
+      )
+    },
+  }
+})
+
 import App from '../App'
 
 const localStorageMock = createLocalStorageMock()
@@ -184,25 +258,15 @@ describe('unified shell layout', () => {
     expect(colorInput).toHaveValue('#4f7cff')
   })
 
-  it('opens administrative region unlock controls from the map region tab', () => {
+  it('shows an administrative region compatibility notice from the map region tab', () => {
     render(<App amapConfig={configuredAmap} />)
 
-    expect(screen.queryByRole('group', { name: '行政区划层级' })).not.toBeInTheDocument()
+    expect(screen.queryByText('行政区划图层迁移中')).not.toBeInTheDocument()
 
     fireEvent.click(within(screen.getByRole('navigation', { name: '二级导航' })).getByRole('button', { name: '区域' }))
 
-    const levelGroup = screen.getByRole('group', { name: '行政区划层级' })
-    expect(levelGroup).toBeInTheDocument()
-    expect(within(levelGroup).getAllByRole('button').map((button) => button.textContent)).toEqual([
-      '省级',
-      '市级',
-      '区县',
-      '街镇',
-    ])
-    expect(within(levelGroup).getByRole('button', { name: '市级' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    )
+    expect(screen.getByText('行政区划图层迁移中')).toBeInTheDocument()
+    expect(screen.getByText(/足迹 MVT 瓦片/)).toBeInTheDocument()
   })
 
   it('rounds footprint point opacity controls to 0.01 precision through the slider', () => {

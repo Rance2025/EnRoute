@@ -2,6 +2,42 @@ import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+vi.mock('./components/MapboxCanvas', async () => {
+  const React = await import('react')
+
+  return {
+    MapboxCanvas: () => React.createElement(
+      'section',
+      {
+        className: 'map-stage',
+        'aria-label': '在途 EnRoute 地图工作区',
+      },
+      React.createElement(
+        'div',
+        {
+          className: 'map-message',
+          role: 'status',
+        },
+        React.createElement('h2', null, '需要配置 Mapbox 访问令牌'),
+        React.createElement('pre', null, 'VITE_MAPBOX_ACCESS_TOKEN'),
+      ),
+      React.createElement(
+        'div',
+        {
+          className: 'map-toolbar',
+          'aria-label': '地图工具',
+        },
+        React.createElement('button', { type: 'button' }, '聚焦当前足迹'),
+        React.createElement('button', { type: 'button' }, '显示世界地图'),
+        React.createElement('button', { type: 'button' }, '定位当前位置'),
+        React.createElement('button', { type: 'button' }, '放大地图'),
+        React.createElement('button', { type: 'button' }, '缩小地图'),
+        React.createElement('button', { type: 'button' }, '足迹显示设置'),
+      ),
+    ),
+  }
+})
+
 import App from './App'
 import {
   SECONDARY_NAV_RAIL_WIDTH,
@@ -235,7 +271,7 @@ describe('App', () => {
     expect(shell.querySelector(':scope > .right-context-panel')).toBeNull()
   })
 
-  it('shows a setup message when AMap credentials are missing', () => {
+  it('shows a setup message when Mapbox credentials are missing', () => {
     render(
       <App
         amapConfig={{
@@ -257,9 +293,8 @@ describe('App', () => {
     )
 
     expect(screen.getByRole('navigation', { name: '主导航' })).toHaveTextContent('EnRoute')
-    expect(screen.getByText('需要配置高德地图密钥')).toBeInTheDocument()
-    expect(screen.getByText(/VITE_AMAP_KEY/)).toBeInTheDocument()
-    expect(screen.getByText(/VITE_AMAP_SECURITY_CODE/)).toBeInTheDocument()
+    expect(screen.getByText('需要配置 Mapbox 访问令牌')).toBeInTheDocument()
+    expect(screen.getByText(/VITE_MAPBOX_ACCESS_TOKEN/)).toBeInTheDocument()
   })
 
   it('defaults to pure icon top navigation with a selectable logo overview segment', () => {
@@ -635,7 +670,7 @@ describe('App', () => {
       'aria-pressed',
       'true',
     )
-    expect(screen.getByText('需要配置高德地图密钥')).toBeInTheDocument()
+    expect(screen.getByText('需要配置 Mapbox 访问令牌')).toBeInTheDocument()
     expect(screen.getByRole('main')).toHaveClass('app-shell--map')
     expect(document.body).toHaveClass('is-map-view')
 

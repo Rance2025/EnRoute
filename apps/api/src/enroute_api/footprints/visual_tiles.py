@@ -44,6 +44,12 @@ class VisualTileBuildCandidate:
     end_timestamp_seconds: int
 
 
+@dataclass(frozen=True)
+class VisualTileReadResult:
+    records: list[VisualCellRecord]
+    dirty_buckets: list[tuple[int, int]]
+
+
 def build_visual_tile(
     connection: sqlite3.Connection,
     *,
@@ -57,16 +63,17 @@ def build_visual_tile(
     updated_at: int,
 ) -> bool:
     west, south, east, north = tile_bounds(z=z, x=x, y=y)
+    max_tile = 2**z - 1
     records_by_cell: dict[int, VisualCellRecord] = {}
     cursor = connection.execute(
         """
         SELECT f.timestamp_seconds, f.longitude, f.latitude
         FROM footprint_spatial s
         JOIN footprints f ON f.timestamp_seconds = s.footprint_rowid
-        WHERE s.min_lng <= :east
+        WHERE (:is_last_x OR s.min_lng < :east)
           AND s.max_lng >= :west
           AND s.min_lat <= :north
-          AND s.max_lat >= :south
+          AND (:is_last_y OR s.max_lat > :south)
           AND f.timestamp_seconds >= :start
           AND f.timestamp_seconds < :end
         ORDER BY f.timestamp_seconds ASC
@@ -76,6 +83,8 @@ def build_visual_tile(
             "south": south,
             "east": east,
             "north": north,
+            "is_last_x": int(x == max_tile),
+            "is_last_y": int(y == max_tile),
             "start": start_timestamp_seconds,
             "end": end_timestamp_seconds,
         },
@@ -125,42 +134,47 @@ def build_visual_tiles(
     *,
     min_zoom: int = 0,
     max_zoom: int = MAX_VISUAL_TILE_ZOOM,
-    bucket: str = "all",
+    bucket: str = "all,day,month,year",
     updated_at: int | None = None,
     commit_interval: int = 1000,
 ) -> VisualTileBuildResult:
-    normalized_bucket = normalize_precompute_bucket(bucket)
+    normalized_buckets = normalize_precompute_buckets(bucket)
     validate_zoom_range(min_zoom=min_zoom, max_zoom=max_zoom)
-    resolved_updated_at = int(time.time()) if updated_at is None else updated_at
-
-    candidates = enumerate_visual_tile_build_candidates(
-        connection,
-        min_zoom=min_zoom,
-        max_zoom=max_zoom,
-        bucket=normalized_bucket,
-    )
+    resolved_updated_at = int(time.time() * 1000) if updated_at is None else updated_at
+    bucket_count = 0
+    candidate_count = 0
     built_count = 0
-    for index, candidate in enumerate(candidates, start=1):
-        if build_visual_tile(
-            connection,
-            z=candidate.z,
-            x=candidate.x,
-            y=candidate.y,
-            t_type=candidate.t_type,
-            t=candidate.t,
-            start_timestamp_seconds=candidate.start_timestamp_seconds,
-            end_timestamp_seconds=candidate.end_timestamp_seconds,
-            updated_at=resolved_updated_at,
-        ):
-            built_count += 1
-        if commit_interval > 0 and index % commit_interval == 0:
-            connection.commit()
+
+    for normalized_bucket in normalized_buckets:
+        for z in range(min_zoom, max_zoom + 1):
+            candidates = enumerate_visual_tile_build_candidates(
+                connection,
+                z=z,
+                bucket=normalized_bucket,
+            )
+            candidate_count += len(candidates)
+            for candidate in candidates:
+                bucket_count += 1
+                if build_visual_tile(
+                    connection,
+                    z=candidate.z,
+                    x=candidate.x,
+                    y=candidate.y,
+                    t_type=candidate.t_type,
+                    t=candidate.t,
+                    start_timestamp_seconds=candidate.start_timestamp_seconds,
+                    end_timestamp_seconds=candidate.end_timestamp_seconds,
+                    updated_at=resolved_updated_at,
+                ):
+                    built_count += 1
+                if commit_interval > 0 and bucket_count % commit_interval == 0:
+                    connection.commit()
     connection.commit()
     return VisualTileBuildResult(
-        bucket=normalized_bucket,
+        bucket=",".join(normalized_buckets),
         min_zoom=min_zoom,
         max_zoom=max_zoom,
-        candidate_count=len(candidates),
+        candidate_count=candidate_count,
         built_count=built_count,
     )
 
@@ -168,8 +182,7 @@ def build_visual_tiles(
 def enumerate_visual_tile_build_candidates(
     connection: sqlite3.Connection,
     *,
-    min_zoom: int,
-    max_zoom: int,
+    z: int,
     bucket: str,
 ) -> list[VisualTileBuildCandidate]:
     timestamp_bounds = get_footprint_timestamp_bounds(connection)
@@ -195,19 +208,18 @@ def enumerate_visual_tile_build_candidates(
             all_start_timestamp_seconds=all_start,
             all_end_timestamp_seconds=all_end,
         )
-        for z in range(min_zoom, max_zoom + 1):
-            x, y = coordinate_to_tile(longitude=longitude, latitude=latitude, z=z)
-            candidates.add(
-                VisualTileBuildCandidate(
-                    z=z,
-                    x=x,
-                    y=y,
-                    t_type=t_type,
-                    t=t,
-                    start_timestamp_seconds=start_timestamp_seconds,
-                    end_timestamp_seconds=end_timestamp_seconds,
-                ),
-            )
+        x, y = coordinate_to_tile(longitude=longitude, latitude=latitude, z=z)
+        candidates.add(
+            VisualTileBuildCandidate(
+                z=z,
+                x=x,
+                y=y,
+                t_type=t_type,
+                t=t,
+                start_timestamp_seconds=start_timestamp_seconds,
+                end_timestamp_seconds=end_timestamp_seconds,
+            ),
+        )
 
     return sorted(candidates)
 
@@ -267,6 +279,15 @@ def normalize_precompute_bucket(bucket: str) -> str:
     if normalized not in {"all", "day", "month", "year"}:
         raise ValueError("bucket must be one of all, day, month, or year")
     return normalized
+
+
+def normalize_precompute_buckets(bucket: str) -> list[str]:
+    normalized_buckets: list[str] = []
+    for raw_bucket in bucket.split(","):
+        normalized_bucket = normalize_precompute_bucket(raw_bucket)
+        if normalized_bucket not in normalized_buckets:
+            normalized_buckets.append(normalized_bucket)
+    return normalized_buckets
 
 
 def validate_zoom_range(*, min_zoom: int, max_zoom: int) -> None:
@@ -378,12 +399,13 @@ def read_visual_tile_records(
     x: int,
     y: int,
     buckets: list[tuple[int, int]],
-) -> list[VisualCellRecord]:
+) -> VisualTileReadResult:
     records_by_cell: dict[int, VisualCellRecord] = {}
+    dirty_buckets: list[tuple[int, int]] = []
     for t_type, t in buckets:
         row = connection.execute(
             """
-            SELECT cells
+            SELECT status, cells
             FROM visual_tiles
             WHERE z = ? AND x = ? AND y = ? AND t_type = ? AND t = ?
               AND status IN (?, ?)
@@ -394,10 +416,95 @@ def read_visual_tile_records(
         if row is None:
             continue
 
-        cells = row["cells"] if isinstance(row, sqlite3.Row) else row[0]
+        status = int(get_row_value(row, "status", 0))
+        cells = get_row_value(row, "cells", 1)
         for record in decode_visual_cells(cells):
             records_by_cell.setdefault(record.cell_id, record)
-    return list(records_by_cell.values())
+        if status == STATUS_DIRTY:
+            dirty_buckets.append((t_type, t))
+
+    return VisualTileReadResult(
+        records=list(records_by_cell.values()),
+        dirty_buckets=dirty_buckets,
+    )
+
+
+def rebuild_dirty_visual_tiles(
+    connection: sqlite3.Connection,
+    *,
+    z: int,
+    x: int,
+    y: int,
+    buckets: list[tuple[int, int]],
+) -> None:
+    if not buckets:
+        return
+
+    updated_at = int(time.time() * 1000)
+    for t_type, t in buckets:
+        time_range = resolve_bucket_timestamp_range(connection, t_type=t_type, t=t)
+        if time_range is None:
+            delete_visual_tile(connection, z=z, x=x, y=y, t_type=t_type, t=t)
+            continue
+
+        start_timestamp_seconds, end_timestamp_seconds = time_range
+        build_visual_tile(
+            connection,
+            z=z,
+            x=x,
+            y=y,
+            t_type=t_type,
+            t=t,
+            start_timestamp_seconds=start_timestamp_seconds,
+            end_timestamp_seconds=end_timestamp_seconds,
+            updated_at=updated_at,
+        )
+    connection.commit()
+
+
+def resolve_bucket_timestamp_range(
+    connection: sqlite3.Connection,
+    *,
+    t_type: int,
+    t: int,
+) -> tuple[int, int] | None:
+    if t_type == TIME_BUCKET_ALL and t == 0:
+        return get_footprint_timestamp_bounds(connection)
+
+    if t_type == TIME_BUCKET_YEAR:
+        return (
+            shanghai_date_start_timestamp_seconds(t, 1, 1),
+            shanghai_date_start_timestamp_seconds(t + 1, 1, 1),
+        )
+
+    if t_type == TIME_BUCKET_MONTH:
+        year = t // 100
+        month = t % 100
+        if month < 1 or month > 12:
+            return None
+        if month == 12:
+            return (
+                shanghai_date_start_timestamp_seconds(year, 12, 1),
+                shanghai_date_start_timestamp_seconds(year + 1, 1, 1),
+            )
+        return (
+            shanghai_date_start_timestamp_seconds(year, month, 1),
+            shanghai_date_start_timestamp_seconds(year, month + 1, 1),
+        )
+
+    if t_type == TIME_BUCKET_DAY:
+        year = t // 10000
+        month = (t // 100) % 100
+        day = t % 100
+        try:
+            return (
+                shanghai_date_start_timestamp_seconds(year, month, day),
+                shanghai_date_start_timestamp_seconds(year, month, day) + 86_400,
+            )
+        except ValueError:
+            return None
+
+    return None
 
 
 def last_day_of_month(value: date) -> date:

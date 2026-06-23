@@ -3,8 +3,10 @@ from __future__ import annotations
 import json
 import math
 import sqlite3
-from threading import RLock
+import time
+from datetime import date
 from pathlib import Path
+from threading import RLock, Thread
 from typing import Any, Iterable, TypedDict
 
 from enroute_api.admin_regions.store import (
@@ -20,7 +22,21 @@ from enroute_api.admin_regions.store import (
 
 from .country import country_id_for_region_match
 from .csv_loader import iter_footprint_points
-from .visual_tiles import read_visual_tile_records, resolve_time_buckets
+from .visual_tiles import (
+    MAX_VISUAL_TILE_ZOOM,
+    TIME_BUCKET_ALL,
+    TIME_BUCKET_DAY,
+    TIME_BUCKET_MONTH,
+    TIME_BUCKET_YEAR,
+    coordinate_to_tile,
+    encode_day,
+    mark_visual_tile_dirty,
+    read_visual_tile_records,
+    rebuild_dirty_visual_tiles,
+    resolve_time_buckets,
+    shanghai_date_from_timestamp,
+    shanghai_date_start_timestamp_seconds,
+)
 from enroute_api.map_tiles.mvt import encode_footprint_mvt
 
 TILE_SIZE = 256
@@ -55,6 +71,8 @@ class FootprintStore:
         )
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._connection_lock = RLock()
+        self._visual_tile_rebuild_lock = RLock()
+        self._queued_visual_tile_rebuilds: set[tuple[int, int, int, tuple[tuple[int, int], ...]]] = set()
         self.connection = sqlite3.connect(self.db_path, check_same_thread=False)
         self.connection.row_factory = sqlite3.Row
         initialize_schema(self.connection)
@@ -75,6 +93,25 @@ class FootprintStore:
         with self._connection_lock:
             self.ensure_ready()
             return query_snapshot(self.connection, normalize_snapshot_input(input_payload))
+
+    def get_footprint_metrics(
+        self,
+        *,
+        range_value: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> dict[str, float]:
+        with self._connection_lock:
+            self.ensure_ready()
+            return query_metrics(
+                self.connection,
+                normalize_metrics_input(
+                    self.connection,
+                    range_value=range_value,
+                    start_date=start_date,
+                    end_date=end_date,
+                ),
+            )
 
     def get_all_points(self) -> dict[str, list[dict[str, Any]]]:
         with self._connection_lock:
@@ -119,18 +156,69 @@ class FootprintStore:
         end_date: str | None = None,
     ) -> bytes:
         with self._connection_lock:
-            records = read_visual_tile_records(
+            self.ensure_ready()
+            buckets = resolve_time_buckets(
+                range_value=range_value,
+                start_date=start_date,
+                end_date=end_date,
+            )
+            read_result = read_visual_tile_records(
                 self.connection,
                 z=z,
                 x=x,
                 y=y,
-                buckets=resolve_time_buckets(
-                    range_value=range_value,
-                    start_date=start_date,
-                    end_date=end_date,
-                ),
+                buckets=buckets,
             )
-            return encode_footprint_mvt(records)
+            if read_result.dirty_buckets:
+                self.queue_visual_tile_rebuild(
+                    z=z,
+                    x=x,
+                    y=y,
+                    buckets=read_result.dirty_buckets,
+                )
+            return encode_footprint_mvt(read_result.records)
+
+    def queue_visual_tile_rebuild(
+        self,
+        *,
+        z: int,
+        x: int,
+        y: int,
+        buckets: list[tuple[int, int]],
+    ) -> None:
+        rebuild_key = (z, x, y, tuple(sorted(set(buckets))))
+        with self._visual_tile_rebuild_lock:
+            if rebuild_key in self._queued_visual_tile_rebuilds:
+                return
+            self._queued_visual_tile_rebuilds.add(rebuild_key)
+
+        thread = Thread(
+            target=self._rebuild_visual_tile_worker,
+            args=(rebuild_key,),
+            daemon=True,
+        )
+        thread.start()
+
+    def _rebuild_visual_tile_worker(
+        self,
+        rebuild_key: tuple[int, int, int, tuple[tuple[int, int], ...]],
+    ) -> None:
+        z, x, y, buckets = rebuild_key
+        connection = sqlite3.connect(self.db_path)
+        connection.row_factory = sqlite3.Row
+        try:
+            initialize_schema(connection)
+            rebuild_dirty_visual_tiles(
+                connection,
+                z=z,
+                x=x,
+                y=y,
+                buckets=list(buckets),
+            )
+        finally:
+            connection.close()
+            with self._visual_tile_rebuild_lock:
+                self._queued_visual_tile_rebuilds.discard(rebuild_key)
 
     def close(self) -> None:
         with self._connection_lock:
@@ -262,7 +350,13 @@ def import_footprints(
             expected_stats_signature=compatibility_signature,
         )
         return get_import_result(connection, new_count=0)
-    if not data_path.exists() and stored_count > 0 and stored_spatial_count == stored_count:
+    if (
+        not data_path.exists()
+        and stored_count > 0
+        and stored_spatial_count == stored_count
+        and stored_signature is not None
+        and stored_compatibility_signature == compatibility_signature
+    ):
         ensure_admin_region_stats_current(
             connection,
             stored_stats_signature=stored_stats_signature,
@@ -270,8 +364,8 @@ def import_footprints(
         )
         return get_import_result(connection, new_count=0)
 
-    if stored_compatibility_signature is None and stored_count > 0:
-        stored_compatibility_signature = compatibility_signature
+    if not data_path.exists():
+        raise FileNotFoundError(data_path)
 
     if stored_compatibility_signature != compatibility_signature:
         clear_imported_footprints(connection)
@@ -289,6 +383,7 @@ def import_footprints(
         for point in iter_footprint_points(data_path=data_path, coordinate_system=coordinate_system):
             if insert_footprint_if_new(connection, point, region_matcher=region_matcher):
                 new_count += 1
+                mark_affected_visual_tiles_dirty(connection, point)
 
         set_meta_value(connection, "sourceSignature", source_signature)
         set_meta_value(connection, "importCompatibilitySignature", compatibility_signature)
@@ -362,6 +457,33 @@ def insert_footprint_if_new(
     )
     update_region_unlock_stats(connection, point, region_id)
     return True
+
+
+def mark_affected_visual_tiles_dirty(connection: sqlite3.Connection, point: dict[str, Any]) -> None:
+    timestamp_seconds = int(point["timestampSeconds"])
+    local_date = shanghai_date_from_timestamp(timestamp_seconds)
+    buckets = [
+        (TIME_BUCKET_ALL, 0),
+        (TIME_BUCKET_YEAR, local_date.year),
+        (TIME_BUCKET_MONTH, local_date.year * 100 + local_date.month),
+        (TIME_BUCKET_DAY, encode_day(local_date)),
+    ]
+    updated_at = int(time.time() * 1000)
+    longitude = float(point["longitude"])
+    latitude = float(point["latitude"])
+
+    for z in range(MAX_VISUAL_TILE_ZOOM + 1):
+        x, y = coordinate_to_tile(longitude=longitude, latitude=latitude, z=z)
+        for t_type, t in buckets:
+            mark_visual_tile_dirty(
+                connection,
+                z=z,
+                x=x,
+                y=y,
+                t_type=t_type,
+                t=t,
+                updated_at=updated_at,
+            )
 
 
 def validate_existing_footprint_matches(
@@ -439,10 +561,12 @@ def load_admin_region_data_if_available(
 def clear_imported_footprints(connection: sqlite3.Connection) -> None:
     connection.executescript(
         """
+        DELETE FROM visual_tiles;
         DELETE FROM footprint_spatial;
         DELETE FROM footprints;
         DELETE FROM footprint_meta WHERE key IN (
             'sourceSignature',
+            'importCompatibilitySignature',
             'rowCount',
             'adminRegionStatsSignature'
         );
@@ -621,6 +745,69 @@ def query_metrics(connection: sqlite3.Connection, input_payload: dict[str, Any])
         "totalDistanceMeters": total_distance_meters,
         "averageDistanceMetersPerDay": total_distance_meters
         / max(input_payload["timeRange"]["dayCount"], 1),
+    }
+
+
+def normalize_metrics_input(
+    connection: sqlite3.Connection,
+    *,
+    range_value: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+) -> dict[str, Any]:
+    if (range_value or "").strip().lower() == "all" or not (start_date and end_date):
+        return normalize_all_metrics_input(connection)
+
+    start = date.fromisoformat(start_date)
+    end = date.fromisoformat(end_date)
+
+    return {
+        "timeRange": {
+            "startTimestampSeconds": shanghai_date_start_timestamp_seconds(
+                start.year,
+                start.month,
+                start.day,
+            ),
+            "endTimestampSeconds": shanghai_date_start_timestamp_seconds(
+                end.year,
+                end.month,
+                end.day,
+            )
+            + 86_399,
+            "dayCount": max((end - start).days + 1, 1),
+        },
+    }
+
+
+def normalize_all_metrics_input(connection: sqlite3.Connection) -> dict[str, Any]:
+    row = connection.execute(
+        """
+        SELECT
+          MIN(timestamp_seconds) AS startTimestampSeconds,
+          MAX(timestamp_seconds) AS endTimestampSeconds
+        FROM footprints
+        """,
+    ).fetchone()
+    if row["startTimestampSeconds"] is None or row["endTimestampSeconds"] is None:
+        return {
+            "timeRange": {
+                "startTimestampSeconds": 0,
+                "endTimestampSeconds": OPEN_ENDED_TIMESTAMP_SECONDS,
+                "dayCount": 1,
+            },
+        }
+
+    start_timestamp_seconds = int(row["startTimestampSeconds"])
+    end_timestamp_seconds = int(row["endTimestampSeconds"])
+    start = shanghai_date_from_timestamp(start_timestamp_seconds)
+    end = shanghai_date_from_timestamp(end_timestamp_seconds)
+
+    return {
+        "timeRange": {
+            "startTimestampSeconds": start_timestamp_seconds,
+            "endTimestampSeconds": end_timestamp_seconds,
+            "dayCount": max((end - start).days + 1, 1),
+        },
     }
 
 

@@ -53,7 +53,11 @@ def parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
   parser.add_argument(
     "--coordinate-system",
     choices=["wgs84", "gcj02"],
-    help="Source coordinate system. Defaults to FOOTPRINT_COORDINATE_SYSTEM.",
+    help=(
+      "Source coordinate system label. Footprint storage is canonical WGS-84; "
+      "gcj02 is accepted only for legacy compatibility and is not shifted during import. "
+      "Defaults to FOOTPRINT_COORDINATE_SYSTEM."
+    ),
   )
   parser.add_argument(
     "--admin-region-data-path",
