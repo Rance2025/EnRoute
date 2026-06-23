@@ -685,7 +685,7 @@ describe('map chrome layout', () => {
     expect(pickerCellRule).toContain('border-radius: 11px')
     expect(pickerCellRule).toContain('font-size: 11px')
     expect(pickerCellRule).toContain('font-weight: 760')
-    expect(monthCellRule).toContain('min-height: 34px')
+    expect(monthCellRule).toContain('min-height: 30px')
     expect(monthCellRule).toContain('font-size: 10px')
     expect(monthCellRule).toContain('white-space: nowrap')
     expect(appCss.indexOf('.time-picker-grid--months button')).toBeGreaterThan(
@@ -1071,7 +1071,7 @@ describe('map chrome layout', () => {
     expect(cssRule('.time-picker-grid--months')).toContain(
       'grid-template-columns: repeat(6, minmax(0, 1fr))',
     )
-    expect(cssRule('.time-picker-grid--months button')).toContain('min-height: 34px')
+    expect(cssRule('.time-picker-grid--months button')).toContain('min-height: 30px')
   })
 
   it('keeps decade year cells on one readable line', () => {
