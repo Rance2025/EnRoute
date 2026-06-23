@@ -1117,7 +1117,7 @@
 }
 
 .time-picker-grid--months button {
-  min-height: 34px;
+  min-height: 30px;
   font-size: 10px;
   white-space: nowrap;
 }
