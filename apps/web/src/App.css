@@ -8,6 +8,9 @@
   --glass-panel-bg:
     radial-gradient(circle at 18% 0%, rgba(255, 255, 255, 0.76), transparent 34%),
     linear-gradient(145deg, rgba(255, 255, 255, 0.56), rgba(242, 248, 247, 0.24));
+  --solid-glass-panel-bg:
+    radial-gradient(circle at 18% 0%, rgba(255, 255, 255, 0.84), transparent 34%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.82), rgba(242, 248, 247, 0.68));
   --glass-panel-border: rgba(255, 255, 255, 0.7);
   --glass-panel-shadow:
     0 28px 78px rgba(25, 38, 36, 0.16),
@@ -3425,7 +3428,7 @@
   border: 1px solid var(--glass-panel-border);
   border-radius: 10px;
   color: #17211f;
-  background: var(--glass-panel-bg);
+  background: var(--solid-glass-panel-bg);
   box-shadow: var(--glass-panel-shadow);
   backdrop-filter: var(--glass-panel-filter);
   -webkit-backdrop-filter: var(--glass-panel-filter);
