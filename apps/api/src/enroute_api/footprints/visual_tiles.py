@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 import sqlite3
+from datetime import date, timedelta
 
 from .visual_tile_codec import VisualCellRecord, encode_visual_cells
 
@@ -130,6 +131,44 @@ def delete_visual_tile(
         """,
         (z, x, y, t_type, t),
     )
+
+
+def split_time_range_into_buckets(start_date: str, end_date: str) -> list[tuple[int, int]]:
+    current = date.fromisoformat(start_date)
+    end = date.fromisoformat(end_date)
+    if current > end:
+        return []
+
+    buckets: list[tuple[int, int]] = []
+    while current <= end:
+        if current.month == 1 and current.day == 1:
+            year_end = date(current.year, 12, 31)
+            if year_end <= end:
+                buckets.append((TIME_BUCKET_YEAR, current.year))
+                current = year_end + timedelta(days=1)
+                continue
+
+        if current.day == 1:
+            month_end = last_day_of_month(current)
+            if month_end <= end:
+                buckets.append((TIME_BUCKET_MONTH, current.year * 100 + current.month))
+                current = month_end + timedelta(days=1)
+                continue
+
+        buckets.append((TIME_BUCKET_DAY, encode_day(current)))
+        current += timedelta(days=1)
+
+    return buckets
+
+
+def last_day_of_month(value: date) -> date:
+    if value.month == 12:
+        return date(value.year, 12, 31)
+    return date(value.year, value.month + 1, 1) - timedelta(days=1)
+
+
+def encode_day(value: date) -> int:
+    return value.year * 10000 + value.month * 100 + value.day
 
 
 def tile_bounds(*, z: int, x: int, y: int) -> tuple[float, float, float, float]:

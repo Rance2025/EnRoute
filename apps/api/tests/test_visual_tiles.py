@@ -8,8 +8,11 @@ from enroute_api.footprints.visual_tiles import (
     STATUS_DIRTY,
     STATUS_READY,
     TIME_BUCKET_DAY,
+    TIME_BUCKET_MONTH,
+    TIME_BUCKET_YEAR,
     build_visual_tile,
     mark_visual_tile_dirty,
+    split_time_range_into_buckets,
 )
 
 
@@ -182,3 +185,13 @@ def test_mark_dirty_does_not_create_missing_visual_tile_row(tmp_path):
         assert count == 0
     finally:
         connection.close()
+
+
+def test_splits_custom_range_into_year_month_day_buckets():
+    buckets = split_time_range_into_buckets("2024-02-10", "2026-03-09")
+
+    assert (TIME_BUCKET_YEAR, 2025) in buckets
+    assert (TIME_BUCKET_MONTH, 202403) in buckets
+    assert (TIME_BUCKET_MONTH, 202602) in buckets
+    assert (TIME_BUCKET_DAY, 20240210) in buckets
+    assert (TIME_BUCKET_DAY, 20260309) in buckets
