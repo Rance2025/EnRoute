@@ -1549,7 +1549,7 @@ describe('map chrome layout', () => {
     expect(popoverRule).toContain('width: 218px')
     expect(popoverRule).toContain('max-width: calc(100vw - 28px)')
     expect(popoverRule).toContain('border-radius: 10px')
-    expect(popoverRule).toContain('background: var(--glass-panel-bg)')
+    expect(popoverRule).toContain('background: var(--solid-glass-panel-bg)')
     expect(popoverRule).toContain('box-shadow: var(--glass-panel-shadow)')
     expect(popoverRule).toContain('backdrop-filter: var(--glass-panel-filter)')
     expect(popoverRule).toContain('-webkit-backdrop-filter: var(--glass-panel-filter)')
@@ -1595,6 +1595,23 @@ describe('map chrome layout', () => {
     expect(panelRule).toContain('z-index: 2')
     expect(rowRule).toContain('grid-template-columns: minmax(0, 1fr) auto')
     expect(rowRule).toContain('white-space: nowrap')
+  })
+
+  it('keeps the footprint settings popover more opaque while matching debug panel material', () => {
+    const appShellRule = cssRule('.app-shell')
+    const debugPanelRule = cssRule('.footprint-debug-panel')
+    const popoverRule = cssRule('.footprint-style-popover')
+
+    expect(appShellRule).toContain('--solid-glass-panel-bg:')
+    expect(appShellRule).toContain('linear-gradient(145deg, rgba(255, 255, 255, 0.82), rgba(242, 248, 247, 0.68))')
+    expect(debugPanelRule).toContain('border: 1px solid var(--glass-panel-border)')
+    expect(debugPanelRule).toContain('box-shadow: var(--glass-panel-shadow)')
+    expect(debugPanelRule).toContain('backdrop-filter: var(--glass-panel-filter)')
+    expect(popoverRule).toContain('border: 1px solid var(--glass-panel-border)')
+    expect(popoverRule).toContain('background: var(--solid-glass-panel-bg)')
+    expect(popoverRule).not.toContain('background: var(--glass-panel-bg)')
+    expect(popoverRule).toContain('box-shadow: var(--glass-panel-shadow)')
+    expect(popoverRule).toContain('backdrop-filter: var(--glass-panel-filter)')
   })
 
   it('removes the AMap compass and limits map dragging to configured bounds', () => {
