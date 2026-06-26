@@ -618,7 +618,7 @@ function App(props: AppProps) {
       </aside>
 
       {view === 'map' ? (
-        <Suspense fallback={null}>
+        <Suspense fallback={<MapLoadingFallback />}>
           <LazyMapboxCanvas
             timeRange={selectedTimeRange}
             onFootprintMetricsChange={setFootprintMetrics}
@@ -935,5 +935,14 @@ function PlaceholderWorkspace({ view }: { view: Exclude<AppView, 'map' | 'accoun
         <h1>{title}</h1>
       </div>
     </section>
+  )
+}
+
+function MapLoadingFallback() {
+  return (
+    <section
+      className="map-stage map-stage--loading"
+      aria-label="在途 EnRoute 地图工作区"
+    />
   )
 }
