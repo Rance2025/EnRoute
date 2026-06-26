@@ -349,15 +349,20 @@ function MapboxCanvasComponent({
         setErrorMessage(nextError instanceof Error ? nextError.message : 'Mapbox 地图加载失败')
         setStatus('error')
       }
+      const handleZoomStart = () => {
+        stopGlobeRotation()
+      }
 
       map.on('load', handleLoad)
       map.on('error', handleError)
+      map.on('zoomstart', handleZoomStart)
 
       return () => {
         disposed = true
         stopGlobeRotation()
         map.off('load', handleLoad)
         map.off('error', handleError)
+        map.off('zoomstart', handleZoomStart)
         map.remove()
         mapRef.current = null
       }

@@ -298,6 +298,59 @@ describe('MapboxCanvas footprint vector tiles', () => {
     ])
   })
 
+  it('stops globe rotation when the user zooms after entering the world view', async () => {
+    vi.useFakeTimers()
+    const { mapRecords } = mockMapboxRuntime()
+    const { MapboxCanvas } = await import('./MapboxCanvas')
+
+    render(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        projection="globe"
+        timeRange={selectedRange}
+      />,
+    )
+
+    mapRecords[0].setCenter([12, 34])
+    fireEvent.click(screen.getByRole('button', { name: '显示世界地图' }))
+    act(() => mapRecords[0].emit('moveend'))
+    expect(mapRecords[0].easeToCalls).toHaveLength(1)
+
+    act(() => mapRecords[0].emit('zoomstart'))
+    act(() => {
+      vi.advanceTimersByTime(1000)
+    })
+
+    expect(mapRecords[0].easeToCalls).toHaveLength(1)
+  })
+
+  it('keeps globe rotation running when the user drags after entering the world view', async () => {
+    vi.useFakeTimers()
+    const { mapRecords } = mockMapboxRuntime()
+    const { MapboxCanvas } = await import('./MapboxCanvas')
+
+    render(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        projection="globe"
+        timeRange={selectedRange}
+      />,
+    )
+
+    mapRecords[0].setCenter([12, 34])
+    fireEvent.click(screen.getByRole('button', { name: '显示世界地图' }))
+    act(() => mapRecords[0].emit('moveend'))
+    expect(mapRecords[0].easeToCalls).toHaveLength(1)
+
+    act(() => mapRecords[0].emit('dragstart'))
+    act(() => mapRecords[0].emit('moveend'))
+    act(() => {
+      vi.advanceTimersByTime(1000)
+    })
+
+    expect(mapRecords[0].easeToCalls).toHaveLength(2)
+  })
+
   it('shows footprint tile debug metrics for the current Mapbox viewport', async () => {
     const { mapRecords } = mockMapboxRuntime()
     const fetchMock = mockMetricsAndDebugFetch({
