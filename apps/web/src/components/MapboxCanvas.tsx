@@ -64,7 +64,7 @@ type FootprintTileDebugMetrics = {
   renderRatio: number
 }
 
-const DEFAULT_MAPBOX_STYLE_URL = 'mapbox://styles/mapbox/light-v11'
+const DEFAULT_MAPBOX_STYLE_URL = 'mapbox://styles/oies0/cmquspp54003i01qpazy084sq'
 const DEFAULT_MAPBOX_PROJECTION: MapboxProjection = 'globe'
 const DEFAULT_FOOTPRINT_METRICS_URL = '/api/footprints/metrics'
 const DEFAULT_FOOTPRINT_TILE_DEBUG_URL = '/api/map/tiles/footprints/debug'
