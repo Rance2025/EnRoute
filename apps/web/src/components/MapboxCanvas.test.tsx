@@ -63,7 +63,7 @@ describe('MapboxCanvas footprint vector tiles', () => {
     )
 
     expect(mapRecords[0].options).toMatchObject({
-      style: 'mapbox://styles/oies0/cmquspp54003i01qpazy084sq',
+      style: 'mapbox://styles/oies0/cmqv3payf000r01s79tjjh7bh',
     })
   })
 
@@ -132,6 +132,41 @@ describe('MapboxCanvas footprint vector tiles', () => {
     expect(JSON.stringify(footprintLayer)).not.toContain('cluster')
     expect(JSON.stringify(footprintLayer)).not.toContain('count')
     expect(footprintDataSourceImported()).toBe(false)
+  })
+
+  it('starts slow globe rotation from the default world view after the initial load', async () => {
+    vi.useFakeTimers()
+    const { mapRecords } = mockMapboxRuntime()
+    const { MapboxCanvas } = await import('./MapboxCanvas')
+
+    render(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        projection="globe"
+        timeRange={selectedRange}
+      />,
+    )
+
+    mapRecords[0].setCenter([12, 34])
+    expect(mapRecords[0].easeToCalls).toEqual([])
+
+    act(() => mapRecords[0].emit('load'))
+
+    expect(mapRecords[0].easeToCalls).toEqual([
+      {
+        center: [10.8, 34],
+        bearing: 0,
+        pitch: 0,
+        duration: 1000,
+        easing: expect.any(Function),
+      },
+    ])
+
+    act(() => {
+      vi.advanceTimersByTime(1000)
+    })
+
+    expect(mapRecords[0].easeToCalls).toHaveLength(2)
   })
 
   it('uses mercator projection and world copies when configured as a flat map', async () => {
@@ -293,7 +328,7 @@ describe('MapboxCanvas footprint vector tiles', () => {
 
     expect(mapRecords[0].easeToCalls).toEqual([
       {
-        center: [10, 34],
+        center: [10.8, 34],
         bearing: 0,
         pitch: 0,
         duration: 1000,
