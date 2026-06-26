@@ -1037,6 +1037,26 @@ describe('map chrome layout', () => {
     )
   })
 
+  it('keeps footprint map style segments in one compact row', () => {
+    expect(cssRule('.footprint-style-popover__row--segmented')).toContain(
+      'grid-template-columns: minmax(0, 1fr) 96px',
+    )
+    expect(cssRule('.footprint-style-popover__row--segmented')).toContain('align-items: center')
+    expect(cssRule('.footprint-style-popover__row--segmented')).toContain('gap: 10px')
+    expect(cssRule('.footprint-style-popover__segmented')).toContain('display: grid')
+    expect(cssRule('.footprint-style-popover__segmented')).toContain(
+      'grid-template-columns: repeat(var(--segment-count), minmax(0, 1fr))',
+    )
+    expect(cssRule('.footprint-style-popover__segmented')).toContain('width: 96px')
+    expect(cssRule('.footprint-style-popover__segmented')).toContain('height: 26px')
+    expect(cssRule('.footprint-style-popover__segmented')).toContain('overflow: hidden')
+    expect(cssRule('.footprint-style-popover__segmented button')).toContain('min-width: 0')
+    expect(cssRule('.footprint-style-popover__segmented button')).toContain('height: 22px')
+    expect(cssRule('.footprint-style-popover__segmented button')).toContain('border: 0')
+    expect(cssRule('.footprint-style-popover__segmented button')).toContain('background: transparent')
+    expect(cssRule('.footprint-style-popover__segmented button')).toContain('box-shadow: none')
+  })
+
   it('renders the settings dialog as a centered non-fullscreen modal', () => {
     expect(appSource).toContain('className="settings-dialog"')
     expect(appSource).toContain('className="settings-dialog__panel"')
@@ -1576,7 +1596,7 @@ describe('map chrome layout', () => {
     expect(popoverRule).toContain('width: 218px')
     expect(popoverRule).toContain('max-width: calc(100vw - 28px)')
     expect(popoverRule).toContain('border-radius: 10px')
-    expect(popoverRule).toContain('background: var(--solid-glass-panel-bg)')
+    expect(popoverRule).toContain('linear-gradient(145deg, #fbfefd, #eef6f3)')
     expect(popoverRule).toContain('box-shadow: var(--glass-panel-shadow)')
     expect(popoverRule).toContain('backdrop-filter: var(--glass-panel-filter)')
     expect(popoverRule).toContain('-webkit-backdrop-filter: var(--glass-panel-filter)')
@@ -1649,7 +1669,7 @@ describe('map chrome layout', () => {
     expect(debugPanelRule).toContain('box-shadow: var(--glass-panel-shadow)')
     expect(debugPanelRule).toContain('backdrop-filter: var(--glass-panel-filter)')
     expect(popoverRule).toContain('border: 1px solid var(--glass-panel-border)')
-    expect(popoverRule).toContain('background: var(--solid-glass-panel-bg)')
+    expect(popoverRule).toContain('linear-gradient(145deg, #fbfefd, #eef6f3)')
     expect(popoverRule).not.toContain('background: var(--glass-panel-bg)')
     expect(popoverRule).toContain('box-shadow: var(--glass-panel-shadow)')
     expect(popoverRule).toContain('backdrop-filter: var(--glass-panel-filter)')

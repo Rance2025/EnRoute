@@ -3482,7 +3482,9 @@
   border: 1px solid var(--glass-panel-border);
   border-radius: 10px;
   color: #17211f;
-  background: var(--solid-glass-panel-bg);
+  background:
+    radial-gradient(circle at 18% 0%, rgba(255, 255, 255, 0.84), transparent 34%),
+    linear-gradient(145deg, #fbfefd, #eef6f3);
   box-shadow: var(--glass-panel-shadow);
   backdrop-filter: var(--glass-panel-filter);
   -webkit-backdrop-filter: var(--glass-panel-filter);
@@ -3507,6 +3509,41 @@
   grid-column: 1 / -1;
   width: 100%;
   accent-color: #123f35;
+}
+
+.footprint-style-popover__row--segmented {
+  grid-template-columns: minmax(0, 1fr) 96px;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.footprint-style-popover__segmented {
+  display: grid;
+  grid-template-columns: repeat(var(--segment-count), minmax(0, 1fr));
+  width: 96px;
+  height: 26px;
+  padding: 2px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(23, 35, 31, 0.08);
+}
+
+.footprint-style-popover__segmented .segmented-control__thumb {
+  inset: 2px auto 2px 2px;
+}
+
+.footprint-style-popover__segmented button {
+  min-width: 0;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--segmented-label-color);
+  font-size: 11px;
+  font-weight: 760;
 }
 
 .footprint-style-popover__row input[type='color'] {

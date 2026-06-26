@@ -1,6 +1,8 @@
 import type { CSSProperties } from 'react'
 import { useEffect, useId, useRef, useState } from 'react'
 import { Crosshair, Globe2, LocateFixed, Minus, Plus, Settings2 } from 'lucide-react'
+import { MAP_STYLE_OPTIONS, type MapStylePreference } from '../mapStyleOptions'
+import { SegmentedControl } from './SegmentedControl'
 import {
   FOOTPRINT_OPACITY_MAX,
   FOOTPRINT_OPACITY_MIN,
@@ -26,8 +28,10 @@ type MapControlsProps = {
   onFootprintStyleChange: (style: FootprintStyle) => void
   placeLabelsVisible?: boolean
   adminBoundariesVisible?: boolean
+  mapStyle?: MapStylePreference
   onPlaceLabelsVisibleChange?: (visible: boolean) => void
   onAdminBoundariesVisibleChange?: (visible: boolean) => void
+  onMapStyleChange?: (style: MapStylePreference) => void
 }
 
 type FootprintStylePopoverProps = {
@@ -35,12 +39,15 @@ type FootprintStylePopoverProps = {
   onFootprintStyleChange: (style: FootprintStyle) => void
   placeLabelsVisible?: boolean
   adminBoundariesVisible?: boolean
+  mapStyle?: MapStylePreference
   onPlaceLabelsVisibleChange?: (visible: boolean) => void
   onAdminBoundariesVisibleChange?: (visible: boolean) => void
+  onMapStyleChange?: (style: MapStylePreference) => void
 }
 
 const FOOTPRINT_COLOR_SWATCHES = ['#123f35', '#4f7cff', '#b8544c']
 const FOOTPRINT_STYLE_COMMIT_DELAY_MS = 180
+const MAP_STYLE_LABEL = '\u5730\u56fe\u6837\u5f0f'
 
 export function MapControls({
   onFitFootprints,
@@ -52,8 +59,10 @@ export function MapControls({
   onFootprintStyleChange,
   placeLabelsVisible = true,
   adminBoundariesVisible = true,
+  mapStyle = 'primary',
   onPlaceLabelsVisibleChange,
   onAdminBoundariesVisibleChange,
+  onMapStyleChange,
 }: MapControlsProps) {
   const [isFootprintStyleOpen, setIsFootprintStyleOpen] = useState(false)
   const settingsRef = useRef<HTMLDivElement | null>(null)
@@ -128,8 +137,10 @@ export function MapControls({
             onFootprintStyleChange={onFootprintStyleChange}
             placeLabelsVisible={placeLabelsVisible}
             adminBoundariesVisible={adminBoundariesVisible}
+            mapStyle={mapStyle}
             onPlaceLabelsVisibleChange={onPlaceLabelsVisibleChange}
             onAdminBoundariesVisibleChange={onAdminBoundariesVisibleChange}
+            onMapStyleChange={onMapStyleChange}
           />
         ) : null}
         <button
@@ -152,8 +163,10 @@ function FootprintStylePopover({
   onFootprintStyleChange,
   placeLabelsVisible = true,
   adminBoundariesVisible = true,
+  mapStyle = 'primary',
   onPlaceLabelsVisibleChange,
   onAdminBoundariesVisibleChange,
+  onMapStyleChange,
 }: FootprintStylePopoverProps) {
   const [draftFootprintStyle, setDraftFootprintStyle] = useState(footprintStyle)
   const styleCommitTimerRef = useRef<number | null>(null)
@@ -277,6 +290,18 @@ function FootprintStylePopover({
           />
         ))}
       </div>
+      {onMapStyleChange ? (
+        <div className="footprint-style-popover__row footprint-style-popover__row--segmented">
+          <span>{MAP_STYLE_LABEL}</span>
+          <SegmentedControl
+            ariaLabel={MAP_STYLE_LABEL}
+            className="footprint-style-popover__segmented"
+            options={MAP_STYLE_OPTIONS}
+            value={mapStyle}
+            onChange={onMapStyleChange}
+          />
+        </div>
+      ) : null}
       {onPlaceLabelsVisibleChange ? (
         <button
           type="button"
