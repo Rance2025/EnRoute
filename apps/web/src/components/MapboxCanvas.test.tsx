@@ -285,6 +285,7 @@ describe('MapboxCanvas footprint vector tiles', () => {
     ])
     expect(mapRecords[0].easeToCalls).toEqual([])
 
+    act(() => mapRecords[0].emit('zoomstart'))
     act(() => mapRecords[0].emit('moveend'))
 
     expect(mapRecords[0].easeToCalls).toEqual([

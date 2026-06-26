@@ -114,6 +114,7 @@ function MapboxCanvasComponent({
   const baseMapVisibilityRecordsRef = useRef<BaseMapVisibilityRecord[]>([])
   const globeRotationTimerRef = useRef<number | undefined>(undefined)
   const globeRotationStartHandlerRef = useRef<(() => void) | undefined>(undefined)
+  const globeRotationPendingWorldViewRef = useRef(false)
 
   const resolvedAccessToken = resolveConfigValue(
     accessToken,
@@ -217,6 +218,7 @@ function MapboxCanvasComponent({
       map.off('moveend', globeRotationStartHandlerRef.current)
     }
     globeRotationStartHandlerRef.current = undefined
+    globeRotationPendingWorldViewRef.current = false
 
     if (globeRotationTimerRef.current === undefined) return
 
@@ -253,10 +255,12 @@ function MapboxCanvasComponent({
     const handleMoveEnd = () => {
       map.off('moveend', handleMoveEnd)
       globeRotationStartHandlerRef.current = undefined
+      globeRotationPendingWorldViewRef.current = false
       startGlobeRotation()
     }
 
     globeRotationStartHandlerRef.current = handleMoveEnd
+    globeRotationPendingWorldViewRef.current = true
     map.on('moveend', handleMoveEnd)
   }, [resolvedProjection, startGlobeRotation, stopGlobeRotation])
 
@@ -350,6 +354,8 @@ function MapboxCanvasComponent({
         setStatus('error')
       }
       const handleZoomStart = () => {
+        if (globeRotationPendingWorldViewRef.current) return
+
         stopGlobeRotation()
       }
 
