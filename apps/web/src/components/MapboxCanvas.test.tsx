@@ -264,7 +264,7 @@ describe('MapboxCanvas footprint vector tiles', () => {
 
     expect(mapRecords[0].easeToCalls).toEqual([
       {
-        center: [14, 34],
+        center: [10, 34],
         bearing: 0,
         pitch: 0,
         duration: 1000,

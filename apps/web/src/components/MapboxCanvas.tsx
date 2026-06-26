@@ -194,7 +194,7 @@ function MapboxCanvasComponent({
       const center = map.getCenter()
 
       map.easeTo({
-        center: [normalizeLongitude(center.lng + GLOBE_ROTATION_STEP_DEGREES), center.lat],
+        center: [normalizeLongitude(center.lng - GLOBE_ROTATION_STEP_DEGREES), center.lat],
         bearing: 0,
         pitch: 0,
         duration: GLOBE_ROTATION_INTERVAL_MS,
