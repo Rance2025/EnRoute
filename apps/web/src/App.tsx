@@ -40,8 +40,11 @@ import { getAmapConfig, type AmapConfig } from './config/amap'
 import {
   readMapDebugPanelVisible,
   readNavigationStyle,
+  readAppTheme,
+  writeAppTheme,
   writeMapDebugPanelVisible,
   writeNavigationStyle,
+  type AppTheme,
   type NavigationStyle,
 } from './navigationPreferences'
 import {
@@ -99,6 +102,17 @@ const settingsPageItems: Array<{ id: SettingsPageId; label: string }> = [
   { id: 'map', label: '地图' },
   { id: 'accounting', label: '记账' },
   { id: 'schedule', label: '日程' },
+]
+const appThemeOptions: Array<{
+  value: AppTheme
+  label: string
+  swatches: [string, string, string]
+}> = [
+  {
+    value: 'mist',
+    label: '青瓷灰',
+    swatches: ['#eef4f2', '#ccd6d7', '#f2f8f7'],
+  },
 ]
 const secondaryNavItemsByView: Record<AppView, SecondaryNavItem[]> = {
   overview: [],
@@ -219,6 +233,7 @@ function App({ amapConfig }: AppProps) {
   })
   const [view, setView] = useState<AppView>('map')
   const [navigationStyle, setNavigationStyle] = useState<NavigationStyle>(readNavigationStyle)
+  const [appTheme, setAppTheme] = useState<AppTheme>(readAppTheme)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [settingsPage, setSettingsPage] = useState<SettingsPageId>('general')
   const [isMapDebugPanelVisible, setIsMapDebugPanelVisible] = useState(
@@ -261,6 +276,10 @@ function App({ amapConfig }: AppProps) {
   const handleNavigationStyleChange = useCallback((nextStyle: NavigationStyle) => {
     setNavigationStyle(nextStyle)
     writeNavigationStyle(nextStyle)
+  }, [])
+  const handleAppThemeChange = useCallback((nextTheme: AppTheme) => {
+    setAppTheme(nextTheme)
+    writeAppTheme(nextTheme)
   }, [])
   const handleMapDebugPanelVisibleChange = useCallback((nextVisible: boolean) => {
     setIsMapDebugPanelVisible(nextVisible)
@@ -438,7 +457,7 @@ function App({ amapConfig }: AppProps) {
 
   return (
     <main
-      className={`app-shell app-shell--${view}${dataPanelWidth > 0 ? ' has-data-panel' : ''}`}
+      className={`app-shell app-shell--${view} app-shell--theme-${appTheme}${dataPanelWidth > 0 ? ' has-data-panel' : ''}`}
       style={{
         '--data-panel-width': `${dataPanelWidth}px`,
         '--right-panel-width': `${rightPanelWidth}px`,
@@ -655,16 +674,47 @@ function App({ amapConfig }: AppProps) {
               </nav>
               <div className="settings-dialog__content">
                 {settingsPage === 'general' ? (
-                  <section className="settings-dialog__section" aria-label="顶部导航样式">
-                    <span>顶部导航样式</span>
-                    <SegmentedControl
-                      ariaLabel="顶部导航样式"
-                      className="settings-navigation-tabs"
-                      options={navigationStyleOptions}
-                      value={navigationStyle}
-                      onChange={handleNavigationStyleChange}
-                    />
-                  </section>
+                  <>
+                    <section className="settings-dialog__section" aria-label="顶部导航样式">
+                      <span>顶部导航样式</span>
+                      <SegmentedControl
+                        ariaLabel="顶部导航样式"
+                        className="settings-navigation-tabs"
+                        options={navigationStyleOptions}
+                        value={navigationStyle}
+                        onChange={handleNavigationStyleChange}
+                      />
+                    </section>
+                    <section className="settings-dialog__section" aria-label="界面色调">
+                      <span>界面色调</span>
+                      <div className="settings-theme-options" role="group" aria-label="界面色调">
+                        {appThemeOptions.map((option) => (
+                          <button
+                            key={option.value}
+                            type="button"
+                            className={
+                              option.value === appTheme
+                                ? 'settings-theme-option is-active'
+                                : 'settings-theme-option'
+                            }
+                            aria-pressed={option.value === appTheme}
+                            onClick={() => handleAppThemeChange(option.value)}
+                          >
+                            <span className="settings-theme-option__swatches" aria-hidden="true">
+                              {option.swatches.map((color) => (
+                                <span
+                                  key={color}
+                                  className="settings-theme-option__swatch"
+                                  style={{ '--theme-swatch-color': color } as CSSProperties}
+                                />
+                              ))}
+                            </span>
+                            <span className="settings-theme-option__label">{option.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </section>
+                  </>
                 ) : null}
                 {settingsPage === 'map' ? (
                   <section className="settings-dialog__section" aria-label="地图显示">

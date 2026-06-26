@@ -1,7 +1,9 @@
 export type NavigationStyle = 'icon' | 'mixed'
+export type AppTheme = 'mist'
 
 export const NAVIGATION_STYLE_STORAGE_KEY = 'enroute:navigation-style'
 export const MAP_DEBUG_PANEL_VISIBLE_STORAGE_KEY = 'enroute:map-debug-panel-visible'
+export const APP_THEME_STORAGE_KEY = 'enroute:app-theme'
 
 export function readNavigationStyle(
   storage: Pick<Storage, 'getItem'> | undefined = getBrowserStorage(),
@@ -21,6 +23,27 @@ export function writeNavigationStyle(
 ) {
   try {
     storage?.setItem(NAVIGATION_STYLE_STORAGE_KEY, style)
+  } catch {
+    // Local preference writes should never block the UI.
+  }
+}
+
+export function readAppTheme(
+  storage: Pick<Storage, 'getItem'> | undefined = getBrowserStorage(),
+): AppTheme {
+  try {
+    return storage?.getItem(APP_THEME_STORAGE_KEY) === 'mist' ? 'mist' : 'mist'
+  } catch {
+    return 'mist'
+  }
+}
+
+export function writeAppTheme(
+  theme: AppTheme,
+  storage: Pick<Storage, 'setItem'> | undefined = getBrowserStorage(),
+) {
+  try {
+    storage?.setItem(APP_THEME_STORAGE_KEY, theme)
   } catch {
     // Local preference writes should never block the UI.
   }
