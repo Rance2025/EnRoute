@@ -4,6 +4,8 @@ export type MapProjectionPreference = 'globe' | 'mercator'
 
 export const NAVIGATION_STYLE_STORAGE_KEY = 'enroute:navigation-style'
 export const MAP_DEBUG_PANEL_VISIBLE_STORAGE_KEY = 'enroute:map-debug-panel-visible'
+export const MAP_PLACE_LABELS_VISIBLE_STORAGE_KEY = 'enroute:map-place-labels-visible'
+export const MAP_ADMIN_BOUNDARIES_VISIBLE_STORAGE_KEY = 'enroute:map-admin-boundaries-visible'
 export const APP_THEME_STORAGE_KEY = 'enroute:app-theme'
 export const MAP_PROJECTION_STORAGE_KEY = 'enroute:map-projection'
 
@@ -72,6 +74,32 @@ export function writeMapDebugPanelVisible(
   }
 }
 
+export function readMapPlaceLabelsVisible(
+  storage: Pick<Storage, 'getItem'> | undefined = getBrowserStorage(),
+) {
+  return readVisibleByDefaultPreference(MAP_PLACE_LABELS_VISIBLE_STORAGE_KEY, storage)
+}
+
+export function writeMapPlaceLabelsVisible(
+  visible: boolean,
+  storage: Pick<Storage, 'setItem'> | undefined = getBrowserStorage(),
+) {
+  writeBooleanPreference(MAP_PLACE_LABELS_VISIBLE_STORAGE_KEY, visible, storage)
+}
+
+export function readMapAdminBoundariesVisible(
+  storage: Pick<Storage, 'getItem'> | undefined = getBrowserStorage(),
+) {
+  return readVisibleByDefaultPreference(MAP_ADMIN_BOUNDARIES_VISIBLE_STORAGE_KEY, storage)
+}
+
+export function writeMapAdminBoundariesVisible(
+  visible: boolean,
+  storage: Pick<Storage, 'setItem'> | undefined = getBrowserStorage(),
+) {
+  writeBooleanPreference(MAP_ADMIN_BOUNDARIES_VISIBLE_STORAGE_KEY, visible, storage)
+}
+
 export function readMapProjection(
   storage: Pick<Storage, 'getItem'> | undefined = getBrowserStorage(),
 ): MapProjectionPreference {
@@ -90,6 +118,29 @@ export function writeMapProjection(
 ) {
   try {
     storage?.setItem(MAP_PROJECTION_STORAGE_KEY, projection)
+  } catch {
+    // Local preference writes should never block the UI.
+  }
+}
+
+function readVisibleByDefaultPreference(
+  key: string,
+  storage: Pick<Storage, 'getItem'> | undefined,
+) {
+  try {
+    return storage?.getItem(key) !== 'false'
+  } catch {
+    return true
+  }
+}
+
+function writeBooleanPreference(
+  key: string,
+  value: boolean,
+  storage: Pick<Storage, 'setItem'> | undefined,
+) {
+  try {
+    storage?.setItem(key, value ? 'true' : 'false')
   } catch {
     // Local preference writes should never block the UI.
   }

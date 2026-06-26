@@ -8,6 +8,8 @@ type MockMapRecord = {
   options: Record<string, unknown>
   sources: Record<string, unknown>
   layers: unknown[]
+  layoutProperties: Array<[string, string, unknown]>
+  configProperties: Array<[string, string, unknown]>
   removedLayers: string[]
   removedSources: string[]
   paintProperties: Array<[string, string, unknown]>
@@ -106,7 +108,14 @@ describe('MapboxCanvas footprint vector tiles', () => {
         expectedMapboxTileUrl('?start=2026-06-19&end=2026-06-19'),
       ],
     })
-    expect(mapRecords[0].layers[0]).toMatchObject({
+    const footprintLayer = mapRecords[0].layers.find((layer) => (
+      typeof layer === 'object' &&
+      layer !== null &&
+      'id' in layer &&
+      layer.id === 'footprints-circle'
+    ))
+
+    expect(footprintLayer).toMatchObject({
       id: 'footprints-circle',
       type: 'circle',
       source: 'footprints',
@@ -117,9 +126,9 @@ describe('MapboxCanvas footprint vector tiles', () => {
         'circle-opacity': 0.82,
       }),
     })
-    expect(JSON.stringify(mapRecords[0].layers[0])).not.toContain('heatmap')
-    expect(JSON.stringify(mapRecords[0].layers[0])).not.toContain('cluster')
-    expect(JSON.stringify(mapRecords[0].layers[0])).not.toContain('count')
+    expect(JSON.stringify(footprintLayer)).not.toContain('heatmap')
+    expect(JSON.stringify(footprintLayer)).not.toContain('cluster')
+    expect(JSON.stringify(footprintLayer)).not.toContain('count')
     expect(footprintDataSourceImported()).toBe(false)
   })
 
@@ -605,6 +614,103 @@ describe('MapboxCanvas footprint vector tiles', () => {
     ])
   })
 
+  it('hides and restores Mapbox place label and administrative boundary style layers from map display preferences', async () => {
+    const { mapRecords } = mockMapboxRuntime()
+    const { MapboxCanvas } = await import('./MapboxCanvas')
+
+    const { rerender } = render(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        timeRange={selectedRange}
+        placeLabelsVisible
+        adminBoundariesVisible
+      />,
+    )
+    act(() => mapRecords[0].emit('load'))
+
+    expect(mapRecords[0].layoutProperties).toEqual([
+      ['country-label', 'visibility', 'visible'],
+      ['settlement-label', 'visibility', 'visible'],
+      ['road-label', 'visibility', 'none'],
+      ['admin-1-boundary', 'visibility', 'visible'],
+      ['admin-0-boundary', 'visibility', 'none'],
+    ])
+
+    rerender(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        timeRange={selectedRange}
+        placeLabelsVisible={false}
+        adminBoundariesVisible={false}
+      />,
+    )
+
+    expect(mapRecords[0].layoutProperties.slice(-5)).toEqual([
+      ['country-label', 'visibility', 'none'],
+      ['settlement-label', 'visibility', 'none'],
+      ['road-label', 'visibility', 'none'],
+      ['admin-1-boundary', 'visibility', 'none'],
+      ['admin-0-boundary', 'visibility', 'none'],
+    ])
+
+    rerender(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        timeRange={selectedRange}
+        placeLabelsVisible
+        adminBoundariesVisible
+      />,
+    )
+
+    expect(mapRecords[0].layoutProperties.slice(-5)).toEqual([
+      ['country-label', 'visibility', 'visible'],
+      ['settlement-label', 'visibility', 'visible'],
+      ['road-label', 'visibility', 'none'],
+      ['admin-1-boundary', 'visibility', 'visible'],
+      ['admin-0-boundary', 'visibility', 'none'],
+    ])
+  })
+
+  it('syncs Mapbox Standard basemap config when map display preferences change', async () => {
+    const { mapRecords } = mockMapboxRuntime({ layers: [] })
+    const { MapboxCanvas } = await import('./MapboxCanvas')
+
+    const { rerender } = render(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        timeRange={selectedRange}
+        placeLabelsVisible
+        adminBoundariesVisible
+      />,
+    )
+    act(() => mapRecords[0].emit('load'))
+
+    expect(mapRecords[0].configProperties).toEqual([
+      ['basemap', 'showPlaceLabels', true],
+      ['basemap', 'showPointOfInterestLabels', true],
+      ['basemap', 'showRoadLabels', true],
+      ['basemap', 'showTransitLabels', true],
+      ['basemap', 'showAdminBoundaries', true],
+    ])
+
+    rerender(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        timeRange={selectedRange}
+        placeLabelsVisible={false}
+        adminBoundariesVisible={false}
+      />,
+    )
+
+    expect(mapRecords[0].configProperties.slice(-5)).toEqual([
+      ['basemap', 'showPlaceLabels', false],
+      ['basemap', 'showPointOfInterestLabels', false],
+      ['basemap', 'showRoadLabels', false],
+      ['basemap', 'showTransitLabels', false],
+      ['basemap', 'showAdminBoundaries', false],
+    ])
+  })
+
   it('shows a clear placeholder instead of creating a map when the token is missing', async () => {
     const { mapRecords } = mockMapboxRuntime()
     const { MapboxCanvas } = await import('./MapboxCanvas')
@@ -617,7 +723,7 @@ describe('MapboxCanvas footprint vector tiles', () => {
   })
 })
 
-function mockMapboxRuntime() {
+function mockMapboxRuntime(runtimeOptions: { layers?: unknown[] } = {}) {
   const mapRecords: MockMapRecord[] = []
   let footprintDataSourceWasImported = false
 
@@ -632,7 +738,62 @@ function mockMapboxRuntime() {
       this.record = {
         options,
         sources: {},
-        layers: [],
+        layers: runtimeOptions.layers ?? [
+          {
+            id: 'background',
+            type: 'background',
+          },
+          {
+            id: 'country-label',
+            type: 'symbol',
+            layout: {
+              'text-field': ['get', 'name'],
+              visibility: 'visible',
+            },
+          },
+          {
+            id: 'settlement-label',
+            type: 'symbol',
+            layout: {
+              'text-field': ['get', 'name'],
+            },
+          },
+          {
+            id: 'road-label',
+            type: 'symbol',
+            layout: {
+              'symbol-placement': 'line',
+              'text-field': ['get', 'name'],
+              visibility: 'none',
+            },
+          },
+          {
+            id: 'admin-1-boundary',
+            type: 'line',
+            source: 'composite',
+            'source-layer': 'admin',
+            layout: {
+              visibility: 'visible',
+            },
+          },
+          {
+            id: 'admin-0-boundary',
+            type: 'line',
+            source: 'composite',
+            'source-layer': 'admin',
+            layout: {
+              visibility: 'none',
+            },
+          },
+          {
+            id: 'road-line',
+            type: 'line',
+            source: 'composite',
+            'source-layer': 'road',
+          },
+        ],
+        layoutProperties: [],
+        configProperties: [],
         removedLayers: [],
         removedSources: [],
         paintProperties: [],
@@ -690,6 +851,12 @@ function mockMapboxRuntime() {
       return this.record.sources[id]
     }
 
+    getStyle() {
+      return {
+        layers: this.record.layers,
+      }
+    }
+
     removeLayer(id: string) {
       this.record.removedLayers.push(id)
       this.record.layers = this.record.layers.filter((layer) => (
@@ -707,6 +874,34 @@ function mockMapboxRuntime() {
 
     setPaintProperty(layerId: string, propertyName: string, value: unknown) {
       this.record.paintProperties.push([layerId, propertyName, value])
+    }
+
+    setLayoutProperty(layerId: string, propertyName: string, value: unknown) {
+      this.record.layoutProperties.push([layerId, propertyName, value])
+      this.record.layers = this.record.layers.map((layer) => {
+        if (
+          typeof layer !== 'object' ||
+          layer === null ||
+          !('id' in layer) ||
+          layer.id !== layerId
+        ) {
+          return layer
+        }
+
+        return {
+          ...layer,
+          layout: {
+            ...('layout' in layer && typeof layer.layout === 'object' && layer.layout !== null
+              ? layer.layout
+              : {}),
+            [propertyName]: value,
+          },
+        }
+      })
+    }
+
+    setConfigProperty(importId: string, configName: string, value: unknown) {
+      this.record.configProperties.push([importId, configName, value])
     }
 
     getZoom() {
