@@ -43,6 +43,7 @@ import {
   readMapProjection,
   readMapDebugPanelVisible,
   readMapPlaceLabelsVisible,
+  readMapStyle,
   readNavigationStyle,
   readAppTheme,
   writeAppTheme,
@@ -50,11 +51,14 @@ import {
   writeMapProjection,
   writeMapDebugPanelVisible,
   writeMapPlaceLabelsVisible,
+  writeMapStyle,
   writeNavigationStyle,
   type AppTheme,
+  type MapStylePreference,
   type MapProjectionPreference,
   type NavigationStyle,
 } from './navigationPreferences'
+import { resolveMapStyleOption } from './mapStyleOptions'
 import {
   createCurrentSelection,
   createTodaySelection,
@@ -263,6 +267,7 @@ function App(props: AppProps) {
   const [mapProjection, setMapProjection] = useState<MapProjectionPreference>(
     readMapProjection,
   )
+  const [mapStyle, setMapStyle] = useState<MapStylePreference>(readMapStyle)
   const [topNavigationThumb, setTopNavigationThumb] = useState<TopNavigationThumbMetrics>({
     left: 0,
     width: 0,
@@ -320,6 +325,10 @@ function App(props: AppProps) {
   const handleMapProjectionChange = useCallback((nextProjection: MapProjectionPreference) => {
     setMapProjection(nextProjection)
     writeMapProjection(nextProjection)
+  }, [])
+  const handleMapStyleChange = useCallback((nextStyle: MapStylePreference) => {
+    setMapStyle(nextStyle)
+    writeMapStyle(nextStyle)
   }, [])
   const previewTopNavigationPointerPosition = useCallback((clientX: number) => {
     const tabsElement = topNavigationTabsRef.current
@@ -490,6 +499,7 @@ function App(props: AppProps) {
     footprintMetrics.selectedCount,
     footprintMetrics.totalDistanceMeters,
   ])
+  const selectedMapStyle = useMemo(() => resolveMapStyleOption(mapStyle), [mapStyle])
 
   return (
     <main
@@ -647,6 +657,9 @@ function App(props: AppProps) {
             onPlaceLabelsVisibleChange={handleMapPlaceLabelsVisibleChange}
             onAdminBoundariesVisibleChange={handleMapAdminBoundariesVisibleChange}
             projection={mapProjection}
+            styleUrl={selectedMapStyle.url}
+            mapStyle={mapStyle}
+            onMapStyleChange={handleMapStyleChange}
           />
         </Suspense>
       ) : view === 'accounting' ? (

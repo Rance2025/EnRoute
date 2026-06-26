@@ -5,16 +5,19 @@ import {
   MAP_PROJECTION_STORAGE_KEY,
   MAP_DEBUG_PANEL_VISIBLE_STORAGE_KEY,
   MAP_PLACE_LABELS_VISIBLE_STORAGE_KEY,
+  MAP_STYLE_STORAGE_KEY,
   NAVIGATION_STYLE_STORAGE_KEY,
   readMapAdminBoundariesVisible,
   readMapProjection,
   readMapDebugPanelVisible,
   readMapPlaceLabelsVisible,
+  readMapStyle,
   readNavigationStyle,
   writeMapAdminBoundariesVisible,
   writeMapProjection,
   writeMapDebugPanelVisible,
   writeMapPlaceLabelsVisible,
+  writeMapStyle,
   writeNavigationStyle,
 } from './navigationPreferences'
 
@@ -113,6 +116,25 @@ describe('navigationPreferences', () => {
     writeMapProjection('globe', storage)
 
     expect(storage.setItem).toHaveBeenCalledWith(MAP_PROJECTION_STORAGE_KEY, 'globe')
+  })
+
+  it('defaults map style to the primary style and only accepts known style ids', () => {
+    expect(readMapStyle(createStorage())).toBe('primary')
+    expect(readMapStyle(createStorage('wide', MAP_STYLE_STORAGE_KEY))).toBe('primary')
+    expect(readMapStyle(createStorage('primary', MAP_STYLE_STORAGE_KEY))).toBe('primary')
+    expect(readMapStyle(createStorage('alternate', MAP_STYLE_STORAGE_KEY))).toBe('alternate')
+  })
+
+  it('writes the map style preference', () => {
+    const storage = createStorage()
+
+    writeMapStyle('alternate', storage)
+
+    expect(storage.setItem).toHaveBeenCalledWith(MAP_STYLE_STORAGE_KEY, 'alternate')
+
+    writeMapStyle('primary', storage)
+
+    expect(storage.setItem).toHaveBeenCalledWith(MAP_STYLE_STORAGE_KEY, 'primary')
   })
 
   it('defaults map place labels and administrative boundaries to visible unless storage explicitly disables them', () => {

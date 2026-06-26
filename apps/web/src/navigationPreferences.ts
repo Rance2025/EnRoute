@@ -1,6 +1,9 @@
+import type { MapStylePreference } from './mapStyleOptions'
+
 export type NavigationStyle = 'icon' | 'mixed'
 export type AppTheme = 'mist'
 export type MapProjectionPreference = 'globe' | 'mercator'
+export type { MapStylePreference } from './mapStyleOptions'
 
 export const NAVIGATION_STYLE_STORAGE_KEY = 'enroute:navigation-style'
 export const MAP_DEBUG_PANEL_VISIBLE_STORAGE_KEY = 'enroute:map-debug-panel-visible'
@@ -8,6 +11,7 @@ export const MAP_PLACE_LABELS_VISIBLE_STORAGE_KEY = 'enroute:map-place-labels-vi
 export const MAP_ADMIN_BOUNDARIES_VISIBLE_STORAGE_KEY = 'enroute:map-admin-boundaries-visible'
 export const APP_THEME_STORAGE_KEY = 'enroute:app-theme'
 export const MAP_PROJECTION_STORAGE_KEY = 'enroute:map-projection'
+export const MAP_STYLE_STORAGE_KEY = 'enroute:map-style'
 
 export function readNavigationStyle(
   storage: Pick<Storage, 'getItem'> | undefined = getBrowserStorage(),
@@ -118,6 +122,29 @@ export function writeMapProjection(
 ) {
   try {
     storage?.setItem(MAP_PROJECTION_STORAGE_KEY, projection)
+  } catch {
+    // Local preference writes should never block the UI.
+  }
+}
+
+export function readMapStyle(
+  storage: Pick<Storage, 'getItem'> | undefined = getBrowserStorage(),
+): MapStylePreference {
+  try {
+    const storedValue = storage?.getItem(MAP_STYLE_STORAGE_KEY)
+
+    return storedValue === 'alternate' ? 'alternate' : 'primary'
+  } catch {
+    return 'primary'
+  }
+}
+
+export function writeMapStyle(
+  style: MapStylePreference,
+  storage: Pick<Storage, 'setItem'> | undefined = getBrowserStorage(),
+) {
+  try {
+    storage?.setItem(MAP_STYLE_STORAGE_KEY, style)
   } catch {
     // Local preference writes should never block the UI.
   }

@@ -11,6 +11,7 @@ type MockMapRecord = {
   layoutProperties: Array<[string, string, unknown]>
   configProperties: Array<[string, string, unknown]>
   configPropertyValues: Map<string, unknown>
+  setStyleCalls: unknown[]
   removedLayers: string[]
   removedSources: string[]
   paintProperties: Array<[string, string, unknown]>
@@ -133,6 +134,64 @@ describe('MapboxCanvas footprint vector tiles', () => {
     expect(JSON.stringify(footprintLayer)).not.toContain('cluster')
     expect(JSON.stringify(footprintLayer)).not.toContain('count')
     expect(footprintDataSourceImported()).toBe(false)
+  })
+
+  it('switches Mapbox styles in place and restores footprint layers after the new style loads', async () => {
+    const { mapRecords } = mockMapboxRuntime()
+    const { MapboxCanvas } = await import('./MapboxCanvas')
+
+    const { rerender } = render(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        styleUrl="mapbox://styles/oies0/cmqv3payf000r01s79tjjh7bh"
+        timeRange={selectedRange}
+        placeLabelsVisible={false}
+        adminBoundariesVisible={false}
+      />,
+    )
+    act(() => mapRecords[0].emit('load'))
+
+    expect(mapRecords).toHaveLength(1)
+    expect(mapRecords[0].sources.footprints).toBeDefined()
+
+    rerender(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        styleUrl="mapbox://styles/oies0/cmqvb5b20001e01s72ia82lz5"
+        timeRange={selectedRange}
+        placeLabelsVisible={false}
+        adminBoundariesVisible={false}
+      />,
+    )
+
+    expect(mapRecords).toHaveLength(1)
+    expect(mapRecords[0].setStyleCalls).toEqual([
+      'mapbox://styles/oies0/cmqvb5b20001e01s72ia82lz5',
+    ])
+
+    mapRecords[0].removedLayers = []
+    mapRecords[0].removedSources = []
+    mapRecords[0].layoutProperties = []
+    mapRecords[0].configProperties = []
+    act(() => mapRecords[0].emit('style.load'))
+
+    expect(mapRecords[0].sources.footprints).toMatchObject({
+      type: 'vector',
+      maxzoom: 18,
+    })
+    expect(mapRecords[0].layers.some((layer) => (
+      typeof layer === 'object' &&
+      layer !== null &&
+      'id' in layer &&
+      layer.id === 'footprints-circle'
+    ))).toBe(true)
+    expect(mapRecords[0].configProperties).toEqual([
+      ['basemap', 'showPlaceLabels', false],
+      ['basemap', 'showPointOfInterestLabels', false],
+      ['basemap', 'showRoadLabels', false],
+      ['basemap', 'showTransitLabels', false],
+      ['basemap', 'showAdminBoundaries', false],
+    ])
   })
 
   it('starts slow globe rotation from the default world view after the initial load', async () => {
@@ -908,6 +967,7 @@ function mockMapboxRuntime(runtimeOptions: { layers?: unknown[] } = {}) {
         layoutProperties: [],
         configProperties: [],
         configPropertyValues: new Map(standardBasemapConfig),
+        setStyleCalls: [],
         removedLayers: [],
         removedSources: [],
         paintProperties: [],
@@ -1024,6 +1084,10 @@ function mockMapboxRuntime(runtimeOptions: { layers?: unknown[] } = {}) {
       if (importId !== 'basemap') return undefined
 
       return this.record.configPropertyValues.get(configName)
+    }
+
+    setStyle(styleUrl: string) {
+      this.record.setStyleCalls.push(styleUrl)
     }
 
     getZoom() {

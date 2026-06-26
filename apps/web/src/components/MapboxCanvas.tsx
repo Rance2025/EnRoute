@@ -14,6 +14,7 @@ import {
   normalizeFootprintStyle,
   type FootprintStyle,
 } from '../layers/footprintStyle'
+import { DEFAULT_MAPBOX_STYLE_URL, type MapStylePreference } from '../mapStyleOptions'
 import type { TimeRangeSelection } from '../time/timeRange'
 import { MapControls } from './MapControls'
 
@@ -28,8 +29,10 @@ type MapboxCanvasProps = {
   debugPanelVisible?: boolean
   placeLabelsVisible?: boolean
   adminBoundariesVisible?: boolean
+  mapStyle?: MapStylePreference
   onPlaceLabelsVisibleChange?: (visible: boolean) => void
   onAdminBoundariesVisibleChange?: (visible: boolean) => void
+  onMapStyleChange?: (style: MapStylePreference) => void
 }
 
 export type FootprintMetrics = {
@@ -82,7 +85,6 @@ type BaseMapConfigPropertyName =
   | 'showTransitLabels'
   | 'showAdminBoundaries'
 
-const DEFAULT_MAPBOX_STYLE_URL = 'mapbox://styles/oies0/cmqv3payf000r01s79tjjh7bh'
 const DEFAULT_MAPBOX_PROJECTION: MapboxProjection = 'globe'
 const DEFAULT_FOOTPRINT_METRICS_URL = '/api/footprints/metrics'
 const DEFAULT_FOOTPRINT_TILE_DEBUG_URL = '/api/map/tiles/footprints/debug'
@@ -111,8 +113,10 @@ function MapboxCanvasComponent({
   debugPanelVisible = false,
   placeLabelsVisible = true,
   adminBoundariesVisible = true,
+  mapStyle,
   onPlaceLabelsVisibleChange,
   onAdminBoundariesVisibleChange,
+  onMapStyleChange,
 }: MapboxCanvasProps) {
   const mapNodeRef = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<mapboxgl.Map | null>(null)
@@ -125,6 +129,7 @@ function MapboxCanvasComponent({
   const baseMapVisibilityRecordsRef = useRef<BaseMapVisibilityRecord[]>([])
   const hiddenBaseMapConfigOverridesRef = useRef<Set<BaseMapConfigPropertyName>>(new Set())
   const originalBaseMapConfigValuesRef = useRef<Map<BaseMapConfigPropertyName, unknown>>(new Map())
+  const resolvedStyleUrlRef = useRef('')
   const globeRotationTimerRef = useRef<number | undefined>(undefined)
   const globeRotationStartHandlerRef = useRef<(() => void) | undefined>(undefined)
   const globeRotationPendingWorldViewRef = useRef(false)
@@ -140,6 +145,7 @@ function MapboxCanvasComponent({
     (import.meta.env as MapboxCanvasEnv).VITE_MAPBOX_STYLE_URL,
     DEFAULT_MAPBOX_STYLE_URL,
   )
+  const latestResolvedStyleUrlRef = useRef(resolvedStyleUrl)
   const resolvedProjection = resolveMapboxProjection(
     projection,
     (import.meta.env as MapboxCanvasEnv).VITE_MAPBOX_PROJECTION,
@@ -163,6 +169,10 @@ function MapboxCanvasComponent({
     () => createFootprintTileRange(timeRange),
     [timeRange],
   )
+
+  useEffect(() => {
+    latestResolvedStyleUrlRef.current = resolvedStyleUrl
+  }, [resolvedStyleUrl])
 
   const refreshFootprintLayer = useCallback((
     range: FootprintVectorTileRange,
@@ -259,6 +269,12 @@ function MapboxCanvasComponent({
       record.lastVisibilityOverride = isVisible ? undefined : 'none'
     }
   }, [adminBoundariesVisible, placeLabelsVisible])
+
+  const resetBaseMapVisibilityState = useCallback(() => {
+    baseMapVisibilityRecordsRef.current = []
+    hiddenBaseMapConfigOverridesRef.current.clear()
+    originalBaseMapConfigValuesRef.current.clear()
+  }, [])
 
   const clearGlobeRotationTimer = useCallback(() => {
     if (globeRotationTimerRef.current === undefined) return
@@ -378,6 +394,7 @@ function MapboxCanvasComponent({
     setStatus('loading')
     setErrorMessage('')
     mapboxgl.accessToken = resolvedAccessToken
+    resolvedStyleUrlRef.current = latestResolvedStyleUrlRef.current
 
     const reportInitializationError = (error: unknown) => {
       window.setTimeout(() => {
@@ -392,7 +409,7 @@ function MapboxCanvasComponent({
       const mapNode = mapNodeRef.current
       const map = new mapboxgl.Map({
         container: mapNode,
-        style: resolvedStyleUrl,
+        style: latestResolvedStyleUrlRef.current,
         center: DEFAULT_MAP_CENTER,
         zoom: resolvedProjection === 'globe' ? GLOBE_WORLD_ZOOM : DEFAULT_MAP_ZOOM,
         maxZoom: 18,
@@ -411,11 +428,17 @@ function MapboxCanvasComponent({
       const handleLoad = () => {
         if (disposed) return
 
-        baseMapVisibilityRecordsRef.current = []
+        resetBaseMapVisibilityState()
         setStatus('ready')
         if (resolvedProjection === 'globe') {
           startGlobeRotation()
         }
+      }
+      const handleStyleLoad = () => {
+        if (disposed) return
+
+        resetBaseMapVisibilityState()
+        setStatus('ready')
       }
       const handleError = (event: ErrorEvent | { error?: unknown }) => {
         if (disposed) return
@@ -450,6 +473,7 @@ function MapboxCanvasComponent({
       }
 
       map.on('load', handleLoad)
+      map.on('style.load', handleStyleLoad)
       map.on('error', handleError)
       map.on('zoomstart', handleZoomStart)
       map.on('dragstart', handleDragStart)
@@ -461,6 +485,7 @@ function MapboxCanvasComponent({
         mapNode.removeEventListener('pointerdown', handlePointerDown, { capture: true })
         stopGlobeRotation()
         map.off('load', handleLoad)
+        map.off('style.load', handleStyleLoad)
         map.off('error', handleError)
         map.off('zoomstart', handleZoomStart)
         map.off('dragstart', handleDragStart)
@@ -475,10 +500,22 @@ function MapboxCanvasComponent({
     clearGlobeRotationTimer,
     resolvedAccessToken,
     resolvedProjection,
-    resolvedStyleUrl,
+    resetBaseMapVisibilityState,
     startGlobeRotation,
     stopGlobeRotation,
   ])
+
+  useEffect(() => {
+    const map = mapRef.current
+
+    if (!map || status !== 'ready') return
+    if (resolvedStyleUrlRef.current === resolvedStyleUrl) return
+
+    resolvedStyleUrlRef.current = resolvedStyleUrl
+    setStatus('loading')
+    resetBaseMapVisibilityState()
+    map.setStyle(resolvedStyleUrl)
+  }, [resetBaseMapVisibilityState, resolvedStyleUrl, status])
 
   useEffect(() => {
     if (status !== 'ready') return
@@ -627,8 +664,10 @@ function MapboxCanvasComponent({
         onFootprintStyleChange={updateFootprintStyle}
         placeLabelsVisible={placeLabelsVisible}
         adminBoundariesVisible={adminBoundariesVisible}
+        mapStyle={mapStyle}
         onPlaceLabelsVisibleChange={onPlaceLabelsVisibleChange}
         onAdminBoundariesVisibleChange={onAdminBoundariesVisibleChange}
+        onMapStyleChange={onMapStyleChange}
       />
       {adminRegionUnlockEnabled ? (
         <div className="map-message map-message--compat" role="status">
