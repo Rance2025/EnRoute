@@ -75,14 +75,14 @@ type BaseMapVisibilityRecord = {
   originalVisibility: 'visible' | 'none'
 }
 
-const DEFAULT_MAPBOX_STYLE_URL = 'mapbox://styles/oies0/cmquspp54003i01qpazy084sq'
+const DEFAULT_MAPBOX_STYLE_URL = 'mapbox://styles/oies0/cmqv3payf000r01s79tjjh7bh'
 const DEFAULT_MAPBOX_PROJECTION: MapboxProjection = 'globe'
 const DEFAULT_FOOTPRINT_METRICS_URL = '/api/footprints/metrics'
 const DEFAULT_FOOTPRINT_TILE_DEBUG_URL = '/api/map/tiles/footprints/debug'
 const DEFAULT_MAP_CENTER: [number, number] = [104.195397, 35.86166]
 const DEFAULT_MAP_ZOOM = 2.2
 const GLOBE_WORLD_ZOOM = 1.75
-const GLOBE_ROTATION_STEP_DEGREES = 2
+const GLOBE_ROTATION_STEP_DEGREES = 1.2
 const GLOBE_ROTATION_INTERVAL_MS = 1000
 const MAP_FIT_BOUNDS_DURATION_MS = 900
 const MAP_FIT_BOUNDS_PADDING_PX = 96
@@ -371,6 +371,9 @@ function MapboxCanvasComponent({
 
         baseMapVisibilityRecordsRef.current = []
         setStatus('ready')
+        if (resolvedProjection === 'globe') {
+          startGlobeRotation()
+        }
       }
       const handleError = (event: ErrorEvent | { error?: unknown }) => {
         if (disposed) return
@@ -687,7 +690,9 @@ function formatCoordinateParam(value: number) {
 }
 
 function normalizeLongitude(longitude: number) {
-  return ((((longitude + 180) % 360) + 360) % 360) - 180
+  const normalized = ((((longitude + 180) % 360) + 360) % 360) - 180
+
+  return Number(normalized.toFixed(6))
 }
 
 function createMapboxTileUrl(tileUrl: string) {
