@@ -10,6 +10,7 @@ type MockMapRecord = {
   layers: unknown[]
   layoutProperties: Array<[string, string, unknown]>
   configProperties: Array<[string, string, unknown]>
+  configPropertyValues: Map<string, unknown>
   removedLayers: string[]
   removedSources: string[]
   paintProperties: Array<[string, string, unknown]>
@@ -714,7 +715,7 @@ describe('MapboxCanvas footprint vector tiles', () => {
     ])
   })
 
-  it('hides and restores Mapbox place label and administrative boundary style layers from map display preferences', async () => {
+  it('hides and restores Mapbox place label and administrative boundary style layers without overriding style defaults', async () => {
     const { mapRecords } = mockMapboxRuntime()
     const { MapboxCanvas } = await import('./MapboxCanvas')
 
@@ -728,13 +729,7 @@ describe('MapboxCanvas footprint vector tiles', () => {
     )
     act(() => mapRecords[0].emit('load'))
 
-    expect(mapRecords[0].layoutProperties).toEqual([
-      ['country-label', 'visibility', 'visible'],
-      ['settlement-label', 'visibility', 'visible'],
-      ['road-label', 'visibility', 'none'],
-      ['admin-1-boundary', 'visibility', 'visible'],
-      ['admin-0-boundary', 'visibility', 'none'],
-    ])
+    expect(mapRecords[0].layoutProperties).toEqual([])
 
     rerender(
       <MapboxCanvas
@@ -771,7 +766,7 @@ describe('MapboxCanvas footprint vector tiles', () => {
     ])
   })
 
-  it('syncs Mapbox Standard basemap config when map display preferences change', async () => {
+  it('uses Mapbox Standard basemap config only to hide or restore style-defined visibility', async () => {
     const { mapRecords } = mockMapboxRuntime({ layers: [] })
     const { MapboxCanvas } = await import('./MapboxCanvas')
 
@@ -785,13 +780,7 @@ describe('MapboxCanvas footprint vector tiles', () => {
     )
     act(() => mapRecords[0].emit('load'))
 
-    expect(mapRecords[0].configProperties).toEqual([
-      ['basemap', 'showPlaceLabels', true],
-      ['basemap', 'showPointOfInterestLabels', true],
-      ['basemap', 'showRoadLabels', true],
-      ['basemap', 'showTransitLabels', true],
-      ['basemap', 'showAdminBoundaries', true],
-    ])
+    expect(mapRecords[0].configProperties).toEqual([])
 
     rerender(
       <MapboxCanvas
@@ -808,6 +797,23 @@ describe('MapboxCanvas footprint vector tiles', () => {
       ['basemap', 'showRoadLabels', false],
       ['basemap', 'showTransitLabels', false],
       ['basemap', 'showAdminBoundaries', false],
+    ])
+
+    rerender(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        timeRange={selectedRange}
+        placeLabelsVisible
+        adminBoundariesVisible
+      />,
+    )
+
+    expect(mapRecords[0].configProperties.slice(-5)).toEqual([
+      ['basemap', 'showPlaceLabels', true],
+      ['basemap', 'showPointOfInterestLabels', false],
+      ['basemap', 'showRoadLabels', false],
+      ['basemap', 'showTransitLabels', false],
+      ['basemap', 'showAdminBoundaries', true],
     ])
   })
 
@@ -826,6 +832,13 @@ describe('MapboxCanvas footprint vector tiles', () => {
 function mockMapboxRuntime(runtimeOptions: { layers?: unknown[] } = {}) {
   const mapRecords: MockMapRecord[] = []
   let footprintDataSourceWasImported = false
+  const standardBasemapConfig = new Map<string, unknown>([
+    ['showPlaceLabels', true],
+    ['showPointOfInterestLabels', false],
+    ['showRoadLabels', false],
+    ['showTransitLabels', false],
+    ['showAdminBoundaries', true],
+  ])
 
   class MockMap {
     private readonly record: MockMapRecord
@@ -894,6 +907,7 @@ function mockMapboxRuntime(runtimeOptions: { layers?: unknown[] } = {}) {
         ],
         layoutProperties: [],
         configProperties: [],
+        configPropertyValues: new Map(standardBasemapConfig),
         removedLayers: [],
         removedSources: [],
         paintProperties: [],
@@ -1003,6 +1017,13 @@ function mockMapboxRuntime(runtimeOptions: { layers?: unknown[] } = {}) {
 
     setConfigProperty(importId: string, configName: string, value: unknown) {
       this.record.configProperties.push([importId, configName, value])
+      this.record.configPropertyValues.set(configName, value)
+    }
+
+    getConfigProperty(importId: string, configName: string) {
+      if (importId !== 'basemap') return undefined
+
+      return this.record.configPropertyValues.get(configName)
     }
 
     getZoom() {
