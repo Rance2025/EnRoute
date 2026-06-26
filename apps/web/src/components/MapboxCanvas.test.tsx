@@ -96,6 +96,7 @@ describe('MapboxCanvas footprint vector tiles', () => {
       style: 'mapbox://styles/enroute/test',
       touchPitch: false,
       touchZoomRotate: false,
+      zoom: 1.75,
     })
 
     act(() => mapRecords[0].emit('load'))
@@ -149,6 +150,7 @@ describe('MapboxCanvas footprint vector tiles', () => {
     expect(mapRecords[0].options).toMatchObject({
       projection: 'mercator',
       renderWorldCopies: true,
+      zoom: 2.2,
     })
   })
 
@@ -326,12 +328,12 @@ describe('MapboxCanvas footprint vector tiles', () => {
     expect(mapRecords[0].easeToCalls).toHaveLength(1)
   })
 
-  it('pauses globe rotation while dragging and resumes after drag release', async () => {
+  it('pauses globe rotation before dragging and resumes after drag release', async () => {
     vi.useFakeTimers()
     const { mapRecords } = mockMapboxRuntime()
     const { MapboxCanvas } = await import('./MapboxCanvas')
 
-    render(
+    const { container } = render(
       <MapboxCanvas
         accessToken="test-mapbox-token"
         projection="globe"
@@ -343,6 +345,12 @@ describe('MapboxCanvas footprint vector tiles', () => {
     fireEvent.click(screen.getByRole('button', { name: '显示世界地图' }))
     act(() => mapRecords[0].emit('moveend'))
     expect(mapRecords[0].easeToCalls).toHaveLength(1)
+
+    const mapSurface = container.querySelector('.mapbox-surface')
+    expect(mapSurface).toBeInstanceOf(HTMLElement)
+
+    fireEvent.pointerDown(mapSurface as HTMLElement)
+    expect(mapRecords[0].stopCalls).toBe(1)
 
     act(() => mapRecords[0].emit('dragstart'))
     expect(mapRecords[0].stopCalls).toBe(1)
