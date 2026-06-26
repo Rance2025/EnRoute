@@ -1,14 +1,20 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import {
+  MAP_ADMIN_BOUNDARIES_VISIBLE_STORAGE_KEY,
   MAP_PROJECTION_STORAGE_KEY,
   MAP_DEBUG_PANEL_VISIBLE_STORAGE_KEY,
+  MAP_PLACE_LABELS_VISIBLE_STORAGE_KEY,
   NAVIGATION_STYLE_STORAGE_KEY,
+  readMapAdminBoundariesVisible,
   readMapProjection,
   readMapDebugPanelVisible,
+  readMapPlaceLabelsVisible,
   readNavigationStyle,
+  writeMapAdminBoundariesVisible,
   writeMapProjection,
   writeMapDebugPanelVisible,
+  writeMapPlaceLabelsVisible,
   writeNavigationStyle,
 } from './navigationPreferences'
 
@@ -107,5 +113,43 @@ describe('navigationPreferences', () => {
     writeMapProjection('globe', storage)
 
     expect(storage.setItem).toHaveBeenCalledWith(MAP_PROJECTION_STORAGE_KEY, 'globe')
+  })
+
+  it('defaults map place labels and administrative boundaries to visible unless storage explicitly disables them', () => {
+    expect(readMapPlaceLabelsVisible(createStorage())).toBe(true)
+    expect(readMapPlaceLabelsVisible(createStorage('true', MAP_PLACE_LABELS_VISIBLE_STORAGE_KEY)))
+      .toBe(true)
+    expect(readMapPlaceLabelsVisible(createStorage('wide', MAP_PLACE_LABELS_VISIBLE_STORAGE_KEY)))
+      .toBe(true)
+    expect(readMapPlaceLabelsVisible(createStorage('false', MAP_PLACE_LABELS_VISIBLE_STORAGE_KEY)))
+      .toBe(false)
+
+    expect(readMapAdminBoundariesVisible(createStorage())).toBe(true)
+    expect(readMapAdminBoundariesVisible(createStorage('true', MAP_ADMIN_BOUNDARIES_VISIBLE_STORAGE_KEY)))
+      .toBe(true)
+    expect(readMapAdminBoundariesVisible(createStorage('wide', MAP_ADMIN_BOUNDARIES_VISIBLE_STORAGE_KEY)))
+      .toBe(true)
+    expect(readMapAdminBoundariesVisible(createStorage('false', MAP_ADMIN_BOUNDARIES_VISIBLE_STORAGE_KEY)))
+      .toBe(false)
+  })
+
+  it('writes map place label and administrative boundary visibility preferences', () => {
+    const storage = createStorage()
+
+    writeMapPlaceLabelsVisible(false, storage)
+
+    expect(storage.setItem).toHaveBeenCalledWith(MAP_PLACE_LABELS_VISIBLE_STORAGE_KEY, 'false')
+
+    writeMapPlaceLabelsVisible(true, storage)
+
+    expect(storage.setItem).toHaveBeenCalledWith(MAP_PLACE_LABELS_VISIBLE_STORAGE_KEY, 'true')
+
+    writeMapAdminBoundariesVisible(false, storage)
+
+    expect(storage.setItem).toHaveBeenCalledWith(MAP_ADMIN_BOUNDARIES_VISIBLE_STORAGE_KEY, 'false')
+
+    writeMapAdminBoundariesVisible(true, storage)
+
+    expect(storage.setItem).toHaveBeenCalledWith(MAP_ADMIN_BOUNDARIES_VISIBLE_STORAGE_KEY, 'true')
   })
 })

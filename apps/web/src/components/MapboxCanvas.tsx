@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import mapboxgl from 'mapbox-gl'
+import mapboxgl, { type LayerSpecification } from 'mapbox-gl'
 
 import {
   createFootprintCircleLayer,
@@ -26,6 +26,8 @@ type MapboxCanvasProps = {
   onFootprintMetricsChange?: (metrics: FootprintMetrics) => void
   adminRegionUnlockEnabled?: boolean
   debugPanelVisible?: boolean
+  placeLabelsVisible?: boolean
+  adminBoundariesVisible?: boolean
 }
 
 export type FootprintMetrics = {
@@ -64,6 +66,13 @@ type FootprintTileDebugMetrics = {
   renderRatio: number
 }
 
+type BaseMapVisibilityLayerKind = 'place-label' | 'admin-boundary'
+type BaseMapVisibilityRecord = {
+  id: string
+  kind: BaseMapVisibilityLayerKind
+  originalVisibility: 'visible' | 'none'
+}
+
 const DEFAULT_MAPBOX_STYLE_URL = 'mapbox://styles/oies0/cmquspp54003i01qpazy084sq'
 const DEFAULT_MAPBOX_PROJECTION: MapboxProjection = 'globe'
 const DEFAULT_FOOTPRINT_METRICS_URL = '/api/footprints/metrics'
@@ -91,6 +100,8 @@ function MapboxCanvasComponent({
   onFootprintMetricsChange,
   adminRegionUnlockEnabled = false,
   debugPanelVisible = false,
+  placeLabelsVisible = true,
+  adminBoundariesVisible = true,
 }: MapboxCanvasProps) {
   const mapNodeRef = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<mapboxgl.Map | null>(null)
@@ -100,6 +111,7 @@ function MapboxCanvasComponent({
   const [tileDebugMetrics, setTileDebugMetrics] = useState<FootprintTileDebugMetrics | null>(null)
   const footprintStyleRef = useRef(footprintStyle)
   const selectedFootprintBoundsRef = useRef<FootprintLngLatBounds | null>(null)
+  const baseMapVisibilityRecordsRef = useRef<BaseMapVisibilityRecord[]>([])
   const globeRotationTimerRef = useRef<number | undefined>(undefined)
   const globeRotationStartHandlerRef = useRef<(() => void) | undefined>(undefined)
 
@@ -171,6 +183,33 @@ function MapboxCanvasComponent({
     map.setPaintProperty(FOOTPRINT_CIRCLE_LAYER_ID, 'circle-color', nextFootprintStyle.color)
     map.setPaintProperty(FOOTPRINT_CIRCLE_LAYER_ID, 'circle-opacity', nextFootprintStyle.opacity)
   }, [])
+
+  const updateBaseMapLayerVisibility = useCallback(() => {
+    const map = mapRef.current
+
+    if (!map) return
+
+    setBaseMapConfigProperty(map, 'showPlaceLabels', placeLabelsVisible)
+    setBaseMapConfigProperty(map, 'showPointOfInterestLabels', placeLabelsVisible)
+    setBaseMapConfigProperty(map, 'showRoadLabels', placeLabelsVisible)
+    setBaseMapConfigProperty(map, 'showTransitLabels', placeLabelsVisible)
+    setBaseMapConfigProperty(map, 'showAdminBoundaries', adminBoundariesVisible)
+
+    if (baseMapVisibilityRecordsRef.current.length === 0) {
+      baseMapVisibilityRecordsRef.current = collectBaseMapVisibilityRecords(map)
+    }
+
+    for (const record of baseMapVisibilityRecordsRef.current) {
+      const visible = record.kind === 'place-label'
+        ? placeLabelsVisible
+        : adminBoundariesVisible
+      const nextVisibility = visible ? record.originalVisibility : 'none'
+
+      if (!map.getLayer(record.id)) continue
+
+      map.setLayoutProperty(record.id, 'visibility', nextVisibility)
+    }
+  }, [adminBoundariesVisible, placeLabelsVisible])
 
   const stopGlobeRotation = useCallback(() => {
     const map = mapRef.current
@@ -300,6 +339,7 @@ function MapboxCanvasComponent({
       const handleLoad = () => {
         if (disposed) return
 
+        baseMapVisibilityRecordsRef.current = []
         setStatus('ready')
       }
       const handleError = (event: ErrorEvent | { error?: unknown }) => {
@@ -331,6 +371,17 @@ function MapboxCanvasComponent({
 
     refreshFootprintLayer(footprintTileRange, resolvedTileUrl)
   }, [footprintTileRange, refreshFootprintLayer, resolvedTileUrl, status])
+
+  useEffect(() => {
+    if (status !== 'ready') return
+
+    updateBaseMapLayerVisibility()
+  }, [
+    adminBoundariesVisible,
+    placeLabelsVisible,
+    status,
+    updateBaseMapLayerVisibility,
+  ])
 
   useEffect(() => {
     if (!debugPanelVisible || status !== 'ready') {
@@ -572,6 +623,77 @@ function createMapboxTileUrl(tileUrl: string) {
   const normalizedTileUrl = tileUrl.startsWith('/') ? tileUrl : `/${tileUrl}`
 
   return `${window.location.origin}${normalizedTileUrl}`
+}
+
+function collectBaseMapVisibilityRecords(map: mapboxgl.Map): BaseMapVisibilityRecord[] {
+  const styleLayers = map.getStyle().layers ?? []
+
+  return styleLayers.flatMap((layer) => {
+    const kind = getBaseMapVisibilityLayerKind(layer)
+
+    if (!kind) return []
+
+    return [{
+      id: layer.id,
+      kind,
+      originalVisibility: layer.layout?.visibility === 'none' ? 'none' : 'visible',
+    }]
+  })
+}
+
+function getBaseMapVisibilityLayerKind(
+  layer: LayerSpecification,
+): BaseMapVisibilityLayerKind | null {
+  if (isPlaceLabelLayer(layer)) return 'place-label'
+  if (isAdministrativeBoundaryLayer(layer)) return 'admin-boundary'
+
+  return null
+}
+
+function isPlaceLabelLayer(layer: LayerSpecification) {
+  return layer.type === 'symbol' && hasLayoutProperty(layer, 'text-field')
+}
+
+function isAdministrativeBoundaryLayer(layer: LayerSpecification) {
+  if (layer.type !== 'line') return false
+
+  const id = layer.id.toLowerCase()
+  const sourceLayer = getSourceLayer(layer).toLowerCase()
+
+  return (
+    id.includes('admin') ||
+    id.includes('boundary') ||
+    sourceLayer.includes('admin') ||
+    sourceLayer.includes('boundary')
+  )
+}
+
+function hasLayoutProperty(layer: LayerSpecification, propertyName: string) {
+  return Boolean(
+    layer.layout &&
+    typeof layer.layout === 'object' &&
+    propertyName in layer.layout
+  )
+}
+
+function getSourceLayer(layer: LayerSpecification) {
+  if ('source-layer' in layer && typeof layer['source-layer'] === 'string') {
+    return layer['source-layer']
+  }
+
+  return ''
+}
+
+function setBaseMapConfigProperty(
+  map: mapboxgl.Map,
+  configName: string,
+  value: boolean,
+) {
+  try {
+    map.setConfigProperty('basemap', configName, value)
+  } catch {
+    // Custom non-Standard styles may not expose a configurable basemap import.
+  }
 }
 
 function resolveConfigValue(

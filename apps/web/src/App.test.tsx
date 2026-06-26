@@ -6,11 +6,21 @@ vi.mock('./components/MapboxCanvas', async () => {
   const React = await import('react')
 
   return {
-    MapboxCanvas: ({ projection }: { projection?: string }) => React.createElement(
+    MapboxCanvas: ({
+      adminBoundariesVisible,
+      placeLabelsVisible,
+      projection,
+    }: {
+      adminBoundariesVisible?: boolean
+      placeLabelsVisible?: boolean
+      projection?: string
+    }) => React.createElement(
       'section',
       {
         className: 'map-stage',
         'data-testid': 'mapbox-canvas',
+        'data-admin-boundaries-visible': String(adminBoundariesVisible),
+        'data-place-labels-visible': String(placeLabelsVisible),
         'data-projection': projection,
         'aria-label': '在途 EnRoute 地图工作区',
       },
@@ -538,6 +548,49 @@ describe('App', () => {
 
     expect(debugSwitch).toHaveAttribute('aria-checked', 'false')
     expect(window.localStorage.getItem('enroute:map-debug-panel-visible')).toBe('false')
+  })
+
+  it('defaults map labels and administrative boundaries to visible and toggles them from map settings', async () => {
+    render(<App amapConfig={missingAmapConfig} />)
+
+    expect(await screen.findByTestId('mapbox-canvas')).toHaveAttribute(
+      'data-place-labels-visible',
+      'true',
+    )
+    expect(screen.getByTestId('mapbox-canvas')).toHaveAttribute(
+      'data-admin-boundaries-visible',
+      'true',
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '打开设置' }))
+    const dialog = screen.getByRole('dialog', { name: '设置' })
+    fireEvent.click(within(dialog).getByRole('button', { name: '地图' }))
+
+    const placeLabelsSwitch = within(dialog).getByRole('switch', { name: '显示地名' })
+    const adminBoundariesSwitch = within(dialog).getByRole('switch', { name: '显示行政边界' })
+
+    expect(placeLabelsSwitch).toHaveAttribute('aria-checked', 'true')
+    expect(adminBoundariesSwitch).toHaveAttribute('aria-checked', 'true')
+
+    fireEvent.click(placeLabelsSwitch)
+    fireEvent.click(adminBoundariesSwitch)
+
+    expect(placeLabelsSwitch).toHaveAttribute('aria-checked', 'false')
+    expect(adminBoundariesSwitch).toHaveAttribute('aria-checked', 'false')
+    expect(screen.getByTestId('mapbox-canvas')).toHaveAttribute('data-place-labels-visible', 'false')
+    expect(screen.getByTestId('mapbox-canvas')).toHaveAttribute('data-admin-boundaries-visible', 'false')
+    expect(window.localStorage.getItem('enroute:map-place-labels-visible')).toBe('false')
+    expect(window.localStorage.getItem('enroute:map-admin-boundaries-visible')).toBe('false')
+
+    fireEvent.click(placeLabelsSwitch)
+    fireEvent.click(adminBoundariesSwitch)
+
+    expect(placeLabelsSwitch).toHaveAttribute('aria-checked', 'true')
+    expect(adminBoundariesSwitch).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByTestId('mapbox-canvas')).toHaveAttribute('data-place-labels-visible', 'true')
+    expect(screen.getByTestId('mapbox-canvas')).toHaveAttribute('data-admin-boundaries-visible', 'true')
+    expect(window.localStorage.getItem('enroute:map-place-labels-visible')).toBe('true')
+    expect(window.localStorage.getItem('enroute:map-admin-boundaries-visible')).toBe('true')
   })
 
   it('restores the persisted map render statistics preference on reload', () => {

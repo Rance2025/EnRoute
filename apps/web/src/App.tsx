@@ -39,13 +39,17 @@ import {
 } from './appLayout'
 import type { AmapConfig } from './config/amap'
 import {
+  readMapAdminBoundariesVisible,
   readMapProjection,
   readMapDebugPanelVisible,
+  readMapPlaceLabelsVisible,
   readNavigationStyle,
   readAppTheme,
   writeAppTheme,
+  writeMapAdminBoundariesVisible,
   writeMapProjection,
   writeMapDebugPanelVisible,
+  writeMapPlaceLabelsVisible,
   writeNavigationStyle,
   type AppTheme,
   type MapProjectionPreference,
@@ -250,6 +254,12 @@ function App(props: AppProps) {
   const [isMapDebugPanelVisible, setIsMapDebugPanelVisible] = useState(
     readMapDebugPanelVisible,
   )
+  const [areMapPlaceLabelsVisible, setAreMapPlaceLabelsVisible] = useState(
+    readMapPlaceLabelsVisible,
+  )
+  const [areMapAdminBoundariesVisible, setAreMapAdminBoundariesVisible] = useState(
+    readMapAdminBoundariesVisible,
+  )
   const [mapProjection, setMapProjection] = useState<MapProjectionPreference>(
     readMapProjection,
   )
@@ -298,6 +308,14 @@ function App(props: AppProps) {
   const handleMapDebugPanelVisibleChange = useCallback((nextVisible: boolean) => {
     setIsMapDebugPanelVisible(nextVisible)
     writeMapDebugPanelVisible(nextVisible)
+  }, [])
+  const handleMapPlaceLabelsVisibleChange = useCallback((nextVisible: boolean) => {
+    setAreMapPlaceLabelsVisible(nextVisible)
+    writeMapPlaceLabelsVisible(nextVisible)
+  }, [])
+  const handleMapAdminBoundariesVisibleChange = useCallback((nextVisible: boolean) => {
+    setAreMapAdminBoundariesVisible(nextVisible)
+    writeMapAdminBoundariesVisible(nextVisible)
   }, [])
   const handleMapProjectionChange = useCallback((nextProjection: MapProjectionPreference) => {
     setMapProjection(nextProjection)
@@ -624,6 +642,8 @@ function App(props: AppProps) {
             onFootprintMetricsChange={setFootprintMetrics}
             adminRegionUnlockEnabled={activeSecondaryNavId === 'regions'}
             debugPanelVisible={isMapDebugPanelVisible}
+            placeLabelsVisible={areMapPlaceLabelsVisible}
+            adminBoundariesVisible={areMapAdminBoundariesVisible}
             projection={mapProjection}
           />
         </Suspense>
@@ -748,6 +768,38 @@ function App(props: AppProps) {
                       value={mapProjection}
                       onChange={handleMapProjectionChange}
                     />
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={areMapPlaceLabelsVisible}
+                      className={
+                        areMapPlaceLabelsVisible
+                          ? 'settings-switch-row is-active'
+                          : 'settings-switch-row'
+                      }
+                      onClick={() =>
+                        handleMapPlaceLabelsVisibleChange(!areMapPlaceLabelsVisible)
+                      }
+                    >
+                      <span>显示地名</span>
+                      <span className="settings-switch-row__control" aria-hidden="true" />
+                    </button>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={areMapAdminBoundariesVisible}
+                      className={
+                        areMapAdminBoundariesVisible
+                          ? 'settings-switch-row is-active'
+                          : 'settings-switch-row'
+                      }
+                      onClick={() =>
+                        handleMapAdminBoundariesVisibleChange(!areMapAdminBoundariesVisible)
+                      }
+                    >
+                      <span>显示行政边界</span>
+                      <span className="settings-switch-row__control" aria-hidden="true" />
+                    </button>
                     <button
                       type="button"
                       role="switch"
