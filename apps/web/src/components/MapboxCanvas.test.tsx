@@ -52,7 +52,7 @@ describe('MapboxCanvas footprint vector tiles', () => {
     const { mapRecords, footprintDataSourceImported } = mockMapboxRuntime()
     const { MapboxCanvas } = await import('./MapboxCanvas')
 
-    render(
+    const { container } = render(
       <MapboxCanvas
         accessToken="test-mapbox-token"
         styleUrl="mapbox://styles/enroute/test"
@@ -61,7 +61,11 @@ describe('MapboxCanvas footprint vector tiles', () => {
       />,
     )
 
+    const mapStage = container.querySelector('.map-stage')
+
     expect(mapRecords).toHaveLength(1)
+    expect(mapStage).toHaveClass('map-stage--loading')
+    expect(mapStage).not.toHaveClass('map-stage--ready')
     expect(mapRecords[0].options).toMatchObject({
       dragRotate: false,
       maxPitch: 0,
@@ -77,6 +81,8 @@ describe('MapboxCanvas footprint vector tiles', () => {
 
     act(() => mapRecords[0].emit('load'))
 
+    expect(mapStage).toHaveClass('map-stage--ready')
+    expect(mapStage).not.toHaveClass('map-stage--loading')
     expect(mapRecords[0].sources.footprints).toMatchObject({
       type: 'vector',
       maxzoom: 18,

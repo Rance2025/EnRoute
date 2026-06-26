@@ -448,7 +448,7 @@ function MapboxCanvasComponent({
 
   return (
     <section
-      className="map-stage"
+      className={`map-stage map-stage--${status}`}
       aria-label="在途 EnRoute 地图工作区"
     >
       <div className="amap-surface mapbox-surface" ref={mapNodeRef} />

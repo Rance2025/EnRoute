@@ -1861,10 +1861,22 @@
 }
 
 .map-stage--loading::before {
+  z-index: 2;
+  opacity: 1;
+}
+
+.map-stage--missing-token::before {
+  z-index: 2;
+  opacity: 1;
+}
+
+.map-stage--error::before {
+  z-index: 2;
   opacity: 1;
 }
 
 .map-stage--ready::before {
+  z-index: 0;
   opacity: 0;
 }
 
@@ -1886,7 +1898,7 @@
 .admin-region-unlock-panel,
 .map-message {
   position: absolute;
-  z-index: 2;
+  z-index: 3;
 }
 
 .accounting-page {
