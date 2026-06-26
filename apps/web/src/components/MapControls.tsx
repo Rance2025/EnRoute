@@ -24,11 +24,19 @@ type MapControlsProps = {
   onZoomOut: () => void
   footprintStyle: FootprintStyle
   onFootprintStyleChange: (style: FootprintStyle) => void
+  placeLabelsVisible?: boolean
+  adminBoundariesVisible?: boolean
+  onPlaceLabelsVisibleChange?: (visible: boolean) => void
+  onAdminBoundariesVisibleChange?: (visible: boolean) => void
 }
 
 type FootprintStylePopoverProps = {
   footprintStyle: FootprintStyle
   onFootprintStyleChange: (style: FootprintStyle) => void
+  placeLabelsVisible?: boolean
+  adminBoundariesVisible?: boolean
+  onPlaceLabelsVisibleChange?: (visible: boolean) => void
+  onAdminBoundariesVisibleChange?: (visible: boolean) => void
 }
 
 const FOOTPRINT_COLOR_SWATCHES = ['#123f35', '#4f7cff', '#b8544c']
@@ -42,6 +50,10 @@ export function MapControls({
   onZoomOut,
   footprintStyle,
   onFootprintStyleChange,
+  placeLabelsVisible = true,
+  adminBoundariesVisible = true,
+  onPlaceLabelsVisibleChange,
+  onAdminBoundariesVisibleChange,
 }: MapControlsProps) {
   const [isFootprintStyleOpen, setIsFootprintStyleOpen] = useState(false)
   const settingsRef = useRef<HTMLDivElement | null>(null)
@@ -114,6 +126,10 @@ export function MapControls({
           <FootprintStylePopover
             footprintStyle={footprintStyle}
             onFootprintStyleChange={onFootprintStyleChange}
+            placeLabelsVisible={placeLabelsVisible}
+            adminBoundariesVisible={adminBoundariesVisible}
+            onPlaceLabelsVisibleChange={onPlaceLabelsVisibleChange}
+            onAdminBoundariesVisibleChange={onAdminBoundariesVisibleChange}
           />
         ) : null}
         <button
@@ -134,6 +150,10 @@ export function MapControls({
 function FootprintStylePopover({
   footprintStyle,
   onFootprintStyleChange,
+  placeLabelsVisible = true,
+  adminBoundariesVisible = true,
+  onPlaceLabelsVisibleChange,
+  onAdminBoundariesVisibleChange,
 }: FootprintStylePopoverProps) {
   const [draftFootprintStyle, setDraftFootprintStyle] = useState(footprintStyle)
   const styleCommitTimerRef = useRef<number | null>(null)
@@ -257,6 +277,38 @@ function FootprintStylePopover({
           />
         ))}
       </div>
+      {onPlaceLabelsVisibleChange ? (
+        <button
+          type="button"
+          role="switch"
+          aria-checked={placeLabelsVisible}
+          className={
+            placeLabelsVisible
+              ? 'footprint-style-popover__switch is-active'
+              : 'footprint-style-popover__switch'
+          }
+          onClick={() => onPlaceLabelsVisibleChange(!placeLabelsVisible)}
+        >
+          <span>显示地名</span>
+          <span className="footprint-style-popover__switch-control" aria-hidden="true" />
+        </button>
+      ) : null}
+      {onAdminBoundariesVisibleChange ? (
+        <button
+          type="button"
+          role="switch"
+          aria-checked={adminBoundariesVisible}
+          className={
+            adminBoundariesVisible
+              ? 'footprint-style-popover__switch is-active'
+              : 'footprint-style-popover__switch'
+          }
+          onClick={() => onAdminBoundariesVisibleChange(!adminBoundariesVisible)}
+        >
+          <span>显示行政边界</span>
+          <span className="footprint-style-popover__switch-control" aria-hidden="true" />
+        </button>
+      ) : null}
     </div>
   )
 }

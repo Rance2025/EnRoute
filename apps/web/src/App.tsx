@@ -644,6 +644,8 @@ function App(props: AppProps) {
             debugPanelVisible={isMapDebugPanelVisible}
             placeLabelsVisible={areMapPlaceLabelsVisible}
             adminBoundariesVisible={areMapAdminBoundariesVisible}
+            onPlaceLabelsVisibleChange={handleMapPlaceLabelsVisibleChange}
+            onAdminBoundariesVisibleChange={handleMapAdminBoundariesVisibleChange}
             projection={mapProjection}
           />
         </Suspense>
@@ -768,38 +770,6 @@ function App(props: AppProps) {
                       value={mapProjection}
                       onChange={handleMapProjectionChange}
                     />
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={areMapPlaceLabelsVisible}
-                      className={
-                        areMapPlaceLabelsVisible
-                          ? 'settings-switch-row is-active'
-                          : 'settings-switch-row'
-                      }
-                      onClick={() =>
-                        handleMapPlaceLabelsVisibleChange(!areMapPlaceLabelsVisible)
-                      }
-                    >
-                      <span>显示地名</span>
-                      <span className="settings-switch-row__control" aria-hidden="true" />
-                    </button>
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={areMapAdminBoundariesVisible}
-                      className={
-                        areMapAdminBoundariesVisible
-                          ? 'settings-switch-row is-active'
-                          : 'settings-switch-row'
-                      }
-                      onClick={() =>
-                        handleMapAdminBoundariesVisibleChange(!areMapAdminBoundariesVisible)
-                      }
-                    >
-                      <span>显示行政边界</span>
-                      <span className="settings-switch-row__control" aria-hidden="true" />
-                    </button>
                     <button
                       type="button"
                       role="switch"
