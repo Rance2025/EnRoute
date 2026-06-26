@@ -48,6 +48,22 @@ afterEach(() => {
 })
 
 describe('MapboxCanvas footprint vector tiles', () => {
+  it('uses the configured EnRoute Mapbox style as the default base style', async () => {
+    const { mapRecords } = mockMapboxRuntime()
+    const { MapboxCanvas } = await import('./MapboxCanvas')
+
+    render(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        timeRange={selectedRange}
+      />,
+    )
+
+    expect(mapRecords[0].options).toMatchObject({
+      style: 'mapbox://styles/oies0/cmquspp54003i01qpazy084sq',
+    })
+  })
+
   it('initializes Mapbox as a fixed globe map at max zoom 18 and adds the footprint vector circle layer', async () => {
     const { mapRecords, footprintDataSourceImported } = mockMapboxRuntime()
     const { MapboxCanvas } = await import('./MapboxCanvas')
