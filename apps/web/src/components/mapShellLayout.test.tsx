@@ -35,7 +35,19 @@ vi.mock('./MapboxCanvas', async () => {
   }
 
   return {
-    MapboxCanvas: ({ adminRegionUnlockEnabled = false }: { adminRegionUnlockEnabled?: boolean }) => {
+    MapboxCanvas: ({
+      adminRegionUnlockEnabled = false,
+      adminBoundariesVisible = true,
+      placeLabelsVisible = true,
+      onAdminBoundariesVisibleChange,
+      onPlaceLabelsVisibleChange,
+    }: {
+      adminRegionUnlockEnabled?: boolean
+      adminBoundariesVisible?: boolean
+      placeLabelsVisible?: boolean
+      onAdminBoundariesVisibleChange?: (visible: boolean) => void
+      onPlaceLabelsVisibleChange?: (visible: boolean) => void
+    }) => {
       const [footprintStyle, setFootprintStyle] = React.useState(readStoredFootprintStyle)
       const updateFootprintStyle = React.useCallback((nextFootprintStyle: typeof DEFAULT_FOOTPRINT_STYLE) => {
         const normalizedFootprintStyle = normalizeFootprintStyle(nextFootprintStyle)
@@ -48,6 +60,8 @@ vi.mock('./MapboxCanvas', async () => {
         'section',
         {
           className: 'map-stage',
+          'data-admin-boundaries-visible': String(adminBoundariesVisible),
+          'data-place-labels-visible': String(placeLabelsVisible),
           'aria-label': MAP_STAGE_LABEL,
         },
         React.createElement('div', { className: 'amap-surface mapbox-surface' }),
@@ -59,6 +73,10 @@ vi.mock('./MapboxCanvas', async () => {
           onZoomOut: vi.fn(),
           footprintStyle,
           onFootprintStyleChange: updateFootprintStyle,
+          adminBoundariesVisible,
+          placeLabelsVisible,
+          onAdminBoundariesVisibleChange,
+          onPlaceLabelsVisibleChange,
         }),
         adminRegionUnlockEnabled
           ? React.createElement(
@@ -267,6 +285,52 @@ describe('unified shell layout', () => {
     expect(opacityInput).toHaveValue('0.64')
     expect(within(popover).getByText('0.64')).toHaveClass('footprint-style-popover__value')
     expect(colorInput).toHaveValue('#4f7cff')
+  })
+
+  it('toggles map place labels and administrative boundaries from the footprint settings popover', async () => {
+    render(<App amapConfig={configuredAmap} />)
+    await settleLazyImports()
+
+    fireEvent.click(screen.getByRole('button', { name: '足迹显示设置' }))
+
+    const popover = screen.getByRole('dialog', { name: '足迹显示设置' })
+    const placeLabelsSwitch = within(popover).getByRole('switch', { name: '显示地名' })
+    const adminBoundariesSwitch = within(popover).getByRole('switch', { name: '显示行政边界' })
+
+    expect(placeLabelsSwitch).toHaveAttribute('aria-checked', 'true')
+    expect(adminBoundariesSwitch).toHaveAttribute('aria-checked', 'true')
+
+    fireEvent.click(placeLabelsSwitch)
+    fireEvent.click(adminBoundariesSwitch)
+
+    expect(placeLabelsSwitch).toHaveAttribute('aria-checked', 'false')
+    expect(adminBoundariesSwitch).toHaveAttribute('aria-checked', 'false')
+    expect(screen.getByLabelText('在途 EnRoute 地图工作区')).toHaveAttribute(
+      'data-place-labels-visible',
+      'false',
+    )
+    expect(screen.getByLabelText('在途 EnRoute 地图工作区')).toHaveAttribute(
+      'data-admin-boundaries-visible',
+      'false',
+    )
+    expect(window.localStorage.getItem('enroute:map-place-labels-visible')).toBe('false')
+    expect(window.localStorage.getItem('enroute:map-admin-boundaries-visible')).toBe('false')
+
+    fireEvent.click(placeLabelsSwitch)
+    fireEvent.click(adminBoundariesSwitch)
+
+    expect(placeLabelsSwitch).toHaveAttribute('aria-checked', 'true')
+    expect(adminBoundariesSwitch).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByLabelText('在途 EnRoute 地图工作区')).toHaveAttribute(
+      'data-place-labels-visible',
+      'true',
+    )
+    expect(screen.getByLabelText('在途 EnRoute 地图工作区')).toHaveAttribute(
+      'data-admin-boundaries-visible',
+      'true',
+    )
+    expect(window.localStorage.getItem('enroute:map-place-labels-visible')).toBe('true')
+    expect(window.localStorage.getItem('enroute:map-admin-boundaries-visible')).toBe('true')
   })
 
   it('shows an administrative region compatibility notice from the map region tab', async () => {

@@ -1558,6 +1558,7 @@ describe('map chrome layout', () => {
     const settingsRule = cssRule('.map-toolbar__settings')
     const popoverRule = cssRule('.footprint-style-popover')
     const rowRule = cssRule('.footprint-style-popover__row')
+    const switchRule = lastCssRule('.footprint-style-popover__switch')
     const swatchRule = cssRule('.footprint-style-popover__swatch')
 
     expect(toolbarRule).toContain('overflow: visible')
@@ -1580,6 +1581,12 @@ describe('map chrome layout', () => {
     expect(popoverRule).toContain('backdrop-filter: var(--glass-panel-filter)')
     expect(popoverRule).toContain('-webkit-backdrop-filter: var(--glass-panel-filter)')
     expect(rowRule).toContain('grid-template-columns:')
+    expect(switchRule).toContain('grid-template-columns: minmax(0, 1fr) 42px')
+    expect(switchRule).toContain('font-size: 12px')
+    expect(cssRule('.footprint-style-popover__switch-control::after')).toContain('width: 18px')
+    expect(cssRule('.footprint-style-popover__switch.is-active .footprint-style-popover__switch-control::after')).toContain(
+      'transform: translateX(18px)',
+    )
     const valueRule = cssRule('.footprint-style-popover__value')
     expect(valueRule).toContain('display: grid')
     expect(valueRule).toContain('cursor: default')

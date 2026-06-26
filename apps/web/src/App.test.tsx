@@ -550,7 +550,7 @@ describe('App', () => {
     expect(window.localStorage.getItem('enroute:map-debug-panel-visible')).toBe('false')
   })
 
-  it('defaults map labels and administrative boundaries to visible and toggles them from map settings', async () => {
+  it('defaults map labels and administrative boundaries to visible without exposing them in map settings', async () => {
     render(<App amapConfig={missingAmapConfig} />)
 
     expect(await screen.findByTestId('mapbox-canvas')).toHaveAttribute(
@@ -566,31 +566,9 @@ describe('App', () => {
     const dialog = screen.getByRole('dialog', { name: '设置' })
     fireEvent.click(within(dialog).getByRole('button', { name: '地图' }))
 
-    const placeLabelsSwitch = within(dialog).getByRole('switch', { name: '显示地名' })
-    const adminBoundariesSwitch = within(dialog).getByRole('switch', { name: '显示行政边界' })
-
-    expect(placeLabelsSwitch).toHaveAttribute('aria-checked', 'true')
-    expect(adminBoundariesSwitch).toHaveAttribute('aria-checked', 'true')
-
-    fireEvent.click(placeLabelsSwitch)
-    fireEvent.click(adminBoundariesSwitch)
-
-    expect(placeLabelsSwitch).toHaveAttribute('aria-checked', 'false')
-    expect(adminBoundariesSwitch).toHaveAttribute('aria-checked', 'false')
-    expect(screen.getByTestId('mapbox-canvas')).toHaveAttribute('data-place-labels-visible', 'false')
-    expect(screen.getByTestId('mapbox-canvas')).toHaveAttribute('data-admin-boundaries-visible', 'false')
-    expect(window.localStorage.getItem('enroute:map-place-labels-visible')).toBe('false')
-    expect(window.localStorage.getItem('enroute:map-admin-boundaries-visible')).toBe('false')
-
-    fireEvent.click(placeLabelsSwitch)
-    fireEvent.click(adminBoundariesSwitch)
-
-    expect(placeLabelsSwitch).toHaveAttribute('aria-checked', 'true')
-    expect(adminBoundariesSwitch).toHaveAttribute('aria-checked', 'true')
-    expect(screen.getByTestId('mapbox-canvas')).toHaveAttribute('data-place-labels-visible', 'true')
-    expect(screen.getByTestId('mapbox-canvas')).toHaveAttribute('data-admin-boundaries-visible', 'true')
-    expect(window.localStorage.getItem('enroute:map-place-labels-visible')).toBe('true')
-    expect(window.localStorage.getItem('enroute:map-admin-boundaries-visible')).toBe('true')
+    expect(within(dialog).queryByRole('switch', { name: '显示地名' })).not.toBeInTheDocument()
+    expect(within(dialog).queryByRole('switch', { name: '显示行政边界' })).not.toBeInTheDocument()
+    expect(within(dialog).getByRole('switch', { name: '显示地图统计浮窗' })).toBeInTheDocument()
   })
 
   it('restores the persisted map render statistics preference on reload', () => {
