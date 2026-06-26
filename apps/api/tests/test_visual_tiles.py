@@ -15,22 +15,34 @@ from enroute_api.footprints.visual_tile_codec import (
     encode_visual_cells,
 )
 from enroute_api.footprints.visual_tiles import (
+    CELLS_PER_ROW,
     STATUS_DIRTY,
     STATUS_READY,
     TIME_BUCKET_ALL,
     TIME_BUCKET_DAY,
     TIME_BUCKET_MONTH,
     TIME_BUCKET_YEAR,
+    VISUAL_TILE_ALGORITHM_SIGNATURE,
+    VISUAL_TILE_ALGORITHM_SIGNATURE_KEY,
+    VISUAL_CELL_SIZE,
     build_visual_tile,
     build_visual_tiles,
+    backfill_visual_tile_counts,
     mark_visual_tile_dirty,
+    summarize_visual_tiles_for_viewport,
     split_time_range_into_buckets,
+    tile_bounds,
 )
 from enroute_api.main import create_app
 
 
 def column_names(connection: sqlite3.Connection, table_name: str) -> list[str]:
     return [row[1] for row in connection.execute(f"PRAGMA table_info({table_name})")]
+
+
+def test_visual_tile_grid_uses_four_mvt_units_per_cell():
+    assert VISUAL_CELL_SIZE == 4
+    assert CELLS_PER_ROW == 1024
 
 
 def test_initializes_visual_tiles_table(tmp_path):
@@ -45,10 +57,173 @@ def test_initializes_visual_tiles_table(tmp_path):
             "t",
             "status",
             "cells",
+            "raw_count",
+            "representative_count",
             "updated_at",
         ]
         indexes = list(connection.execute("PRAGMA index_list(visual_tiles)"))
         assert indexes
+    finally:
+        connection.close()
+
+
+def test_backfills_visual_tile_counts_without_rewriting_cells(tmp_path):
+    connection = sqlite3.connect(tmp_path / "footprints.sqlite")
+    connection.row_factory = sqlite3.Row
+    try:
+        initialize_schema(connection)
+        rows = [
+            (100, -100.0, 10.0),
+            (101, -100.00001, 10.00001),
+            (102, -100.00002, 10.00002),
+        ]
+        for timestamp, longitude, latitude in rows:
+            connection.execute(
+                """
+                INSERT INTO footprints (
+                  timestamp_seconds, longitude, latitude, accuracy, speed, distance, heading, altitude
+                ) VALUES (?, ?, ?, 5, 0, 0, 0, 0)
+                """,
+                (timestamp, longitude, latitude),
+            )
+            connection.execute(
+                """
+                INSERT INTO footprint_spatial (
+                  footprint_rowid, min_lng, max_lng, min_lat, max_lat
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (timestamp, longitude, longitude, latitude, latitude),
+            )
+
+        build_visual_tile(
+            connection,
+            z=1,
+            x=0,
+            y=0,
+            t_type=TIME_BUCKET_ALL,
+            t=0,
+            start_timestamp_seconds=0,
+            end_timestamp_seconds=200,
+            updated_at=1234,
+        )
+        before = connection.execute(
+            "SELECT cells, raw_count, representative_count FROM visual_tiles",
+        ).fetchone()
+
+        updated_count = backfill_visual_tile_counts(connection, commit_interval=1)
+
+        after = connection.execute(
+            "SELECT cells, raw_count, representative_count FROM visual_tiles",
+        ).fetchone()
+        assert updated_count == 1
+        assert after["cells"] == before["cells"]
+        assert after["raw_count"] == 3
+        assert after["representative_count"] == len(decode_visual_cells(after["cells"]))
+    finally:
+        connection.close()
+
+
+def test_backfill_visual_tile_counts_uses_bulk_scan(tmp_path, monkeypatch):
+    connection = sqlite3.connect(tmp_path / "footprints.sqlite")
+    connection.row_factory = sqlite3.Row
+    try:
+        initialize_schema(connection)
+        connection.execute(
+            """
+            INSERT INTO footprints (
+              timestamp_seconds, longitude, latitude, accuracy, speed, distance, heading, altitude
+            ) VALUES (100, -100, 10, 5, 0, 0, 0, 0)
+            """,
+        )
+        connection.execute(
+            """
+            INSERT INTO footprint_spatial (
+              footprint_rowid, min_lng, max_lng, min_lat, max_lat
+            ) VALUES (100, -100, -100, 10, 10)
+            """,
+        )
+        build_visual_tile(
+            connection,
+            z=1,
+            x=0,
+            y=0,
+            t_type=TIME_BUCKET_ALL,
+            t=0,
+            start_timestamp_seconds=0,
+            end_timestamp_seconds=200,
+            updated_at=1234,
+        )
+        monkeypatch.setattr(
+            "enroute_api.footprints.visual_tiles.count_raw_footprints_for_visual_tile",
+            lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("per-tile raw count called")),
+        )
+
+        updated_count = backfill_visual_tile_counts(connection, commit_interval=1)
+
+        row = connection.execute("SELECT raw_count, representative_count FROM visual_tiles").fetchone()
+        assert updated_count == 1
+        assert tuple(row) == (1, 1)
+    finally:
+        connection.close()
+
+
+def test_summarizes_visual_tiles_for_current_viewport_without_creating_empty_rows(tmp_path):
+    connection = sqlite3.connect(tmp_path / "footprints.sqlite")
+    connection.row_factory = sqlite3.Row
+    try:
+        initialize_schema(connection)
+        inside_blob = encode_visual_cells(
+            [
+                VisualCellRecord(cell_id=1, footprint_id=100, geom_x=10, geom_y=20),
+                VisualCellRecord(cell_id=2, footprint_id=101, geom_x=30, geom_y=40),
+            ],
+        )
+        outside_blob = encode_visual_cells(
+            [
+                VisualCellRecord(cell_id=3, footprint_id=200, geom_x=10, geom_y=20),
+            ],
+        )
+        connection.execute(
+            """
+            INSERT INTO visual_tiles (
+              z, x, y, t_type, t, status, cells, raw_count, representative_count, updated_at
+            )
+            VALUES (2, 2, 1, 0, 0, ?, ?, 10, 2, 1000)
+            """,
+            (STATUS_READY, inside_blob),
+        )
+        connection.execute(
+            """
+            INSERT INTO visual_tiles (
+              z, x, y, t_type, t, status, cells, raw_count, representative_count, updated_at
+            )
+            VALUES (2, 3, 1, 0, 0, ?, ?, 5, 1, 1000)
+            """,
+            (STATUS_READY, outside_blob),
+        )
+        west, south, east, north = tile_bounds(z=2, x=2, y=1)
+
+        stats = summarize_visual_tiles_for_viewport(
+            connection,
+            z=2,
+            west=west + 0.01,
+            south=south + 0.01,
+            east=east - 0.01,
+            north=north - 0.01,
+            buckets=[(TIME_BUCKET_ALL, 0)],
+        )
+
+        assert stats == {
+            "tileZoom": 2,
+            "requestedTileCount": 1,
+            "populatedTileCount": 1,
+            "readyTileCount": 1,
+            "dirtyTileCount": 0,
+            "rawCount": 10,
+            "representativeCount": 2,
+            "renderRatio": 0.2,
+        }
+        assert connection.execute("SELECT COUNT(*) FROM visual_tiles").fetchone()[0] == 2
     finally:
         connection.close()
 
@@ -156,6 +331,83 @@ def test_builds_visual_tiles_only_for_existing_all_bucket_tile_keys(tmp_path):
         assert [row["status"] for row in rows] == [STATUS_READY, STATUS_READY]
         assert [row["updated_at"] for row in rows] == [1234, 1234]
         assert [decode_visual_cells(row["cells"])[0].footprint_id for row in rows] == [100, 200]
+    finally:
+        connection.close()
+
+
+def test_build_visual_tiles_uses_bulk_builder_instead_of_per_candidate_queries(tmp_path, monkeypatch):
+    connection = sqlite3.connect(tmp_path / "footprints.sqlite")
+    connection.row_factory = sqlite3.Row
+    try:
+        initialize_schema(connection)
+        connection.execute(
+            """
+            INSERT INTO footprints (
+              timestamp_seconds, longitude, latitude, accuracy, speed, distance, heading, altitude
+            ) VALUES (100, -100, 10, 5, 0, 0, 0, 0)
+            """,
+        )
+        connection.execute(
+            """
+            INSERT INTO footprint_spatial (
+              footprint_rowid, min_lng, max_lng, min_lat, max_lat
+            ) VALUES (100, -100, -100, 10, 10)
+            """,
+        )
+        monkeypatch.setattr(
+            "enroute_api.footprints.visual_tiles.build_visual_tile",
+            lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("per-candidate builder called")),
+        )
+
+        result = build_visual_tiles(
+            connection,
+            min_zoom=1,
+            max_zoom=1,
+            bucket="all",
+            updated_at=1234,
+        )
+
+        rows = connection.execute("SELECT cells FROM visual_tiles").fetchall()
+        assert result.built_count == 1
+        assert len(rows) == 1
+        assert decode_visual_cells(rows[0]["cells"])[0].footprint_id == 100
+    finally:
+        connection.close()
+
+
+def test_build_visual_tiles_records_current_algorithm_signature(tmp_path):
+    connection = sqlite3.connect(tmp_path / "footprints.sqlite")
+    connection.row_factory = sqlite3.Row
+    try:
+        initialize_schema(connection)
+        connection.execute(
+            """
+            INSERT INTO footprints (
+              timestamp_seconds, longitude, latitude, accuracy, speed, distance, heading, altitude
+            ) VALUES (100, -100, 10, 5, 0, 0, 0, 0)
+            """,
+        )
+        connection.execute(
+            """
+            INSERT INTO footprint_spatial (
+              footprint_rowid, min_lng, max_lng, min_lat, max_lat
+            ) VALUES (100, -100, -100, 10, 10)
+            """,
+        )
+
+        build_visual_tiles(
+            connection,
+            min_zoom=1,
+            max_zoom=1,
+            bucket="all",
+            updated_at=1234,
+        )
+
+        row = connection.execute(
+            "SELECT value FROM footprint_meta WHERE key = ?",
+            (VISUAL_TILE_ALGORITHM_SIGNATURE_KEY,),
+        ).fetchone()
+        assert tuple(row) == (VISUAL_TILE_ALGORITHM_SIGNATURE,)
     finally:
         connection.close()
 
@@ -446,6 +698,72 @@ def test_serves_footprint_mvt_from_ready_visual_tile(tmp_path):
         assert response.status_code == 200
         assert response.headers["content-type"] == "application/vnd.mapbox-vector-tile"
         assert response.content
+    finally:
+        store.close()
+
+
+def test_serves_footprint_tile_debug_metrics_for_viewport(tmp_path):
+    db_path = tmp_path / "footprints.sqlite"
+    data_path = tmp_path / "backUpData-all.csv"
+    data_path.write_text(
+        "\n".join(
+            [
+                "dataTime,locType,longitude,latitude,heading,accuracy,speed,distance,isBackForeground,stepType,altitude",
+                "100,1,0,0,0,5,0,0,1,0,0",
+            ],
+        ),
+        encoding="utf-8",
+    )
+    store = FootprintStore(
+        db_path=db_path,
+        data_path=data_path,
+        coordinate_system="wgs84",
+        admin_region_data_path=tmp_path / "missing-admin-regions.geojson",
+    )
+    try:
+        store.import_footprints()
+        blob = encode_visual_cells(
+            [
+                VisualCellRecord(cell_id=1, footprint_id=100, geom_x=2048, geom_y=2048),
+                VisualCellRecord(cell_id=2, footprint_id=101, geom_x=2050, geom_y=2050),
+            ],
+        )
+        store.connection.execute(
+            """
+            INSERT INTO visual_tiles (
+              z, x, y, t_type, t, status, cells, raw_count, representative_count, updated_at
+            )
+            VALUES (1, 1, 1, 0, 0, ?, ?, 5, 2, 1234)
+            """,
+            (STATUS_READY, blob),
+        )
+        store.connection.commit()
+        client = TestClient(
+            create_app(
+                settings=Settings(
+                    footprint_db_path=db_path,
+                    footprint_data_path=data_path,
+                    footprint_coordinate_system="wgs84",
+                    admin_region_data_path=tmp_path / "missing-admin-regions.geojson",
+                ),
+            ),
+        )
+
+        response = client.get(
+            "/api/map/tiles/footprints/debug?z=1&west=0&south=-80&east=179&north=0&range=all",
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "tileZoom": 1,
+            "requestedTileCount": 1,
+            "populatedTileCount": 1,
+            "readyTileCount": 1,
+            "dirtyTileCount": 0,
+            "rawCount": 5,
+            "representativeCount": 2,
+            "renderRatio": 0.4,
+        }
     finally:
         store.close()
 

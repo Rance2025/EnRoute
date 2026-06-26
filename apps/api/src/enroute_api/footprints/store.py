@@ -28,6 +28,8 @@ from .visual_tiles import (
     TIME_BUCKET_DAY,
     TIME_BUCKET_MONTH,
     TIME_BUCKET_YEAR,
+    VISUAL_TILE_ALGORITHM_SIGNATURE,
+    VISUAL_TILE_ALGORITHM_SIGNATURE_KEY,
     coordinate_to_tile,
     encode_day,
     mark_visual_tile_dirty,
@@ -36,6 +38,7 @@ from .visual_tiles import (
     resolve_time_buckets,
     shanghai_date_from_timestamp,
     shanghai_date_start_timestamp_seconds,
+    summarize_visual_tiles_for_viewport,
 )
 from enroute_api.map_tiles.mvt import encode_footprint_mvt
 
@@ -100,18 +103,19 @@ class FootprintStore:
         range_value: str | None = None,
         start_date: str | None = None,
         end_date: str | None = None,
-    ) -> dict[str, float]:
+    ) -> dict[str, Any]:
         with self._connection_lock:
             self.ensure_ready()
-            return query_metrics(
+            input_payload = normalize_metrics_input(
                 self.connection,
-                normalize_metrics_input(
-                    self.connection,
-                    range_value=range_value,
-                    start_date=start_date,
-                    end_date=end_date,
-                ),
+                range_value=range_value,
+                start_date=start_date,
+                end_date=end_date,
             )
+            return {
+                **query_metrics(self.connection, input_payload),
+                "selectedBounds": query_selected_bounds(self.connection, input_payload),
+            }
 
     def get_all_points(self) -> dict[str, list[dict[str, Any]]]:
         with self._connection_lock:
@@ -175,8 +179,37 @@ class FootprintStore:
                     x=x,
                     y=y,
                     buckets=read_result.dirty_buckets,
-                )
+            )
             return encode_footprint_mvt(read_result.records)
+
+    def get_footprint_tile_debug_metrics(
+        self,
+        *,
+        z: int,
+        west: float,
+        south: float,
+        east: float,
+        north: float,
+        range_value: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> dict[str, int | float]:
+        with self._connection_lock:
+            self.ensure_ready()
+            buckets = resolve_time_buckets(
+                range_value=range_value,
+                start_date=start_date,
+                end_date=end_date,
+            )
+            return summarize_visual_tiles_for_viewport(
+                self.connection,
+                z=z,
+                west=west,
+                south=south,
+                east=east,
+                north=north,
+                buckets=buckets,
+            )
 
     def queue_visual_tile_rebuild(
         self,
@@ -268,12 +301,25 @@ def initialize_schema(connection: sqlite3.Connection) -> None:
           t INTEGER NOT NULL,
           status INTEGER NOT NULL,
           cells BLOB,
+          raw_count INTEGER NOT NULL DEFAULT 0,
+          representative_count INTEGER NOT NULL DEFAULT 0,
           updated_at INTEGER NOT NULL,
           PRIMARY KEY (z, x, y, t_type, t)
         ) WITHOUT ROWID;
         """,
     )
+    migrate_visual_tiles_count_columns(connection)
     connection.commit()
+
+
+def migrate_visual_tiles_count_columns(connection: sqlite3.Connection) -> None:
+    columns = [column[1] for column in connection.execute("PRAGMA table_info(visual_tiles)")]
+    if "raw_count" not in columns:
+        connection.execute("ALTER TABLE visual_tiles ADD COLUMN raw_count INTEGER NOT NULL DEFAULT 0")
+    if "representative_count" not in columns:
+        connection.execute(
+            "ALTER TABLE visual_tiles ADD COLUMN representative_count INTEGER NOT NULL DEFAULT 0",
+        )
 
 
 def migrate_legacy_footprints_schema(connection: sqlite3.Connection) -> None:
@@ -344,6 +390,7 @@ def import_footprints(
     stored_spatial_count = get_spatial_row_count(connection)
 
     if stored_signature == source_signature and stored_count > 0 and stored_spatial_count == stored_count:
+        ensure_visual_tiles_algorithm_current(connection)
         ensure_admin_region_stats_current(
             connection,
             stored_stats_signature=stored_stats_signature,
@@ -357,6 +404,7 @@ def import_footprints(
         and stored_signature is not None
         and stored_compatibility_signature == compatibility_signature
     ):
+        ensure_visual_tiles_algorithm_current(connection)
         ensure_admin_region_stats_current(
             connection,
             stored_stats_signature=stored_stats_signature,
@@ -388,6 +436,7 @@ def import_footprints(
         set_meta_value(connection, "sourceSignature", source_signature)
         set_meta_value(connection, "importCompatibilitySignature", compatibility_signature)
         set_meta_value(connection, ADMIN_REGION_STATS_SIGNATURE_KEY, compatibility_signature)
+        set_meta_value(connection, VISUAL_TILE_ALGORITHM_SIGNATURE_KEY, VISUAL_TILE_ALGORITHM_SIGNATURE)
         set_meta_value(connection, "rowCount", str(stored_count + new_count))
 
     return get_import_result(connection, new_count=new_count)
@@ -567,6 +616,7 @@ def clear_imported_footprints(connection: sqlite3.Connection) -> None:
         DELETE FROM footprint_meta WHERE key IN (
             'sourceSignature',
             'importCompatibilitySignature',
+            'visualTileAlgorithmSignature',
             'rowCount',
             'adminRegionStatsSignature'
         );
@@ -577,6 +627,15 @@ def clear_imported_footprints(connection: sqlite3.Connection) -> None:
             travel_distance_meters = 0;
         """,
     )
+
+
+def ensure_visual_tiles_algorithm_current(connection: sqlite3.Connection) -> None:
+    if get_meta_value(connection, VISUAL_TILE_ALGORITHM_SIGNATURE_KEY) == VISUAL_TILE_ALGORITHM_SIGNATURE:
+        return
+
+    with connection:
+        connection.execute("DELETE FROM visual_tiles")
+        set_meta_value(connection, VISUAL_TILE_ALGORITHM_SIGNATURE_KEY, VISUAL_TILE_ALGORITHM_SIGNATURE)
 
 
 def ensure_admin_region_stats_current(

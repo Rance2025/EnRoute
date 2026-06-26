@@ -53,7 +53,7 @@ export function createFootprintCircleLayer(style: FootprintCircleLayerStyle) {
     source: FOOTPRINT_VECTOR_SOURCE_ID,
     'source-layer': FOOTPRINT_VECTOR_SOURCE_LAYER,
     paint: {
-      'circle-radius': style.pixelSize,
+      'circle-radius': style.pixelSize / 2,
       'circle-color': style.color,
       'circle-opacity': style.opacity,
     },

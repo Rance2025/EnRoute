@@ -46,6 +46,28 @@ def create_app(*, settings: Settings | None = None) -> FastAPI:
             end_date=end,
         )
 
+    @app.get("/api/map/tiles/footprints/debug")
+    def get_footprint_tile_debug_metrics(
+        z: int,
+        west: float,
+        south: float,
+        east: float,
+        north: float,
+        range: str | None = None,
+        start: str | None = None,
+        end: str | None = None,
+    ) -> dict[str, object]:
+        return store.get_footprint_tile_debug_metrics(
+            z=z,
+            west=west,
+            south=south,
+            east=east,
+            north=north,
+            range_value=range,
+            start_date=start,
+            end_date=end,
+        )
+
     @app.get("/api/map/tiles/footprints/{z}/{x}/{y}.mvt")
     def get_footprint_tile(
         z: int,

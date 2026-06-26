@@ -6,7 +6,12 @@ from fastapi.testclient import TestClient
 
 from enroute_api.config import Settings
 from enroute_api.footprints.store import ensure_imported, initialize_schema
-from enroute_api.footprints.visual_tiles import STATUS_DIRTY, STATUS_READY
+from enroute_api.footprints.visual_tiles import (
+    STATUS_DIRTY,
+    STATUS_READY,
+    VISUAL_TILE_ALGORITHM_SIGNATURE,
+    VISUAL_TILE_ALGORITHM_SIGNATURE_KEY,
+)
 from enroute_api.main import create_app
 from enroute_api.footprints.csv_loader import load_footprint_payload
 
@@ -236,6 +241,50 @@ def test_legacy_database_with_existing_csv_is_rebuilt_instead_of_treated_compati
     assert compatibility_signature is not None
 
 
+def test_import_clears_visual_tiles_when_algorithm_signature_is_stale(tmp_path: Path):
+    data_path = write_csv(tmp_path, CSV)
+    db_path = tmp_path / "footprints.sqlite"
+    with sqlite3.connect(db_path) as connection:
+        connection.row_factory = sqlite3.Row
+        initialize_schema(connection)
+
+        ensure_imported(
+            connection,
+            data_path=data_path,
+            coordinate_system="wgs84",
+            admin_region_data_path=tmp_path / "missing-admin-regions.geojson",
+        )
+        connection.execute(
+            """
+            INSERT INTO visual_tiles (z, x, y, t_type, t, status, cells, updated_at)
+            VALUES (1, 1, 0, 0, 0, 1, X'455654430100000000', 1000)
+            """,
+        )
+        connection.execute(
+            "UPDATE footprint_meta SET value = ? WHERE key = ?",
+            ("old-grid", VISUAL_TILE_ALGORITHM_SIGNATURE_KEY),
+        )
+        connection.commit()
+
+        result = ensure_imported(
+            connection,
+            data_path=data_path,
+            coordinate_system="wgs84",
+            admin_region_data_path=tmp_path / "missing-admin-regions.geojson",
+        )
+        visual_tile_count = tuple(connection.execute("SELECT COUNT(*) FROM visual_tiles").fetchone())
+        visual_tile_signature = tuple(
+            connection.execute(
+                "SELECT value FROM footprint_meta WHERE key = ?",
+                (VISUAL_TILE_ALGORITHM_SIGNATURE_KEY,),
+            ).fetchone(),
+        )
+
+    assert result["new_count"] == 0
+    assert visual_tile_count == (0,)
+    assert visual_tile_signature == (VISUAL_TILE_ALGORITHM_SIGNATURE,)
+
+
 def test_reimport_that_clears_raw_footprints_also_clears_visual_tiles(tmp_path: Path):
     data_path = write_csv(tmp_path, CSV)
     db_path = tmp_path / "footprints.sqlite"
@@ -333,9 +382,12 @@ def test_serves_footprint_metrics_without_raw_points_for_date_range(tmp_path: Pa
         "selectedCount": 3,
         "totalDistanceMeters": 400,
         "averageDistanceMetersPerDay": 400,
+        "selectedBounds": {
+            "southWest": [118.0, 30.0],
+            "northEast": [121.511384, 31.296565],
+        },
     }
     assert "points" not in payload
-    assert "selectedBounds" not in payload
     assert "debug" not in payload
 
 
@@ -351,9 +403,12 @@ def test_serves_footprint_metrics_for_all_range_without_raw_points(tmp_path: Pat
         "selectedCount": 4,
         "totalDistanceMeters": 1399,
         "averageDistanceMetersPerDay": 699.5,
+        "selectedBounds": {
+            "southWest": [118.0, 30.0],
+            "northEast": [121.511385, 31.296566],
+        },
     }
     assert "points" not in payload
-    assert "selectedBounds" not in payload
     assert "debug" not in payload
 
 

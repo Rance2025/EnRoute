@@ -130,9 +130,19 @@ function openTimeEditor() {
   fireEvent.click(screen.getByRole('button', { name: '修改时间' }))
 }
 
+async function settleLazyImports() {
+  await act(async () => {
+    const settled = vi.dynamicImportSettled()
+
+    await vi.runAllTimersAsync()
+    await settled
+  })
+}
+
 describe('unified shell layout', () => {
-  it('renders a shared time panel beside the map workspace', () => {
+  it('renders a shared time panel beside the map workspace', async () => {
     render(<App amapConfig={configuredAmap} />)
+    await settleLazyImports()
 
     expect(screen.getByLabelText('时间范围面板')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: '今天' })).toBeInTheDocument()
@@ -206,8 +216,9 @@ describe('unified shell layout', () => {
     expect(screen.getByLabelText('在途 EnRoute 地图工作区')).toBeInTheDocument()
   })
 
-  it('opens compact footprint style controls from the map toolbar', () => {
+  it('opens compact footprint style controls from the map toolbar', async () => {
     render(<App amapConfig={configuredAmap} />)
+    await settleLazyImports()
 
     const toolbar = screen.getByLabelText('地图工具')
     expect(within(toolbar).getAllByRole('button').map((button) => button.getAttribute('aria-label'))).toEqual([
@@ -258,8 +269,9 @@ describe('unified shell layout', () => {
     expect(colorInput).toHaveValue('#4f7cff')
   })
 
-  it('shows an administrative region compatibility notice from the map region tab', () => {
+  it('shows an administrative region compatibility notice from the map region tab', async () => {
     render(<App amapConfig={configuredAmap} />)
+    await settleLazyImports()
 
     expect(screen.queryByText('行政区划图层迁移中')).not.toBeInTheDocument()
 
@@ -269,8 +281,9 @@ describe('unified shell layout', () => {
     expect(screen.getByText(/足迹 MVT 瓦片/)).toBeInTheDocument()
   })
 
-  it('rounds footprint point opacity controls to 0.01 precision through the slider', () => {
+  it('rounds footprint point opacity controls to 0.01 precision through the slider', async () => {
     render(<App amapConfig={configuredAmap} />)
+    await settleLazyImports()
 
     fireEvent.click(screen.getByRole('button', { name: '足迹显示设置' }))
 
@@ -283,8 +296,9 @@ describe('unified shell layout', () => {
     expect(within(popover).getByText('0.74')).toHaveClass('footprint-style-popover__value')
   })
 
-  it('rounds footprint point size controls to 0.1 precision through the slider', () => {
+  it('rounds footprint point size controls to 0.1 precision through the slider', async () => {
     render(<App amapConfig={configuredAmap} />)
+    await settleLazyImports()
 
     fireEvent.click(screen.getByRole('button', { name: '足迹显示设置' }))
 
@@ -297,10 +311,11 @@ describe('unified shell layout', () => {
     expect(within(popover).getByText('1.2')).toHaveClass('footprint-style-popover__value')
   })
 
-  it('persists footprint style settings after toolbar edits settle', () => {
+  it('persists footprint style settings after toolbar edits settle', async () => {
     vi.useFakeTimers()
     const setItemSpy = vi.spyOn(window.localStorage, 'setItem')
     const { unmount } = render(<App amapConfig={configuredAmap} />)
+    await settleLazyImports()
 
     fireEvent.click(screen.getByRole('button', { name: '足迹显示设置' }))
 
@@ -332,6 +347,7 @@ describe('unified shell layout', () => {
 
     unmount()
     render(<App amapConfig={configuredAmap} />)
+    await settleLazyImports()
     fireEvent.click(screen.getByRole('button', { name: '足迹显示设置' }))
 
     popover = screen.getByRole('dialog', { name: '足迹显示设置' })
@@ -342,9 +358,10 @@ describe('unified shell layout', () => {
     expect(within(popover).getByLabelText('足迹点颜色')).toHaveValue('#4f7cff')
   })
 
-  it('commits pending footprint style edits when closing the popover', () => {
+  it('commits pending footprint style edits when closing the popover', async () => {
     vi.useFakeTimers()
     render(<App amapConfig={configuredAmap} />)
+    await settleLazyImports()
 
     fireEvent.click(screen.getByRole('button', { name: '足迹显示设置' }))
 
@@ -366,9 +383,11 @@ describe('unified shell layout', () => {
     )
   })
 
-  it('closes footprint style controls when clicking outside the map toolbar popover', () => {
+  it('closes footprint style controls when clicking outside the map toolbar popover', async () => {
     render(<App amapConfig={configuredAmap} />)
+    await settleLazyImports()
 
+    screen.getByRole('button', { name: '足迹显示设置' })
     const settingsButton = document.querySelector('.map-toolbar__settings .map-toolbar__button')
 
     expect(settingsButton).toBeInstanceOf(HTMLButtonElement)
@@ -383,9 +402,10 @@ describe('unified shell layout', () => {
     expect(settingsButton).toHaveAttribute('aria-expanded', 'false')
   })
 
-  it('persists pending footprint style edits when leaving the map view', () => {
+  it('persists pending footprint style edits when leaving the map view', async () => {
     vi.useFakeTimers()
     render(<App amapConfig={configuredAmap} />)
+    await settleLazyImports()
 
     fireEvent.click(screen.getByRole('button', { name: '足迹显示设置' }))
 
@@ -445,10 +465,11 @@ describe('unified shell layout', () => {
     expect(screen.queryByText('预留')).not.toBeInTheDocument()
   })
 
-  it('keeps the shared time panel when switching to accounting', () => {
+  it('keeps the shared time panel when switching to accounting', async () => {
     render(<App amapConfig={configuredAmap} />)
 
     fireEvent.click(screen.getByRole('button', { name: '记账' }))
+    await settleLazyImports()
 
     const shell = screen.getByRole('main')
     expect(screen.getByLabelText('时间范围面板')).toBeInTheDocument()
@@ -474,10 +495,12 @@ describe('unified shell layout', () => {
     expect(within(accountingMetricStrip).queryByText('当前足迹')).not.toBeInTheDocument()
   })
 
-  it('keeps accounting secondary navigation in the shared right rail', () => {
+  it('keeps accounting secondary navigation in the shared right rail', async () => {
     render(<App amapConfig={configuredAmap} />)
 
     fireEvent.click(screen.getByRole('button', { name: '记账' }))
+    await settleLazyImports()
+    screen.getByLabelText('账户与流水工作台')
 
     const rail = screen.getByRole('navigation', { name: '二级导航' })
     const getRailLabels = () =>
@@ -491,6 +514,7 @@ describe('unified shell layout', () => {
     expect(document.querySelector('.ios-account-filter-panel')).toBeNull()
 
     fireEvent.click(within(rail).getByRole('button', { name: '统计' }))
+    screen.getByLabelText('统计工作区')
 
     expect(getRailLabels()).toEqual(['流水', '统计'])
     expect(rail.querySelector('[aria-pressed="true"]')).toHaveTextContent('统计')
@@ -498,10 +522,11 @@ describe('unified shell layout', () => {
     expect(document.querySelector('.ios-account-filter-panel')).toBeNull()
   })
 
-  it('switches the shared time panel between top-level range modes', () => {
+  it('switches the shared time panel between top-level range modes', async () => {
     render(<App amapConfig={configuredAmap} />)
 
     fireEvent.click(screen.getByRole('button', { name: '记账' }))
+    await settleLazyImports()
     openTimeEditor()
 
     for (const range of ['日', '周', '月', '年', '自定义']) {
@@ -539,7 +564,7 @@ describe('unified shell layout', () => {
     expect(screen.queryByLabelText('日历选择')).not.toBeInTheDocument()
   })
 
-  it('keeps all-time inside custom presets and supports real editable custom dates', () => {
+  it('keeps all-time inside custom presets and supports real editable custom dates', async () => {
     render(<App amapConfig={configuredAmap} />)
 
     openTimeEditor()
@@ -590,6 +615,7 @@ describe('unified shell layout', () => {
     render(<App amapConfig={configuredAmap} />)
 
     fireEvent.click(screen.getByRole('button', { name: '记账' }))
+    await settleLazyImports()
     expect(screen.getByRole('heading', { name: '6月' })).toBeInTheDocument()
     openTimeEditor()
 
@@ -974,7 +1000,7 @@ describe('unified shell layout', () => {
     ])
   })
 
-  it('applies concrete selections from every time panel button group', () => {
+  it('applies concrete selections from every time panel button group', async () => {
     render(<App amapConfig={configuredAmap} />)
 
     openTimeEditor()

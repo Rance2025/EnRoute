@@ -259,6 +259,150 @@ class ImportFootprintsTests(unittest.TestCase):
                 ],
             )
 
+    def test_describe_footprint_visual_tiles_cli_writes_count_charts(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root_dir = Path(tmp_dir)
+            database = root_dir / "data" / "footprints.sqlite"
+            output_dir = root_dir / "output" / "footprint-tiles"
+            database.parent.mkdir(parents=True)
+            connection = sqlite3.connect(database)
+            try:
+                sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "apps" / "api" / "src"))
+                from enroute_api.footprints.store import initialize_schema
+
+                initialize_schema(connection)
+                for z, x, y, raw_count, representative_count in [
+                    (1, 0, 0, 10, 4),
+                    (1, 0, 1, 30, 6),
+                    (2, 2, 1, 7, 3),
+                ]:
+                    connection.execute(
+                        """
+                        INSERT INTO visual_tiles (
+                          z, x, y, t_type, t, status, cells, raw_count, representative_count, updated_at
+                        )
+                        VALUES (?, ?, ?, 0, 0, 1, X'455654430100000000', ?, ?, 1000)
+                        """,
+                        (z, x, y, raw_count, representative_count),
+                    )
+                connection.commit()
+            finally:
+                connection.close()
+
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(Path(__file__).resolve().parents[1] / "scripts" / "describe_footprint_visual_tiles.py"),
+                    "--database",
+                    str(database),
+                    "--charts-dir",
+                    str(output_dir),
+                ],
+                cwd=root_dir,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertIn("z tile_count raw_avg representative_avg raw_max representative_max", completed.stdout)
+            average_chart = output_dir / "visual-tile-count-averages.svg"
+            max_chart = output_dir / "visual-tile-count-maxima.svg"
+            self.assertTrue(average_chart.exists())
+            self.assertTrue(max_chart.exists())
+            self.assertIn("Representative average", average_chart.read_text(encoding="utf-8"))
+            self.assertIn("Actual average", average_chart.read_text(encoding="utf-8"))
+            self.assertIn("Representative maximum", max_chart.read_text(encoding="utf-8"))
+            self.assertIn("Actual maximum", max_chart.read_text(encoding="utf-8"))
+
+    def test_describe_footprint_visual_tiles_cli_opens_generated_charts_when_requested(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root_dir = Path(tmp_dir)
+            database = root_dir / "data" / "footprints.sqlite"
+            output_dir = root_dir / "output" / "footprint-tiles"
+            database.parent.mkdir(parents=True)
+            connection = sqlite3.connect(database)
+            try:
+                sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "apps" / "api" / "src"))
+                from enroute_api.footprints.store import initialize_schema
+
+                initialize_schema(connection)
+                connection.execute(
+                    """
+                    INSERT INTO visual_tiles (
+                      z, x, y, t_type, t, status, cells, raw_count, representative_count, updated_at
+                    )
+                    VALUES (1, 0, 0, 0, 0, 1, X'455654430100000000', 10, 4, 1000)
+                    """,
+                )
+                connection.commit()
+            finally:
+                connection.close()
+
+            opened_paths: list[Path] = []
+            from scripts.describe_footprint_visual_tiles import main as describe_main
+
+            exit_code = describe_main(
+                [
+                    "--database",
+                    str(database),
+                    "--charts-dir",
+                    str(output_dir),
+                    "--open",
+                ],
+                root_dir=root_dir,
+                opener=opened_paths.append,
+            )
+
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(
+                opened_paths,
+                [
+                    output_dir / "visual-tile-count-averages.svg",
+                    output_dir / "visual-tile-count-maxima.svg",
+                ],
+            )
+
+    def test_describe_footprint_visual_tiles_cli_can_show_matplotlib_charts(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root_dir = Path(tmp_dir)
+            database = root_dir / "data" / "footprints.sqlite"
+            database.parent.mkdir(parents=True)
+            connection = sqlite3.connect(database)
+            try:
+                sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "apps" / "api" / "src"))
+                from enroute_api.footprints.store import initialize_schema
+
+                initialize_schema(connection)
+                connection.execute(
+                    """
+                    INSERT INTO visual_tiles (
+                      z, x, y, t_type, t, status, cells, raw_count, representative_count, updated_at
+                    )
+                    VALUES (1, 0, 0, 0, 0, 1, X'455654430100000000', 10, 4, 1000)
+                    """,
+                )
+                connection.commit()
+            finally:
+                connection.close()
+
+            calls: list[str] = []
+            from scripts.describe_footprint_visual_tiles import main as describe_main
+
+            exit_code = describe_main(
+                [
+                    "--database",
+                    str(database),
+                    "--show",
+                    "--no-write-charts",
+                ],
+                root_dir=root_dir,
+                shower=lambda stats: calls.append(f"{len(stats)} rows"),
+            )
+
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(calls, ["1 rows"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,10 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import {
+  MAP_PROJECTION_STORAGE_KEY,
   MAP_DEBUG_PANEL_VISIBLE_STORAGE_KEY,
   NAVIGATION_STYLE_STORAGE_KEY,
+  readMapProjection,
   readMapDebugPanelVisible,
   readNavigationStyle,
+  writeMapProjection,
   writeMapDebugPanelVisible,
   writeNavigationStyle,
 } from './navigationPreferences'
@@ -85,5 +88,24 @@ describe('navigationPreferences', () => {
 
     expect(readMapDebugPanelVisible(storage)).toBe(false)
     expect(() => writeMapDebugPanelVisible(true, storage)).not.toThrow()
+  })
+
+  it('defaults map projection to globe and only accepts globe or mercator', () => {
+    expect(readMapProjection(createStorage())).toBe('globe')
+    expect(readMapProjection(createStorage('wide', MAP_PROJECTION_STORAGE_KEY))).toBe('globe')
+    expect(readMapProjection(createStorage('globe', MAP_PROJECTION_STORAGE_KEY))).toBe('globe')
+    expect(readMapProjection(createStorage('mercator', MAP_PROJECTION_STORAGE_KEY))).toBe('mercator')
+  })
+
+  it('writes the map projection preference', () => {
+    const storage = createStorage()
+
+    writeMapProjection('mercator', storage)
+
+    expect(storage.setItem).toHaveBeenCalledWith(MAP_PROJECTION_STORAGE_KEY, 'mercator')
+
+    writeMapProjection('globe', storage)
+
+    expect(storage.setItem).toHaveBeenCalledWith(MAP_PROJECTION_STORAGE_KEY, 'globe')
   })
 })

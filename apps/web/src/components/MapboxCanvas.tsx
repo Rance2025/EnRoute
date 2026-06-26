@@ -20,6 +20,7 @@ import { MapControls } from './MapControls'
 type MapboxCanvasProps = {
   accessToken?: string
   styleUrl?: string
+  projection?: MapboxProjection
   tileUrl?: string
   timeRange: TimeRangeSelection
   onFootprintMetricsChange?: (metrics: FootprintMetrics) => void
@@ -31,21 +32,49 @@ export type FootprintMetrics = {
   selectedCount: number
   totalDistanceMeters: number
   averageDistanceMetersPerDay: number
+  selectedBounds?: FootprintLngLatBounds | null
+}
+
+type FootprintLngLatBounds = {
+  southWest: [number, number]
+  northEast: [number, number]
 }
 
 type MapboxCanvasEnv = {
   VITE_MAPBOX_ACCESS_TOKEN?: string
   VITE_MAPBOX_STYLE_URL?: string
+  VITE_MAPBOX_PROJECTION?: string
   VITE_FOOTPRINT_TILE_URL?: string
   VITE_FOOTPRINT_METRICS_URL?: string
+  VITE_FOOTPRINT_TILE_DEBUG_URL?: string
 }
+
+type MapboxProjection = 'globe' | 'mercator'
 
 type MapStatus = 'missing-token' | 'loading' | 'ready' | 'error'
 
+type FootprintTileDebugMetrics = {
+  tileZoom: number
+  requestedTileCount: number
+  populatedTileCount: number
+  readyTileCount: number
+  dirtyTileCount: number
+  rawCount: number
+  representativeCount: number
+  renderRatio: number
+}
+
 const DEFAULT_MAPBOX_STYLE_URL = 'mapbox://styles/mapbox/light-v11'
+const DEFAULT_MAPBOX_PROJECTION: MapboxProjection = 'globe'
 const DEFAULT_FOOTPRINT_METRICS_URL = '/api/footprints/metrics'
+const DEFAULT_FOOTPRINT_TILE_DEBUG_URL = '/api/map/tiles/footprints/debug'
 const DEFAULT_MAP_CENTER: [number, number] = [104.195397, 35.86166]
 const DEFAULT_MAP_ZOOM = 2.2
+const GLOBE_WORLD_ZOOM = 1.75
+const GLOBE_ROTATION_STEP_DEGREES = 2
+const GLOBE_ROTATION_INTERVAL_MS = 1000
+const MAP_FIT_BOUNDS_DURATION_MS = 900
+const MAP_FIT_BOUNDS_PADDING_PX = 96
 const FOOTPRINT_STYLE_STORAGE_KEY = 'enroute.footprintStyle'
 const EMPTY_FOOTPRINT_METRICS: FootprintMetrics = {
   selectedCount: 0,
@@ -56,6 +85,7 @@ const EMPTY_FOOTPRINT_METRICS: FootprintMetrics = {
 function MapboxCanvasComponent({
   accessToken,
   styleUrl,
+  projection,
   tileUrl,
   timeRange,
   onFootprintMetricsChange,
@@ -67,7 +97,11 @@ function MapboxCanvasComponent({
   const [status, setStatus] = useState<MapStatus>('loading')
   const [errorMessage, setErrorMessage] = useState('')
   const [footprintStyle, setFootprintStyle] = useState<FootprintStyle>(readStoredFootprintStyle)
+  const [tileDebugMetrics, setTileDebugMetrics] = useState<FootprintTileDebugMetrics | null>(null)
   const footprintStyleRef = useRef(footprintStyle)
+  const selectedFootprintBoundsRef = useRef<FootprintLngLatBounds | null>(null)
+  const globeRotationTimerRef = useRef<number | undefined>(undefined)
+  const globeRotationStartHandlerRef = useRef<(() => void) | undefined>(undefined)
 
   const resolvedAccessToken = resolveConfigValue(
     accessToken,
@@ -78,6 +112,10 @@ function MapboxCanvasComponent({
     (import.meta.env as MapboxCanvasEnv).VITE_MAPBOX_STYLE_URL,
     DEFAULT_MAPBOX_STYLE_URL,
   )
+  const resolvedProjection = resolveMapboxProjection(
+    projection,
+    (import.meta.env as MapboxCanvasEnv).VITE_MAPBOX_PROJECTION,
+  )
   const resolvedTileUrl = resolveConfigValue(
     tileUrl,
     (import.meta.env as MapboxCanvasEnv).VITE_FOOTPRINT_TILE_URL,
@@ -87,6 +125,11 @@ function MapboxCanvasComponent({
     undefined,
     (import.meta.env as MapboxCanvasEnv).VITE_FOOTPRINT_METRICS_URL,
     DEFAULT_FOOTPRINT_METRICS_URL,
+  )
+  const resolvedTileDebugUrl = resolveConfigValue(
+    undefined,
+    (import.meta.env as MapboxCanvasEnv).VITE_FOOTPRINT_TILE_DEBUG_URL,
+    DEFAULT_FOOTPRINT_TILE_DEBUG_URL,
   )
   const footprintTileRange = useMemo(
     () => createFootprintTileRange(timeRange),
@@ -124,18 +167,65 @@ function MapboxCanvasComponent({
 
     if (!map?.getLayer(FOOTPRINT_CIRCLE_LAYER_ID)) return
 
-    map.setPaintProperty(FOOTPRINT_CIRCLE_LAYER_ID, 'circle-radius', nextFootprintStyle.pixelSize)
+    map.setPaintProperty(FOOTPRINT_CIRCLE_LAYER_ID, 'circle-radius', nextFootprintStyle.pixelSize / 2)
     map.setPaintProperty(FOOTPRINT_CIRCLE_LAYER_ID, 'circle-color', nextFootprintStyle.color)
     map.setPaintProperty(FOOTPRINT_CIRCLE_LAYER_ID, 'circle-opacity', nextFootprintStyle.opacity)
   }, [])
+
+  const stopGlobeRotation = useCallback(() => {
+    const map = mapRef.current
+    if (map && globeRotationStartHandlerRef.current) {
+      map.off('moveend', globeRotationStartHandlerRef.current)
+    }
+    globeRotationStartHandlerRef.current = undefined
+
+    if (globeRotationTimerRef.current === undefined) return
+
+    window.clearInterval(globeRotationTimerRef.current)
+    globeRotationTimerRef.current = undefined
+  }, [])
+
+  const startGlobeRotation = useCallback(() => {
+    const map = mapRef.current
+    if (!map || resolvedProjection !== 'globe') return
+
+    stopGlobeRotation()
+    const rotateGlobeOnce = () => {
+      const center = map.getCenter()
+
+      map.easeTo({
+        center: [normalizeLongitude(center.lng + GLOBE_ROTATION_STEP_DEGREES), center.lat],
+        bearing: 0,
+        pitch: 0,
+        duration: GLOBE_ROTATION_INTERVAL_MS,
+        easing: (time: number) => time,
+      })
+    }
+
+    rotateGlobeOnce()
+    globeRotationTimerRef.current = window.setInterval(rotateGlobeOnce, GLOBE_ROTATION_INTERVAL_MS)
+  }, [resolvedProjection, stopGlobeRotation])
+
+  const startGlobeRotationAfterMove = useCallback(() => {
+    const map = mapRef.current
+    if (!map || resolvedProjection !== 'globe') return
+
+    stopGlobeRotation()
+    const handleMoveEnd = () => {
+      map.off('moveend', handleMoveEnd)
+      globeRotationStartHandlerRef.current = undefined
+      startGlobeRotation()
+    }
+
+    globeRotationStartHandlerRef.current = handleMoveEnd
+    map.on('moveend', handleMoveEnd)
+  }, [resolvedProjection, startGlobeRotation, stopGlobeRotation])
 
   useEffect(() => {
     onFootprintMetricsChange?.(EMPTY_FOOTPRINT_METRICS)
   }, [onFootprintMetricsChange])
 
   useEffect(() => {
-    if (!onFootprintMetricsChange) return
-
     const abortController = new AbortController()
 
     fetch(createFootprintMetricsUrl(resolvedMetricsUrl, footprintTileRange), {
@@ -151,12 +241,14 @@ function MapboxCanvasComponent({
       })
       .then((metrics) => {
         if (!abortController.signal.aborted) {
-          onFootprintMetricsChange(metrics)
+          selectedFootprintBoundsRef.current = metrics.selectedBounds ?? null
+          onFootprintMetricsChange?.(metrics)
         }
       })
       .catch(() => {
         if (!abortController.signal.aborted) {
-          onFootprintMetricsChange(EMPTY_FOOTPRINT_METRICS)
+          selectedFootprintBoundsRef.current = null
+          onFootprintMetricsChange?.(EMPTY_FOOTPRINT_METRICS)
         }
       })
 
@@ -200,8 +292,8 @@ function MapboxCanvasComponent({
         dragRotate: false,
         touchZoomRotate: false,
         touchPitch: false,
-        projection: 'mercator',
-        renderWorldCopies: true,
+        projection: resolvedProjection,
+        renderWorldCopies: resolvedProjection === 'mercator',
       })
       mapRef.current = map
 
@@ -223,6 +315,7 @@ function MapboxCanvasComponent({
 
       return () => {
         disposed = true
+        stopGlobeRotation()
         map.off('load', handleLoad)
         map.off('error', handleError)
         map.remove()
@@ -231,13 +324,64 @@ function MapboxCanvasComponent({
     } catch (error: unknown) {
       reportInitializationError(error)
     }
-  }, [resolvedAccessToken, resolvedStyleUrl])
+  }, [resolvedAccessToken, resolvedProjection, resolvedStyleUrl, stopGlobeRotation])
 
   useEffect(() => {
     if (status !== 'ready') return
 
     refreshFootprintLayer(footprintTileRange, resolvedTileUrl)
   }, [footprintTileRange, refreshFootprintLayer, resolvedTileUrl, status])
+
+  useEffect(() => {
+    if (!debugPanelVisible || status !== 'ready') {
+      return
+    }
+
+    const map = mapRef.current
+    if (!map) return
+
+    let abortController: AbortController | null = null
+
+    const refreshTileDebugMetrics = () => {
+      const debugUrl = createFootprintTileDebugUrl(
+        resolvedTileDebugUrl,
+        footprintTileRange,
+        getCurrentFootprintTileDebugViewport(map),
+      )
+
+      abortController?.abort()
+      const currentAbortController = new AbortController()
+      abortController = currentAbortController
+
+      fetch(debugUrl, {
+        method: 'GET',
+        signal: currentAbortController.signal,
+      })
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error(`Footprint tile debug request failed: ${response.status}`)
+          }
+
+          return response.json() as Promise<FootprintTileDebugMetrics>
+        })
+        .then((metrics) => {
+          if (!currentAbortController.signal.aborted) {
+            setTileDebugMetrics(metrics)
+          }
+        })
+        .catch(() => {})
+    }
+
+    refreshTileDebugMetrics()
+    map.on('moveend', refreshTileDebugMetrics)
+    map.on('zoomend', refreshTileDebugMetrics)
+
+    return () => {
+      abortController?.abort()
+      map.off('moveend', refreshTileDebugMetrics)
+      map.off('zoomend', refreshTileDebugMetrics)
+    }
+  }, [debugPanelVisible, footprintTileRange, resolvedTileDebugUrl, status])
 
   const updateFootprintStyle = useCallback((nextFootprintStyle: FootprintStyle) => {
     const normalizedFootprintStyle = normalizeFootprintStyle(nextFootprintStyle)
@@ -249,36 +393,58 @@ function MapboxCanvasComponent({
   }, [updateFootprintLayerPaint])
 
   const showWorldMap = useCallback(() => {
-    mapRef.current?.flyTo({
-      center: DEFAULT_MAP_CENTER,
-      zoom: DEFAULT_MAP_ZOOM,
+    const map = mapRef.current
+    const currentCenter = map?.getCenter()
+
+    if (resolvedProjection === 'globe') {
+      startGlobeRotationAfterMove()
+    } else {
+      stopGlobeRotation()
+    }
+
+    map?.flyTo({
+      center: currentCenter ? [currentCenter.lng, currentCenter.lat] : DEFAULT_MAP_CENTER,
+      zoom: resolvedProjection === 'globe' ? GLOBE_WORLD_ZOOM : DEFAULT_MAP_ZOOM,
       bearing: 0,
       pitch: 0,
     })
-  }, [])
+  }, [resolvedProjection, startGlobeRotationAfterMove, stopGlobeRotation])
 
   const fitDisplayedFootprints = useCallback(() => {
-    showWorldMap()
-  }, [showWorldMap])
+    const bounds = selectedFootprintBoundsRef.current
+    if (!bounds) return
+
+    stopGlobeRotation()
+    mapRef.current?.fitBounds(
+      [bounds.southWest, bounds.northEast],
+      {
+        duration: MAP_FIT_BOUNDS_DURATION_MS,
+        padding: MAP_FIT_BOUNDS_PADDING_PX,
+      },
+    )
+  }, [stopGlobeRotation])
 
   const locate = useCallback(() => {
     if (!navigator.geolocation) return
 
+    stopGlobeRotation()
     navigator.geolocation.getCurrentPosition((position) => {
       mapRef.current?.flyTo({
         center: [position.coords.longitude, position.coords.latitude],
         zoom: 14,
       })
     })
-  }, [])
+  }, [stopGlobeRotation])
 
   const zoomIn = useCallback(() => {
+    stopGlobeRotation()
     mapRef.current?.zoomIn()
-  }, [])
+  }, [stopGlobeRotation])
 
   const zoomOut = useCallback(() => {
+    stopGlobeRotation()
     mapRef.current?.zoomOut()
-  }, [])
+  }, [stopGlobeRotation])
 
   return (
     <section
@@ -302,7 +468,7 @@ function MapboxCanvasComponent({
         </div>
       ) : null}
       {debugPanelVisible ? (
-        <FootprintDebugPanel />
+        <FootprintDebugPanel debugMetrics={status === 'ready' ? tileDebugMetrics : null} />
       ) : null}
       {status === 'missing-token' ? (
         <div className="map-message" role="status">
@@ -350,6 +516,56 @@ function createFootprintMetricsUrl(
   return `${metricsUrl}?${params.toString()}`
 }
 
+function createFootprintTileDebugUrl(
+  debugUrl: string,
+  range: FootprintVectorTileRange,
+  viewport: {
+    z: number
+    west: number
+    south: number
+    east: number
+    north: number
+  },
+) {
+  const params = new URLSearchParams()
+  params.set('z', String(viewport.z))
+  params.set('west', formatCoordinateParam(viewport.west))
+  params.set('south', formatCoordinateParam(viewport.south))
+  params.set('east', formatCoordinateParam(viewport.east))
+  params.set('north', formatCoordinateParam(viewport.north))
+
+  if (range.range === 'all') {
+    params.set('range', 'all')
+  } else {
+    params.set('start', range.start)
+    params.set('end', range.end)
+  }
+
+  return `${debugUrl}?${params.toString()}`
+}
+
+function getCurrentFootprintTileDebugViewport(map: mapboxgl.Map) {
+  const bounds = map.getBounds()
+
+  return {
+    z: Math.max(0, Math.min(18, Math.floor(map.getZoom()))),
+    west: bounds?.getWest() ?? -180,
+    south: bounds?.getSouth() ?? -85,
+    east: bounds?.getEast() ?? 180,
+    north: bounds?.getNorth() ?? 85,
+  }
+}
+
+function formatCoordinateParam(value: number) {
+  if (Number.isInteger(value)) return String(value)
+
+  return String(Number(value.toFixed(6)))
+}
+
+function normalizeLongitude(longitude: number) {
+  return ((((longitude + 180) % 360) + 360) % 360) - 180
+}
+
 function createMapboxTileUrl(tileUrl: string) {
   if (/^https?:\/\//i.test(tileUrl)) return tileUrl
 
@@ -366,6 +582,15 @@ function resolveConfigValue(
   if (explicitValue !== undefined) return explicitValue.trim()
 
   return envValue?.trim() || fallback
+}
+
+function resolveMapboxProjection(
+  explicitValue: MapboxProjection | undefined,
+  envValue: string | undefined,
+): MapboxProjection {
+  const nextProjection = (explicitValue ?? envValue)?.trim().toLowerCase()
+
+  return nextProjection === 'mercator' ? 'mercator' : DEFAULT_MAPBOX_PROJECTION
 }
 
 function readStoredFootprintStyle() {
@@ -390,21 +615,45 @@ function writeStoredFootprintStyle(footprintStyle: FootprintStyle) {
   }
 }
 
-function FootprintDebugPanel() {
+function FootprintDebugPanel({ debugMetrics }: { debugMetrics: FootprintTileDebugMetrics | null }) {
   return (
     <aside className="footprint-debug-panel" aria-label="足迹渲染调试">
       <div className="footprint-debug-panel__row">
-        <span>渲染方式</span>
-        <strong>MVT</strong>
-      </div>
-      <div className="footprint-debug-panel__row">
         <span>瓦片层级</span>
-        <strong>0-18</strong>
+        <strong>{debugMetrics ? formatDebugCount(debugMetrics.tileZoom) : '--'}</strong>
       </div>
       <div className="footprint-debug-panel__row">
-        <span>客户端采样</span>
-        <strong>无</strong>
+        <span>瓦片</span>
+        <strong>
+          {debugMetrics
+            ? [
+                debugMetrics.requestedTileCount,
+                debugMetrics.populatedTileCount,
+                debugMetrics.dirtyTileCount,
+              ].map(formatDebugCount).join(' / ')
+            : '--'}
+        </strong>
+      </div>
+      <div className="footprint-debug-panel__row">
+        <span>实际点数</span>
+        <strong>{debugMetrics ? formatDebugCount(debugMetrics.rawCount) : '--'}</strong>
+      </div>
+      <div className="footprint-debug-panel__row">
+        <span>代表点数</span>
+        <strong>{debugMetrics ? formatDebugCount(debugMetrics.representativeCount) : '--'}</strong>
+      </div>
+      <div className="footprint-debug-panel__row">
+        <span>渲染率</span>
+        <strong>{debugMetrics ? formatDebugRatio(debugMetrics.renderRatio) : '--'}</strong>
       </div>
     </aside>
   )
+}
+
+function formatDebugCount(value: number) {
+  return new Intl.NumberFormat('en-US').format(value)
+}
+
+function formatDebugRatio(value: number) {
+  return `${(value * 100).toFixed(1)}%`
 }

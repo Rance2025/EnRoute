@@ -1,15 +1,17 @@
 import '@testing-library/jest-dom/vitest'
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('./components/MapboxCanvas', async () => {
   const React = await import('react')
 
   return {
-    MapboxCanvas: () => React.createElement(
+    MapboxCanvas: ({ projection }: { projection?: string }) => React.createElement(
       'section',
       {
         className: 'map-stage',
+        'data-testid': 'mapbox-canvas',
+        'data-projection': projection,
         'aria-label': '在途 EnRoute 地图工作区',
       },
       React.createElement(
@@ -76,6 +78,12 @@ afterEach(() => {
 beforeEach(() => {
   window.localStorage.clear()
 })
+
+async function settleLazyImports() {
+  await act(async () => {
+    await vi.dynamicImportSettled()
+  })
+}
 
 describe('App', () => {
   it('calculates symmetric side panels and leaves the map workspace between them', () => {
@@ -271,7 +279,7 @@ describe('App', () => {
     expect(shell.querySelector(':scope > .right-context-panel')).toBeNull()
   })
 
-  it('shows a setup message when Mapbox credentials are missing', () => {
+  it('shows a setup message when Mapbox credentials are missing', async () => {
     render(
       <App
         amapConfig={{
@@ -293,7 +301,7 @@ describe('App', () => {
     )
 
     expect(screen.getByRole('navigation', { name: '主导航' })).toHaveTextContent('EnRoute')
-    expect(screen.getByText('需要配置 Mapbox 访问令牌')).toBeInTheDocument()
+    expect(await screen.findByText('需要配置 Mapbox 访问令牌')).toBeInTheDocument()
     expect(screen.getByText(/VITE_MAPBOX_ACCESS_TOKEN/)).toBeInTheDocument()
   })
 
@@ -531,6 +539,27 @@ describe('App', () => {
     ).toHaveAttribute('aria-checked', 'true')
   })
 
+  it('defaults map projection to globe and toggles the map shape from map settings', async () => {
+    render(<App amapConfig={missingAmapConfig} />)
+
+    expect(await screen.findByTestId('mapbox-canvas')).toHaveAttribute('data-projection', 'globe')
+
+    fireEvent.click(screen.getByRole('button', { name: '打开设置' }))
+    const dialog = screen.getByRole('dialog', { name: '设置' })
+    fireEvent.click(within(dialog).getByRole('button', { name: '地图' }))
+
+    const projectionTabs = within(dialog).getByRole('group', { name: '地图形态' })
+    expect(within(projectionTabs).getByRole('button', { name: '球形' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+
+    fireEvent.click(within(projectionTabs).getByRole('button', { name: '平面' }))
+
+    expect(window.localStorage.getItem('enroute:map-projection')).toBe('mercator')
+    expect(await screen.findByTestId('mapbox-canvas')).toHaveAttribute('data-projection', 'mercator')
+  })
+
   it('restores the persisted mixed navigation style on reload', () => {
     window.localStorage.setItem('enroute:navigation-style', 'mixed')
 
@@ -558,20 +587,23 @@ describe('App', () => {
     expect(within(secondaryNav).queryByRole('button', { name: '流水' })).not.toBeInTheDocument()
   })
 
-  it('switches secondary navigation content with the top-level page and drives accounting sections', () => {
+  it('switches secondary navigation content with the top-level page and drives accounting sections', async () => {
     render(<App amapConfig={missingAmapConfig} />)
 
     fireEvent.click(screen.getByRole('button', { name: '记账' }))
+    await settleLazyImports()
 
     const secondaryNav = screen.getByRole('navigation', { name: '二级导航' })
 
+    expect(within(secondaryNav).getByRole('button', { name: '流水' })).toBeInTheDocument()
+    expect(within(secondaryNav).getByRole('button', { name: '统计' })).toBeInTheDocument()
+    expect(within(secondaryNav).queryByRole('button', { name: '足迹' })).not.toBeInTheDocument()
     expect(within(secondaryNav).getByRole('button', { name: '流水' })).toHaveAttribute(
       'aria-pressed',
       'true',
     )
-    expect(within(secondaryNav).getByRole('button', { name: '统计' })).toBeInTheDocument()
-    expect(within(secondaryNav).queryByRole('button', { name: '足迹' })).not.toBeInTheDocument()
-    expect(screen.getByLabelText('账户与流水工作台')).toBeInTheDocument()
+    expect(await screen.findByLabelText('iOS 记账工作台')).toBeInTheDocument()
+    expect(await screen.findByLabelText('账户与流水工作台')).toBeInTheDocument()
     expect(screen.queryByLabelText('统计工作区')).not.toBeInTheDocument()
 
     fireEvent.click(within(secondaryNav).getByRole('button', { name: '统计' }))
@@ -580,7 +612,7 @@ describe('App', () => {
       'aria-pressed',
       'true',
     )
-    expect(screen.getByLabelText('统计工作区')).toBeInTheDocument()
+    expect(await screen.findByLabelText('统计工作区')).toBeInTheDocument()
     expect(screen.queryByLabelText('账户与流水工作台')).not.toBeInTheDocument()
   })
 
@@ -608,7 +640,7 @@ describe('App', () => {
     expect(screen.queryByLabelText(/切换地图主题/)).not.toBeInTheDocument()
   })
 
-  it('uses a text-only brand and a single floating map toolbar', () => {
+  it('uses a text-only brand and a single floating map toolbar', async () => {
     render(
       <App
         amapConfig={{
@@ -634,7 +666,7 @@ describe('App', () => {
     expect(screen.queryByText('途')).not.toBeInTheDocument()
     expect(screen.queryByText(/地图已就绪/)).not.toBeInTheDocument()
     expect(screen.queryByText(/远山黛/)).not.toBeInTheDocument()
-    const mapToolbar = screen.getByLabelText('地图工具')
+    const mapToolbar = await screen.findByLabelText('地图工具')
     expect(mapToolbar).toBeInTheDocument()
     expect(mapToolbar.querySelectorAll('button')).toHaveLength(6)
     expect(within(mapToolbar).queryByRole('button', { name: '行政区划解锁程度' })).not.toBeInTheDocument()
@@ -670,17 +702,18 @@ describe('App', () => {
       'aria-pressed',
       'true',
     )
-    expect(screen.getByText('需要配置 Mapbox 访问令牌')).toBeInTheDocument()
+    expect(await screen.findByText('需要配置 Mapbox 访问令牌')).toBeInTheDocument()
     expect(screen.getByRole('main')).toHaveClass('app-shell--map')
     expect(document.body).toHaveClass('is-map-view')
 
     fireEvent.click(screen.getByRole('button', { name: '记账' }))
+    await settleLazyImports()
 
     expect(screen.getByRole('button', { name: '记账' })).toHaveAttribute(
       'aria-pressed',
       'true',
     )
-    expect(screen.getByLabelText('iOS 记账工作台')).toBeInTheDocument()
+    expect(await screen.findByLabelText('iOS 记账工作台')).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: '记账' })).not.toBeInTheDocument()
     expect(screen.queryByText('Money ledger')).not.toBeInTheDocument()
     expect(screen.getByRole('main')).toHaveClass('app-shell--accounting')
@@ -691,7 +724,7 @@ describe('App', () => {
     expect(screen.queryByText('Ledger Atlas')).not.toBeInTheDocument()
     expect(screen.queryByText('记账图谱工作台')).not.toBeInTheDocument()
     expect(screen.queryByLabelText('当前账目范围')).not.toBeInTheDocument()
-    const ledgerWorkspace = screen.getByLabelText('账户与流水工作台')
+    const ledgerWorkspace = await screen.findByLabelText('账户与流水工作台')
     expect(ledgerWorkspace).toBeInTheDocument()
     expect(within(ledgerWorkspace).getByRole('button', { name: '新增流水' })).toBeInTheDocument()
     expect(screen.queryByText('查看统计')).not.toBeInTheDocument()
@@ -739,8 +772,9 @@ describe('App', () => {
     )
 
     fireEvent.click(screen.getByRole('button', { name: '记账' }))
+    await settleLazyImports()
 
-    const workspace = screen.getByLabelText('账户与流水工作台')
+    const workspace = await screen.findByLabelText('账户与流水工作台')
 
     fireEvent.click(within(workspace).getAllByText('NIBU 酸奶')[0])
 
@@ -782,13 +816,14 @@ describe('App', () => {
     )
 
     fireEvent.click(screen.getByRole('button', { name: '记账' }))
+    await settleLazyImports()
     fireEvent.click(
       within(screen.getByRole('navigation', { name: '二级导航' })).getByRole('button', {
         name: '统计',
       }),
     )
 
-    const reportWorkspace = screen.getByLabelText('统计工作区')
+    const reportWorkspace = await screen.findByLabelText('统计工作区')
 
     expect(within(reportWorkspace).getByText('统计总览')).toBeInTheDocument()
     expect(within(reportWorkspace).getByLabelText('收支环形图')).toBeInTheDocument()
@@ -823,6 +858,7 @@ describe('App', () => {
     )
 
     fireEvent.click(screen.getByRole('button', { name: '记账' }))
+    await settleLazyImports()
 
     expect(screen.queryByRole('group', { name: '记账工作区' })).not.toBeInTheDocument()
     const secondaryNav = screen.getByRole('navigation', { name: '二级导航' })
@@ -833,13 +869,13 @@ describe('App', () => {
     )
     expect(within(secondaryNav).queryByRole('button', { name: '账户' })).not.toBeInTheDocument()
     expect(within(secondaryNav).getByRole('button', { name: '统计' })).toBeInTheDocument()
-    expect(screen.getByLabelText('账户与流水工作台')).toBeInTheDocument()
+    expect(await screen.findByLabelText('账户与流水工作台')).toBeInTheDocument()
     expect(screen.queryByRole('navigation', { name: '记账二级导航' })).not.toBeInTheDocument()
     expect(screen.queryByLabelText('账户工作台')).not.toBeInTheDocument()
 
     fireEvent.click(within(secondaryNav).getByRole('button', { name: '统计' }))
 
-    expect(screen.getByLabelText('统计工作区')).toBeInTheDocument()
+    expect(await screen.findByLabelText('统计工作区')).toBeInTheDocument()
     expect(within(secondaryNav).getByRole('button', { name: '统计' })).toHaveAttribute(
       'aria-pressed',
       'true',
@@ -848,7 +884,7 @@ describe('App', () => {
 
     fireEvent.click(within(secondaryNav).getByRole('button', { name: '流水' }))
 
-    expect(screen.getByLabelText('账户与流水工作台')).toBeInTheDocument()
+    expect(await screen.findByLabelText('账户与流水工作台')).toBeInTheDocument()
     expect(screen.queryByLabelText('统计工作区')).not.toBeInTheDocument()
   })
 })

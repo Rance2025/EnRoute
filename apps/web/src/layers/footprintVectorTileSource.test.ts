@@ -61,7 +61,7 @@ describe('createFootprintVectorTileSource', () => {
       source: 'footprints',
       'source-layer': 'footprints',
       paint: {
-        'circle-radius': 1.5,
+        'circle-radius': 0.75,
         'circle-color': '#123f35',
         'circle-opacity': 0.82,
       },

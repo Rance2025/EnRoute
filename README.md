@@ -23,6 +23,7 @@ Create `.env.local` in the project root:
 ```env
 VITE_MAPBOX_ACCESS_TOKEN=your-mapbox-access-token
 VITE_MAPBOX_STYLE_URL=mapbox://styles/mapbox/light-v11
+VITE_MAPBOX_PROJECTION=globe
 VITE_FOOTPRINT_TILE_URL=/api/map/tiles/footprints/{z}/{x}/{y}.mvt
 VITE_FOOTPRINT_METRICS_URL=/api/footprints/metrics
 VITE_ADMIN_REGION_API_URL=/api/admin-regions
@@ -56,6 +57,18 @@ dependencies from `apps/api/pyproject.toml`. `npm run rebuild:footprints`
 recreates the ignored SQLite database from the WGS-84 source CSV, and
 `npm run prepare:footprint-tiles` precomputes the footprint visual tile cells
 for `all`, `day`, `month`, and `year` buckets up to zoom 18.
+
+Mapbox map appearance is configured from `.env.local`. Use
+`VITE_MAPBOX_PROJECTION=globe` for the default spherical map, or
+`VITE_MAPBOX_PROJECTION=mercator` for the flat Web Mercator map. Change
+`VITE_MAPBOX_STYLE_URL` to switch the base style, for example
+`mapbox://styles/mapbox/light-v11`, `mapbox://styles/mapbox/streets-v12`,
+`mapbox://styles/mapbox/outdoors-v12`, `mapbox://styles/mapbox/dark-v11`, or
+`mapbox://styles/mapbox/satellite-streets-v12`. Custom styles can be created in
+Mapbox Studio (`https://console.mapbox.com/studio/`), and the style JSON
+contract is documented at `https://docs.mapbox.com/style-spec/guides/` and
+`https://docs.mapbox.com/style-spec/reference/`. The globe projection example
+is at `https://docs.mapbox.com/mapbox-gl-js/example/globe/`.
 
 Keep personal footprint exports in `external/`, which is ignored by git. The
 Python API reads `FOOTPRINT_DATA_PATH=external/backUpData-all.csv` and stores
