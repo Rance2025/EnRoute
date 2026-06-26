@@ -119,6 +119,8 @@ function MapboxCanvasComponent({
   const globeRotationTimerRef = useRef<number | undefined>(undefined)
   const globeRotationStartHandlerRef = useRef<(() => void) | undefined>(undefined)
   const globeRotationPendingWorldViewRef = useRef(false)
+  const globeRotationRequestedRef = useRef(false)
+  const globeRotationDraggingRef = useRef(false)
 
   const resolvedAccessToken = resolveConfigValue(
     accessToken,
@@ -216,25 +218,39 @@ function MapboxCanvasComponent({
     }
   }, [adminBoundariesVisible, placeLabelsVisible])
 
-  const stopGlobeRotation = useCallback(() => {
-    const map = mapRef.current
-    if (map && globeRotationStartHandlerRef.current) {
-      map.off('moveend', globeRotationStartHandlerRef.current)
-    }
-    globeRotationStartHandlerRef.current = undefined
-    globeRotationPendingWorldViewRef.current = false
-
+  const clearGlobeRotationTimer = useCallback(() => {
     if (globeRotationTimerRef.current === undefined) return
 
     window.clearInterval(globeRotationTimerRef.current)
     globeRotationTimerRef.current = undefined
   }, [])
 
+  const clearPendingGlobeRotationStart = useCallback((map: mapboxgl.Map | null) => {
+    if (map && globeRotationStartHandlerRef.current) {
+      map.off('moveend', globeRotationStartHandlerRef.current)
+    }
+
+    globeRotationStartHandlerRef.current = undefined
+    globeRotationPendingWorldViewRef.current = false
+  }, [])
+
+  const stopGlobeRotation = useCallback(() => {
+    const map = mapRef.current
+    globeRotationRequestedRef.current = false
+    globeRotationDraggingRef.current = false
+    clearPendingGlobeRotationStart(map)
+    clearGlobeRotationTimer()
+  }, [clearGlobeRotationTimer, clearPendingGlobeRotationStart])
+
   const startGlobeRotation = useCallback(() => {
     const map = mapRef.current
     if (!map || resolvedProjection !== 'globe') return
 
-    stopGlobeRotation()
+    globeRotationRequestedRef.current = true
+    clearPendingGlobeRotationStart(map)
+    clearGlobeRotationTimer()
+    if (globeRotationDraggingRef.current) return
+
     const rotateGlobeOnce = () => {
       const center = map.getCenter()
 
@@ -249,24 +265,29 @@ function MapboxCanvasComponent({
 
     rotateGlobeOnce()
     globeRotationTimerRef.current = window.setInterval(rotateGlobeOnce, GLOBE_ROTATION_INTERVAL_MS)
-  }, [resolvedProjection, stopGlobeRotation])
+  }, [clearGlobeRotationTimer, clearPendingGlobeRotationStart, resolvedProjection])
 
   const startGlobeRotationAfterMove = useCallback(() => {
     const map = mapRef.current
     if (!map || resolvedProjection !== 'globe') return
 
-    stopGlobeRotation()
+    globeRotationRequestedRef.current = true
+    clearPendingGlobeRotationStart(map)
+    clearGlobeRotationTimer()
+
     const handleMoveEnd = () => {
       map.off('moveend', handleMoveEnd)
       globeRotationStartHandlerRef.current = undefined
       globeRotationPendingWorldViewRef.current = false
+      if (!globeRotationRequestedRef.current || globeRotationDraggingRef.current) return
+
       startGlobeRotation()
     }
 
     globeRotationStartHandlerRef.current = handleMoveEnd
     globeRotationPendingWorldViewRef.current = true
     map.on('moveend', handleMoveEnd)
-  }, [resolvedProjection, startGlobeRotation, stopGlobeRotation])
+  }, [clearGlobeRotationTimer, clearPendingGlobeRotationStart, resolvedProjection, startGlobeRotation])
 
   useEffect(() => {
     onFootprintMetricsChange?.(EMPTY_FOOTPRINT_METRICS)
@@ -362,10 +383,27 @@ function MapboxCanvasComponent({
 
         stopGlobeRotation()
       }
+      const handleDragStart = () => {
+        if (!globeRotationRequestedRef.current) return
+
+        globeRotationDraggingRef.current = true
+        map.stop()
+        clearGlobeRotationTimer()
+      }
+      const handleDragEnd = () => {
+        if (!globeRotationDraggingRef.current) return
+
+        globeRotationDraggingRef.current = false
+        if (!globeRotationRequestedRef.current) return
+
+        startGlobeRotation()
+      }
 
       map.on('load', handleLoad)
       map.on('error', handleError)
       map.on('zoomstart', handleZoomStart)
+      map.on('dragstart', handleDragStart)
+      map.on('dragend', handleDragEnd)
 
       return () => {
         disposed = true
@@ -373,13 +411,22 @@ function MapboxCanvasComponent({
         map.off('load', handleLoad)
         map.off('error', handleError)
         map.off('zoomstart', handleZoomStart)
+        map.off('dragstart', handleDragStart)
+        map.off('dragend', handleDragEnd)
         map.remove()
         mapRef.current = null
       }
     } catch (error: unknown) {
       reportInitializationError(error)
     }
-  }, [resolvedAccessToken, resolvedProjection, resolvedStyleUrl, stopGlobeRotation])
+  }, [
+    clearGlobeRotationTimer,
+    resolvedAccessToken,
+    resolvedProjection,
+    resolvedStyleUrl,
+    startGlobeRotation,
+    stopGlobeRotation,
+  ])
 
   useEffect(() => {
     if (status !== 'ready') return
