@@ -16,6 +16,7 @@ type MockMapRecord = {
   fitBoundsCalls: Array<[unknown, unknown]>
   flyToCalls: unknown[]
   easeToCalls: unknown[]
+  stopCalls: number
   removeCalls: number
   emit: (eventName: string) => void
   setZoom: (zoom: number) => void
@@ -325,7 +326,7 @@ describe('MapboxCanvas footprint vector tiles', () => {
     expect(mapRecords[0].easeToCalls).toHaveLength(1)
   })
 
-  it('keeps globe rotation running when the user drags after entering the world view', async () => {
+  it('pauses globe rotation while dragging and resumes after drag release', async () => {
     vi.useFakeTimers()
     const { mapRecords } = mockMapboxRuntime()
     const { MapboxCanvas } = await import('./MapboxCanvas')
@@ -344,11 +345,13 @@ describe('MapboxCanvas footprint vector tiles', () => {
     expect(mapRecords[0].easeToCalls).toHaveLength(1)
 
     act(() => mapRecords[0].emit('dragstart'))
-    act(() => mapRecords[0].emit('moveend'))
+    expect(mapRecords[0].stopCalls).toBe(1)
     act(() => {
       vi.advanceTimersByTime(1000)
     })
+    expect(mapRecords[0].easeToCalls).toHaveLength(1)
 
+    act(() => mapRecords[0].emit('dragend'))
     expect(mapRecords[0].easeToCalls).toHaveLength(2)
   })
 
@@ -854,6 +857,7 @@ function mockMapboxRuntime(runtimeOptions: { layers?: unknown[] } = {}) {
         fitBoundsCalls: [],
         flyToCalls: [],
         easeToCalls: [],
+        stopCalls: 0,
         removeCalls: 0,
         emit: (eventName: string) => {
           for (const handler of this.handlers.get(eventName) ?? []) handler()
@@ -998,6 +1002,9 @@ function mockMapboxRuntime(runtimeOptions: { layers?: unknown[] } = {}) {
       }
     }
     jumpTo() {}
+    stop() {
+      this.record.stopCalls += 1
+    }
     remove() {
       this.record.removeCalls += 1
     }
