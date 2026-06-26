@@ -347,11 +347,12 @@ function MapboxCanvasComponent({
     }
 
     try {
+      const mapNode = mapNodeRef.current
       const map = new mapboxgl.Map({
-        container: mapNodeRef.current,
+        container: mapNode,
         style: resolvedStyleUrl,
         center: DEFAULT_MAP_CENTER,
-        zoom: DEFAULT_MAP_ZOOM,
+        zoom: resolvedProjection === 'globe' ? GLOBE_WORLD_ZOOM : DEFAULT_MAP_ZOOM,
         maxZoom: 18,
         minPitch: 0,
         maxPitch: 0,
@@ -383,11 +384,15 @@ function MapboxCanvasComponent({
 
         stopGlobeRotation()
       }
+      const handlePointerDown = () => {
+        if (!globeRotationRequestedRef.current) return
+
+        map.stop()
+      }
       const handleDragStart = () => {
         if (!globeRotationRequestedRef.current) return
 
         globeRotationDraggingRef.current = true
-        map.stop()
         clearGlobeRotationTimer()
       }
       const handleDragEnd = () => {
@@ -404,9 +409,11 @@ function MapboxCanvasComponent({
       map.on('zoomstart', handleZoomStart)
       map.on('dragstart', handleDragStart)
       map.on('dragend', handleDragEnd)
+      mapNode.addEventListener('pointerdown', handlePointerDown, { capture: true })
 
       return () => {
         disposed = true
+        mapNode.removeEventListener('pointerdown', handlePointerDown, { capture: true })
         stopGlobeRotation()
         map.off('load', handleLoad)
         map.off('error', handleError)
