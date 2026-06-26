@@ -1,0 +1,826 @@
+import '@testing-library/jest-dom/vitest'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
+import type { TimeRangeSelection } from '../time/timeRange'
+
+type MockMapRecord = {
+  options: Record<string, unknown>
+  sources: Record<string, unknown>
+  layers: unknown[]
+  removedLayers: string[]
+  removedSources: string[]
+  paintProperties: Array<[string, string, unknown]>
+  fitBoundsCalls: Array<[unknown, unknown]>
+  flyToCalls: unknown[]
+  easeToCalls: unknown[]
+  removeCalls: number
+  emit: (eventName: string) => void
+  setZoom: (zoom: number) => void
+  setCenter: (center: [number, number]) => void
+  setBounds: (bounds: { west: number, south: number, east: number, north: number }) => void
+}
+
+const selectedRange: TimeRangeSelection = {
+  mode: 'day',
+  start: '2026-06-19',
+  end: '2026-06-19',
+  anchorDate: '2026-06-19',
+}
+
+const allRange: TimeRangeSelection = {
+  mode: 'custom',
+  start: '2022-03-01',
+  end: '2026-06-19',
+  anchorDate: '2026-06-19',
+  label: 'All',
+  isOpenEnded: true,
+}
+
+afterEach(() => {
+  vi.useRealTimers()
+  cleanup()
+  vi.unstubAllGlobals()
+  vi.doUnmock('mapbox-gl')
+  vi.doUnmock('../layers/footprintDataSource')
+  vi.resetModules()
+  vi.restoreAllMocks()
+})
+
+describe('MapboxCanvas footprint vector tiles', () => {
+  it('initializes Mapbox as a fixed globe map at max zoom 18 and adds the footprint vector circle layer', async () => {
+    const { mapRecords, footprintDataSourceImported } = mockMapboxRuntime()
+    const { MapboxCanvas } = await import('./MapboxCanvas')
+
+    render(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        styleUrl="mapbox://styles/enroute/test"
+        tileUrl="/api/map/tiles/footprints/{z}/{x}/{y}.mvt"
+        timeRange={selectedRange}
+      />,
+    )
+
+    expect(mapRecords).toHaveLength(1)
+    expect(mapRecords[0].options).toMatchObject({
+      dragRotate: false,
+      maxPitch: 0,
+      maxZoom: 18,
+      minPitch: 0,
+      pitch: 0,
+      projection: 'globe',
+      renderWorldCopies: false,
+      style: 'mapbox://styles/enroute/test',
+      touchPitch: false,
+      touchZoomRotate: false,
+    })
+
+    act(() => mapRecords[0].emit('load'))
+
+    expect(mapRecords[0].sources.footprints).toMatchObject({
+      type: 'vector',
+      maxzoom: 18,
+      tiles: [
+        expectedMapboxTileUrl('?start=2026-06-19&end=2026-06-19'),
+      ],
+    })
+    expect(mapRecords[0].layers[0]).toMatchObject({
+      id: 'footprints-circle',
+      type: 'circle',
+      source: 'footprints',
+      'source-layer': 'footprints',
+      paint: expect.objectContaining({
+        'circle-radius': 0.75,
+        'circle-color': '#123f35',
+        'circle-opacity': 0.82,
+      }),
+    })
+    expect(JSON.stringify(mapRecords[0].layers[0])).not.toContain('heatmap')
+    expect(JSON.stringify(mapRecords[0].layers[0])).not.toContain('cluster')
+    expect(JSON.stringify(mapRecords[0].layers[0])).not.toContain('count')
+    expect(footprintDataSourceImported()).toBe(false)
+  })
+
+  it('uses mercator projection and world copies when configured as a flat map', async () => {
+    const { mapRecords } = mockMapboxRuntime()
+    vi.stubEnv('VITE_MAPBOX_PROJECTION', 'mercator')
+    const { MapboxCanvas } = await import('./MapboxCanvas')
+
+    render(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        timeRange={selectedRange}
+      />,
+    )
+
+    expect(mapRecords).toHaveLength(1)
+    expect(mapRecords[0].options).toMatchObject({
+      projection: 'mercator',
+      renderWorldCopies: true,
+    })
+  })
+
+  it('uses range=all for open ended footprint tile requests', async () => {
+    const { mapRecords } = mockMapboxRuntime()
+    const { MapboxCanvas } = await import('./MapboxCanvas')
+
+    render(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        tileUrl="/api/map/tiles/footprints/{z}/{x}/{y}.mvt"
+        timeRange={allRange}
+      />,
+    )
+
+    act(() => mapRecords[0].emit('load'))
+
+    expect(mapRecords[0].sources.footprints).toMatchObject({
+      maxzoom: 18,
+      tiles: [expectedMapboxTileUrl('?range=all')],
+    })
+  })
+
+  it('uses the default footprint tile endpoint when no tile URL is configured', async () => {
+    const { mapRecords } = mockMapboxRuntime()
+    const { MapboxCanvas } = await import('./MapboxCanvas')
+
+    render(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        timeRange={selectedRange}
+      />,
+    )
+
+    act(() => mapRecords[0].emit('load'))
+
+    expect(mapRecords[0].sources.footprints).toMatchObject({
+      tiles: [
+        expectedMapboxTileUrl('?start=2026-06-19&end=2026-06-19'),
+      ],
+    })
+  })
+
+  it('requests metrics for the selected time range without importing the snapshot data source', async () => {
+    const { mapRecords, footprintDataSourceImported } = mockMapboxRuntime()
+    const fetchMock = mockMetricsFetch({
+      selectedCount: 3,
+      totalDistanceMeters: 400,
+      averageDistanceMetersPerDay: 400,
+    })
+    const onFootprintMetricsChange = vi.fn()
+    const { MapboxCanvas } = await import('./MapboxCanvas')
+
+    render(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        tileUrl="/api/map/tiles/footprints/{z}/{x}/{y}.mvt"
+        timeRange={selectedRange}
+        onFootprintMetricsChange={onFootprintMetricsChange}
+      />,
+    )
+
+    act(() => mapRecords[0].emit('load'))
+    await act(async () => {})
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/footprints/metrics?start=2026-06-19&end=2026-06-19',
+      expect.objectContaining({ method: 'GET' }),
+    )
+    expect(onFootprintMetricsChange).toHaveBeenLastCalledWith({
+      selectedCount: 3,
+      totalDistanceMeters: 400,
+      averageDistanceMetersPerDay: 400,
+    })
+    expect(footprintDataSourceImported()).toBe(false)
+  })
+
+  it('fits the map to selected footprint bounds from metrics when focusing footprints', async () => {
+    const { mapRecords } = mockMapboxRuntime()
+    mockMetricsFetch({
+      selectedCount: 3,
+      totalDistanceMeters: 400,
+      averageDistanceMetersPerDay: 400,
+      selectedBounds: {
+        southWest: [118, 30],
+        northEast: [121.5, 31.3],
+      },
+    })
+    const { MapboxCanvas } = await import('./MapboxCanvas')
+
+    render(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        timeRange={selectedRange}
+      />,
+    )
+
+    act(() => mapRecords[0].emit('load'))
+    await act(async () => {})
+    fireEvent.click(screen.getByRole('button', { name: '聚焦当前足迹' }))
+
+    expect(mapRecords[0].fitBoundsCalls).toEqual([
+      [
+        [
+          [118, 30],
+          [121.5, 31.3],
+        ],
+        { duration: 900, padding: 96 },
+      ],
+    ])
+  })
+
+  it('zooms the globe out to zoom 1.75 while keeping the current center before starting slow rotation', async () => {
+    const { mapRecords } = mockMapboxRuntime()
+    const { MapboxCanvas } = await import('./MapboxCanvas')
+
+    render(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        projection="globe"
+        timeRange={selectedRange}
+      />,
+    )
+
+    mapRecords[0].setCenter([12, 34])
+    fireEvent.click(screen.getByRole('button', { name: '显示世界地图' }))
+
+    expect(mapRecords[0].flyToCalls).toEqual([
+      {
+        center: [12, 34],
+        zoom: 1.75,
+        bearing: 0,
+        pitch: 0,
+      },
+    ])
+    expect(mapRecords[0].easeToCalls).toEqual([])
+
+    act(() => mapRecords[0].emit('moveend'))
+
+    expect(mapRecords[0].easeToCalls).toEqual([
+      {
+        center: [14, 34],
+        bearing: 0,
+        pitch: 0,
+        duration: 1000,
+        easing: expect.any(Function),
+      },
+    ])
+  })
+
+  it('shows footprint tile debug metrics for the current Mapbox viewport', async () => {
+    const { mapRecords } = mockMapboxRuntime()
+    const fetchMock = mockMetricsAndDebugFetch({
+      ok: true,
+      json: async () => ({
+        tileZoom: 8,
+        requestedTileCount: 12,
+        populatedTileCount: 5,
+        readyTileCount: 4,
+        dirtyTileCount: 1,
+        rawCount: 1200,
+        representativeCount: 320,
+        renderRatio: 0.266666,
+      }),
+    })
+    const { MapboxCanvas } = await import('./MapboxCanvas')
+
+    render(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        tileUrl="/api/map/tiles/footprints/{z}/{x}/{y}.mvt"
+        timeRange={allRange}
+        debugPanelVisible
+      />,
+    )
+
+    mapRecords[0].setZoom(8.6)
+    mapRecords[0].setBounds({ west: 120, south: 30, east: 122, north: 32 })
+    act(() => mapRecords[0].emit('load'))
+    await act(async () => {})
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/map/tiles/footprints/debug?z=8&west=120&south=30&east=122&north=32&range=all',
+      expect.objectContaining({ method: 'GET' }),
+    )
+    const rows = Array.from(document.querySelectorAll('.footprint-debug-panel__row'))
+
+    expect(rows).toHaveLength(5)
+    expect(rows.map((row) => row.textContent)).toEqual([
+      '瓦片层级8',
+      '瓦片12 / 5 / 1',
+      '实际点数1,200',
+      '代表点数320',
+      '渲染率26.7%',
+    ])
+    expect(screen.getByLabelText('足迹渲染调试')).not.toHaveTextContent('z8')
+    expect(screen.getByLabelText('足迹渲染调试')).not.toHaveTextContent('视口瓦片')
+    expect(screen.getByLabelText('足迹渲染调试')).not.toHaveTextContent('命中瓦片')
+    expect(screen.getByLabelText('足迹渲染调试')).not.toHaveTextContent('脏瓦片')
+  })
+
+  it('keeps the last successful debug metrics while a refresh fails', async () => {
+    const { mapRecords } = mockMapboxRuntime()
+    const fetchMock = mockMetricsAndDebugFetch({
+      ok: true,
+      json: async () => ({
+        tileZoom: 8,
+        requestedTileCount: 12,
+        populatedTileCount: 5,
+        readyTileCount: 4,
+        dirtyTileCount: 1,
+        rawCount: 1200,
+        representativeCount: 320,
+        renderRatio: 0.266666,
+      }),
+    }, {
+      ok: false,
+      status: 503,
+      json: async () => ({}),
+    })
+    const { MapboxCanvas } = await import('./MapboxCanvas')
+
+    render(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        tileUrl="/api/map/tiles/footprints/{z}/{x}/{y}.mvt"
+        timeRange={allRange}
+        debugPanelVisible
+      />,
+    )
+
+    mapRecords[0].setZoom(8.6)
+    mapRecords[0].setBounds({ west: 120, south: 30, east: 122, north: 32 })
+    act(() => mapRecords[0].emit('load'))
+    await act(async () => {})
+
+    expect(screen.getByLabelText('足迹渲染调试')).toHaveTextContent('瓦片12 / 5 / 1')
+
+    act(() => mapRecords[0].emit('moveend'))
+    await act(async () => {})
+
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+    expect(screen.getByLabelText('足迹渲染调试')).toHaveTextContent('瓦片12 / 5 / 1')
+    expect(screen.getByLabelText('足迹渲染调试')).not.toHaveTextContent('--')
+  })
+
+  it('ignores stale debug metrics that resolve after a newer refresh', async () => {
+    const { mapRecords } = mockMapboxRuntime()
+    const staleRequest = createDeferredResponse({
+      tileZoom: 8,
+      requestedTileCount: 12,
+      populatedTileCount: 5,
+      readyTileCount: 4,
+      dirtyTileCount: 1,
+      rawCount: 1200,
+      representativeCount: 320,
+      renderRatio: 0.266666,
+    })
+    const freshRequest = createDeferredResponse({
+      tileZoom: 9,
+      requestedTileCount: 7,
+      populatedTileCount: 6,
+      readyTileCount: 6,
+      dirtyTileCount: 0,
+      rawCount: 900,
+      representativeCount: 450,
+      renderRatio: 0.5,
+    })
+    const fetchMock = vi.fn()
+      .mockImplementation((url: string) => {
+        if (url.includes('/api/footprints/metrics')) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              selectedCount: 0,
+              totalDistanceMeters: 0,
+              averageDistanceMetersPerDay: 0,
+              selectedBounds: null,
+            }),
+          })
+        }
+
+        return fetchMock.mock.calls.filter(([calledUrl]) => String(calledUrl).includes('/api/map/tiles/footprints/debug')).length === 1
+          ? staleRequest.promise
+          : freshRequest.promise
+      })
+    vi.stubGlobal('fetch', fetchMock)
+    const { MapboxCanvas } = await import('./MapboxCanvas')
+
+    render(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        tileUrl="/api/map/tiles/footprints/{z}/{x}/{y}.mvt"
+        timeRange={allRange}
+        debugPanelVisible
+      />,
+    )
+
+    mapRecords[0].setZoom(8.6)
+    mapRecords[0].setBounds({ west: 120, south: 30, east: 122, north: 32 })
+    act(() => mapRecords[0].emit('load'))
+    await act(async () => {})
+
+    mapRecords[0].setZoom(9.2)
+    act(() => mapRecords[0].emit('moveend'))
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+    await act(async () => {
+      freshRequest.resolve()
+    })
+
+    expect(screen.getByLabelText('足迹渲染调试')).toHaveTextContent('瓦片层级9')
+    expect(screen.getByLabelText('足迹渲染调试')).toHaveTextContent('瓦片7 / 6 / 0')
+
+    await act(async () => {
+      staleRequest.resolve()
+    })
+
+    expect(screen.getByLabelText('足迹渲染调试')).toHaveTextContent('瓦片层级9')
+    expect(screen.getByLabelText('足迹渲染调试')).toHaveTextContent('瓦片7 / 6 / 0')
+    expect(screen.getByLabelText('足迹渲染调试')).not.toHaveTextContent('瓦片12 / 5 / 1')
+  })
+
+  it('requests all-range metrics and refreshes metrics when the time range changes', async () => {
+    const { mapRecords } = mockMapboxRuntime()
+    const fetchMock = mockMetricsFetch(
+      {
+        selectedCount: 4,
+        totalDistanceMeters: 1399,
+        averageDistanceMetersPerDay: 699.5,
+      },
+      {
+        selectedCount: 3,
+        totalDistanceMeters: 400,
+        averageDistanceMetersPerDay: 400,
+      },
+    )
+    const onFootprintMetricsChange = vi.fn()
+    const { MapboxCanvas } = await import('./MapboxCanvas')
+
+    const { rerender } = render(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        tileUrl="/api/map/tiles/footprints/{z}/{x}/{y}.mvt"
+        timeRange={allRange}
+        onFootprintMetricsChange={onFootprintMetricsChange}
+      />,
+    )
+    act(() => mapRecords[0].emit('load'))
+    await act(async () => {})
+
+    const nextRange: TimeRangeSelection = {
+      mode: 'day',
+      start: '2026-06-19',
+      end: '2026-06-19',
+      anchorDate: '2026-06-19',
+    }
+    rerender(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        tileUrl="/api/map/tiles/footprints/{z}/{x}/{y}.mvt"
+        timeRange={nextRange}
+        onFootprintMetricsChange={onFootprintMetricsChange}
+      />,
+    )
+    await act(async () => {})
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      '/api/footprints/metrics?range=all',
+      expect.objectContaining({ method: 'GET' }),
+    )
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      '/api/footprints/metrics?start=2026-06-19&end=2026-06-19',
+      expect.objectContaining({ method: 'GET' }),
+    )
+    expect(onFootprintMetricsChange).toHaveBeenLastCalledWith({
+      selectedCount: 3,
+      totalDistanceMeters: 400,
+      averageDistanceMetersPerDay: 400,
+    })
+  })
+
+  it('reloads the footprint source URL without recreating the Mapbox map when time changes', async () => {
+    const { mapRecords } = mockMapboxRuntime()
+    const { MapboxCanvas } = await import('./MapboxCanvas')
+
+    const { rerender } = render(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        tileUrl="/api/map/tiles/footprints/{z}/{x}/{y}.mvt"
+        timeRange={selectedRange}
+      />,
+    )
+    act(() => mapRecords[0].emit('load'))
+
+    const nextRange: TimeRangeSelection = {
+      mode: 'day',
+      start: '2026-06-20',
+      end: '2026-06-20',
+      anchorDate: '2026-06-20',
+    }
+    rerender(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        tileUrl="/api/map/tiles/footprints/{z}/{x}/{y}.mvt"
+        timeRange={nextRange}
+      />,
+    )
+
+    expect(mapRecords).toHaveLength(1)
+    expect(mapRecords[0].removeCalls).toBe(0)
+    expect(mapRecords[0].removedLayers).toEqual(['footprints-circle'])
+    expect(mapRecords[0].removedSources).toEqual(['footprints'])
+    expect(mapRecords[0].sources.footprints).toMatchObject({
+      tiles: [
+        expectedMapboxTileUrl('?start=2026-06-20&end=2026-06-20'),
+      ],
+    })
+  })
+
+  it('updates footprint paint properties without reloading vector tile source when style changes', async () => {
+    vi.useFakeTimers()
+    const { mapRecords } = mockMapboxRuntime()
+    const { MapboxCanvas } = await import('./MapboxCanvas')
+
+    render(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        tileUrl="/api/map/tiles/footprints/{z}/{x}/{y}.mvt"
+        timeRange={selectedRange}
+      />,
+    )
+    act(() => mapRecords[0].emit('load'))
+
+    const settingsButton = document.querySelector('.map-toolbar__settings .map-toolbar__button')
+    expect(settingsButton).toBeInstanceOf(HTMLButtonElement)
+
+    fireEvent.click(settingsButton as HTMLButtonElement)
+
+    const popover = document.querySelector('.footprint-style-popover')
+    expect(popover).toBeInstanceOf(HTMLElement)
+    const [sizeInput, opacityInput, colorInput] = Array.from(
+      (popover as HTMLElement).querySelectorAll('input'),
+    )
+
+    fireEvent.change(sizeInput, { target: { value: '2.4' } })
+    fireEvent.change(opacityInput, { target: { value: '0.64' } })
+    fireEvent.change(colorInput, { target: { value: '#4f7cff' } })
+    act(() => {
+      vi.advanceTimersByTime(180)
+    })
+
+    expect(popover).toBeInTheDocument()
+    expect(mapRecords[0].removedLayers).toEqual([])
+    expect(mapRecords[0].removedSources).toEqual([])
+    expect(mapRecords[0].sources.footprints).toMatchObject({
+      tiles: [expectedMapboxTileUrl('?start=2026-06-19&end=2026-06-19')],
+    })
+    expect(mapRecords[0].paintProperties).toEqual([
+      ['footprints-circle', 'circle-radius', 1.2],
+      ['footprints-circle', 'circle-color', '#4f7cff'],
+      ['footprints-circle', 'circle-opacity', 0.64],
+    ])
+  })
+
+  it('shows a clear placeholder instead of creating a map when the token is missing', async () => {
+    const { mapRecords } = mockMapboxRuntime()
+    const { MapboxCanvas } = await import('./MapboxCanvas')
+
+    render(<MapboxCanvas accessToken="" timeRange={selectedRange} />)
+
+    expect(mapRecords).toHaveLength(0)
+    expect(screen.getByRole('status')).toHaveTextContent('Mapbox')
+    expect(screen.getByText(/VITE_MAPBOX_ACCESS_TOKEN/)).toBeInTheDocument()
+  })
+})
+
+function mockMapboxRuntime() {
+  const mapRecords: MockMapRecord[] = []
+  let footprintDataSourceWasImported = false
+
+  class MockMap {
+    private readonly record: MockMapRecord
+    private readonly handlers = new Map<string, Array<() => void>>()
+    private zoom = 2.2
+    private center: [number, number] = [104.195397, 35.86166]
+    private bounds = { west: -180, south: -85, east: 180, north: 85 }
+
+    constructor(options: Record<string, unknown>) {
+      this.record = {
+        options,
+        sources: {},
+        layers: [],
+        removedLayers: [],
+        removedSources: [],
+        paintProperties: [],
+        fitBoundsCalls: [],
+        flyToCalls: [],
+        easeToCalls: [],
+        removeCalls: 0,
+        emit: (eventName: string) => {
+          for (const handler of this.handlers.get(eventName) ?? []) handler()
+        },
+        setZoom: (zoom: number) => {
+          this.zoom = zoom
+        },
+        setCenter: (center: [number, number]) => {
+          this.center = center
+        },
+        setBounds: (bounds: { west: number, south: number, east: number, north: number }) => {
+          this.bounds = bounds
+        },
+      }
+      mapRecords.push(this.record)
+    }
+
+    on(eventName: string, handler: () => void) {
+      this.handlers.set(eventName, [...(this.handlers.get(eventName) ?? []), handler])
+      return this
+    }
+
+    off(eventName: string, handler: () => void) {
+      this.handlers.set(
+        eventName,
+        (this.handlers.get(eventName) ?? []).filter((currentHandler) => currentHandler !== handler),
+      )
+      return this
+    }
+
+    addSource(id: string, source: unknown) {
+      this.record.sources[id] = source
+    }
+
+    addLayer(layer: unknown) {
+      this.record.layers.push(layer)
+    }
+
+    getLayer(id: string) {
+      return this.record.layers.find((layer) => (
+        typeof layer === 'object' &&
+        layer !== null &&
+        'id' in layer &&
+        layer.id === id
+      ))
+    }
+
+    getSource(id: string) {
+      return this.record.sources[id]
+    }
+
+    removeLayer(id: string) {
+      this.record.removedLayers.push(id)
+      this.record.layers = this.record.layers.filter((layer) => (
+        typeof layer !== 'object' ||
+        layer === null ||
+        !('id' in layer) ||
+        layer.id !== id
+      ))
+    }
+
+    removeSource(id: string) {
+      this.record.removedSources.push(id)
+      delete this.record.sources[id]
+    }
+
+    setPaintProperty(layerId: string, propertyName: string, value: unknown) {
+      this.record.paintProperties.push([layerId, propertyName, value])
+    }
+
+    getZoom() {
+      return this.zoom
+    }
+
+    getBounds() {
+      return {
+        getWest: () => this.bounds.west,
+        getSouth: () => this.bounds.south,
+        getEast: () => this.bounds.east,
+        getNorth: () => this.bounds.north,
+      }
+    }
+
+    resize() {}
+    zoomIn() {}
+    zoomOut() {}
+    fitBounds(bounds: unknown, options: unknown) {
+      this.record.fitBoundsCalls.push([bounds, options])
+    }
+    flyTo(options: unknown) {
+      this.record.flyToCalls.push(options)
+    }
+    easeTo(options: unknown) {
+      this.record.easeToCalls.push(options)
+      if (
+        typeof options === 'object' &&
+        options !== null &&
+        'center' in options &&
+        Array.isArray(options.center)
+      ) {
+        this.center = options.center as [number, number]
+      }
+    }
+    getCenter() {
+      return {
+        lng: this.center[0],
+        lat: this.center[1],
+      }
+    }
+    jumpTo() {}
+    remove() {
+      this.record.removeCalls += 1
+    }
+  }
+
+  vi.doMock('mapbox-gl', () => ({
+    default: {
+      accessToken: '',
+      Map: MockMap,
+    },
+  }))
+  vi.doMock('../layers/footprintDataSource', () => {
+    footprintDataSourceWasImported = true
+
+    return {
+      loadFootprintSnapshot: vi.fn(),
+    }
+  })
+
+  return {
+    mapRecords,
+    footprintDataSourceImported: () => footprintDataSourceWasImported,
+  }
+}
+
+function expectedMapboxTileUrl(query: string) {
+  return `${window.location.origin}/api/map/tiles/footprints/{z}/{x}/{y}.mvt${query}`
+}
+
+function mockMetricsFetch(...metricsResponses: Array<{
+  selectedCount: number
+  totalDistanceMeters: number
+  averageDistanceMetersPerDay: number
+  selectedBounds?: {
+    southWest: [number, number]
+    northEast: [number, number]
+  } | null
+}>) {
+  let responseIndex = 0
+  const fetchMock = vi.fn(async () => {
+    const metrics = metricsResponses[Math.min(responseIndex, metricsResponses.length - 1)]
+    responseIndex += 1
+
+    return {
+      ok: true,
+      json: async () => metrics,
+    }
+  })
+
+  vi.stubGlobal('fetch', fetchMock)
+  return fetchMock
+}
+
+function mockMetricsAndDebugFetch(...debugResponses: Array<{
+  ok: boolean
+  status?: number
+  json: () => Promise<Record<string, unknown>>
+}>) {
+  let debugResponseIndex = 0
+  const fetchMock = vi.fn(async (url: string) => {
+    if (url.includes('/api/footprints/metrics')) {
+      return {
+        ok: true,
+        json: async () => ({
+          selectedCount: 0,
+          totalDistanceMeters: 0,
+          averageDistanceMetersPerDay: 0,
+          selectedBounds: null,
+        }),
+      }
+    }
+
+    const response = debugResponses[Math.min(debugResponseIndex, debugResponses.length - 1)]
+    debugResponseIndex += 1
+    return response
+  })
+
+  vi.stubGlobal('fetch', fetchMock)
+  return fetchMock
+}
+
+function createDeferredResponse(body: Record<string, unknown>) {
+  let resolveResponse!: () => void
+  const promise = new Promise<{ ok: true, json: () => Promise<Record<string, unknown>> }>((resolve) => {
+    resolveResponse = () => {
+      resolve({
+        ok: true,
+        json: async () => body,
+      })
+    }
+  })
+
+  return {
+    promise,
+    resolve: resolveResponse,
+  }
+}

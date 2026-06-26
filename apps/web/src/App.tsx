@@ -1,6 +1,8 @@
 import './App.css'
 
 import {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -23,8 +25,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 
-import { AccountingPage } from './components/AccountingPage'
-import { AmapCanvas, type FootprintMetrics } from './components/AmapCanvas'
+import type { FootprintMetrics } from './components/MapboxCanvas'
 import {
   formatAverageDistanceMeters,
   formatDistanceMeters,
@@ -36,15 +37,18 @@ import {
   calculateUnifiedDataPanelWidth,
   type AppView,
 } from './appLayout'
-import { getAmapConfig, type AmapConfig } from './config/amap'
+import type { AmapConfig } from './config/amap'
 import {
+  readMapProjection,
   readMapDebugPanelVisible,
   readNavigationStyle,
   readAppTheme,
   writeAppTheme,
+  writeMapProjection,
   writeMapDebugPanelVisible,
   writeNavigationStyle,
   type AppTheme,
+  type MapProjectionPreference,
   type NavigationStyle,
 } from './navigationPreferences'
 import {
@@ -97,6 +101,10 @@ const navigationStyleOptions: Array<SegmentedOption<NavigationStyle>> = [
   { value: 'icon', label: '纯 icon' },
   { value: 'mixed', label: '图文混合' },
 ]
+const mapProjectionOptions: Array<SegmentedOption<MapProjectionPreference>> = [
+  { value: 'globe', label: '球形' },
+  { value: 'mercator', label: '平面' },
+]
 const settingsPageItems: Array<{ id: SettingsPageId; label: string }> = [
   { id: 'general', label: '通用' },
   { id: 'map', label: '地图' },
@@ -133,6 +141,8 @@ const defaultSecondaryNavSelection: SecondaryNavSelection = {
   schedule: 'stats',
   accounting: 'ledger',
 }
+const LazyMapboxCanvas = lazy(() => import('./components/MapboxCanvas').then((module) => ({ default: module.MapboxCanvas })))
+const LazyAccountingPage = lazy(() => import('./components/AccountingPage').then((module) => ({ default: module.AccountingPage })))
 
 function getViewportSize() {
   return {
@@ -221,8 +231,9 @@ function getTopNavigationDragPosition(
   }
 }
 
-function App({ amapConfig }: AppProps) {
-  const resolvedAmapConfig = useMemo(() => amapConfig ?? getAmapConfig(), [amapConfig])
+function App(props: AppProps) {
+  void props.amapConfig
+
   const topNavigationTabsRef = useRef<HTMLDivElement | null>(null)
   const isTopNavigationDraggingRef = useRef(false)
   const topNavigationButtonRefs = useRef<Record<AppView, HTMLButtonElement | null>>({
@@ -238,6 +249,9 @@ function App({ amapConfig }: AppProps) {
   const [settingsPage, setSettingsPage] = useState<SettingsPageId>('general')
   const [isMapDebugPanelVisible, setIsMapDebugPanelVisible] = useState(
     readMapDebugPanelVisible,
+  )
+  const [mapProjection, setMapProjection] = useState<MapProjectionPreference>(
+    readMapProjection,
   )
   const [topNavigationThumb, setTopNavigationThumb] = useState<TopNavigationThumbMetrics>({
     left: 0,
@@ -284,6 +298,10 @@ function App({ amapConfig }: AppProps) {
   const handleMapDebugPanelVisibleChange = useCallback((nextVisible: boolean) => {
     setIsMapDebugPanelVisible(nextVisible)
     writeMapDebugPanelVisible(nextVisible)
+  }, [])
+  const handleMapProjectionChange = useCallback((nextProjection: MapProjectionPreference) => {
+    setMapProjection(nextProjection)
+    writeMapProjection(nextProjection)
   }, [])
   const previewTopNavigationPointerPosition = useCallback((clientX: number) => {
     const tabsElement = topNavigationTabsRef.current
@@ -600,25 +618,29 @@ function App({ amapConfig }: AppProps) {
       </aside>
 
       {view === 'map' ? (
-        <AmapCanvas
-          config={resolvedAmapConfig}
-          timeRange={selectedTimeRange}
-          onFootprintMetricsChange={setFootprintMetrics}
-          adminRegionUnlockEnabled={activeSecondaryNavId === 'regions'}
-          debugPanelVisible={isMapDebugPanelVisible}
-        />
+        <Suspense fallback={null}>
+          <LazyMapboxCanvas
+            timeRange={selectedTimeRange}
+            onFootprintMetricsChange={setFootprintMetrics}
+            adminRegionUnlockEnabled={activeSecondaryNavId === 'regions'}
+            debugPanelVisible={isMapDebugPanelVisible}
+            projection={mapProjection}
+          />
+        </Suspense>
       ) : view === 'accounting' ? (
         <section className="main-workspace" aria-label="在途 EnRoute 主工作区">
-          <AccountingPage
-            section={activeSecondaryNavId === 'stats' ? 'analytics' : 'workspace'}
-            timeRange={selectedTimeRange}
-            onSectionChange={(nextSection) =>
-              setSecondaryNavSelection((current) => ({
-                ...current,
-                accounting: nextSection === 'analytics' ? 'stats' : 'ledger',
-              }))
-            }
-          />
+          <Suspense fallback={null}>
+            <LazyAccountingPage
+              section={activeSecondaryNavId === 'stats' ? 'analytics' : 'workspace'}
+              timeRange={selectedTimeRange}
+              onSectionChange={(nextSection) =>
+                setSecondaryNavSelection((current) => ({
+                  ...current,
+                  accounting: nextSection === 'analytics' ? 'stats' : 'ledger',
+                }))
+              }
+            />
+          </Suspense>
         </section>
       ) : (
         <PlaceholderWorkspace view={view} />
@@ -719,6 +741,13 @@ function App({ amapConfig }: AppProps) {
                 {settingsPage === 'map' ? (
                   <section className="settings-dialog__section" aria-label="地图显示">
                     <span>地图显示</span>
+                    <SegmentedControl
+                      ariaLabel="地图形态"
+                      className="settings-navigation-tabs settings-map-projection-tabs"
+                      options={mapProjectionOptions}
+                      value={mapProjection}
+                      onChange={handleMapProjectionChange}
+                    />
                     <button
                       type="button"
                       role="switch"

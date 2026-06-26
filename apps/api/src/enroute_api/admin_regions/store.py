@@ -5,7 +5,7 @@ import sqlite3
 from dataclasses import dataclass
 from typing import Any, Iterable
 
-from enroute_api.footprints.coordinates import transform_footprint_coordinate
+from enroute_api.footprints.coordinates import transform_wgs84_to_gcj02_coordinate
 
 from .geometry import BoundingBox, calculate_geometry_bbox, geometry_contains_point
 
@@ -238,11 +238,14 @@ def transform_nested_coordinates(
     source_coordinate_system: str,
 ) -> list[Any]:
     if is_position(coordinates):
-        longitude, latitude = transform_footprint_coordinate(
-            longitude=float(coordinates[0]),
-            latitude=float(coordinates[1]),
-            source_coordinate_system=source_coordinate_system,
-        )
+        if source_coordinate_system == "wgs84":
+            longitude, latitude = transform_wgs84_to_gcj02_coordinate(
+                longitude=float(coordinates[0]),
+                latitude=float(coordinates[1]),
+            )
+        else:
+            longitude = float(coordinates[0])
+            latitude = float(coordinates[1])
         return [longitude, latitude, *coordinates[2:]]
 
     return [
@@ -348,16 +351,24 @@ class RegionMatcher:
         longitude: float,
         latitude: float,
     ) -> str | None:
+        match_longitude, match_latitude = transform_wgs84_to_gcj02_coordinate(
+            longitude=longitude,
+            latitude=latitude,
+        )
         for region in self.regions:
             bbox = region.bbox
             if (
-                bbox["min_lng"] > longitude
-                or bbox["max_lng"] < longitude
-                or bbox["min_lat"] > latitude
-                or bbox["max_lat"] < latitude
+                bbox["min_lng"] > match_longitude
+                or bbox["max_lng"] < match_longitude
+                or bbox["min_lat"] > match_latitude
+                or bbox["max_lat"] < match_latitude
             ):
                 continue
-            if geometry_contains_point(region.geometry, longitude=longitude, latitude=latitude):
+            if geometry_contains_point(
+                region.geometry,
+                longitude=match_longitude,
+                latitude=match_latitude,
+            ):
                 return region.id
         return None
 

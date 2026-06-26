@@ -15,6 +15,8 @@
     "lint": "npm --workspace apps/web run lint",
     "prepare:admin-regions": "python scripts/prepare_admin_regions.py",
     "prepare:footprints": "python scripts/import_footprints.py",
+    "rebuild:footprints": "python scripts/rebuild_footprints_wgs84.py",
+    "prepare:footprint-tiles": "python scripts/build_footprint_visual_tiles.py",
     "test": "npm run test:web && npm run test:api && npm run test:repo",
     "test:web": "node scripts/run-web-tests.mjs",
     "test:api": "python scripts/run_api_tests.py",

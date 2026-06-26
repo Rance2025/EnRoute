@@ -1,9 +1,17 @@
 import sqlite3
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from enroute_api.config import Settings
+from enroute_api.footprints.store import ensure_imported, initialize_schema
+from enroute_api.footprints.visual_tiles import (
+    STATUS_DIRTY,
+    STATUS_READY,
+    VISUAL_TILE_ALGORITHM_SIGNATURE,
+    VISUAL_TILE_ALGORITHM_SIGNATURE_KEY,
+)
 from enroute_api.main import create_app
 from enroute_api.footprints.csv_loader import load_footprint_payload
 
@@ -30,6 +38,33 @@ def test_defaults_to_data_directory_for_footprint_database():
     settings = Settings()
 
     assert settings.footprint_db_path == Path("data/footprints.sqlite")
+
+
+def test_import_stores_wgs84_coordinates_without_gcj02_shift(tmp_path: Path):
+    data_path = tmp_path / "footprints.csv"
+    data_path.write_text(
+        "\n".join(
+            [
+                "dataTime,locType,longitude,latitude,heading,accuracy,speed,distance,isBackForeground,stepType,altitude",
+                "1768144456,0,121.473700,31.230400,0,5,0,0,0,0,3",
+            ],
+        ),
+        encoding="utf-8",
+    )
+    db_path = tmp_path / "footprints.sqlite"
+    client = create_test_client(
+        data_path=data_path,
+        db_path=db_path,
+    )
+
+    response = client.get("/api/footprints")
+
+    assert response.status_code == 200
+    with sqlite3.connect(db_path) as connection:
+        row = connection.execute(
+            "SELECT longitude, latitude FROM footprints WHERE timestamp_seconds IS NOT NULL",
+        ).fetchone()
+    assert row == pytest.approx((121.473700, 31.230400))
 
 
 def test_loads_footprint_points_from_configured_csv_path(tmp_path: Path):
@@ -122,6 +157,259 @@ def test_get_footprints_imports_and_serves_from_sqlite(tmp_path: Path):
 
     assert stored_count == (1,)
     assert spatial_count == (1,)
+
+
+def test_missing_csv_does_not_accept_legacy_database_without_import_signature(tmp_path: Path):
+    db_path = tmp_path / "footprints.sqlite"
+    with sqlite3.connect(db_path) as connection:
+        connection.row_factory = sqlite3.Row
+        initialize_schema(connection)
+        connection.execute(
+            """
+            INSERT INTO footprints (
+              timestamp_seconds, longitude, latitude, accuracy, speed, distance, heading, altitude
+            ) VALUES (1768144456, 121.511383, 31.296564, 5, 0, 0, 0, 0)
+            """,
+        )
+        connection.execute(
+            """
+            INSERT INTO footprint_spatial (
+              footprint_rowid, min_lng, max_lng, min_lat, max_lat
+            ) VALUES (1768144456, 121.511383, 121.511383, 31.296564, 31.296564)
+            """,
+        )
+        connection.commit()
+
+        with pytest.raises(FileNotFoundError):
+            ensure_imported(
+                connection,
+                data_path=tmp_path / "missing.csv",
+                coordinate_system="wgs84",
+                admin_region_data_path=tmp_path / "missing-admin-regions.geojson",
+            )
+        assert connection.execute("SELECT COUNT(*) FROM footprints").fetchone()[0] == 1
+
+
+def test_legacy_database_with_existing_csv_is_rebuilt_instead_of_treated_compatible(tmp_path: Path):
+    db_path = tmp_path / "footprints.sqlite"
+    data_path = write_csv(tmp_path, CSV)
+    with sqlite3.connect(db_path) as connection:
+        connection.row_factory = sqlite3.Row
+        initialize_schema(connection)
+        connection.execute(
+            """
+            INSERT INTO footprints (
+              timestamp_seconds, longitude, latitude, accuracy, speed, distance, heading, altitude
+            ) VALUES (1, 122, 32, 5, 0, 0, 0, 0)
+            """,
+        )
+        connection.execute(
+            """
+            INSERT INTO footprint_spatial (
+              footprint_rowid, min_lng, max_lng, min_lat, max_lat
+            ) VALUES (1, 122, 122, 32, 32)
+            """,
+        )
+        connection.execute(
+            """
+            INSERT INTO visual_tiles (z, x, y, t_type, t, status, cells, updated_at)
+            VALUES (1, 1, 0, 0, 0, 1, X'455654430100000000', 1000)
+            """,
+        )
+        connection.commit()
+
+        result = ensure_imported(
+            connection,
+            data_path=data_path,
+            coordinate_system="wgs84",
+            admin_region_data_path=tmp_path / "missing-admin-regions.geojson",
+        )
+        rows = [
+            tuple(row)
+            for row in connection.execute(
+                "SELECT timestamp_seconds, longitude, latitude FROM footprints ORDER BY timestamp_seconds",
+            ).fetchall()
+        ]
+        visual_tile_count = tuple(connection.execute("SELECT COUNT(*) FROM visual_tiles").fetchone())
+        compatibility_signature = connection.execute(
+            "SELECT value FROM footprint_meta WHERE key = 'importCompatibilitySignature'",
+        ).fetchone()
+
+    assert result["new_count"] == 1
+    assert rows == [(1768144456, 121.511383, 31.296564)]
+    assert visual_tile_count == (0,)
+    assert compatibility_signature is not None
+
+
+def test_import_clears_visual_tiles_when_algorithm_signature_is_stale(tmp_path: Path):
+    data_path = write_csv(tmp_path, CSV)
+    db_path = tmp_path / "footprints.sqlite"
+    with sqlite3.connect(db_path) as connection:
+        connection.row_factory = sqlite3.Row
+        initialize_schema(connection)
+
+        ensure_imported(
+            connection,
+            data_path=data_path,
+            coordinate_system="wgs84",
+            admin_region_data_path=tmp_path / "missing-admin-regions.geojson",
+        )
+        connection.execute(
+            """
+            INSERT INTO visual_tiles (z, x, y, t_type, t, status, cells, updated_at)
+            VALUES (1, 1, 0, 0, 0, 1, X'455654430100000000', 1000)
+            """,
+        )
+        connection.execute(
+            "UPDATE footprint_meta SET value = ? WHERE key = ?",
+            ("old-grid", VISUAL_TILE_ALGORITHM_SIGNATURE_KEY),
+        )
+        connection.commit()
+
+        result = ensure_imported(
+            connection,
+            data_path=data_path,
+            coordinate_system="wgs84",
+            admin_region_data_path=tmp_path / "missing-admin-regions.geojson",
+        )
+        visual_tile_count = tuple(connection.execute("SELECT COUNT(*) FROM visual_tiles").fetchone())
+        visual_tile_signature = tuple(
+            connection.execute(
+                "SELECT value FROM footprint_meta WHERE key = ?",
+                (VISUAL_TILE_ALGORITHM_SIGNATURE_KEY,),
+            ).fetchone(),
+        )
+
+    assert result["new_count"] == 0
+    assert visual_tile_count == (0,)
+    assert visual_tile_signature == (VISUAL_TILE_ALGORITHM_SIGNATURE,)
+
+
+def test_reimport_that_clears_raw_footprints_also_clears_visual_tiles(tmp_path: Path):
+    data_path = write_csv(tmp_path, CSV)
+    db_path = tmp_path / "footprints.sqlite"
+    client = create_test_client(data_path=data_path, db_path=db_path)
+
+    response = client.get("/api/footprints")
+    assert response.status_code == 200
+
+    connection = sqlite3.connect(db_path)
+    try:
+        connection.execute(
+            """
+            INSERT INTO visual_tiles (z, x, y, t_type, t, status, cells, updated_at)
+            VALUES (1, 1, 0, 0, 0, 1, X'455654430100000000', 1000)
+            """,
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    client = create_test_client(
+        data_path=data_path,
+        db_path=db_path,
+        coordinate_system="gcj02",
+    )
+
+    response = client.get("/api/footprints")
+
+    assert response.status_code == 200
+    connection = sqlite3.connect(db_path)
+    try:
+        visual_tile_count = connection.execute("SELECT COUNT(*) FROM visual_tiles").fetchone()
+    finally:
+        connection.close()
+    assert visual_tile_count == (0,)
+
+
+def test_importing_new_footprints_marks_existing_visual_tiles_dirty(tmp_path: Path):
+    first_csv = CSV
+    appended_csv = "\n".join(
+        [
+            CSV,
+            "1768144457,1,121.511384,31.296565,0.000000,4.729415,-1.000000,12.500000,1,0,10.146956",
+        ],
+    )
+    data_path = write_csv(tmp_path, first_csv)
+    db_path = tmp_path / "footprints.sqlite"
+    client = create_test_client(data_path=data_path, db_path=db_path)
+    assert client.get("/api/footprints").status_code == 200
+
+    with sqlite3.connect(db_path) as connection:
+        connection.execute(
+            """
+            INSERT INTO visual_tiles (z, x, y, t_type, t, status, cells, updated_at)
+            VALUES (18, 219553, 107056, 0, 0, ?, X'455654430100000000', 1000)
+            """,
+            (STATUS_READY,),
+        )
+        connection.execute(
+            """
+            INSERT INTO visual_tiles (z, x, y, t_type, t, status, cells, updated_at)
+            VALUES (18, 219553, 107056, 3, 20260111, ?, X'455654430100000000', 1000)
+            """,
+            (STATUS_READY,),
+        )
+        connection.commit()
+
+    data_path.write_text(appended_csv, encoding="utf-8")
+    client = create_test_client(data_path=data_path, db_path=db_path)
+
+    response = client.get("/api/footprints")
+
+    assert response.status_code == 200
+    with sqlite3.connect(db_path) as connection:
+        rows = connection.execute(
+            """
+            SELECT t_type, t, status
+            FROM visual_tiles
+            WHERE z = 18 AND x = 219553 AND y = 107056
+            ORDER BY t_type, t
+            """,
+        ).fetchall()
+    assert rows == [(0, 0, STATUS_DIRTY), (3, 20260111, STATUS_DIRTY)]
+
+
+def test_serves_footprint_metrics_without_raw_points_for_date_range(tmp_path: Path):
+    data_path = write_csv(tmp_path, SNAPSHOT_CSV)
+    client = create_test_client(data_path=data_path, db_path=tmp_path / "footprints.sqlite")
+
+    response = client.get("/api/footprints/metrics?start=2026-06-19&end=2026-06-19")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload == {
+        "selectedCount": 3,
+        "totalDistanceMeters": 400,
+        "averageDistanceMetersPerDay": 400,
+        "selectedBounds": {
+            "southWest": [118.0, 30.0],
+            "northEast": [121.511384, 31.296565],
+        },
+    }
+    assert "points" not in payload
+    assert "debug" not in payload
+
+
+def test_serves_footprint_metrics_for_all_range_without_raw_points(tmp_path: Path):
+    data_path = write_csv(tmp_path, SNAPSHOT_CSV)
+    client = create_test_client(data_path=data_path, db_path=tmp_path / "footprints.sqlite")
+
+    response = client.get("/api/footprints/metrics?range=all")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload == {
+        "selectedCount": 4,
+        "totalDistanceMeters": 1399,
+        "averageDistanceMetersPerDay": 699.5,
+        "selectedBounds": {
+            "southWest": [118.0, 30.0],
+            "northEast": [121.511385, 31.296566],
+        },
+    }
+    assert "points" not in payload
+    assert "debug" not in payload
 
 
 def test_serves_snapshot_from_database_backed_viewport_query(tmp_path: Path):
@@ -309,11 +597,16 @@ def write_csv(tmp_path: Path, content: str) -> Path:
     return data_path
 
 
-def create_test_client(*, data_path: Path, db_path: Path) -> TestClient:
+def create_test_client(
+    *,
+    data_path: Path,
+    db_path: Path,
+    coordinate_system: str = "wgs84",
+) -> TestClient:
     settings = Settings(
         footprint_data_path=data_path,
         footprint_db_path=db_path,
-        footprint_coordinate_system="gcj02",
+        footprint_coordinate_system=coordinate_system,
         admin_region_data_path=db_path.parent / "missing-admin-regions.geojson",
     )
     return TestClient(create_app(settings=settings))

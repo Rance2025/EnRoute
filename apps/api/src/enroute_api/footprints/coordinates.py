@@ -19,7 +19,16 @@ def transform_footprint_coordinate(
     latitude: float,
     source_coordinate_system: str = "wgs84",
 ) -> tuple[float, float]:
-    if source_coordinate_system != "wgs84" or is_outside_china(longitude, latitude):
+    del source_coordinate_system
+    return longitude, latitude
+
+
+def transform_wgs84_to_gcj02_coordinate(
+    *,
+    longitude: float,
+    latitude: float,
+) -> tuple[float, float]:
+    if is_outside_china(longitude, latitude):
         return longitude, latitude
 
     delta_longitude, delta_latitude = calculate_wgs84_to_gcj02_offset(longitude, latitude)

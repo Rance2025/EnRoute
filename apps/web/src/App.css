@@ -3349,9 +3349,9 @@
   top: var(--map-chrome-top);
   z-index: 2;
   display: grid;
-  width: 168px;
-  gap: 6px;
-  padding: 10px 12px;
+  width: 140px;
+  gap: 3px;
+  padding: 6px 7px;
   border: 1px solid var(--glass-panel-border);
   border-radius: 10px;
   color: #17211f;
@@ -3365,7 +3365,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: baseline;
-  gap: 10px;
+  gap: 5px;
   white-space: nowrap;
 }
 
@@ -3373,14 +3373,14 @@
   min-width: 0;
   overflow: hidden;
   color: rgba(23, 35, 31, 0.58);
-  font-size: 11px;
+  font-size: 9px;
   font-weight: 680;
   text-overflow: ellipsis;
 }
 
 .footprint-debug-panel__row strong {
   color: #162421;
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 780;
   font-variant-numeric: tabular-nums;
 }
