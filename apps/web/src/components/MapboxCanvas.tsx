@@ -73,7 +73,14 @@ type BaseMapVisibilityRecord = {
   id: string
   kind: BaseMapVisibilityLayerKind
   originalVisibility: 'visible' | 'none'
+  lastVisibilityOverride?: 'none'
 }
+type BaseMapConfigPropertyName =
+  | 'showPlaceLabels'
+  | 'showPointOfInterestLabels'
+  | 'showRoadLabels'
+  | 'showTransitLabels'
+  | 'showAdminBoundaries'
 
 const DEFAULT_MAPBOX_STYLE_URL = 'mapbox://styles/oies0/cmqv3payf000r01s79tjjh7bh'
 const DEFAULT_MAPBOX_PROJECTION: MapboxProjection = 'globe'
@@ -116,6 +123,8 @@ function MapboxCanvasComponent({
   const footprintStyleRef = useRef(footprintStyle)
   const selectedFootprintBoundsRef = useRef<FootprintLngLatBounds | null>(null)
   const baseMapVisibilityRecordsRef = useRef<BaseMapVisibilityRecord[]>([])
+  const hiddenBaseMapConfigOverridesRef = useRef<Set<BaseMapConfigPropertyName>>(new Set())
+  const originalBaseMapConfigValuesRef = useRef<Map<BaseMapConfigPropertyName, unknown>>(new Map())
   const globeRotationTimerRef = useRef<number | undefined>(undefined)
   const globeRotationStartHandlerRef = useRef<(() => void) | undefined>(undefined)
   const globeRotationPendingWorldViewRef = useRef(false)
@@ -196,25 +205,58 @@ function MapboxCanvasComponent({
 
     if (!map) return
 
-    setBaseMapConfigProperty(map, 'showPlaceLabels', placeLabelsVisible)
-    setBaseMapConfigProperty(map, 'showPointOfInterestLabels', placeLabelsVisible)
-    setBaseMapConfigProperty(map, 'showRoadLabels', placeLabelsVisible)
-    setBaseMapConfigProperty(map, 'showTransitLabels', placeLabelsVisible)
-    setBaseMapConfigProperty(map, 'showAdminBoundaries', adminBoundariesVisible)
+    updateBaseMapConfigOverride(
+      map,
+      hiddenBaseMapConfigOverridesRef.current,
+      originalBaseMapConfigValuesRef.current,
+      'showPlaceLabels',
+      placeLabelsVisible,
+    )
+    updateBaseMapConfigOverride(
+      map,
+      hiddenBaseMapConfigOverridesRef.current,
+      originalBaseMapConfigValuesRef.current,
+      'showPointOfInterestLabels',
+      placeLabelsVisible,
+    )
+    updateBaseMapConfigOverride(
+      map,
+      hiddenBaseMapConfigOverridesRef.current,
+      originalBaseMapConfigValuesRef.current,
+      'showRoadLabels',
+      placeLabelsVisible,
+    )
+    updateBaseMapConfigOverride(
+      map,
+      hiddenBaseMapConfigOverridesRef.current,
+      originalBaseMapConfigValuesRef.current,
+      'showTransitLabels',
+      placeLabelsVisible,
+    )
+    updateBaseMapConfigOverride(
+      map,
+      hiddenBaseMapConfigOverridesRef.current,
+      originalBaseMapConfigValuesRef.current,
+      'showAdminBoundaries',
+      adminBoundariesVisible,
+    )
 
     if (baseMapVisibilityRecordsRef.current.length === 0) {
       baseMapVisibilityRecordsRef.current = collectBaseMapVisibilityRecords(map)
     }
 
     for (const record of baseMapVisibilityRecordsRef.current) {
-      const visible = record.kind === 'place-label'
+      const isVisible = record.kind === 'place-label'
         ? placeLabelsVisible
         : adminBoundariesVisible
-      const nextVisibility = visible ? record.originalVisibility : 'none'
 
       if (!map.getLayer(record.id)) continue
+      if (isVisible && record.lastVisibilityOverride === undefined) continue
+
+      const nextVisibility = isVisible ? record.originalVisibility : 'none'
 
       map.setLayoutProperty(record.id, 'visibility', nextVisibility)
+      record.lastVisibilityOverride = isVisible ? undefined : 'none'
     }
   }, [adminBoundariesVisible, placeLabelsVisible])
 
@@ -764,14 +806,48 @@ function getSourceLayer(layer: LayerSpecification) {
 
 function setBaseMapConfigProperty(
   map: mapboxgl.Map,
-  configName: string,
-  value: boolean,
+  configName: BaseMapConfigPropertyName,
+  value: unknown,
 ) {
   try {
     map.setConfigProperty('basemap', configName, value)
   } catch {
     // Custom non-Standard styles may not expose a configurable basemap import.
   }
+}
+
+function getBaseMapConfigProperty(
+  map: mapboxgl.Map,
+  configName: BaseMapConfigPropertyName,
+) {
+  try {
+    return map.getConfigProperty('basemap', configName)
+  } catch {
+    return undefined
+  }
+}
+
+function updateBaseMapConfigOverride(
+  map: mapboxgl.Map,
+  hiddenOverrides: Set<BaseMapConfigPropertyName>,
+  originalValues: Map<BaseMapConfigPropertyName, unknown>,
+  configName: BaseMapConfigPropertyName,
+  visible: boolean,
+) {
+  if (!visible) {
+    if (!hiddenOverrides.has(configName) && !originalValues.has(configName)) {
+      originalValues.set(configName, getBaseMapConfigProperty(map, configName))
+    }
+
+    setBaseMapConfigProperty(map, configName, false)
+    hiddenOverrides.add(configName)
+    return
+  }
+
+  if (!hiddenOverrides.has(configName)) return
+
+  setBaseMapConfigProperty(map, configName, originalValues.get(configName))
+  hiddenOverrides.delete(configName)
 }
 
 function resolveConfigValue(
