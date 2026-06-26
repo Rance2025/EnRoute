@@ -100,6 +100,15 @@ Object.defineProperty(window, 'localStorage', {
   value: localStorageMock,
 })
 
+function createResolvablePromise<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((nextResolve) => {
+    resolve = nextResolve
+  })
+
+  return { promise, resolve }
+}
+
 async function renderFootprintMassMarks({
   containerSize = { width: 1024, height: 768 },
   mapOverrides,
@@ -339,6 +348,107 @@ afterEach(() => {
 })
 
 describe('AmapCanvas footprint layer wiring', () => {
+  it('keeps a light loading underlay until the AMap surface is ready', async () => {
+    const loadAmapResult = createResolvablePromise<{
+      MassMarks: new () => unknown
+      Pixel: new () => unknown
+      Size: new () => unknown
+      Map: new (container: HTMLElement, options: unknown) => unknown
+      Scale: new (options: unknown) => unknown
+      Geolocation: new (options: unknown) => unknown
+      Bounds: new (southWest: [number, number], northEast: [number, number]) => unknown
+      plugin: (name: string, callback: () => void) => void
+    }>()
+    class MockMap {
+      addControl = vi.fn()
+      destroy = vi.fn()
+      resize = vi.fn()
+      on = vi.fn()
+      off = vi.fn()
+      getZoom = vi.fn(() => 10)
+      getCenter = vi.fn(() => ({ getLng: () => 121.5, getLat: () => 31.2 }))
+      lnglatToPixel = vi.fn(() => ({ x: 0, y: 0 }))
+      lngLatToContainer = vi.fn(() => ({ x: 0, y: 0 }))
+      containerToLngLat = vi.fn((point: { x: number; y: number }) => ({
+        getLng: () => (point.x === 0 ? 120 : 122),
+        getLat: () => (point.y === 0 ? 32 : 30),
+      }))
+      setCenter = vi.fn()
+      setZoomAndCenter = vi.fn()
+      setBounds = vi.fn()
+      setPitch = vi.fn()
+      setRotation = vi.fn()
+      setStatus = vi.fn()
+      getPitch = vi.fn(() => 0)
+      getRotation = vi.fn(() => 0)
+    }
+
+    vi.doMock('../services/amapLoader', () => ({
+      loadAmap: vi.fn(() => loadAmapResult.promise),
+    }))
+    vi.doMock('../layers/footprintDataSource', () => ({
+      loadFootprintSnapshot: vi.fn(async () => createDefaultSnapshot()),
+    }))
+    vi.doMock('../layers/massFootprintLayer', () => ({
+      createMassFootprintLayer: vi.fn(() => ({
+        destroy: vi.fn(),
+        scheduleStyleUpdate: vi.fn(),
+        update: vi.fn(),
+      })),
+    }))
+    vi.doMock('../layers/adminRegionDataSource', () => ({
+      loadAdminRegions: vi.fn(async () => loadedAdminRegions),
+    }))
+    vi.doMock('../layers/adminRegionLayer', () => ({
+      createAdminRegionLayer: vi.fn(() => ({
+        destroy: vi.fn(),
+        update: vi.fn(),
+      })),
+    }))
+
+    const { AmapCanvas } = await import('./AmapCanvas')
+    const renderResult = render(
+      <AmapCanvas config={configuredAmap} timeRange={selectPresetRange('all')} />,
+    )
+    const mapStage = renderResult.container.querySelector('.map-stage')
+    const mapSurface = renderResult.container.querySelector('.amap-surface') as HTMLElement
+
+    Object.defineProperty(mapSurface, 'clientWidth', {
+      configurable: true,
+      value: 1024,
+    })
+    Object.defineProperty(mapSurface, 'clientHeight', {
+      configurable: true,
+      value: 768,
+    })
+
+    expect(mapStage).toHaveClass('map-stage--loading')
+    expect(mapStage).not.toHaveClass('map-stage--ready')
+
+    await act(async () => {
+      loadAmapResult.resolve({
+        MassMarks: class MassMarks {},
+        Pixel: class Pixel {},
+        Size: class Size {},
+        Map: MockMap,
+        Scale: class Scale {},
+        Geolocation: class Geolocation {
+          getCurrentPosition = vi.fn()
+        },
+        Bounds: class Bounds {
+          constructor(
+            public southWest: [number, number],
+            public northEast: [number, number],
+          ) {}
+        },
+        plugin: (_name: string, callback: () => void) => callback(),
+      })
+    })
+
+    await waitFor(() => expect(mapStage).toHaveClass('map-stage--ready'))
+    expect(mapStage).not.toHaveClass('map-stage--loading')
+  })
+
   it('starts the map camera on the first full-world coverage threshold', async () => {
     const { mapConstructorCalls } = await renderFootprintMassMarks({
       containerSize: { width: 1432, height: 815 },

@@ -430,6 +430,24 @@ describe('App', () => {
     expect(window.localStorage.getItem('enroute:navigation-style')).toBe('mixed')
   })
 
+  it('shows the extracted shell color group as a selectable general theme', () => {
+    render(<App amapConfig={missingAmapConfig} />)
+
+    fireEvent.click(screen.getByRole('button', { name: '打开设置' }))
+
+    const dialog = screen.getByRole('dialog', { name: '设置' })
+    const themeGroup = within(dialog).getByRole('group', { name: '界面色调' })
+    const themeButton = within(themeGroup).getByRole('button', { name: '青瓷灰' })
+
+    expect(themeButton).toHaveAttribute('aria-pressed', 'true')
+    expect(themeButton.querySelectorAll('.settings-theme-option__swatch')).toHaveLength(3)
+    expect(screen.getByRole('main')).toHaveClass('app-shell--theme-mist')
+
+    fireEvent.click(themeButton)
+
+    expect(window.localStorage.getItem('enroute:app-theme')).toBe('mist')
+  })
+
   it('switches settings pages and leaves accounting and schedule pages as empty states', () => {
     render(<App amapConfig={missingAmapConfig} />)
 
