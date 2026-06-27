@@ -358,7 +358,7 @@ describe('unified shell layout', () => {
     expect(mapStage).toBeInstanceOf(HTMLElement)
     expect(mapStage).toHaveAttribute(
       'data-style-url',
-      'mapbox://styles/oies0/cmqw4e7m7001101qo7kmvdwry/draft',
+      'mapbox://styles/oies0/cmqw4e7m7001101qo7kmvdwry',
     )
 
     const settingsButton = document.querySelector('.map-toolbar__settings .map-toolbar__button')
@@ -393,7 +393,7 @@ describe('unified shell layout', () => {
     expect(window.localStorage.getItem('enroute:map-style')).toBe('primary')
     expect(mapStage).toHaveAttribute(
       'data-style-url',
-      'mapbox://styles/oies0/cmqw4e7m7001101qo7kmvdwry/draft',
+      'mapbox://styles/oies0/cmqw4e7m7001101qo7kmvdwry',
     )
   })
 

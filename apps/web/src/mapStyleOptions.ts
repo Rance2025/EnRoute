@@ -10,7 +10,7 @@ export const MAP_STYLE_OPTIONS: MapStyleOption[] = [
   {
     value: 'primary',
     label: '水',
-    url: 'mapbox://styles/oies0/cmqw4e7m7001101qo7kmvdwry/draft',
+    url: 'mapbox://styles/oies0/cmqw4e7m7001101qo7kmvdwry',
   },
   {
     value: 'alternate',

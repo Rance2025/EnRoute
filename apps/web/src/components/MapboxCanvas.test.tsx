@@ -65,7 +65,7 @@ describe('MapboxCanvas footprint vector tiles', () => {
     )
 
     expect(mapRecords[0].options).toMatchObject({
-      style: 'mapbox://styles/oies0/cmqw4e7m7001101qo7kmvdwry/draft',
+      style: 'mapbox://styles/oies0/cmqw4e7m7001101qo7kmvdwry',
     })
   })
 
