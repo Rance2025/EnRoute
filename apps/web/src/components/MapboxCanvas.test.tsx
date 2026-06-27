@@ -497,7 +497,7 @@ describe('MapboxCanvas footprint vector tiles', () => {
 
     expect(rows).toHaveLength(5)
     expect(rows.map((row) => row.textContent)).toEqual([
-      '瓦片层级8',
+      '相机层级 / 瓦片层级8.6 / 8',
       '瓦片12 / 5 / 1',
       '实际点数1,200',
       '代表点数320',
@@ -551,6 +551,7 @@ describe('MapboxCanvas footprint vector tiles', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(3)
     expect(screen.getByLabelText('足迹渲染调试')).toHaveTextContent('瓦片12 / 5 / 1')
+    expect(screen.getByLabelText('足迹渲染调试')).toHaveTextContent('8.6 / 8')
     expect(screen.getByLabelText('足迹渲染调试')).not.toHaveTextContent('--')
   })
 

@@ -63,6 +63,7 @@ type MapStatus = 'missing-token' | 'loading' | 'ready' | 'error'
 
 type FootprintTileDebugMetrics = {
   tileZoom: number
+  cameraZoom?: number
   requestedTileCount: number
   populatedTileCount: number
   readyTileCount: number
@@ -424,6 +425,7 @@ function MapboxCanvasComponent({
         touchPitch: false,
         projection: resolvedProjection,
         renderWorldCopies: resolvedProjection === 'mercator',
+        fadeDuration: 0,
       })
       mapRef.current = map
 
@@ -679,9 +681,12 @@ function MapboxCanvasComponent({
           <p>当前 Mapbox 底座已切换到足迹 MVT 瓦片，行政区划图层会在后续独立迁移。</p>
         </div>
       ) : null}
-      {debugPanelVisible ? (
-        <FootprintDebugPanel debugMetrics={status === 'ready' ? tileDebugMetrics : null} />
-      ) : null}
+        {debugPanelVisible ? (
+          <FootprintDebugPanel
+            debugMetrics={status === 'ready' ? tileDebugMetrics : null}
+            cameraZoom={mapRef.current?.getZoom()}
+          />
+        ) : null}
       {status === 'missing-token' ? (
         <div className="map-message" role="status">
           <h2>需要配置 Mapbox 访问令牌</h2>
@@ -934,12 +939,22 @@ function writeStoredFootprintStyle(footprintStyle: FootprintStyle) {
   }
 }
 
-function FootprintDebugPanel({ debugMetrics }: { debugMetrics: FootprintTileDebugMetrics | null }) {
+function FootprintDebugPanel({
+  debugMetrics,
+  cameraZoom,
+}: {
+  debugMetrics: FootprintTileDebugMetrics | null
+  cameraZoom?: number
+}) {
   return (
     <aside className="footprint-debug-panel" aria-label="足迹渲染调试">
       <div className="footprint-debug-panel__row">
-        <span>瓦片层级</span>
-        <strong>{debugMetrics ? formatDebugCount(debugMetrics.tileZoom) : '--'}</strong>
+        <span>相机层级 / 瓦片层级</span>
+        <strong>
+          {cameraZoom != null ? cameraZoom.toFixed(1) : '--'}
+          {' / '}
+          {debugMetrics ? formatDebugCount(debugMetrics.tileZoom) : '--'}
+        </strong>
       </div>
       <div className="footprint-debug-panel__row">
         <span>瓦片</span>
