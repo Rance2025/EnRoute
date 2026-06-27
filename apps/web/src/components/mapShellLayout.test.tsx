@@ -39,18 +39,22 @@ vi.mock('./MapboxCanvas', async () => {
       adminRegionUnlockEnabled = false,
       adminBoundariesVisible = true,
       placeLabelsVisible = true,
+      projection,
       styleUrl,
       onAdminBoundariesVisibleChange,
       onPlaceLabelsVisibleChange,
       onMapStyleChange,
+      onMapProjectionChange,
     }: {
       adminRegionUnlockEnabled?: boolean
       adminBoundariesVisible?: boolean
       placeLabelsVisible?: boolean
+      projection?: string
       styleUrl?: string
       onAdminBoundariesVisibleChange?: (visible: boolean) => void
       onPlaceLabelsVisibleChange?: (visible: boolean) => void
       onMapStyleChange?: (styleId: string) => void
+      onMapProjectionChange?: (projection: string) => void
     }) => {
       const [footprintStyle, setFootprintStyle] = React.useState(readStoredFootprintStyle)
       const updateFootprintStyle = React.useCallback((nextFootprintStyle: typeof DEFAULT_FOOTPRINT_STYLE) => {
@@ -66,6 +70,7 @@ vi.mock('./MapboxCanvas', async () => {
           className: 'map-stage',
           'data-admin-boundaries-visible': String(adminBoundariesVisible),
           'data-place-labels-visible': String(placeLabelsVisible),
+          'data-projection': projection,
           'data-style-url': styleUrl,
           'aria-label': MAP_STAGE_LABEL,
         },
@@ -83,7 +88,9 @@ vi.mock('./MapboxCanvas', async () => {
           onAdminBoundariesVisibleChange,
           onPlaceLabelsVisibleChange,
           mapStyle: styleUrl?.includes('cmqvb5b20001e01s72ia82lz5') ? 'alternate' : 'primary',
+          mapProjection: projection === 'mercator' ? 'mercator' : 'globe',
           onMapStyleChange,
+          onMapProjectionChange,
         }),
         adminRegionUnlockEnabled
           ? React.createElement(
@@ -104,6 +111,7 @@ vi.mock('./MapboxCanvas', async () => {
 import App from '../App'
 
 const MAP_STYLE_LABEL = '\u5730\u56fe\u6837\u5f0f'
+const MAP_PROJECTION_LABEL = '\u5730\u56fe\u5f62\u6001'
 
 const localStorageMock = createLocalStorageMock()
 Object.defineProperty(window, 'localStorage', {
@@ -360,11 +368,13 @@ describe('unified shell layout', () => {
     const popover = document.querySelector('.footprint-style-popover')
     expect(popover).toBeInstanceOf(HTMLElement)
     expect(within(popover as HTMLElement).getByText(MAP_STYLE_LABEL)).toBeInTheDocument()
-    expect(within(popover as HTMLElement).getByRole('group', { name: MAP_STYLE_LABEL })).toBeInTheDocument()
-    const styleTabs = (popover as HTMLElement).querySelector('.footprint-style-popover__segmented')
-    expect(styleTabs).toBeInstanceOf(HTMLElement)
-    const styleButtons = within(styleTabs as HTMLElement).getAllByRole('button')
+    const styleGroup = within(popover as HTMLElement).getByRole('group', { name: MAP_STYLE_LABEL })
+    expect(styleGroup).toHaveClass('pill-button-group')
+    const styleButtons = within(styleGroup).getAllByRole('button')
 
+    expect(styleButtons).toHaveLength(2)
+    expect(styleButtons[0]).toHaveTextContent('水')
+    expect(styleButtons[1]).toHaveTextContent('墨')
     expect(styleButtons[0]).toHaveAttribute(
       'aria-pressed',
       'true',
@@ -385,6 +395,41 @@ describe('unified shell layout', () => {
       'data-style-url',
       'mapbox://styles/oies0/cmqv3payf000r01s79tjjh7bh',
     )
+  })
+
+  it('switches map projection from the footprint settings popover and persists the choice', async () => {
+    render(<App amapConfig={configuredAmap} />)
+    await settleLazyImports()
+
+    const mapStage = document.querySelector('.map-stage')
+    expect(mapStage).toBeInstanceOf(HTMLElement)
+    expect(mapStage).toHaveAttribute('data-projection', 'globe')
+
+    const settingsButton = document.querySelector('.map-toolbar__settings .map-toolbar__button')
+    expect(settingsButton).toBeInstanceOf(HTMLButtonElement)
+    fireEvent.click(settingsButton as HTMLButtonElement)
+
+    const popover = document.querySelector('.footprint-style-popover')
+    expect(popover).toBeInstanceOf(HTMLElement)
+    expect(within(popover as HTMLElement).getByText(MAP_PROJECTION_LABEL)).toBeInTheDocument()
+    const projectionGroup = within(popover as HTMLElement).getByRole('group', { name: MAP_PROJECTION_LABEL })
+    expect(projectionGroup).toHaveClass('pill-button-group')
+    const projectionButtons = within(projectionGroup).getAllByRole('button')
+
+    expect(projectionButtons).toHaveLength(2)
+    expect(projectionButtons[0]).toHaveTextContent('球形')
+    expect(projectionButtons[1]).toHaveTextContent('平面')
+    expect(projectionButtons[0]).toHaveAttribute('aria-pressed', 'true')
+
+    fireEvent.click(projectionButtons[1])
+
+    expect(window.localStorage.getItem('enroute:map-projection')).toBe('mercator')
+    expect(mapStage).toHaveAttribute('data-projection', 'mercator')
+
+    fireEvent.click(projectionButtons[0])
+
+    expect(window.localStorage.getItem('enroute:map-projection')).toBe('globe')
+    expect(mapStage).toHaveAttribute('data-projection', 'globe')
   })
   it('shows an administrative region compatibility notice from the map region tab', async () => {
     render(<App amapConfig={configuredAmap} />)

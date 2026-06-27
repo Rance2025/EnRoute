@@ -33,6 +33,7 @@ type MapboxCanvasProps = {
   onPlaceLabelsVisibleChange?: (visible: boolean) => void
   onAdminBoundariesVisibleChange?: (visible: boolean) => void
   onMapStyleChange?: (style: MapStylePreference) => void
+  onMapProjectionChange?: (projection: MapboxProjection) => void
 }
 
 export type FootprintMetrics = {
@@ -117,6 +118,7 @@ function MapboxCanvasComponent({
   onPlaceLabelsVisibleChange,
   onAdminBoundariesVisibleChange,
   onMapStyleChange,
+  onMapProjectionChange,
 }: MapboxCanvasProps) {
   const mapNodeRef = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<mapboxgl.Map | null>(null)
@@ -665,9 +667,11 @@ function MapboxCanvasComponent({
         placeLabelsVisible={placeLabelsVisible}
         adminBoundariesVisible={adminBoundariesVisible}
         mapStyle={mapStyle}
+        mapProjection={resolvedProjection}
         onPlaceLabelsVisibleChange={onPlaceLabelsVisibleChange}
         onAdminBoundariesVisibleChange={onAdminBoundariesVisibleChange}
         onMapStyleChange={onMapStyleChange}
+        onMapProjectionChange={onMapProjectionChange}
       />
       {adminRegionUnlockEnabled ? (
         <div className="map-message map-message--compat" role="status">

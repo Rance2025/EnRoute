@@ -3482,9 +3482,7 @@
   border: 1px solid var(--glass-panel-border);
   border-radius: 10px;
   color: #17211f;
-  background:
-    radial-gradient(circle at 18% 0%, rgba(255, 255, 255, 0.84), transparent 34%),
-    linear-gradient(145deg, #fbfefd, #eef6f3);
+  background: var(--glass-panel-bg);
   box-shadow: var(--glass-panel-shadow);
   backdrop-filter: var(--glass-panel-filter);
   -webkit-backdrop-filter: var(--glass-panel-filter);
@@ -3505,45 +3503,56 @@
   margin-top: 10px;
 }
 
+.footprint-style-popover__row--inline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.footprint-style-popover__row--inline span {
+  flex: 0 0 auto;
+  font-weight: 780;
+}
+
 .footprint-style-popover__row input[type='range'] {
   grid-column: 1 / -1;
   width: 100%;
   accent-color: #123f35;
 }
 
-.footprint-style-popover__row--segmented {
-  grid-template-columns: minmax(0, 1fr) 96px;
+.pill-button-group {
+  display: inline-flex;
   align-items: center;
-  gap: 10px;
-  margin-top: 10px;
-}
-
-.footprint-style-popover__segmented {
-  display: grid;
-  grid-template-columns: repeat(var(--segment-count), minmax(0, 1fr));
-  width: 96px;
-  height: 26px;
-  padding: 2px;
-  overflow: hidden;
+  gap: 3px;
+  padding: 3px;
   border-radius: 999px;
-  background: rgba(23, 35, 31, 0.08);
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.5);
 }
 
-.footprint-style-popover__segmented .segmented-control__thumb {
-  inset: 2px auto 2px 2px;
-}
-
-.footprint-style-popover__segmented button {
+.pill-button-group__button {
   min-width: 0;
-  height: 22px;
-  padding: 0;
+  height: 20px;
+  padding: 0 10px;
   border: 0;
   border-radius: 999px;
+  color: rgba(23, 35, 31, 0.62);
   background: transparent;
-  box-shadow: none;
-  color: var(--segmented-label-color);
   font-size: 11px;
   font-weight: 760;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    color 160ms ease,
+    background 160ms ease;
+}
+
+.pill-button-group__button[aria-pressed='true'] {
+  color: #f8fbfa;
+  background: #123f35;
 }
 
 .footprint-style-popover__row input[type='color'] {

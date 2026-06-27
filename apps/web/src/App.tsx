@@ -109,10 +109,7 @@ const navigationStyleOptions: Array<SegmentedOption<NavigationStyle>> = [
   { value: 'icon', label: '纯 icon' },
   { value: 'mixed', label: '图文混合' },
 ]
-const mapProjectionOptions: Array<SegmentedOption<MapProjectionPreference>> = [
-  { value: 'globe', label: '球形' },
-  { value: 'mercator', label: '平面' },
-]
+
 const settingsPageItems: Array<{ id: SettingsPageId; label: string }> = [
   { id: 'general', label: '通用' },
   { id: 'map', label: '地图' },
@@ -660,6 +657,7 @@ function App(props: AppProps) {
             styleUrl={selectedMapStyle.url}
             mapStyle={mapStyle}
             onMapStyleChange={handleMapStyleChange}
+            onMapProjectionChange={handleMapProjectionChange}
           />
         </Suspense>
       ) : view === 'accounting' ? (
@@ -776,13 +774,6 @@ function App(props: AppProps) {
                 {settingsPage === 'map' ? (
                   <section className="settings-dialog__section" aria-label="地图显示">
                     <span>地图显示</span>
-                    <SegmentedControl
-                      ariaLabel="地图形态"
-                      className="settings-navigation-tabs settings-map-projection-tabs"
-                      options={mapProjectionOptions}
-                      value={mapProjection}
-                      onChange={handleMapProjectionChange}
-                    />
                     <button
                       type="button"
                       role="switch"

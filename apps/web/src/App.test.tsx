@@ -10,10 +10,12 @@ vi.mock('./components/MapboxCanvas', async () => {
       adminBoundariesVisible,
       placeLabelsVisible,
       projection,
+      onMapProjectionChange,
     }: {
       adminBoundariesVisible?: boolean
       placeLabelsVisible?: boolean
       projection?: string
+      onMapProjectionChange?: (projection: string) => void
     }) => React.createElement(
       'section',
       {
@@ -44,7 +46,7 @@ vi.mock('./components/MapboxCanvas', async () => {
         React.createElement('button', { type: 'button' }, '定位当前位置'),
         React.createElement('button', { type: 'button' }, '放大地图'),
         React.createElement('button', { type: 'button' }, '缩小地图'),
-        React.createElement('button', { type: 'button' }, '足迹显示设置'),
+        React.createElement('button', { type: 'button', onClick: () => onMapProjectionChange?.('mercator') }, '足迹显示设置'),
       ),
     ),
   }
@@ -588,7 +590,7 @@ describe('App', () => {
     ).toHaveAttribute('aria-checked', 'true')
   })
 
-  it('defaults map projection to globe and toggles the map shape from map settings', async () => {
+  it('defaults map projection to globe and no longer exposes the projection toggle in settings', async () => {
     render(<App amapConfig={missingAmapConfig} />)
 
     expect(await screen.findByTestId('mapbox-canvas')).toHaveAttribute('data-projection', 'globe')
@@ -597,16 +599,7 @@ describe('App', () => {
     const dialog = screen.getByRole('dialog', { name: '设置' })
     fireEvent.click(within(dialog).getByRole('button', { name: '地图' }))
 
-    const projectionTabs = within(dialog).getByRole('group', { name: '地图形态' })
-    expect(within(projectionTabs).getByRole('button', { name: '球形' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    )
-
-    fireEvent.click(within(projectionTabs).getByRole('button', { name: '平面' }))
-
-    expect(window.localStorage.getItem('enroute:map-projection')).toBe('mercator')
-    expect(await screen.findByTestId('mapbox-canvas')).toHaveAttribute('data-projection', 'mercator')
+    expect(within(dialog).queryByRole('group', { name: '地图形态' })).not.toBeInTheDocument()
   })
 
   it('restores the persisted mixed navigation style on reload', () => {

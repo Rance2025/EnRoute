@@ -2,7 +2,6 @@ import type { CSSProperties } from 'react'
 import { useEffect, useId, useRef, useState } from 'react'
 import { Crosshair, Globe2, LocateFixed, Minus, Plus, Settings2 } from 'lucide-react'
 import { MAP_STYLE_OPTIONS, type MapStylePreference } from '../mapStyleOptions'
-import { SegmentedControl } from './SegmentedControl'
 import {
   FOOTPRINT_OPACITY_MAX,
   FOOTPRINT_OPACITY_MIN,
@@ -18,6 +17,8 @@ import {
 
 export type { FootprintStyle }
 
+type MapProjectionPreference = 'globe' | 'mercator'
+
 type MapControlsProps = {
   onFitFootprints: () => void
   onLocate: () => void
@@ -29,9 +30,11 @@ type MapControlsProps = {
   placeLabelsVisible?: boolean
   adminBoundariesVisible?: boolean
   mapStyle?: MapStylePreference
+  mapProjection?: MapProjectionPreference
   onPlaceLabelsVisibleChange?: (visible: boolean) => void
   onAdminBoundariesVisibleChange?: (visible: boolean) => void
   onMapStyleChange?: (style: MapStylePreference) => void
+  onMapProjectionChange?: (projection: MapProjectionPreference) => void
 }
 
 type FootprintStylePopoverProps = {
@@ -40,14 +43,21 @@ type FootprintStylePopoverProps = {
   placeLabelsVisible?: boolean
   adminBoundariesVisible?: boolean
   mapStyle?: MapStylePreference
+  mapProjection?: MapProjectionPreference
   onPlaceLabelsVisibleChange?: (visible: boolean) => void
   onAdminBoundariesVisibleChange?: (visible: boolean) => void
   onMapStyleChange?: (style: MapStylePreference) => void
+  onMapProjectionChange?: (projection: MapProjectionPreference) => void
 }
 
 const FOOTPRINT_COLOR_SWATCHES = ['#123f35', '#4f7cff', '#b8544c']
 const FOOTPRINT_STYLE_COMMIT_DELAY_MS = 180
 const MAP_STYLE_LABEL = '\u5730\u56fe\u6837\u5f0f'
+const MAP_PROJECTION_LABEL = '\u5730\u56fe\u5f62\u6001'
+const MAP_PROJECTION_OPTIONS: Array<{ value: MapProjectionPreference; label: string }> = [
+  { value: 'globe', label: '\u7403\u5f62' },
+  { value: 'mercator', label: '\u5e73\u9762' },
+]
 
 export function MapControls({
   onFitFootprints,
@@ -60,9 +70,11 @@ export function MapControls({
   placeLabelsVisible = true,
   adminBoundariesVisible = true,
   mapStyle = 'primary',
+  mapProjection = 'globe',
   onPlaceLabelsVisibleChange,
   onAdminBoundariesVisibleChange,
   onMapStyleChange,
+  onMapProjectionChange,
 }: MapControlsProps) {
   const [isFootprintStyleOpen, setIsFootprintStyleOpen] = useState(false)
   const settingsRef = useRef<HTMLDivElement | null>(null)
@@ -138,9 +150,11 @@ export function MapControls({
             placeLabelsVisible={placeLabelsVisible}
             adminBoundariesVisible={adminBoundariesVisible}
             mapStyle={mapStyle}
+            mapProjection={mapProjection}
             onPlaceLabelsVisibleChange={onPlaceLabelsVisibleChange}
             onAdminBoundariesVisibleChange={onAdminBoundariesVisibleChange}
             onMapStyleChange={onMapStyleChange}
+            onMapProjectionChange={onMapProjectionChange}
           />
         ) : null}
         <button
@@ -164,9 +178,11 @@ function FootprintStylePopover({
   placeLabelsVisible = true,
   adminBoundariesVisible = true,
   mapStyle = 'primary',
+  mapProjection = 'globe',
   onPlaceLabelsVisibleChange,
   onAdminBoundariesVisibleChange,
   onMapStyleChange,
+  onMapProjectionChange,
 }: FootprintStylePopoverProps) {
   const [draftFootprintStyle, setDraftFootprintStyle] = useState(footprintStyle)
   const styleCommitTimerRef = useRef<number | null>(null)
@@ -241,6 +257,28 @@ function FootprintStylePopover({
 
   return (
     <div className="footprint-style-popover" role="dialog" aria-label="足迹显示设置">
+      {onMapProjectionChange ? (
+        <div className="footprint-style-popover__row footprint-style-popover__row--inline">
+          <span>{MAP_PROJECTION_LABEL}</span>
+          <PillButtonGroup
+            ariaLabel={MAP_PROJECTION_LABEL}
+            options={MAP_PROJECTION_OPTIONS}
+            value={mapProjection}
+            onChange={onMapProjectionChange}
+          />
+        </div>
+      ) : null}
+      {onMapStyleChange ? (
+        <div className="footprint-style-popover__row footprint-style-popover__row--inline">
+          <span>{MAP_STYLE_LABEL}</span>
+          <PillButtonGroup
+            ariaLabel={MAP_STYLE_LABEL}
+            options={MAP_STYLE_OPTIONS}
+            value={mapStyle}
+            onChange={onMapStyleChange}
+          />
+        </div>
+      ) : null}
       <div className="footprint-style-popover__row">
         <label htmlFor={sizeInputId}>足迹点大小</label>
         <span className="footprint-style-popover__value">{draftFootprintStyle.pixelSize}</span>
@@ -290,18 +328,6 @@ function FootprintStylePopover({
           />
         ))}
       </div>
-      {onMapStyleChange ? (
-        <div className="footprint-style-popover__row footprint-style-popover__row--segmented">
-          <span>{MAP_STYLE_LABEL}</span>
-          <SegmentedControl
-            ariaLabel={MAP_STYLE_LABEL}
-            className="footprint-style-popover__segmented"
-            options={MAP_STYLE_OPTIONS}
-            value={mapStyle}
-            onChange={onMapStyleChange}
-          />
-        </div>
-      ) : null}
       {onPlaceLabelsVisibleChange ? (
         <button
           type="button"
@@ -334,6 +360,45 @@ function FootprintStylePopover({
           <span className="footprint-style-popover__switch-control" aria-hidden="true" />
         </button>
       ) : null}
+    </div>
+  )
+}
+
+type PillOption<Value extends string> = {
+  value: Value
+  label: string
+}
+
+type PillButtonGroupProps<Value extends string> = {
+  ariaLabel: string
+  options: Array<PillOption<Value>>
+  value: Value
+  onChange: (value: Value) => void
+}
+
+function PillButtonGroup<Value extends string>({
+  ariaLabel,
+  options,
+  value,
+  onChange,
+}: PillButtonGroupProps<Value>) {
+  return (
+    <div className="pill-button-group" role="group" aria-label={ariaLabel}>
+      {options.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          aria-pressed={option.value === value}
+          className={
+            option.value === value
+              ? 'pill-button-group__button is-active'
+              : 'pill-button-group__button'
+          }
+          onClick={() => onChange(option.value)}
+        >
+          {option.label}
+        </button>
+      ))}
     </div>
   )
 }
