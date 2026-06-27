@@ -9,12 +9,12 @@
   --theme-mist-board-start: rgba(225, 234, 233, 0.86);
   --theme-mist-board-end: rgba(180, 193, 194, 0.92);
   --theme-mist-board-base: #b4c0c1;
-  --theme-mist-glass-highlight: rgba(255, 255, 255, 0.58);
-  --theme-mist-glass-start: rgba(252, 254, 253, 0.76);
-  --theme-mist-glass-end: rgba(238, 246, 244, 0.58);
-  --theme-mist-solid-highlight: rgba(255, 255, 255, 0.68);
-  --theme-mist-solid-start: rgba(250, 252, 251, 0.84);
-  --theme-mist-solid-end: rgba(232, 242, 240, 0.72);
+  --theme-mist-glass-highlight: rgba(255, 255, 255, 0.60);
+  --theme-mist-glass-start: rgba(253, 255, 254, 0.68);
+  --theme-mist-glass-end: rgba(238, 246, 244, 0.46);
+  --theme-mist-solid-highlight: rgba(255, 255, 255, 0.66);
+  --theme-mist-solid-start: rgba(250, 252, 251, 0.78);
+  --theme-mist-solid-end: rgba(232, 242, 240, 0.64);
   --glass-panel-bg:
     radial-gradient(circle at 24% 0%, var(--theme-mist-glass-highlight), transparent 26%),
     linear-gradient(145deg, var(--theme-mist-glass-start), var(--theme-mist-glass-end));
