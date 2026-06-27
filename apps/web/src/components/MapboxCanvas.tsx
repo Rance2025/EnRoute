@@ -440,9 +440,6 @@ function MapboxCanvasComponent({
         if (disposed) return
 
         resetBaseMapVisibilityState()
-        if (latestResolvedStyleUrlRef.current === PRIMARY_MAP_STYLE_URL) {
-          applyPrimaryWaterColorInterpolation(map)
-        }
         setStatus('ready')
       }
       const handleError = (event: ErrorEvent | { error?: unknown }) => {
@@ -521,16 +518,6 @@ function MapboxCanvasComponent({
     resetBaseMapVisibilityState()
     map.setStyle(resolvedStyleUrl)
   }, [resetBaseMapVisibilityState, resolvedStyleUrl, status])
-
-  useEffect(() => {
-    const map = mapRef.current
-
-    if (!map || status !== 'ready') return
-
-    if (resolvedStyleUrlRef.current === PRIMARY_MAP_STYLE_URL) {
-      applyPrimaryWaterColorInterpolation(map)
-    }
-  }, [status, resolvedStyleUrl])
 
   useEffect(() => {
     if (status !== 'ready') return
@@ -799,60 +786,6 @@ function createMapboxTileUrl(tileUrl: string) {
   const normalizedTileUrl = tileUrl.startsWith('/') ? tileUrl : `/${tileUrl}`
 
   return `${window.location.origin}${normalizedTileUrl}`
-}
-
-const PRIMARY_MAP_STYLE_URL = 'mapbox://styles/oies0/cmqw4e7m7001101qo7kmvdwry/draft'
-const WATER_LAYER_ID = 'water'
-const WATER_COLOR_PRIMARY_START = '#24949e'
-const WATER_COLOR_PRIMARY_END = '#CCD6D7'
-const WATER_COLOR_PRIMARY_ZOOM_START = 0
-const WATER_COLOR_PRIMARY_ZOOM_END = 8
-
-function applyPrimaryWaterColorInterpolation(map: mapboxgl.Map) {
-  const style = map.getStyle()
-  const allLayers = style.layers ?? []
-
-  console.log('[EnRoute water] total layers:', allLayers.length)
-  console.log('[EnRoute water] layer sample:', allLayers.slice(0, 20).map((layer) => ({
-    id: layer.id,
-    type: layer.type,
-    sourceLayer: 'source-layer' in layer ? layer['source-layer'] : undefined,
-  })))
-
-  const waterLayers = allLayers.filter((layer) => {
-    if (layer.type !== 'fill') return false
-    if (layer.id === WATER_LAYER_ID) return true
-    const sourceLayer = 'source-layer' in layer ? layer['source-layer'] : ''
-    return sourceLayer === WATER_LAYER_ID
-  })
-
-  console.log('[EnRoute water] layers found:', waterLayers.map((layer) => layer.id))
-
-  if (waterLayers.length === 0) return
-
-  const expression: mapboxgl.Expression = [
-    'interpolate',
-    ['linear'],
-    ['zoom'],
-    WATER_COLOR_PRIMARY_ZOOM_START,
-    WATER_COLOR_PRIMARY_START,
-    WATER_COLOR_PRIMARY_ZOOM_END,
-    WATER_COLOR_PRIMARY_END,
-  ]
-
-  for (const waterLayer of waterLayers) {
-    try {
-      map.setPaintProperty(waterLayer.id, 'fill-color', expression)
-      console.log('[EnRoute water] setPaintProperty for', waterLayer.id)
-    } catch (error) {
-      console.warn('[EnRoute water] failed to setPaintProperty for', waterLayer.id, error)
-    }
-  }
-
-  console.log('[EnRoute water] current paint:', waterLayers.map((layer) => ({
-    id: layer.id,
-    fillColor: map.getPaintProperty(layer.id, 'fill-color'),
-  })))
 }
 
 function collectBaseMapVisibilityRecords(map: mapboxgl.Map): BaseMapVisibilityRecord[] {
