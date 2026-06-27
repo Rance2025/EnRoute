@@ -126,6 +126,7 @@ function MapboxCanvasComponent({
   const [status, setStatus] = useState<MapStatus>('loading')
   const [errorMessage, setErrorMessage] = useState('')
   const [footprintStyle, setFootprintStyle] = useState<FootprintStyle>(readStoredFootprintStyle)
+  const [cameraZoom, setCameraZoom] = useState<number | undefined>(undefined)
   const [tileDebugMetrics, setTileDebugMetrics] = useState<FootprintTileDebugMetrics | null>(null)
   const footprintStyleRef = useRef(footprintStyle)
   const selectedFootprintBoundsRef = useRef<FootprintLngLatBounds | null>(null)
@@ -546,6 +547,8 @@ function MapboxCanvasComponent({
     const map = mapRef.current
     if (!map) return
 
+    setCameraZoom(map.getZoom())
+
     let abortController: AbortController | null = null
 
     const refreshTileDebugMetrics = () => {
@@ -578,14 +581,23 @@ function MapboxCanvasComponent({
         .catch(() => {})
     }
 
+    const refreshCameraZoom = () => {
+      setCameraZoom(map.getZoom())
+    }
+
     refreshTileDebugMetrics()
-    map.on('moveend', refreshTileDebugMetrics)
+    map.on('moveend', () => {
+      refreshTileDebugMetrics()
+      refreshCameraZoom()
+    })
     map.on('zoomend', refreshTileDebugMetrics)
+    map.on('zoom', refreshCameraZoom)
 
     return () => {
       abortController?.abort()
       map.off('moveend', refreshTileDebugMetrics)
       map.off('zoomend', refreshTileDebugMetrics)
+      map.off('zoom', refreshCameraZoom)
     }
   }, [debugPanelVisible, footprintTileRange, resolvedTileDebugUrl, status])
 
@@ -684,7 +696,7 @@ function MapboxCanvasComponent({
         {debugPanelVisible ? (
           <FootprintDebugPanel
             debugMetrics={status === 'ready' ? tileDebugMetrics : null}
-            cameraZoom={mapRef.current?.getZoom()}
+            cameraZoom={cameraZoom}
           />
         ) : null}
       {status === 'missing-token' ? (

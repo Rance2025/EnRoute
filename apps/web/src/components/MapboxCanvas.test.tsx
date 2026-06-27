@@ -619,14 +619,14 @@ describe('MapboxCanvas footprint vector tiles', () => {
       freshRequest.resolve()
     })
 
-    expect(screen.getByLabelText('足迹渲染调试')).toHaveTextContent('瓦片层级9')
+    expect(screen.getByLabelText('足迹渲染调试')).toHaveTextContent('相机层级 / 瓦片层级9.2 / 9')
     expect(screen.getByLabelText('足迹渲染调试')).toHaveTextContent('瓦片7 / 6 / 0')
 
     await act(async () => {
       staleRequest.resolve()
     })
 
-    expect(screen.getByLabelText('足迹渲染调试')).toHaveTextContent('瓦片层级9')
+    expect(screen.getByLabelText('足迹渲染调试')).toHaveTextContent('相机层级 / 瓦片层级9.2 / 9')
     expect(screen.getByLabelText('足迹渲染调试')).toHaveTextContent('瓦片7 / 6 / 0')
     expect(screen.getByLabelText('足迹渲染调试')).not.toHaveTextContent('瓦片12 / 5 / 1')
   })
