@@ -440,7 +440,7 @@ function MapboxCanvasComponent({
         if (disposed) return
 
         resetBaseMapVisibilityState()
-        if (resolvedStyleUrlRef.current === PRIMARY_MAP_STYLE_URL) {
+        if (latestResolvedStyleUrlRef.current === PRIMARY_MAP_STYLE_URL) {
           applyPrimaryWaterColorInterpolation(map)
         }
         setStatus('ready')
@@ -530,7 +530,7 @@ function MapboxCanvasComponent({
     if (resolvedStyleUrlRef.current === PRIMARY_MAP_STYLE_URL) {
       applyPrimaryWaterColorInterpolation(map)
     }
-  }, [status])
+  }, [status, resolvedStyleUrl])
 
   useEffect(() => {
     if (status !== 'ready') return
@@ -809,9 +809,17 @@ const WATER_COLOR_PRIMARY_ZOOM_START = 0
 const WATER_COLOR_PRIMARY_ZOOM_END = 8
 
 function applyPrimaryWaterColorInterpolation(map: mapboxgl.Map) {
-  if (!map.getLayer(WATER_LAYER_ID)) return
+  const style = map.getStyle()
+  const waterLayer = (style.layers ?? []).find((layer) => {
+    if (layer.type !== 'fill') return false
+    if (layer.id === WATER_LAYER_ID) return true
+    const sourceLayer = 'source-layer' in layer ? layer['source-layer'] : ''
+    return sourceLayer === WATER_LAYER_ID
+  })
 
-  map.setPaintProperty(WATER_LAYER_ID, 'fill-color', [
+  if (!waterLayer) return
+
+  map.setPaintProperty(waterLayer.id, 'fill-color', [
     'interpolate',
     ['linear'],
     ['zoom'],
