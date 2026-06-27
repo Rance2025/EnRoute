@@ -1893,6 +1893,11 @@
   cursor: grabbing;
 }
 
+.map-stage .mapboxgl-ctrl-logo,
+.map-stage .mapboxgl-ctrl-attrib {
+  display: none !important;
+}
+
 .map-toolbar,
 .admin-region-unlock-panel,
 .map-message {
