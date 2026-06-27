@@ -440,6 +440,9 @@ function MapboxCanvasComponent({
         if (disposed) return
 
         resetBaseMapVisibilityState()
+        if (resolvedStyleUrlRef.current === PRIMARY_MAP_STYLE_URL) {
+          applyPrimaryWaterColorInterpolation(map)
+        }
         setStatus('ready')
       }
       const handleError = (event: ErrorEvent | { error?: unknown }) => {
@@ -518,6 +521,16 @@ function MapboxCanvasComponent({
     resetBaseMapVisibilityState()
     map.setStyle(resolvedStyleUrl)
   }, [resetBaseMapVisibilityState, resolvedStyleUrl, status])
+
+  useEffect(() => {
+    const map = mapRef.current
+
+    if (!map || status !== 'ready') return
+
+    if (resolvedStyleUrlRef.current === PRIMARY_MAP_STYLE_URL) {
+      applyPrimaryWaterColorInterpolation(map)
+    }
+  }, [status])
 
   useEffect(() => {
     if (status !== 'ready') return
@@ -786,6 +799,27 @@ function createMapboxTileUrl(tileUrl: string) {
   const normalizedTileUrl = tileUrl.startsWith('/') ? tileUrl : `/${tileUrl}`
 
   return `${window.location.origin}${normalizedTileUrl}`
+}
+
+const PRIMARY_MAP_STYLE_URL = 'mapbox://styles/oies0/cmqv3payf000r01s79tjjh7bh'
+const WATER_LAYER_ID = 'water'
+const WATER_COLOR_PRIMARY_START = '#24949e'
+const WATER_COLOR_PRIMARY_END = '#CCD6D7'
+const WATER_COLOR_PRIMARY_ZOOM_START = 0
+const WATER_COLOR_PRIMARY_ZOOM_END = 8
+
+function applyPrimaryWaterColorInterpolation(map: mapboxgl.Map) {
+  if (!map.getLayer(WATER_LAYER_ID)) return
+
+  map.setPaintProperty(WATER_LAYER_ID, 'fill-color', [
+    'interpolate',
+    ['linear'],
+    ['zoom'],
+    WATER_COLOR_PRIMARY_ZOOM_START,
+    WATER_COLOR_PRIMARY_START,
+    WATER_COLOR_PRIMARY_ZOOM_END,
+    WATER_COLOR_PRIMARY_END,
+  ])
 }
 
 function collectBaseMapVisibilityRecords(map: mapboxgl.Map): BaseMapVisibilityRecord[] {
