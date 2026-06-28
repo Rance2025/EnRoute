@@ -273,7 +273,7 @@ function FootprintStylePopover({
   }
 
   return (
-    <div className="glass-panel glass-panel--solid glass-panel--compact footprint-style-popover" role="dialog" aria-label="足迹显示设置">
+    <div className="glass-panel glass-panel--solid glass-panel--card footprint-style-popover" role="dialog" aria-label="足迹显示设置">
       <div className="footprint-style-popover__row">
         <label className="footprint-style-popover__label" htmlFor={sizeInputId}>足迹点大小</label>
         <span className="footprint-style-popover__value">{draftFootprintStyle.pixelSize}</span>

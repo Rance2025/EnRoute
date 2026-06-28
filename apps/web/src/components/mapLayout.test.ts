@@ -118,7 +118,7 @@ describe('map chrome layout', () => {
     expect(appSource).toContain('className="glass-panel glass-panel--solid glass-panel--card right-context-panel__glass right-context-panel__legend"')
     expect(appSource).toContain('className="glass-panel glass-panel--solid glass-panel--compact settings-dialog__panel"')
     expect(mapControlsSource).toContain('className="glass-panel glass-panel--solid glass-panel--pill map-toolbar"')
-    expect(mapControlsSource).toContain('className="glass-panel glass-panel--solid glass-panel--compact footprint-style-popover"')
+    expect(mapControlsSource).toContain('className="glass-panel glass-panel--solid glass-panel--card footprint-style-popover"')
     expect(amapCanvasSource).toContain('className="glass-panel glass-panel--solid glass-panel--compact footprint-debug-panel"')
     expect(mapboxCanvasSource).toContain('className="glass-panel glass-panel--solid glass-panel--compact footprint-debug-panel"')
     expect(amapCanvasSource).toContain('className="glass-panel glass-panel--solid glass-panel--compact admin-region-unlock-panel"')
@@ -1757,7 +1757,7 @@ describe('map chrome layout', () => {
     expect(appShellRule).toContain('var(--theme-mist-solid-base)')
     expect(amapCanvasSource).toContain('className="glass-panel glass-panel--solid glass-panel--compact footprint-debug-panel"')
     expect(mapboxCanvasSource).toContain('className="glass-panel glass-panel--solid glass-panel--compact footprint-debug-panel"')
-    expect(mapControlsSource).toContain('className="glass-panel glass-panel--solid glass-panel--compact footprint-style-popover"')
+    expect(mapControlsSource).toContain('className="glass-panel glass-panel--solid glass-panel--card footprint-style-popover"')
 
     for (const selector of [
       '.footprint-debug-panel',
