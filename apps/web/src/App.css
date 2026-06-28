@@ -1859,10 +1859,7 @@
   --map-chrome-x: calc(var(--right-panel-width) + var(--shell-board-inset-x) + var(--shell-board-column-gutter));
   --map-chrome-y: max(24px, env(safe-area-inset-bottom));
   --map-chrome-top: max(24px, env(safe-area-inset-top));
-  --map-loading-bg:
-    radial-gradient(circle at 46% 6%, rgba(255, 255, 255, 0.62), transparent 34%),
-    linear-gradient(145deg, rgba(238, 244, 242, 0.86), rgba(204, 214, 214, 0.92)),
-    #c8d2d2;
+  --map-loading-bg: var(--page-board-bg);
 
   position: absolute;
   z-index: 0;
