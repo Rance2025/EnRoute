@@ -47,6 +47,10 @@ function expectNoOwnedGlassMaterial(rule: string) {
   expect(rule).not.toContain('-webkit-backdrop-filter: var(--glass-panel-filter)')
 }
 
+function expectNoOwnedGlassShape(rule: string) {
+  expect(rule).not.toContain('border-radius:')
+}
+
 function mediaBlock(queryStart: string) {
   const start = appCss.indexOf(queryStart)
   if (start < 0) return ''
@@ -1724,20 +1728,30 @@ describe('map chrome layout', () => {
     expect(cssRule('.footprint-debug-panel__row strong')).toContain('font-size: 10px')
   })
 
-  it('keeps the footprint settings popover more opaque while matching debug panel material', () => {
+  it('uses sealed shared glass material for footprint overlays', () => {
     const appShellRule = cssRule('.app-shell')
-    const debugPanelRule = cssRule('.footprint-debug-panel')
-    const popoverRule = cssRule('.footprint-style-popover')
 
     expect(appShellRule).toContain('--solid-glass-panel-bg:')
-    expect(appShellRule).toContain('--theme-mist-solid-start: rgba(250, 252, 251, 0.80)')
-    expect(appShellRule).toContain('--theme-mist-solid-end: rgba(232, 242, 240, 0.62)')
+    expect(appShellRule).toContain('--theme-mist-solid-start: rgba(250, 252, 251, 0.94)')
+    expect(appShellRule).toContain('--theme-mist-solid-end: rgba(232, 242, 240, 0.84)')
+    expect(appShellRule).toContain('--theme-mist-solid-base: rgba(239, 246, 244, 0.92)')
     expect(appShellRule).toContain('linear-gradient(145deg, var(--theme-mist-solid-start), var(--theme-mist-solid-end))')
+    expect(appShellRule).toContain('var(--theme-mist-solid-base)')
     expect(amapCanvasSource).toContain('className="glass-panel glass-panel--solid glass-panel--compact footprint-debug-panel"')
     expect(mapboxCanvasSource).toContain('className="glass-panel glass-panel--solid glass-panel--compact footprint-debug-panel"')
     expect(mapControlsSource).toContain('className="glass-panel glass-panel--solid glass-panel--compact footprint-style-popover"')
-    expectNoOwnedGlassMaterial(debugPanelRule)
-    expectNoOwnedGlassMaterial(popoverRule)
+
+    for (const selector of [
+      '.footprint-debug-panel',
+      '.admin-region-unlock-panel',
+      '.footprint-style-popover',
+      '.map-message',
+    ]) {
+      for (const rule of allCssRules(selector)) {
+        expectNoOwnedGlassMaterial(rule)
+        expectNoOwnedGlassShape(rule)
+      }
+    }
   })
 
   it('removes the AMap compass and limits map dragging to configured bounds', () => {
