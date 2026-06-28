@@ -698,7 +698,7 @@ describe('MapboxCanvas footprint vector tiles', () => {
     )
   })
 
-  it('uses whole-world bounds for globe z0 debug metrics', async () => {
+  it('uses whole-world bounds for globe debug metrics below z2', async () => {
     const { mapRecords } = mockMapboxRuntime()
     const fetchMock = mockMetricsAndDebugFetch({
       ok: true,
@@ -739,7 +739,7 @@ describe('MapboxCanvas footprint vector tiles', () => {
     expect(debugUrl.searchParams.get('north')).toBe('85')
   })
 
-  it('uses whole-world bounds for globe z1 debug metrics when visible source tiles are unavailable', async () => {
+  it('keeps whole-world bounds below z2 when visible source tiles are unavailable', async () => {
     const { mapRecords } = mockMapboxRuntime()
     const fetchMock = mockMetricsAndDebugFetch({
       ok: true,
@@ -781,7 +781,7 @@ describe('MapboxCanvas footprint vector tiles', () => {
     expect(debugUrl.searchParams.get('north')).toBe('85')
   })
 
-  it('uses whole-world bounds for globe z1 debug metrics even when visible source tiles are available', async () => {
+  it('keeps whole-world bounds below z2 even when visible source tiles are available', async () => {
     const { mapRecords } = mockMapboxRuntime()
     const fetchMock = mockMetricsAndDebugFetch({
       ok: true,
@@ -827,7 +827,7 @@ describe('MapboxCanvas footprint vector tiles', () => {
     expect(debugUrl.searchParams.get('north')).toBe('85')
   })
 
-  it('uses whole-world bounds for globe z1 debug metrics even when retained lower zoom tiles are visible', async () => {
+  it('keeps whole-world bounds below z2 even when retained lower zoom tiles are visible', async () => {
     const { mapRecords } = mockMapboxRuntime()
     const fetchMock = mockMetricsAndDebugFetch({
       ok: true,
@@ -873,7 +873,7 @@ describe('MapboxCanvas footprint vector tiles', () => {
     expect(debugUrl.searchParams.get('north')).toBe('85')
   })
 
-  it('keeps bounds-based debug metrics for globe z2 and above', async () => {
+  it('uses bounds-based debug metrics for globe z2 and above', async () => {
     const { mapRecords } = mockMapboxRuntime()
     const fetchMock = mockMetricsAndDebugFetch({
       ok: true,
