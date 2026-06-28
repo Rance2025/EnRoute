@@ -12,15 +12,17 @@
   --theme-mist-glass-highlight: rgba(255, 255, 255, 0.60);
   --theme-mist-glass-start: rgba(253, 255, 254, 0.66);
   --theme-mist-glass-end: rgba(238, 246, 244, 0.44);
-  --theme-mist-solid-highlight: rgba(255, 255, 255, 0.70);
-  --theme-mist-solid-start: rgba(250, 252, 251, 0.80);
-  --theme-mist-solid-end: rgba(232, 242, 240, 0.62);
+  --theme-mist-solid-highlight: rgba(255, 255, 255, 0.76);
+  --theme-mist-solid-start: rgba(250, 252, 251, 0.94);
+  --theme-mist-solid-end: rgba(232, 242, 240, 0.84);
+  --theme-mist-solid-base: rgba(239, 246, 244, 0.92);
   --glass-panel-bg:
     radial-gradient(circle at 24% 0%, var(--theme-mist-glass-highlight), transparent 26%),
     linear-gradient(145deg, var(--theme-mist-glass-start), var(--theme-mist-glass-end));
   --solid-glass-panel-bg:
     radial-gradient(circle at 24% 0%, var(--theme-mist-solid-highlight), transparent 26%),
-    linear-gradient(145deg, var(--theme-mist-solid-start), var(--theme-mist-solid-end));
+    linear-gradient(145deg, var(--theme-mist-solid-start), var(--theme-mist-solid-end)),
+    var(--theme-mist-solid-base);
   --glass-panel-border: rgba(255, 255, 255, 0.56);
   --glass-panel-shadow:
     0 10px 28px rgba(25, 38, 36, 0.1),
@@ -3421,7 +3423,6 @@
   width: 140px;
   gap: 3px;
   padding: 6px 7px;
-  border-radius: 10px;
   color: #17211f;
 }
 
@@ -3431,7 +3432,6 @@
   width: 258px;
   max-width: calc(100vw - 28px);
   padding: 10px;
-  border-radius: 10px;
   color: #17211f;
 }
 
@@ -3442,7 +3442,6 @@
   width: 218px;
   max-width: calc(100vw - 28px);
   padding: 12px;
-  border-radius: 10px;
   color: #17211f;
 }
 
@@ -3451,7 +3450,6 @@
   left: 50%;
   width: min(440px, calc(100vw - 40px));
   padding: 22px;
-  border-radius: 18px;
   color: #18211f;
   transform: translate(-50%, -50%);
 }
