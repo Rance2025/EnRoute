@@ -737,6 +737,21 @@ def summarize_visual_tiles_for_viewport(
         east=east,
         north=north,
     )
+    return summarize_visual_tile_keys(
+        connection,
+        z=z,
+        tile_keys=tile_keys,
+        buckets=buckets,
+    )
+
+
+def summarize_visual_tile_keys(
+    connection: sqlite3.Connection,
+    *,
+    z: int,
+    tile_keys: list[tuple[int, int]],
+    buckets: list[tuple[int, int]],
+) -> dict[str, int | float]:
     raw_count = 0
     ready_tile_count = 0
     dirty_tile_count = 0

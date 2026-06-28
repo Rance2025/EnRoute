@@ -39,6 +39,7 @@ from .visual_tiles import (
     shanghai_date_from_timestamp,
     shanghai_date_start_timestamp_seconds,
     summarize_visual_tiles_for_viewport,
+    summarize_visual_tile_keys,
 )
 from enroute_api.map_tiles.mvt import encode_footprint_mvt
 
@@ -186,10 +187,11 @@ class FootprintStore:
         self,
         *,
         z: int,
-        west: float,
-        south: float,
-        east: float,
-        north: float,
+        west: float | None = None,
+        south: float | None = None,
+        east: float | None = None,
+        north: float | None = None,
+        tile_keys: list[tuple[int, int]] | None = None,
         range_value: str | None = None,
         start_date: str | None = None,
         end_date: str | None = None,
@@ -201,6 +203,16 @@ class FootprintStore:
                 start_date=start_date,
                 end_date=end_date,
             )
+            if tile_keys is not None:
+                return summarize_visual_tile_keys(
+                    self.connection,
+                    z=z,
+                    tile_keys=tile_keys,
+                    buckets=buckets,
+                )
+            if west is None or south is None or east is None or north is None:
+                raise ValueError("viewport bounds are required when tile keys are not provided")
+
             return summarize_visual_tiles_for_viewport(
                 self.connection,
                 z=z,

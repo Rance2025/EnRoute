@@ -49,24 +49,29 @@ def create_app(*, settings: Settings | None = None) -> FastAPI:
     @app.get("/api/map/tiles/footprints/debug")
     def get_footprint_tile_debug_metrics(
         z: int,
-        west: float,
-        south: float,
-        east: float,
-        north: float,
+        west: float | None = None,
+        south: float | None = None,
+        east: float | None = None,
+        north: float | None = None,
+        tiles: str | None = None,
         range: str | None = None,
         start: str | None = None,
         end: str | None = None,
     ) -> dict[str, object]:
-        return store.get_footprint_tile_debug_metrics(
-            z=z,
-            west=west,
-            south=south,
-            east=east,
-            north=north,
-            range_value=range,
-            start_date=start,
-            end_date=end,
-        )
+        try:
+            return store.get_footprint_tile_debug_metrics(
+                z=z,
+                west=west,
+                south=south,
+                east=east,
+                north=north,
+                tile_keys=parse_tile_keys(tiles),
+                range_value=range,
+                start_date=start,
+                end_date=end,
+            )
+        except ValueError as error:
+            raise HTTPException(status_code=400, detail=str(error)) from error
 
     @app.get("/api/map/tiles/footprints/{z}/{x}/{y}.mvt")
     def get_footprint_tile(
@@ -117,3 +122,34 @@ def create_app(*, settings: Settings | None = None) -> FastAPI:
         )
 
     return app
+
+
+def parse_tile_keys(value: str | None) -> list[tuple[int, int]] | None:
+    if value is None:
+        return None
+
+    tile_keys: list[tuple[int, int]] = []
+    seen: set[tuple[int, int]] = set()
+    for raw_tile in value.split(","):
+        tile = raw_tile.strip()
+        if not tile:
+            continue
+        parts = tile.split("/")
+        if len(parts) != 2:
+            raise ValueError("tiles must use x/y entries")
+        try:
+            x, y = int(parts[0]), int(parts[1])
+        except ValueError as error:
+            raise ValueError("tiles must use integer x/y entries") from error
+        if x < 0 or y < 0:
+            raise ValueError("tiles must be non-negative")
+        key = (x, y)
+        if key in seen:
+            continue
+        seen.add(key)
+        tile_keys.append(key)
+
+    if not tile_keys:
+        raise ValueError("tiles must include at least one tile")
+
+    return tile_keys
