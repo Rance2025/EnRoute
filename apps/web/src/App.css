@@ -1921,9 +1921,9 @@
   top: var(--map-chrome-top);
   z-index: 2;
   display: grid;
-  width: 140px;
+  width: 148px;
   gap: 3px;
-  padding: 6px 7px;
+  padding: 8px 11px;
   color: #17211f;
 }
 
@@ -3422,9 +3422,9 @@
   top: var(--map-chrome-top);
   z-index: 2;
   display: grid;
-  width: 140px;
+  width: 148px;
   gap: 3px;
-  padding: 6px 7px;
+  padding: 8px 11px;
   color: #17211f;
 }
 
@@ -3464,9 +3464,9 @@
   top: var(--map-chrome-top);
   z-index: 2;
   display: grid;
-  width: 140px;
+  width: 148px;
   gap: 3px;
-  padding: 6px 7px;
+  padding: 8px 11px;
   color: #17211f;
 }
 
