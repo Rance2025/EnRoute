@@ -274,41 +274,8 @@ function FootprintStylePopover({
 
   return (
     <div className="glass-panel glass-panel--solid glass-panel--compact footprint-style-popover" role="dialog" aria-label="足迹显示设置">
-      {onMapLanguageChange ? (
-        <div className="footprint-style-popover__row footprint-style-popover__row--inline">
-          <span>{MAP_LANGUAGE_LABEL}</span>
-          <PillButtonGroup
-            ariaLabel={MAP_LANGUAGE_LABEL}
-            options={MAP_LANGUAGE_OPTIONS}
-            value={mapLanguage}
-            onChange={onMapLanguageChange}
-          />
-        </div>
-      ) : null}
-      {onMapProjectionChange ? (
-        <div className="footprint-style-popover__row footprint-style-popover__row--inline">
-          <span>{MAP_PROJECTION_LABEL}</span>
-          <PillButtonGroup
-            ariaLabel={MAP_PROJECTION_LABEL}
-            options={MAP_PROJECTION_OPTIONS}
-            value={mapProjection}
-            onChange={onMapProjectionChange}
-          />
-        </div>
-      ) : null}
-      {onMapStyleChange ? (
-        <div className="footprint-style-popover__row footprint-style-popover__row--inline">
-          <span>{MAP_STYLE_LABEL}</span>
-          <PillButtonGroup
-            ariaLabel={MAP_STYLE_LABEL}
-            options={MAP_STYLE_OPTIONS}
-            value={mapStyle}
-            onChange={onMapStyleChange}
-          />
-        </div>
-      ) : null}
       <div className="footprint-style-popover__row">
-        <label htmlFor={sizeInputId}>足迹点大小</label>
+        <label className="footprint-style-popover__label" htmlFor={sizeInputId}>足迹点大小</label>
         <span className="footprint-style-popover__value">{draftFootprintStyle.pixelSize}</span>
         <input
           id={sizeInputId}
@@ -321,7 +288,7 @@ function FootprintStylePopover({
         />
       </div>
       <div className="footprint-style-popover__row">
-        <label htmlFor={opacityInputId}>足迹点透明度</label>
+        <label className="footprint-style-popover__label" htmlFor={opacityInputId}>足迹点透明度</label>
         <span className="footprint-style-popover__value">{draftFootprintStyle.opacity}</span>
         <input
           id={opacityInputId}
@@ -334,7 +301,7 @@ function FootprintStylePopover({
         />
       </div>
       <div className="footprint-style-popover__row">
-        <label htmlFor={colorInputId}>足迹点颜色</label>
+        <label className="footprint-style-popover__label" htmlFor={colorInputId}>足迹点颜色</label>
         <input
           id={colorInputId}
           type="color"
@@ -356,6 +323,39 @@ function FootprintStylePopover({
           />
         ))}
       </div>
+      {onMapLanguageChange ? (
+        <div className="footprint-style-popover__row footprint-style-popover__row--inline">
+          <span className="footprint-style-popover__label">{MAP_LANGUAGE_LABEL}</span>
+          <PillButtonGroup
+            ariaLabel={MAP_LANGUAGE_LABEL}
+            options={MAP_LANGUAGE_OPTIONS}
+            value={mapLanguage}
+            onChange={onMapLanguageChange}
+          />
+        </div>
+      ) : null}
+      {onMapProjectionChange ? (
+        <div className="footprint-style-popover__row footprint-style-popover__row--inline">
+          <span className="footprint-style-popover__label">{MAP_PROJECTION_LABEL}</span>
+          <PillButtonGroup
+            ariaLabel={MAP_PROJECTION_LABEL}
+            options={MAP_PROJECTION_OPTIONS}
+            value={mapProjection}
+            onChange={onMapProjectionChange}
+          />
+        </div>
+      ) : null}
+      {onMapStyleChange ? (
+        <div className="footprint-style-popover__row footprint-style-popover__row--inline">
+          <span className="footprint-style-popover__label">{MAP_STYLE_LABEL}</span>
+          <PillButtonGroup
+            ariaLabel={MAP_STYLE_LABEL}
+            options={MAP_STYLE_OPTIONS}
+            value={mapStyle}
+            onChange={onMapStyleChange}
+          />
+        </div>
+      ) : null}
       {onPlaceLabelsVisibleChange ? (
         <button
           type="button"
@@ -368,7 +368,7 @@ function FootprintStylePopover({
           }
           onClick={() => onPlaceLabelsVisibleChange(!placeLabelsVisible)}
         >
-          <span>显示地名</span>
+          <span className="footprint-style-popover__label">显示地名</span>
           <span className="footprint-style-popover__switch-control" aria-hidden="true" />
         </button>
       ) : null}
@@ -384,7 +384,7 @@ function FootprintStylePopover({
           }
           onClick={() => onAdminBoundariesVisibleChange(!adminBoundariesVisible)}
         >
-          <span>显示行政边界</span>
+          <span className="footprint-style-popover__label">显示行政边界</span>
           <span className="footprint-style-popover__switch-control" aria-hidden="true" />
         </button>
       ) : null}

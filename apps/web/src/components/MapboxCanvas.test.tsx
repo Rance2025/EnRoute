@@ -247,6 +247,60 @@ describe('MapboxCanvas footprint vector tiles', () => {
     ])
   })
 
+  it('restores footprint layers after imported style resources finish rebuilding', async () => {
+    const { mapRecords } = mockMapboxRuntime({ styleReadyOnIdle: true })
+    const { MapboxCanvas } = await import('./MapboxCanvas')
+
+    const { rerender } = render(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        styleUrl="mapbox://styles/oies0/cmqv3payf000r01s79tjjh7bh"
+        tileUrl="/api/map/tiles/footprints/{z}/{x}/{y}.mvt"
+        timeRange={selectedRange}
+      />,
+    )
+    act(() => mapRecords[0].emit('load'))
+    act(() => mapRecords[0].emit('style.load'))
+    act(() => mapRecords[0].emit('style.import.load'))
+    act(() => mapRecords[0].emit('idle'))
+
+    expect(mapRecords[0].sources.footprints).toBeDefined()
+
+    rerender(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        styleUrl="mapbox://styles/oies0/cmqvb5b20001e01s72ia82lz5"
+        tileUrl="/api/map/tiles/footprints/{z}/{x}/{y}.mvt"
+        timeRange={selectedRange}
+      />,
+    )
+    expect(mapRecords[0].setStyleCalls).toEqual([
+      'mapbox://styles/oies0/cmqvb5b20001e01s72ia82lz5',
+    ])
+    expect(mapRecords[0].sources.footprints).toBeUndefined()
+
+    act(() => mapRecords[0].emit('style.load'))
+    act(() => mapRecords[0].emit('style.import.load'))
+
+    expect(mapRecords[0].sources.footprints).toBeUndefined()
+
+    act(() => mapRecords[0].emit('idle'))
+
+    expect(mapRecords[0].sources.footprints).toMatchObject({
+      type: 'vector',
+      maxzoom: 16,
+      tiles: [
+        expectedMapboxTileUrl('?start=2026-06-19&end=2026-06-19'),
+      ],
+    })
+    expect(mapRecords[0].layers.some((layer) => (
+      typeof layer === 'object' &&
+      layer !== null &&
+      'id' in layer &&
+      layer.id === 'footprints-circle'
+    ))).toBe(true)
+  })
+
   it('restores footprint layers when style.load fires during setStyle', async () => {
     const { mapRecords } = mockMapboxRuntime({ emitStyleLoadDuringSetStyle: true })
     const { MapboxCanvas } = await import('./MapboxCanvas')
@@ -1336,6 +1390,7 @@ function mockMapboxRuntime(runtimeOptions: {
   layers?: unknown[]
   syncBaseMapLayerVisibilityFromConfig?: boolean
   styleReadyAfterStyleLoad?: boolean
+  styleReadyOnIdle?: boolean
 } = {}) {
   const mapRecords: MockMapRecord[] = []
   let footprintDataSourceWasImported = false
@@ -1428,7 +1483,10 @@ function mockMapboxRuntime(runtimeOptions: {
         stopCalls: 0,
         removeCalls: 0,
         emit: (eventName: string) => {
-          if (eventName === 'style.load') {
+          if (eventName === 'style.load' && !runtimeOptions.styleReadyOnIdle) {
+            this.styleReady = true
+          }
+          if (eventName === 'idle') {
             this.styleReady = true
           }
 

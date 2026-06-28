@@ -177,6 +177,7 @@ function MapboxCanvasComponent({
   const [styleReady, setStyleReady] = useState(false)
   const [styleLoadRevision, setStyleLoadRevision] = useState(0)
   const footprintStyleRef = useRef(footprintStyle)
+  const styleReadyRef = useRef(false)
   const languageRef = useRef(language)
   const appliedLanguageRef = useRef<MapboxLanguage | undefined>(undefined)
   const selectedFootprintBoundsRef = useRef<FootprintLngLatBounds | null>(null)
@@ -451,6 +452,7 @@ function MapboxCanvasComponent({
 
     setStatus('loading')
     setErrorMessage('')
+    styleReadyRef.current = false
     setStyleReady(false)
     mapboxgl.accessToken = resolvedAccessToken
     resolvedStyleUrlRef.current = latestResolvedStyleUrlRef.current
@@ -494,21 +496,52 @@ function MapboxCanvasComponent({
       const map = new mapboxgl.Map(mapOptions)
       mapRef.current = map
 
+      const syncStyleReady = () => {
+        if (!map.isStyleLoaded()) {
+          styleReadyRef.current = false
+          setStyleReady(false)
+          return false
+        }
+
+        const hasFootprintLayer = Boolean(
+          map.getSource(FOOTPRINT_VECTOR_SOURCE_ID) &&
+          map.getLayer(FOOTPRINT_CIRCLE_LAYER_ID),
+        )
+
+        const wasStyleReady = styleReadyRef.current
+
+        if (!wasStyleReady || !hasFootprintLayer) {
+          setStyleLoadRevision((revision) => revision + 1)
+        }
+
+        styleReadyRef.current = true
+        setStyleReady(true)
+        setStatus('ready')
+        if (!wasStyleReady && resolvedProjection === 'globe') {
+          startGlobeRotation()
+        }
+        return true
+      }
+
       const handleLoad = () => {
         if (disposed) return
 
-        setStatus('ready')
-        setStyleReady(map.isStyleLoaded())
-        if (resolvedProjection === 'globe') {
-          startGlobeRotation()
-        }
+        syncStyleReady()
       }
       const handleStyleLoad = () => {
         if (disposed) return
 
-        setStyleLoadRevision((revision) => revision + 1)
-        setStyleReady(true)
-        setStatus('ready')
+        syncStyleReady()
+      }
+      const handleStyleImportLoad = () => {
+        if (disposed) return
+
+        syncStyleReady()
+      }
+      const handleIdle = () => {
+        if (disposed) return
+
+        syncStyleReady()
       }
       const handleError = (event: ErrorEvent | { error?: unknown }) => {
         if (disposed) return
@@ -544,6 +577,8 @@ function MapboxCanvasComponent({
 
       map.on('load', handleLoad)
       map.on('style.load', handleStyleLoad)
+      map.on('style.import.load', handleStyleImportLoad)
+      map.on('idle', handleIdle)
       map.on('error', handleError)
       map.on('zoomstart', handleZoomStart)
       map.on('dragstart', handleDragStart)
@@ -556,12 +591,15 @@ function MapboxCanvasComponent({
         stopGlobeRotation()
         map.off('load', handleLoad)
         map.off('style.load', handleStyleLoad)
+        map.off('style.import.load', handleStyleImportLoad)
+        map.off('idle', handleIdle)
         map.off('error', handleError)
         map.off('zoomstart', handleZoomStart)
         map.off('dragstart', handleDragStart)
         map.off('dragend', handleDragEnd)
         map.remove()
         mapRef.current = null
+        styleReadyRef.current = false
       }
     } catch (error: unknown) {
       reportInitializationError(error)
@@ -593,6 +631,7 @@ function MapboxCanvasComponent({
 
     resolvedStyleUrlRef.current = resolvedStyleUrl
     setStatus('loading')
+    styleReadyRef.current = false
     setStyleReady(false)
     resetBaseMapVisibilityState()
     map.setStyle(resolvedStyleUrl)

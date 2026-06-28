@@ -1640,6 +1640,11 @@ describe('map chrome layout', () => {
     const settingsRule = cssRule('.map-toolbar__settings')
     const popoverRule = cssRule('.footprint-style-popover')
     const rowRule = cssRule('.footprint-style-popover__row')
+    const labelRule = cssRule('.footprint-style-popover__label')
+    const spacingRule = cssRule(
+      '.footprint-style-popover__row + .footprint-style-popover__row, .footprint-style-popover__swatches, .footprint-style-popover__switch',
+    )
+    const inlineLabelRule = cssRule('.footprint-style-popover__row--inline span')
     const switchRule = lastCssRule('.footprint-style-popover__switch')
     const swatchRule = cssRule('.footprint-style-popover__swatch')
 
@@ -1657,10 +1662,19 @@ describe('map chrome layout', () => {
     expect(popoverRule).toContain('bottom: calc(100% + 16px)')
     expect(popoverRule).toContain('width: 218px')
     expect(popoverRule).toContain('max-width: calc(100vw - 28px)')
+    expect(popoverRule).toContain('display: grid')
+    expect(popoverRule).toContain('gap: 8px')
     expectNoOwnedGlassMaterial(popoverRule)
     expect(rowRule).toContain('grid-template-columns:')
+    expect(rowRule).toContain('gap: 6px 10px')
+    expect(rowRule).toContain('line-height: 1.15')
+    expect(labelRule).toContain('font-weight: 680')
+    expect(labelRule).toContain('line-height: 1.15')
+    expect(spacingRule).toBe('')
+    expect(inlineLabelRule).not.toContain('font-weight:')
     expect(switchRule).toContain('grid-template-columns: minmax(0, 1fr) 42px')
     expect(switchRule).toContain('font-size: 12px')
+    expect(switchRule).not.toContain('font-weight:')
     expect(cssRule('.footprint-style-popover__switch-control::after')).toContain('width: 18px')
     expect(cssRule('.footprint-style-popover__switch.is-active .footprint-style-popover__switch-control::after')).toContain(
       'transform: translateX(18px)',

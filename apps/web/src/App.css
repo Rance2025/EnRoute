@@ -1941,6 +1941,8 @@
   position: absolute;
   right: 0;
   bottom: calc(100% + 16px);
+  display: grid;
+  gap: 8px;
   width: 218px;
   max-width: calc(100vw - 28px);
   padding: 12px;
@@ -3573,15 +3575,9 @@
   display: grid;
   grid-template-columns: 1fr auto;
   align-items: center;
-  gap: 8px 10px;
+  gap: 6px 10px;
   font-size: 12px;
-  line-height: 1.2;
-}
-
-.footprint-style-popover__row + .footprint-style-popover__row,
-.footprint-style-popover__swatches,
-.footprint-style-popover__switch {
-  margin-top: 10px;
+  line-height: 1.15;
 }
 
 .footprint-style-popover__row--inline {
@@ -3589,12 +3585,16 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin-top: 10px;
 }
 
-.footprint-style-popover__row--inline span {
+.footprint-style-popover__label {
   flex: 0 0 auto;
-  font-weight: 780;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 680;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .footprint-style-popover__row input[type='range'] {
@@ -3712,17 +3712,9 @@
   color: #17231f;
   background: transparent;
   font-size: 12px;
-  font-weight: 780;
-  line-height: 1.2;
+  line-height: 1.15;
   text-align: left;
   cursor: pointer;
-}
-
-.footprint-style-popover__switch span:first-child {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .footprint-style-popover__switch-control {
