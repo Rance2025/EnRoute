@@ -285,6 +285,12 @@ GET /api/map/tiles/footprints/{z}/{x}/{y}.mvt?start=2024-02-10&end=2026-03-09
 
 缺行不会触发创建空索引，也不会触发插入 dirty 占位行。只有当后台构建任务确认某个 `z/x/y/t_type/t` 构建出了至少一个 cell 时，才允许插入 ready 行。已有 ready 行因为新增数据过期时，才更新为 dirty。
 
+运行时瓦片请求和瓦片 debug 请求都不能把“原始足迹数量大于 0 但某个 `visual_tiles` 查询为空”解释成全局预计算损坏，也不能因此自动执行整库 `build_visual_tiles`。地图样式、语言、投影或前端图层配置变化只影响浏览器和 Mapbox source/layer 状态，不是重建 SQLite 视觉瓦片的理由。
+
+`visual_tiles` 是持久化预计算夹层，而不是请求缓存。日常读取、时间切换、样式切换和 debug 只能读取已有 ready/dirty 行；若缺行，语义就是该 tile-time key 当前没有可服务的预计算结果，参与 OR 为 0。只有显式运行 `npm run prepare:footprint-tiles`、原始足迹兼容性重建、视觉算法签名迁移，或者明确的受影响 key 增量重建，才允许写入或删除预计算行。
+
+维护 `visual_tiles` 时要优先保留已完成结果。批量构建脚本可以按明确的 `z + t_type` 范围先删除后重建；单个 dirty 重建只能覆盖或删除同一个 `z/x/y/t_type/t`；追加导入新足迹时只标记已有受影响行 dirty，不向缺失 key 写入占位。避免执行无范围的 `DELETE FROM visual_tiles`，除非它和原始足迹重建、算法签名迁移这类显式破坏性流程绑定。
+
 ## 后台构建路径
 
 导入新的 WGS-84 足迹数据后：

@@ -30,7 +30,6 @@ from .visual_tiles import (
     TIME_BUCKET_YEAR,
     VISUAL_TILE_ALGORITHM_SIGNATURE,
     VISUAL_TILE_ALGORITHM_SIGNATURE_KEY,
-    build_visual_tiles,
     coordinate_to_tile,
     encode_day,
     mark_visual_tile_dirty,
@@ -163,7 +162,6 @@ class FootprintStore:
     ) -> bytes:
         with self._connection_lock:
             self.ensure_ready()
-            ensure_precomputed_visual_tiles_present(self.connection)
             buckets = resolve_time_buckets(
                 range_value=range_value,
                 start_date=start_date,
@@ -200,7 +198,6 @@ class FootprintStore:
     ) -> dict[str, int | float]:
         with self._connection_lock:
             self.ensure_ready()
-            ensure_precomputed_visual_tiles_present(self.connection)
             buckets = resolve_time_buckets(
                 range_value=range_value,
                 start_date=start_date,
@@ -651,20 +648,6 @@ def ensure_visual_tiles_algorithm_current(connection: sqlite3.Connection) -> Non
     with connection:
         connection.execute("DELETE FROM visual_tiles")
         set_meta_value(connection, VISUAL_TILE_ALGORITHM_SIGNATURE_KEY, VISUAL_TILE_ALGORITHM_SIGNATURE)
-
-
-def ensure_precomputed_visual_tiles_present(connection: sqlite3.Connection) -> None:
-    if get_footprint_row_count(connection) == 0:
-        return
-    if get_visual_tile_row_count(connection) > 0:
-        return
-
-    build_visual_tiles(connection)
-
-
-def get_visual_tile_row_count(connection: sqlite3.Connection) -> int:
-    row = connection.execute("SELECT COUNT(*) AS count FROM visual_tiles").fetchone()
-    return int(row["count"])
 
 
 def ensure_admin_region_stats_current(
