@@ -967,7 +967,7 @@ function FootprintDebugPanel({
   return (
     <aside className="footprint-debug-panel" aria-label="足迹渲染调试">
       <div className="footprint-debug-panel__row">
-        <span>相机层级 / 瓦片层级</span>
+        <span>相机/瓦片层级</span>
         <strong>
           {cameraZoom != null ? cameraZoom.toFixed(1) : '--'}
           {' / '}
