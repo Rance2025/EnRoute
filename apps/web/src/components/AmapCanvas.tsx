@@ -611,14 +611,14 @@ function AmapCanvasComponent({
             <FootprintDebugPanel debug={footprintDebug} />
           ) : null}
           {status === 'error' ? (
-            <div className="map-message" role="alert">
+            <div className="glass-panel glass-panel--solid glass-panel--compact map-message" role="alert">
               <h2>地图加载失败</h2>
               <p>{errorMessage}</p>
             </div>
           ) : null}
         </>
       ) : (
-        <div className="map-message" role="status">
+        <div className="glass-panel glass-panel--solid glass-panel--compact map-message" role="status">
           <h2>需要配置高德地图密钥</h2>
           <p>在项目根目录创建 `.env.local`，填入下面两个变量后重新启动开发服务器。</p>
           <pre>{config.missingKeys.join('\n')}</pre>
@@ -704,7 +704,7 @@ function calculateLongitudeSpan(west: number, east: number) {
 
 function FootprintDebugPanel({ debug }: { debug: FootprintRenderDebug }) {
   return (
-    <aside className="footprint-debug-panel" aria-label="足迹渲染调试">
+    <aside className="glass-panel glass-panel--solid glass-panel--compact footprint-debug-panel" aria-label="足迹渲染调试">
       <div className="footprint-debug-panel__row">
         <span>渲染点数</span>
         <strong>{formatMetricCount(debug.renderedCount)}</strong>
@@ -729,7 +729,7 @@ function AdminRegionUnlockPanel({
   onLevelChange: (level: AdminRegionLevel) => void
 }) {
   return (
-    <aside className="admin-region-unlock-panel" role="group" aria-label="行政区划层级">
+    <aside className="glass-panel glass-panel--solid glass-panel--compact admin-region-unlock-panel" role="group" aria-label="行政区划层级">
       <div className="admin-region-unlock-levels">
         {ADMIN_REGION_LEVELS.map(({ level: optionLevel, label }) => (
           <button

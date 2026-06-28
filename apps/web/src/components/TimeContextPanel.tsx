@@ -195,7 +195,7 @@ export function TimeContextPanel({
 
   return (
     <aside
-      className={`time-context-panel${isTimeEditorOpen ? ' is-editing-time' : ''}`}
+      className={`glass-panel glass-panel--solid glass-panel--large time-context-panel${isTimeEditorOpen ? ' is-editing-time' : ''}`}
       aria-label="时间范围面板"
     >
       <div className="time-context-panel__scroll">
@@ -296,7 +296,7 @@ export function TimeContextPanel({
         <footer className="time-context-panel__footer" aria-label="应用设置">
           <button
             type="button"
-            className="time-settings-button"
+            className="glass-panel glass-panel--solid glass-panel--pill time-settings-button"
             aria-label="打开设置"
             title="设置"
             onClick={onOpenSettings}

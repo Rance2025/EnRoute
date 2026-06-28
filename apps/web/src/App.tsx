@@ -516,7 +516,7 @@ function App(props: AppProps) {
     >
       <div className="app-board">
       <nav
-        className={`app-nav app-nav--${navigationStyle}`}
+        className={`glass-panel glass-panel--solid glass-panel--pill app-nav app-nav--${navigationStyle}`}
         aria-label="主导航"
       >
         <div
@@ -602,7 +602,7 @@ function App(props: AppProps) {
 
       <aside className="right-context-panel" aria-label="右侧上下文栏">
         <nav className="secondary-nav-rail" aria-label="二级导航">
-          <div className="secondary-nav-rail__items">
+          <div className="glass-panel glass-panel--solid glass-panel--pill secondary-nav-rail__items">
             {secondaryNavItems.map((item) => {
               const Icon = item.icon
               const isActive = item.id === activeSecondaryNavId
@@ -629,12 +629,12 @@ function App(props: AppProps) {
           </div>
         </nav>
         <div className="right-context-panel__stack" aria-label="右侧信息面板">
-          <section className="right-context-panel__glass right-context-panel__summary" aria-label="当前分区摘要">
+          <section className="glass-panel glass-panel--solid glass-panel--card right-context-panel__glass right-context-panel__summary" aria-label="当前分区摘要">
             <span className="right-context-panel__eyebrow">当前分区</span>
             <strong>{activeSecondaryNavItem?.label ?? '概览'}</strong>
             <p>{getRightContextSummary(view, activeSecondaryNavId)}</p>
           </section>
-          <section className="right-context-panel__glass right-context-panel__legend" aria-label="图层与状态">
+          <section className="glass-panel glass-panel--solid glass-panel--card right-context-panel__glass right-context-panel__legend" aria-label="图层与状态">
             <span className="right-context-panel__eyebrow">
               {view === 'map' ? '图层与状态' : '工作区状态'}
             </span>
@@ -701,7 +701,7 @@ function App(props: AppProps) {
             onClick={() => setIsSettingsOpen(false)}
           />
           <section
-            className="settings-dialog__panel"
+            className="glass-panel glass-panel--solid glass-panel--compact settings-dialog__panel"
             role="dialog"
             aria-modal="true"
             aria-labelledby="settings-dialog-title"

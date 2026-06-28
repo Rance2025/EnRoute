@@ -109,7 +109,7 @@ export function MapControls({
   }, [isFootprintStyleOpen])
 
   return (
-    <div className="map-toolbar" aria-label="地图工具">
+    <div className="glass-panel glass-panel--solid glass-panel--pill map-toolbar" aria-label="地图工具">
       <button
         type="button"
         className="map-toolbar__button"
@@ -273,7 +273,7 @@ function FootprintStylePopover({
   }
 
   return (
-    <div className="footprint-style-popover" role="dialog" aria-label="足迹显示设置">
+    <div className="glass-panel glass-panel--solid glass-panel--compact footprint-style-popover" role="dialog" aria-label="足迹显示设置">
       {onMapLanguageChange ? (
         <div className="footprint-style-popover__row footprint-style-popover__row--inline">
           <span>{MAP_LANGUAGE_LABEL}</span>
