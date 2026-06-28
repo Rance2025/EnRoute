@@ -11,6 +11,7 @@ type MockMapRecord = {
   layoutProperties: Array<[string, string, unknown]>
   configProperties: Array<[string, string, unknown]>
   configPropertyValues: Map<string, unknown>
+  setLanguageCalls: unknown[]
   setStyleCalls: unknown[]
   visibleTileCoordinates: MockVisibleTileCoordinate[]
   removedLayers: string[]
@@ -245,6 +246,47 @@ describe('MapboxCanvas footprint vector tiles', () => {
     ])
   })
 
+  it('restores footprint layers when style.load fires during setStyle', async () => {
+    const { mapRecords } = mockMapboxRuntime({ emitStyleLoadDuringSetStyle: true })
+    const { MapboxCanvas } = await import('./MapboxCanvas')
+
+    const { rerender } = render(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        styleUrl="mapbox://styles/oies0/cmqv3payf000r01s79tjjh7bh"
+        timeRange={selectedRange}
+      />,
+    )
+    act(() => mapRecords[0].emit('load'))
+
+    expect(mapRecords[0].sources.footprints).toBeDefined()
+
+    rerender(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        styleUrl="mapbox://styles/oies0/cmqvb5b20001e01s72ia82lz5"
+        timeRange={selectedRange}
+      />,
+    )
+
+    expect(mapRecords[0].setStyleCalls).toEqual([
+      'mapbox://styles/oies0/cmqvb5b20001e01s72ia82lz5',
+    ])
+    expect(mapRecords[0].sources.footprints).toMatchObject({
+      type: 'vector',
+      maxzoom: 16,
+      tiles: [
+        expectedMapboxTileUrl('?start=2026-06-19&end=2026-06-19'),
+      ],
+    })
+    expect(mapRecords[0].layers.some((layer) => (
+      typeof layer === 'object' &&
+      layer !== null &&
+      'id' in layer &&
+      layer.id === 'footprints-circle'
+    ))).toBe(true)
+  })
+
   it('starts slow globe rotation from the default world view after the initial load', async () => {
     vi.useFakeTimers()
     const { mapRecords } = mockMapboxRuntime()
@@ -300,7 +342,7 @@ describe('MapboxCanvas footprint vector tiles', () => {
     })
   })
 
-  it('uses an explicit Mapbox display language while keeping China worldview fixed', async () => {
+  it('switches Mapbox display language in place while keeping China worldview fixed', async () => {
     const { mapRecords } = mockMapboxRuntime()
     const { MapboxCanvas } = await import('./MapboxCanvas')
 
@@ -312,11 +354,14 @@ describe('MapboxCanvas footprint vector tiles', () => {
       />,
     )
 
+    act(() => mapRecords[0].emit('load'))
+
     expect(mapRecords).toHaveLength(1)
     expect(mapRecords[0].options).toMatchObject({
       language: 'zh-Hans',
       worldview: 'CN',
     })
+    expect(mapRecords[0].sources.footprints).toBeDefined()
 
     rerender(
       <MapboxCanvas
@@ -326,12 +371,33 @@ describe('MapboxCanvas footprint vector tiles', () => {
       />,
     )
 
-    expect(mapRecords).toHaveLength(2)
-    expect(mapRecords[0].removeCalls).toBe(1)
-    expect(mapRecords[1].options).toMatchObject({
-      language: 'en',
-      worldview: 'CN',
+    expect(mapRecords).toHaveLength(1)
+    expect(mapRecords[0].setLanguageCalls).toEqual(['en'])
+    expect(mapRecords[0].removeCalls).toBe(0)
+    expect(mapRecords[0].sources.footprints).toMatchObject({
+      type: 'vector',
+      maxzoom: 16,
+      tiles: [
+        expectedMapboxTileUrl('?start=2026-06-19&end=2026-06-19'),
+      ],
     })
+    expect(mapRecords[0].layers.some((layer) => (
+      typeof layer === 'object' &&
+      layer !== null &&
+      'id' in layer &&
+      layer.id === 'footprints-circle'
+    ))).toBe(true)
+
+    rerender(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        timeRange={selectedRange}
+      />,
+    )
+
+    expect(mapRecords).toHaveLength(1)
+    expect(mapRecords[0].setLanguageCalls).toEqual(['en', undefined])
+    expect(mapRecords[0].sources.footprints).toBeDefined()
   })
 
   it('uses range=all for open ended footprint tile requests', async () => {
@@ -1261,6 +1327,7 @@ describe('MapboxCanvas footprint vector tiles', () => {
 })
 
 function mockMapboxRuntime(runtimeOptions: {
+  emitStyleLoadDuringSetStyle?: boolean
   layers?: unknown[]
   syncBaseMapLayerVisibilityFromConfig?: boolean
   styleReadyAfterStyleLoad?: boolean
@@ -1344,6 +1411,7 @@ function mockMapboxRuntime(runtimeOptions: {
         layoutProperties: [],
         configProperties: [],
         configPropertyValues: new Map(standardBasemapConfig),
+        setLanguageCalls: [],
         setStyleCalls: [],
         visibleTileCoordinates: [],
         removedLayers: [],
@@ -1491,8 +1559,23 @@ function mockMapboxRuntime(runtimeOptions: {
       return this.record.configPropertyValues.get(configName)
     }
 
+    setLanguage(language?: string) {
+      this.record.setLanguageCalls.push(language)
+    }
+
     setStyle(styleUrl: string) {
       this.record.setStyleCalls.push(styleUrl)
+      this.styleReady = false
+      this.record.layers = this.record.layers.filter((layer) => (
+        typeof layer !== 'object' ||
+        layer === null ||
+        !('id' in layer) ||
+        layer.id !== 'footprints-circle'
+      ))
+      delete this.record.sources.footprints
+      if (runtimeOptions.emitStyleLoadDuringSetStyle) {
+        this.record.emit('style.load')
+      }
     }
 
     getZoom() {
