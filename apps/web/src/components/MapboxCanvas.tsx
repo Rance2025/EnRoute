@@ -92,6 +92,27 @@ type FootprintTileDebugViewport = {
   tiles?: string[]
 }
 
+type MapboxDebugTileCoordinate = {
+  canonical?: {
+    z?: number
+    x?: number
+    y?: number
+  }
+}
+
+type MapboxFootprintSourceCache = {
+  getVisibleCoordinates?: () => MapboxDebugTileCoordinate[]
+}
+
+type MapboxMapWithDebugSourceCache = mapboxgl.Map & {
+  getStyleSourceCache?: (sourceId: string) => MapboxFootprintSourceCache | undefined
+  style?: {
+    getSourceCache?: (sourceId: string) => MapboxFootprintSourceCache | undefined
+    _mergedSourceCaches?: Record<string, MapboxFootprintSourceCache | undefined>
+    _sourceCaches?: Record<string, MapboxFootprintSourceCache | undefined>
+  }
+}
+
 type BaseMapVisibilityLayerKind = 'place-label' | 'admin-boundary'
 type BaseMapVisibilityRecord = {
   id: string
@@ -114,7 +135,6 @@ const DEFAULT_MAP_ZOOM = 2.2
 const GLOBE_WORLD_ZOOM = 1.75
 const GLOBE_ROTATION_STEP_DEGREES = 1.2
 const GLOBE_ROTATION_INTERVAL_MS = 1000
-const MAX_MERCATOR_LATITUDE = 85.05112878
 const MAP_FIT_BOUNDS_DURATION_MS = 900
 const MAP_FIT_BOUNDS_PADDING_PX = 96
 const FOOTPRINT_STYLE_STORAGE_KEY = 'enroute.footprintStyle'
@@ -815,7 +835,9 @@ function getCurrentFootprintTileDebugViewport(
   projection: MapboxProjection,
 ): FootprintTileDebugViewport {
   const bounds = map.getBounds()
-  const z = Math.max(0, Math.min(MAX_FOOTPRINT_TILE_ZOOM, Math.floor(map.getZoom())))
+  const visibleTileTarget = getVisibleFootprintTileDebugTarget(map)
+  const z = visibleTileTarget?.z
+    ?? Math.max(0, Math.min(MAX_FOOTPRINT_TILE_ZOOM, Math.floor(map.getZoom())))
 
   if (projection === 'globe' && z <= 1) {
     return {
@@ -824,7 +846,7 @@ function getCurrentFootprintTileDebugViewport(
       south: -85,
       east: 180,
       north: 85,
-      tiles: getGlobeWorldDebugTiles(map, z),
+      tiles: visibleTileTarget?.tiles ?? getGlobeWorldDebugTiles(map, z),
     }
   }
 
@@ -837,60 +859,71 @@ function getCurrentFootprintTileDebugViewport(
   }
 }
 
+function getVisibleFootprintTileDebugTarget(map: mapboxgl.Map) {
+  const sourceCache = getFootprintSourceCache(map)
+  const visibleCoordinates = sourceCache?.getVisibleCoordinates?.() ?? []
+  const tileKeysByZoom = new Map<number, Set<string>>()
+
+  for (const coordinate of visibleCoordinates) {
+    const z = coordinate.canonical?.z
+    const x = coordinate.canonical?.x
+    const y = coordinate.canonical?.y
+
+    if (
+      !Number.isInteger(z) ||
+      !Number.isInteger(x) ||
+      !Number.isInteger(y) ||
+      z == null ||
+      x == null ||
+      y == null ||
+      z < 0 ||
+      x < 0 ||
+      y < 0
+    ) {
+      continue
+    }
+
+    if (!tileKeysByZoom.has(z)) {
+      tileKeysByZoom.set(z, new Set())
+    }
+    tileKeysByZoom.get(z)?.add(`${x}/${y}`)
+  }
+
+  const z = Array.from(tileKeysByZoom.keys()).sort((a, b) => b - a)[0]
+  if (z == null) return undefined
+
+  return {
+    z: Math.min(z, MAX_FOOTPRINT_TILE_ZOOM),
+    tiles: Array.from(tileKeysByZoom.get(z) ?? []).sort(compareTileKeys),
+  }
+}
+
+function getFootprintSourceCache(map: mapboxgl.Map): MapboxFootprintSourceCache | undefined {
+  const debugMap = map as MapboxMapWithDebugSourceCache
+
+  return (
+    debugMap.getStyleSourceCache?.(FOOTPRINT_VECTOR_SOURCE_ID) ??
+    debugMap.style?.getSourceCache?.(FOOTPRINT_VECTOR_SOURCE_ID) ??
+    debugMap.style?._mergedSourceCaches?.[FOOTPRINT_VECTOR_SOURCE_ID] ??
+    debugMap.style?._sourceCaches?.[FOOTPRINT_VECTOR_SOURCE_ID]
+  )
+}
+
 function getGlobeWorldDebugTiles(map: mapboxgl.Map, z: number) {
   if (z === 0) return ['0/0']
 
   const center = map.getCenter()
-  const z1Tiles = [
-    { x: 0, y: 0, west: -180, south: 0, east: 0, north: MAX_MERCATOR_LATITUDE },
-    { x: 1, y: 0, west: 0, south: 0, east: 180, north: MAX_MERCATOR_LATITUDE },
-    { x: 0, y: 1, west: -180, south: -MAX_MERCATOR_LATITUDE, east: 0, north: 0 },
-    { x: 1, y: 1, west: 0, south: -MAX_MERCATOR_LATITUDE, east: 180, north: 0 },
-  ]
+  const x = normalizeLongitude(center.lng) < 0 ? 0 : 1
+  const y = center.lat >= 0 ? 0 : 1
 
-  return z1Tiles
-    .filter((tile) => globeHemisphereIntersectsTile(center.lng, center.lat, tile))
-    .map(({ x, y }) => `${x}/${y}`)
+  return [`${x}/${y}`]
 }
 
-function globeHemisphereIntersectsTile(
-  centerLongitude: number,
-  centerLatitude: number,
-  tile: { west: number, south: number, east: number, north: number },
-) {
-  const closestLongitude = closestLongitudeInRange(
-    normalizeLongitude(centerLongitude),
-    tile.west,
-    tile.east,
-  )
-  const centerLatitudeRadians = degreesToRadians(
-    Math.max(-MAX_MERCATOR_LATITUDE, Math.min(MAX_MERCATOR_LATITUDE, centerLatitude)),
-  )
-  const deltaLongitudeRadians = degreesToRadians(normalizeLongitude(closestLongitude - centerLongitude))
-  const latitudeTerm = Math.sin(centerLatitudeRadians)
-  const longitudeTerm = Math.cos(centerLatitudeRadians) * Math.cos(deltaLongitudeRadians)
-  const bestLatitudeRadians = Math.max(
-    degreesToRadians(tile.south),
-    Math.min(degreesToRadians(tile.north), Math.atan2(latitudeTerm, longitudeTerm)),
-  )
-  const maxDotProduct = (
-    latitudeTerm * Math.sin(bestLatitudeRadians) +
-    longitudeTerm * Math.cos(bestLatitudeRadians)
-  )
+function compareTileKeys(left: string, right: string) {
+  const [leftX = 0, leftY = 0] = left.split('/').map(Number)
+  const [rightX = 0, rightY = 0] = right.split('/').map(Number)
 
-  return maxDotProduct > 1e-6
-}
-
-function closestLongitudeInRange(longitude: number, west: number, east: number) {
-  if (longitude >= west && longitude <= east) return longitude
-
-  return Math.abs(normalizeLongitude(longitude - west)) <= Math.abs(normalizeLongitude(longitude - east))
-    ? west
-    : east
-}
-
-function degreesToRadians(value: number) {
-  return value * Math.PI / 180
+  return leftX - rightX || leftY - rightY
 }
 
 function formatCoordinateParam(value: number) {
