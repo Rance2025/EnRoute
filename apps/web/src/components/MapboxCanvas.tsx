@@ -219,6 +219,10 @@ function MapboxCanvasComponent({
 
     if (!map) return
 
+    if (baseMapVisibilityRecordsRef.current.length === 0) {
+      baseMapVisibilityRecordsRef.current = collectBaseMapVisibilityRecords(map)
+    }
+
     updateBaseMapConfigOverride(
       map,
       hiddenBaseMapConfigOverridesRef.current,
@@ -254,10 +258,6 @@ function MapboxCanvasComponent({
       'showAdminBoundaries',
       adminBoundariesVisible,
     )
-
-    if (baseMapVisibilityRecordsRef.current.length === 0) {
-      baseMapVisibilityRecordsRef.current = collectBaseMapVisibilityRecords(map)
-    }
 
     for (const record of baseMapVisibilityRecordsRef.current) {
       const isVisible = record.kind === 'place-label'
@@ -411,6 +411,7 @@ function MapboxCanvasComponent({
 
     try {
       const mapNode = mapNodeRef.current
+      resetBaseMapVisibilityState()
       const map = new mapboxgl.Map({
         container: mapNode,
         style: latestResolvedStyleUrlRef.current,
@@ -433,7 +434,6 @@ function MapboxCanvasComponent({
       const handleLoad = () => {
         if (disposed) return
 
-        resetBaseMapVisibilityState()
         setStatus('ready')
         if (resolvedProjection === 'globe') {
           startGlobeRotation()
@@ -442,7 +442,6 @@ function MapboxCanvasComponent({
       const handleStyleLoad = () => {
         if (disposed) return
 
-        resetBaseMapVisibilityState()
         setStatus('ready')
       }
       const handleError = (event: ErrorEvent | { error?: unknown }) => {

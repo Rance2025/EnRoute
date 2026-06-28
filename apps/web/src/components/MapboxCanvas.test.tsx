@@ -877,6 +877,42 @@ describe('MapboxCanvas footprint vector tiles', () => {
     ])
   })
 
+  it('restores style-defined labels and administrative boundaries after starting with both disabled', async () => {
+    const { mapRecords } = mockMapboxRuntime({ syncBaseMapLayerVisibilityFromConfig: true })
+    const { MapboxCanvas } = await import('./MapboxCanvas')
+
+    const { rerender } = render(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        timeRange={selectedRange}
+        placeLabelsVisible={false}
+        adminBoundariesVisible={false}
+      />,
+    )
+    act(() => mapRecords[0].emit('style.load'))
+
+    expect(getMockLayerVisibility(mapRecords[0], 'country-label')).toBe('none')
+    expect(getMockLayerVisibility(mapRecords[0], 'settlement-label')).toBe('none')
+    expect(getMockLayerVisibility(mapRecords[0], 'admin-1-boundary')).toBe('none')
+
+    act(() => mapRecords[0].emit('load'))
+
+    rerender(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        timeRange={selectedRange}
+        placeLabelsVisible
+        adminBoundariesVisible
+      />,
+    )
+
+    expect(getMockLayerVisibility(mapRecords[0], 'country-label')).toBe('visible')
+    expect(getMockLayerVisibility(mapRecords[0], 'settlement-label')).toBe('visible')
+    expect(getMockLayerVisibility(mapRecords[0], 'road-label')).toBe('none')
+    expect(getMockLayerVisibility(mapRecords[0], 'admin-1-boundary')).toBe('visible')
+    expect(getMockLayerVisibility(mapRecords[0], 'admin-0-boundary')).toBe('none')
+  })
+
   it('shows a clear placeholder instead of creating a map when the token is missing', async () => {
     const { mapRecords } = mockMapboxRuntime()
     const { MapboxCanvas } = await import('./MapboxCanvas')
@@ -889,7 +925,10 @@ describe('MapboxCanvas footprint vector tiles', () => {
   })
 })
 
-function mockMapboxRuntime(runtimeOptions: { layers?: unknown[] } = {}) {
+function mockMapboxRuntime(runtimeOptions: {
+  layers?: unknown[]
+  syncBaseMapLayerVisibilityFromConfig?: boolean
+} = {}) {
   const mapRecords: MockMapRecord[] = []
   let footprintDataSourceWasImported = false
   const standardBasemapConfig = new Map<string, unknown>([
@@ -1079,6 +1118,10 @@ function mockMapboxRuntime(runtimeOptions: { layers?: unknown[] } = {}) {
     setConfigProperty(importId: string, configName: string, value: unknown) {
       this.record.configProperties.push([importId, configName, value])
       this.record.configPropertyValues.set(configName, value)
+
+      if (runtimeOptions.syncBaseMapLayerVisibilityFromConfig) {
+        syncMockBaseMapLayerVisibilityFromConfig(this.record, configName, value)
+      }
     }
 
     getConfigProperty(importId: string, configName: string) {
@@ -1157,6 +1200,78 @@ function mockMapboxRuntime(runtimeOptions: { layers?: unknown[] } = {}) {
     mapRecords,
     footprintDataSourceImported: () => footprintDataSourceWasImported,
   }
+}
+
+function getMockLayerVisibility(
+  record: MockMapRecord,
+  layerId: string,
+): 'visible' | 'none' | undefined {
+  const layer = record.layers.find((currentLayer) => (
+    typeof currentLayer === 'object' &&
+    currentLayer !== null &&
+    'id' in currentLayer &&
+    currentLayer.id === layerId
+  ))
+
+  if (
+    typeof layer !== 'object' ||
+    layer === null ||
+    !('layout' in layer) ||
+    typeof layer.layout !== 'object' ||
+    layer.layout === null ||
+    !('visibility' in layer.layout)
+  ) {
+    return layer ? 'visible' : undefined
+  }
+
+  return layer.layout.visibility === 'none' ? 'none' : 'visible'
+}
+
+function syncMockBaseMapLayerVisibilityFromConfig(
+  record: MockMapRecord,
+  configName: string,
+  value: unknown,
+) {
+  const visible = value !== false
+
+  record.layers = record.layers.map((layer) => {
+    if (
+      typeof layer !== 'object' ||
+      layer === null ||
+      !('id' in layer) ||
+      typeof layer.id !== 'string'
+    ) {
+      return layer
+    }
+
+    if (!mockBaseMapConfigControlsLayer(configName, layer.id)) return layer
+
+    return {
+      ...layer,
+      layout: {
+        ...('layout' in layer && typeof layer.layout === 'object' && layer.layout !== null
+          ? layer.layout
+          : {}),
+        visibility: visible ? 'visible' : 'none',
+      },
+    }
+  })
+}
+
+function mockBaseMapConfigControlsLayer(configName: string, layerId: string) {
+  if (configName === 'showPlaceLabels') {
+    return layerId === 'country-label' || layerId === 'settlement-label'
+  }
+
+  if (configName === 'showRoadLabels') {
+    return layerId === 'road-label'
+  }
+
+  if (configName === 'showAdminBoundaries') {
+    return layerId === 'admin-1-boundary' || layerId === 'admin-0-boundary'
+  }
+
+  return false
 }
 
 function expectedMapboxTileUrl(query: string) {
