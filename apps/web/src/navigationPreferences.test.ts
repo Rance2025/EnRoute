@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import {
+  GLASS_PANEL_OPACITY_STORAGE_KEY,
   MAP_ADMIN_BOUNDARIES_VISIBLE_STORAGE_KEY,
   MAP_PROJECTION_STORAGE_KEY,
   MAP_DEBUG_PANEL_VISIBLE_STORAGE_KEY,
@@ -8,6 +9,7 @@ import {
   MAP_PLACE_LABELS_VISIBLE_STORAGE_KEY,
   MAP_STYLE_STORAGE_KEY,
   NAVIGATION_STYLE_STORAGE_KEY,
+  readGlassPanelOpacity,
   readMapAdminBoundariesVisible,
   readMapLanguage,
   readMapProjection,
@@ -22,6 +24,7 @@ import {
   writeMapPlaceLabelsVisible,
   writeMapStyle,
   writeNavigationStyle,
+  writeGlassPanelOpacity,
 } from './navigationPreferences'
 
 function createStorage(initialValue?: string, key = NAVIGATION_STYLE_STORAGE_KEY) {
@@ -100,6 +103,40 @@ describe('navigationPreferences', () => {
 
     expect(readMapDebugPanelVisible(storage)).toBe(false)
     expect(() => writeMapDebugPanelVisible(true, storage)).not.toThrow()
+  })
+
+  it('normalizes the shared glass panel opacity preference', () => {
+    expect(readGlassPanelOpacity(createStorage())).toBe(0.92)
+    expect(readGlassPanelOpacity(createStorage('0.48', GLASS_PANEL_OPACITY_STORAGE_KEY)))
+      .toBe(0.48)
+    expect(readGlassPanelOpacity(createStorage('0.02', GLASS_PANEL_OPACITY_STORAGE_KEY)))
+      .toBe(0.1)
+    expect(readGlassPanelOpacity(createStorage('1.4', GLASS_PANEL_OPACITY_STORAGE_KEY)))
+      .toBe(1)
+    expect(readGlassPanelOpacity(createStorage('wide', GLASS_PANEL_OPACITY_STORAGE_KEY)))
+      .toBe(0.92)
+  })
+
+  it('writes the shared glass panel opacity preference rounded to 0.01 precision', () => {
+    const storage = createStorage()
+
+    writeGlassPanelOpacity(0.736, storage)
+
+    expect(storage.setItem).toHaveBeenCalledWith(GLASS_PANEL_OPACITY_STORAGE_KEY, '0.74')
+  })
+
+  it('falls back without throwing when glass panel opacity storage is unavailable', () => {
+    const storage = {
+      getItem: vi.fn(() => {
+        throw new Error('blocked')
+      }),
+      setItem: vi.fn(() => {
+        throw new Error('blocked')
+      }),
+    } as Pick<Storage, 'getItem' | 'setItem'>
+
+    expect(readGlassPanelOpacity(storage)).toBe(0.92)
+    expect(() => writeGlassPanelOpacity(0.48, storage)).not.toThrow()
   })
 
   it('defaults map projection to globe and only accepts globe or mercator', () => {

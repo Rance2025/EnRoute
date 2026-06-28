@@ -47,7 +47,9 @@ import {
   readMapStyle,
   readNavigationStyle,
   readAppTheme,
+  readGlassPanelOpacity,
   writeAppTheme,
+  writeGlassPanelOpacity,
   writeMapAdminBoundariesVisible,
   writeMapLanguage,
   writeMapProjection,
@@ -56,6 +58,11 @@ import {
   writeMapStyle,
   writeNavigationStyle,
   type AppTheme,
+  GLASS_PANEL_OPACITY_MAX,
+  GLASS_PANEL_OPACITY_MIN,
+  GLASS_PANEL_OPACITY_STEP,
+  formatGlassPanelOpacity,
+  normalizeGlassPanelOpacity,
   type MapLanguagePreference,
   type MapStylePreference,
   type MapProjectionPreference,
@@ -253,6 +260,7 @@ function App(props: AppProps) {
   const [view, setView] = useState<AppView>('map')
   const [navigationStyle, setNavigationStyle] = useState<NavigationStyle>(readNavigationStyle)
   const [appTheme, setAppTheme] = useState<AppTheme>(readAppTheme)
+  const [glassPanelOpacity, setGlassPanelOpacity] = useState(readGlassPanelOpacity)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [settingsPage, setSettingsPage] = useState<SettingsPageId>('general')
   const [isMapDebugPanelVisible, setIsMapDebugPanelVisible] = useState(
@@ -310,6 +318,12 @@ function App(props: AppProps) {
   const handleAppThemeChange = useCallback((nextTheme: AppTheme) => {
     setAppTheme(nextTheme)
     writeAppTheme(nextTheme)
+  }, [])
+  const handleGlassPanelOpacityChange = useCallback((rawOpacity: string) => {
+    const nextOpacity = normalizeGlassPanelOpacity(Number(rawOpacity))
+
+    setGlassPanelOpacity(nextOpacity)
+    writeGlassPanelOpacity(nextOpacity)
   }, [])
   const handleMapDebugPanelVisibleChange = useCallback((nextVisible: boolean) => {
     setIsMapDebugPanelVisible(nextVisible)
@@ -512,6 +526,7 @@ function App(props: AppProps) {
       style={{
         '--data-panel-width': `${dataPanelWidth}px`,
         '--right-panel-width': `${rightPanelWidth}px`,
+        '--glass-panel-opacity': formatGlassPanelOpacity(glassPanelOpacity),
       } as CSSProperties}
     >
       <div className="app-board">
@@ -779,6 +794,25 @@ function App(props: AppProps) {
                           </button>
                         ))}
                       </div>
+                    </section>
+                    <section className="settings-dialog__section" aria-label="玻璃面板透明程度设置">
+                      <span>磨砂玻璃透明程度</span>
+                      <label className="settings-range-row">
+                        <input
+                          type="range"
+                          aria-label="磨砂玻璃透明程度"
+                          min={GLASS_PANEL_OPACITY_MIN}
+                          max={GLASS_PANEL_OPACITY_MAX}
+                          step={GLASS_PANEL_OPACITY_STEP}
+                          value={formatGlassPanelOpacity(glassPanelOpacity)}
+                          onChange={(event) =>
+                            handleGlassPanelOpacityChange(event.currentTarget.value)
+                          }
+                        />
+                        <span className="settings-range-row__value">
+                          {formatGlassPanelOpacity(glassPanelOpacity)}
+                        </span>
+                      </label>
                     </section>
                   </>
                 ) : null}

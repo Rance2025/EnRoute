@@ -14,6 +14,14 @@ export const APP_THEME_STORAGE_KEY = 'enroute:app-theme'
 export const MAP_PROJECTION_STORAGE_KEY = 'enroute:map-projection'
 export const MAP_STYLE_STORAGE_KEY = 'enroute:map-style'
 export const MAP_LANGUAGE_STORAGE_KEY = 'enroute:map-language'
+export const GLASS_PANEL_OPACITY_STORAGE_KEY = 'enroute:glass-panel-opacity'
+
+export const DEFAULT_GLASS_PANEL_OPACITY = 0.92
+export const GLASS_PANEL_OPACITY_MIN = 0.1
+export const GLASS_PANEL_OPACITY_MAX = 1
+export const GLASS_PANEL_OPACITY_STEP = 0.01
+
+const GLASS_PANEL_OPACITY_PRECISION = 100
 
 export function readNavigationStyle(
   storage: Pick<Storage, 'getItem'> | undefined = getBrowserStorage(),
@@ -78,6 +86,54 @@ export function writeMapDebugPanelVisible(
   } catch {
     // Local preference writes should never block the UI.
   }
+}
+
+export function readGlassPanelOpacity(
+  storage: Pick<Storage, 'getItem'> | undefined = getBrowserStorage(),
+) {
+  try {
+    const storedValue = storage?.getItem(GLASS_PANEL_OPACITY_STORAGE_KEY)
+
+    if (storedValue === undefined || storedValue === null) {
+      return DEFAULT_GLASS_PANEL_OPACITY
+    }
+
+    return normalizeGlassPanelOpacity(Number(storedValue))
+  } catch {
+    return DEFAULT_GLASS_PANEL_OPACITY
+  }
+}
+
+export function writeGlassPanelOpacity(
+  opacity: number,
+  storage: Pick<Storage, 'setItem'> | undefined = getBrowserStorage(),
+) {
+  try {
+    storage?.setItem(
+      GLASS_PANEL_OPACITY_STORAGE_KEY,
+      formatGlassPanelOpacity(normalizeGlassPanelOpacity(opacity)),
+    )
+  } catch {
+    // Local preference writes should never block the UI.
+  }
+}
+
+export function normalizeGlassPanelOpacity(opacity: unknown) {
+  if (typeof opacity !== 'number' || !Number.isFinite(opacity)) {
+    return DEFAULT_GLASS_PANEL_OPACITY
+  }
+
+  const clampedOpacity = Math.min(
+    Math.max(opacity, GLASS_PANEL_OPACITY_MIN),
+    GLASS_PANEL_OPACITY_MAX,
+  )
+
+  return Math.round(clampedOpacity * GLASS_PANEL_OPACITY_PRECISION) /
+    GLASS_PANEL_OPACITY_PRECISION
+}
+
+export function formatGlassPanelOpacity(opacity: number) {
+  return normalizeGlassPanelOpacity(opacity).toString()
 }
 
 export function readMapPlaceLabelsVisible(
