@@ -698,7 +698,7 @@ describe('MapboxCanvas footprint vector tiles', () => {
     )
   })
 
-  it('uses the single root tile for globe z0 debug metrics', async () => {
+  it('uses whole-world bounds for globe z0 debug metrics', async () => {
     const { mapRecords } = mockMapboxRuntime()
     const fetchMock = mockMetricsAndDebugFetch({
       ok: true,
@@ -732,20 +732,20 @@ describe('MapboxCanvas footprint vector tiles', () => {
 
     const debugUrl = getLastDebugRequestUrl(fetchMock)
     expect(debugUrl.searchParams.get('z')).toBe('0')
-    expect(debugUrl.searchParams.get('tiles')).toBe('0/0')
-    expect(debugUrl.searchParams.has('west')).toBe(false)
-    expect(debugUrl.searchParams.has('south')).toBe(false)
-    expect(debugUrl.searchParams.has('east')).toBe(false)
-    expect(debugUrl.searchParams.has('north')).toBe(false)
+    expect(debugUrl.searchParams.has('tiles')).toBe(false)
+    expect(debugUrl.searchParams.get('west')).toBe('-180')
+    expect(debugUrl.searchParams.get('south')).toBe('-85')
+    expect(debugUrl.searchParams.get('east')).toBe('180')
+    expect(debugUrl.searchParams.get('north')).toBe('85')
   })
 
-  it('falls back to the center z1 tile for globe debug metrics when visible source tiles are unavailable', async () => {
+  it('uses whole-world bounds for globe z1 debug metrics when visible source tiles are unavailable', async () => {
     const { mapRecords } = mockMapboxRuntime()
     const fetchMock = mockMetricsAndDebugFetch({
       ok: true,
       json: async () => ({
         tileZoom: 1,
-        requestedTileCount: 1,
+        requestedTileCount: 4,
         populatedTileCount: 1,
         readyTileCount: 1,
         dirtyTileCount: 0,
@@ -774,20 +774,20 @@ describe('MapboxCanvas footprint vector tiles', () => {
 
     const debugUrl = getLastDebugRequestUrl(fetchMock)
     expect(debugUrl.searchParams.get('z')).toBe('1')
-    expect(debugUrl.searchParams.get('tiles')).toBe('1/0')
-    expect(debugUrl.searchParams.has('west')).toBe(false)
-    expect(debugUrl.searchParams.has('south')).toBe(false)
-    expect(debugUrl.searchParams.has('east')).toBe(false)
-    expect(debugUrl.searchParams.has('north')).toBe(false)
+    expect(debugUrl.searchParams.has('tiles')).toBe(false)
+    expect(debugUrl.searchParams.get('west')).toBe('-180')
+    expect(debugUrl.searchParams.get('south')).toBe('-85')
+    expect(debugUrl.searchParams.get('east')).toBe('180')
+    expect(debugUrl.searchParams.get('north')).toBe('85')
   })
 
-  it('uses Mapbox visible z1 source tiles for globe debug metrics at fractional camera zoom', async () => {
+  it('uses whole-world bounds for globe z1 debug metrics even when visible source tiles are available', async () => {
     const { mapRecords } = mockMapboxRuntime()
     const fetchMock = mockMetricsAndDebugFetch({
       ok: true,
       json: async () => ({
         tileZoom: 1,
-        requestedTileCount: 2,
+        requestedTileCount: 4,
         populatedTileCount: 1,
         readyTileCount: 1,
         dirtyTileCount: 0,
@@ -820,20 +820,20 @@ describe('MapboxCanvas footprint vector tiles', () => {
 
     const debugUrl = getLastDebugRequestUrl(fetchMock)
     expect(debugUrl.searchParams.get('z')).toBe('1')
-    expect(debugUrl.searchParams.get('tiles')).toBe('1/0,1/1')
-    expect(debugUrl.searchParams.has('west')).toBe(false)
-    expect(debugUrl.searchParams.has('south')).toBe(false)
-    expect(debugUrl.searchParams.has('east')).toBe(false)
-    expect(debugUrl.searchParams.has('north')).toBe(false)
+    expect(debugUrl.searchParams.has('tiles')).toBe(false)
+    expect(debugUrl.searchParams.get('west')).toBe('-180')
+    expect(debugUrl.searchParams.get('south')).toBe('-85')
+    expect(debugUrl.searchParams.get('east')).toBe('180')
+    expect(debugUrl.searchParams.get('north')).toBe('85')
   })
 
-  it('prefers the detailed visible z1 source tiles over a retained globe z0 parent tile', async () => {
+  it('uses whole-world bounds for globe z1 debug metrics even when retained lower zoom tiles are visible', async () => {
     const { mapRecords } = mockMapboxRuntime()
     const fetchMock = mockMetricsAndDebugFetch({
       ok: true,
       json: async () => ({
         tileZoom: 1,
-        requestedTileCount: 1,
+        requestedTileCount: 4,
         populatedTileCount: 1,
         readyTileCount: 1,
         dirtyTileCount: 0,
@@ -866,7 +866,11 @@ describe('MapboxCanvas footprint vector tiles', () => {
 
     const debugUrl = getLastDebugRequestUrl(fetchMock)
     expect(debugUrl.searchParams.get('z')).toBe('1')
-    expect(debugUrl.searchParams.get('tiles')).toBe('1/0')
+    expect(debugUrl.searchParams.has('tiles')).toBe(false)
+    expect(debugUrl.searchParams.get('west')).toBe('-180')
+    expect(debugUrl.searchParams.get('south')).toBe('-85')
+    expect(debugUrl.searchParams.get('east')).toBe('180')
+    expect(debugUrl.searchParams.get('north')).toBe('85')
   })
 
   it('keeps bounds-based debug metrics for globe z2 and above', async () => {
