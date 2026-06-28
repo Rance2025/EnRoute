@@ -84,6 +84,17 @@ precomputed `visual_tiles` cells and encodes MVT on demand. `visual_tiles` rows
 exist only for `z/x/y/t_type/t` combinations that contain at least one footprint
 cell. Missing rows mean empty, and empty rows are not stored.
 
+Treat `visual_tiles` as a persistent precomputed visual-equivalent layer, not as
+a disposable request cache. Runtime map tile requests, tile debug requests, and
+frontend map style, language, or projection changes must only read this table;
+they must not infer global corruption from a missing row, truncate completed
+rows, or trigger a full rebuild. Rebuild it intentionally with `npm run
+prepare:footprint-tiles`, or through explicit raw-footprint rebuild/import
+compatibility and visual-algorithm migrations. For new or changed footprint
+points, preserve existing completed rows by marking only affected existing
+tile-time keys dirty and rebuilding those keys incrementally; missing keys stay
+absent until a builder produces non-empty ready cells.
+
 Optional administrative boundary data is read from
 `ADMIN_REGION_DATA_PATH=external/admin-regions.geojson`. Boundary files stay
 local unless their license permits committing them. The preferred China source
