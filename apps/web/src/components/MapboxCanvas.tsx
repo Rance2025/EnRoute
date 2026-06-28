@@ -136,6 +136,8 @@ const DEFAULT_FOOTPRINT_TILE_DEBUG_URL = '/api/map/tiles/footprints/debug'
 const DEFAULT_MAP_CENTER: [number, number] = [104.195397, 35.86166]
 const DEFAULT_MAP_ZOOM = 2.2
 const GLOBE_WORLD_ZOOM = 1.75
+const FLAT_WORLD_CENTER: [number, number] = [-30, 0]
+const FLAT_WORLD_ZOOM = 1.5
 const GLOBE_ROTATION_STEP_DEGREES = 1.2
 const GLOBE_ROTATION_INTERVAL_MS = 1000
 const MAP_FIT_BOUNDS_DURATION_MS = 900
@@ -738,17 +740,24 @@ function MapboxCanvasComponent({
 
   const showWorldMap = useCallback(() => {
     const map = mapRef.current
-    const currentCenter = map?.getCenter()
 
     if (resolvedProjection === 'globe') {
+      const currentCenter = map?.getCenter()
       startGlobeRotationAfterMove()
-    } else {
-      stopGlobeRotation()
+
+      map?.flyTo({
+        center: currentCenter ? [currentCenter.lng, currentCenter.lat] : DEFAULT_MAP_CENTER,
+        zoom: GLOBE_WORLD_ZOOM,
+        bearing: 0,
+        pitch: 0,
+      })
+      return
     }
 
+    stopGlobeRotation()
     map?.flyTo({
-      center: currentCenter ? [currentCenter.lng, currentCenter.lat] : DEFAULT_MAP_CENTER,
-      zoom: resolvedProjection === 'globe' ? GLOBE_WORLD_ZOOM : DEFAULT_MAP_ZOOM,
+      center: FLAT_WORLD_CENTER,
+      zoom: FLAT_WORLD_ZOOM,
       bearing: 0,
       pitch: 0,
     })

@@ -603,6 +603,32 @@ describe('MapboxCanvas footprint vector tiles', () => {
     ])
   })
 
+  it('returns the flat map world view to the Atlantic-centered equator at zoom 1.5', async () => {
+    const { mapRecords } = mockMapboxRuntime()
+    const { MapboxCanvas } = await import('./MapboxCanvas')
+
+    render(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        projection="mercator"
+        timeRange={selectedRange}
+      />,
+    )
+
+    mapRecords[0].setCenter([104, 35])
+    fireEvent.click(screen.getByRole('button', { name: '显示世界地图' }))
+
+    expect(mapRecords[0].flyToCalls).toEqual([
+      {
+        center: [-30, 0],
+        zoom: 1.5,
+        bearing: 0,
+        pitch: 0,
+      },
+    ])
+    expect(mapRecords[0].easeToCalls).toEqual([])
+  })
+
   it('stops globe rotation when the user zooms after entering the world view', async () => {
     vi.useFakeTimers()
     const { mapRecords } = mockMapboxRuntime()
