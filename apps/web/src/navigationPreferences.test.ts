@@ -106,15 +106,15 @@ describe('navigationPreferences', () => {
   })
 
   it('normalizes the shared glass panel opacity preference', () => {
-    expect(readGlassPanelOpacity(createStorage())).toBe(0.92)
+    expect(readGlassPanelOpacity(createStorage())).toBe(0.7)
     expect(readGlassPanelOpacity(createStorage('0.48', GLASS_PANEL_OPACITY_STORAGE_KEY)))
       .toBe(0.48)
-    expect(readGlassPanelOpacity(createStorage('0.02', GLASS_PANEL_OPACITY_STORAGE_KEY)))
-      .toBe(0.1)
+    expect(readGlassPanelOpacity(createStorage('-0.2', GLASS_PANEL_OPACITY_STORAGE_KEY)))
+      .toBe(0)
     expect(readGlassPanelOpacity(createStorage('1.4', GLASS_PANEL_OPACITY_STORAGE_KEY)))
       .toBe(1)
     expect(readGlassPanelOpacity(createStorage('wide', GLASS_PANEL_OPACITY_STORAGE_KEY)))
-      .toBe(0.92)
+      .toBe(0.7)
   })
 
   it('writes the shared glass panel opacity preference rounded to 0.01 precision', () => {
@@ -135,7 +135,7 @@ describe('navigationPreferences', () => {
       }),
     } as Pick<Storage, 'getItem' | 'setItem'>
 
-    expect(readGlassPanelOpacity(storage)).toBe(0.92)
+    expect(readGlassPanelOpacity(storage)).toBe(0.7)
     expect(() => writeGlassPanelOpacity(0.48, storage)).not.toThrow()
   })
 
