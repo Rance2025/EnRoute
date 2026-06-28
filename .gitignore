@@ -34,6 +34,7 @@ dist-ssr
 .worktrees/
 output/
 test-results/
+tmp/
 
 # Local persistent application data
 data/
@@ -44,6 +45,12 @@ public/local/
 
 # Local design/debug screenshots
 enroute-*.png
+accounting-*.png
+footprint-*.png
+map-*.png
+month-picker-*.png
+time-panel-*.png
+week-picker-*.png
 
 # Editor directories and files
 .vscode/*
