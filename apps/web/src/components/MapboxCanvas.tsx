@@ -442,6 +442,7 @@ function MapboxCanvasComponent({
         style: latestResolvedStyleUrlRef.current,
         center: DEFAULT_MAP_CENTER,
         zoom: resolvedProjection === 'globe' ? GLOBE_WORLD_ZOOM : DEFAULT_MAP_ZOOM,
+        minZoom: 0,
         maxZoom: MAX_FOOTPRINT_TILE_ZOOM,
         minPitch: 0,
         maxPitch: 0,
