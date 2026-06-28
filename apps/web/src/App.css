@@ -9,7 +9,7 @@
   --theme-mist-board-start: rgba(225, 234, 233, 0.86);
   --theme-mist-board-end: rgba(180, 193, 194, 0.92);
   --theme-mist-board-base: #b4c0c1;
-  --glass-panel-opacity: 0.92;
+  --glass-panel-opacity: 0.7;
   --theme-mist-glass-highlight: rgba(255, 255, 255, calc(var(--glass-panel-opacity) * 0.652));
   --theme-mist-glass-start: rgba(253, 255, 254, calc(var(--glass-panel-opacity) * 0.717));
   --theme-mist-glass-end: rgba(238, 246, 244, calc(var(--glass-panel-opacity) * 0.478));
@@ -51,12 +51,35 @@
 }
 
 .glass-panel {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   border: 1px solid var(--glass-panel-border);
   color: #17231f;
   background: var(--solid-glass-panel-bg);
   box-shadow: var(--glass-panel-shadow);
   backdrop-filter: var(--glass-panel-filter);
   -webkit-backdrop-filter: var(--glass-panel-filter);
+}
+
+.glass-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  background:
+    radial-gradient(circle at 18% 0%, rgba(255, 255, 255, 0.48), transparent 32%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.04) 56%, rgba(16, 32, 29, 0.03));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.52),
+    inset 0 -1px 0 rgba(18, 35, 32, 0.05);
+  pointer-events: none;
+}
+
+.glass-panel > * {
+  position: relative;
+  z-index: 1;
 }
 
 .glass-panel--solid {

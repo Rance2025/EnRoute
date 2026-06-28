@@ -524,13 +524,13 @@ describe('App', () => {
     const opacitySlider = within(dialog).getByLabelText('磨砂玻璃透明程度')
 
     expect(opacitySlider).toHaveAttribute('type', 'range')
-    expect(opacitySlider).toHaveAttribute('min', '0.1')
+    expect(opacitySlider).toHaveAttribute('min', '0')
     expect(opacitySlider).toHaveAttribute('max', '1')
     expect(opacitySlider).toHaveAttribute('step', '0.01')
-    expect(opacitySlider).toHaveValue('0.92')
-    expect(within(dialog).getByText('0.92')).toHaveClass('settings-range-row__value')
+    expect(opacitySlider).toHaveValue('0.7')
+    expect(within(dialog).getByText('0.7')).toHaveClass('settings-range-row__value')
     expect(within(dialog).queryByLabelText('磨砂玻璃透明程度数值')).not.toBeInTheDocument()
-    expect(screen.getByRole('main')).toHaveStyle({ '--glass-panel-opacity': '0.92' })
+    expect(screen.getByRole('main')).toHaveStyle({ '--glass-panel-opacity': '0.7' })
 
     fireEvent.change(opacitySlider, { target: { value: '0.48' } })
 

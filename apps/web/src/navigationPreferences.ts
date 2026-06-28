@@ -16,8 +16,8 @@ export const MAP_STYLE_STORAGE_KEY = 'enroute:map-style'
 export const MAP_LANGUAGE_STORAGE_KEY = 'enroute:map-language'
 export const GLASS_PANEL_OPACITY_STORAGE_KEY = 'enroute:glass-panel-opacity'
 
-export const DEFAULT_GLASS_PANEL_OPACITY = 0.92
-export const GLASS_PANEL_OPACITY_MIN = 0.1
+export const DEFAULT_GLASS_PANEL_OPACITY = 0.7
+export const GLASS_PANEL_OPACITY_MIN = 0
 export const GLASS_PANEL_OPACITY_MAX = 1
 export const GLASS_PANEL_OPACITY_STEP = 0.01
 

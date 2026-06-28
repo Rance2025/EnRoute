@@ -36,6 +36,11 @@ function expectMaterialRule(rule: string) {
   expect(rule).toContain('box-shadow: var(--glass-panel-shadow)')
   expect(rule).toContain('backdrop-filter: var(--glass-panel-filter)')
   expect(rule).toContain('-webkit-backdrop-filter: var(--glass-panel-filter)')
+  expect(rule).toContain('position: relative')
+  expect(rule).toContain('isolation: isolate')
+  expect(rule).toContain('overflow: hidden')
+  expect(cssRule('.glass-panel::before')).toContain('background:')
+  expect(cssRule('.glass-panel::before')).toContain('pointer-events: none')
 }
 
 function expectNoOwnedGlassMaterial(rule: string) {
@@ -162,7 +167,7 @@ describe('map chrome layout', () => {
     expect(appShellRule).toContain('--right-panel-width: var(--secondary-rail-width)')
     expect(appShellRule).toContain('--glass-panel-bg:')
     expect(appShellRule).toContain('--glass-panel-filter: blur(24px) saturate(1.22) brightness(1.02)')
-    expect(appShellRule).toContain('--glass-panel-opacity: 0.92')
+    expect(appShellRule).toContain('--glass-panel-opacity: 0.7')
     expect(appShellRule).toContain('--theme-mist-board-start: rgba(225, 234, 233, 0.86)')
     expect(appShellRule).toContain('--theme-mist-board-end: rgba(180, 193, 194, 0.92)')
     expect(appShellRule).toContain('--theme-mist-board-base: #b4c0c1')
@@ -1738,7 +1743,7 @@ describe('map chrome layout', () => {
     const appShellRule = cssRule('.app-shell')
 
     expect(appShellRule).toContain('--solid-glass-panel-bg:')
-    expect(appShellRule).toContain('--glass-panel-opacity: 0.92')
+    expect(appShellRule).toContain('--glass-panel-opacity: 0.7')
     expect(appShellRule).toContain(
       '--theme-mist-solid-start: rgba(250, 252, 251, calc(var(--glass-panel-opacity) * 1.022))',
     )
