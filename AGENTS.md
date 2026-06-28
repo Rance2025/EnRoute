@@ -85,10 +85,19 @@ VITE_AMAP_SECURITY_CODE=your-amap-security-js-code
 - 不覆盖用户已有改动；遇到无关改动时保持原样。
 - 对行为变更优先补测试，再改实现。地图相机、缩放、配置、UI 文案和布局约束都应有针对性测试。
 - 视觉类改动除了测试、lint、build，还要用浏览器实测，必要时保存本地截图；截图属于本地调试产物，不提交。
-- `visual_tiles` 是本地 SQLite 中已经完成计算的足迹视觉等价预计算夹层，不是可随手清空的临时缓存。地图瓦片读取、瓦片 debug、地图样式/语言/投影切换等运行时路径只能读取它，不能因为缺行或空表自动全量重建，也不能无明确迁移或重建意图地 `DELETE FROM visual_tiles`；新增或修改足迹时应保留已有 ready 行，只标记和重建受影响的 tile-time key。
 - 跨导航页的左侧时间/数据面板必须保持同构；其位置、外边距、内边距、间距、背景和溢出策略应由共享左栏选择器统一控制，不要为了某个分页面在 `.app-shell--<view>` 下单独改动左侧面板位置或尺寸。若页面内容需要对齐，优先调整右侧工作区布局，不能破坏左侧同构区域。
 - 修改高德控件位置时优先使用高德 API 的 `position` 参数，不要用复杂 CSS 覆盖高德内部控件位置，避免运行时坐标计算异常。当前地图不使用高德 `ControlBar`/罗盘。
 - 后续海量点和轨迹渲染不要用 React DOM marker 堆叠；优先考虑高德 Loca/WebGL、视口加载、聚合、抽稀和服务端切片。
+
+## SQLite 与视觉瓦片数据约定
+
+- `data/footprints.sqlite` 是本地持久应用数据，不是临时缓存；`footprints` / `footprint_spatial` 是原始事实层，`visual_tiles` 是已经完成计算的足迹视觉等价预计算层。
+- 地图瓦片读取、瓦片 debug、地图样式/语言/投影切换等运行时路径只能读取 `visual_tiles`，不能因为缺行、空结果或样式切换自动全量重建，不能执行无范围的 `DELETE FROM visual_tiles`。
+- `visual_tiles` 缺行的语义是该 `z/x/y/t_type/t` 当前为空或没有可服务的预计算结果，不是全局损坏信号。若发现 `footprints > 0` 但 `visual_tiles = 0`，先按本地数据异常排查并向用户报告，不要在请求路径自动修复。
+- 允许清理或重建 `visual_tiles` 的场景只有：用户明确要求重建、运行 `npm run prepare:footprint-tiles`、原始足迹兼容性重建、视觉算法签名迁移、或明确受影响 tile-time key 的增量重建。
+- 追加或修改足迹时，应保留已有 ready 行，只把已经存在且受影响的 `visual_tiles` 行标记 dirty；缺失 key 不写 dirty 占位，等显式构建器产出非空 cells 后再插入 ready 行。
+- 修改任何会写入 SQLite 的代码前，必须先搜索 `DELETE FROM visual_tiles`、`DROP TABLE`、`data/footprints.sqlite`、`build_visual_tiles`，说明写入范围，并补测试证明不会误删已完成预计算瓦片。
+- SQLite 可以支持多读和单写并发，但本项目当前没有把全量构建设计成常规运行时写入路径。小范围 dirty 重建可以和读取共存；全量 `npm run prepare:footprint-tiles` 应视为显式维护任务，执行前应确认服务状态和用户意图，不能由地图请求自动触发。
 
 ## 验证要求
 
