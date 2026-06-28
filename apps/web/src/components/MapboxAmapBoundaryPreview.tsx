@@ -111,9 +111,10 @@ export function MapboxAmapBoundaryPreview({
         adcode: district.adcode ?? nextSample.keyword,
         level: nextSample.level,
         paths,
+        targetCoordinateSystem: 'wgs84',
       })
       upsertBoundaryOverlay(map, geoJson)
-      map.fitBounds(calculatePathBounds(paths), {
+      map.fitBounds(calculateGeoJsonBounds(geoJson), {
         padding: 96,
         duration: 700,
       })
@@ -304,18 +305,22 @@ function upsertBoundaryOverlay(
   }
 }
 
-function calculatePathBounds(paths: AmapBoundaryPath[]) {
+function calculateGeoJsonBounds(geoJson: DistrictBoundaryFeatureCollection) {
   let west = Number.POSITIVE_INFINITY
   let south = Number.POSITIVE_INFINITY
   let east = Number.NEGATIVE_INFINITY
   let north = Number.NEGATIVE_INFINITY
 
-  for (const path of paths) {
-    for (const [lng, lat] of path) {
-      west = Math.min(west, lng)
-      south = Math.min(south, lat)
-      east = Math.max(east, lng)
-      north = Math.max(north, lat)
+  for (const feature of geoJson.features) {
+    for (const polygon of feature.geometry.coordinates) {
+      for (const ring of polygon) {
+        for (const [lng, lat] of ring) {
+          west = Math.min(west, lng)
+          south = Math.min(south, lat)
+          east = Math.max(east, lng)
+          north = Math.max(north, lat)
+        }
+      }
     }
   }
 

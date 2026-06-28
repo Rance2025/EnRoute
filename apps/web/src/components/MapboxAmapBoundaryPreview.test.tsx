@@ -27,7 +27,11 @@ describe('MapboxAmapBoundaryPreview', () => {
           name: '浦东新区',
           adcode: '310115',
           boundaries: [
-            [lngLat(121, 31), lngLat(122, 31), lngLat(121, 31)],
+            [
+              lngLat(116.403372, 39.917931),
+              lngLat(116.404372, 39.917931),
+              lngLat(116.403372, 39.918931),
+            ],
           ],
         }],
       })
@@ -88,12 +92,17 @@ describe('MapboxAmapBoundaryPreview', () => {
     mapEvents.get('load')?.forEach((callback) => callback())
 
     await waitFor(() => expect(districtSearch).toHaveBeenCalledWith('310115', expect.any(Function)))
+    const overlayData = addSource.mock.calls[0]?.[1]?.data
     expect(addSource).toHaveBeenCalledWith('amap-boundary-preview', expect.objectContaining({
       type: 'geojson',
       data: expect.objectContaining({
         type: 'FeatureCollection',
       }),
     }))
+    expect(overlayData.features[0].geometry.coordinates[0][0][0]).toEqual([
+      expect.closeTo(116.397128, 6),
+      expect.closeTo(39.916527, 6),
+    ])
     expect(addLayer).toHaveBeenCalledWith(expect.objectContaining({
       id: 'amap-boundary-preview-fill',
       type: 'fill',
@@ -104,7 +113,18 @@ describe('MapboxAmapBoundaryPreview', () => {
       type: 'line',
       source: 'amap-boundary-preview',
     }))
-    expect(fitBounds).toHaveBeenCalled()
+    const overlayRing = overlayData.features[0].geometry.coordinates[0][0]
+    const west = Math.min(...overlayRing.map(([lng]) => lng))
+    const south = Math.min(...overlayRing.map(([, lat]) => lat))
+    const east = Math.max(...overlayRing.map(([lng]) => lng))
+    const north = Math.max(...overlayRing.map(([, lat]) => lat))
+    expect(fitBounds).toHaveBeenCalledWith(
+      [
+        [west, south],
+        [east, north],
+      ],
+      expect.objectContaining({ padding: 96 }),
+    )
     expect(await screen.findByText('1 条边界')).toBeInTheDocument()
     expect(screen.getByText('3 个点')).toBeInTheDocument()
   })

@@ -42,8 +42,8 @@ describe('AMap district boundary parsing', () => {
       adcode: '310115',
       level: 'district',
       paths: [
-        [[121, 31], [122, 31], [121, 31]],
-        [[120, 30], [121, 30], [120, 30]],
+        [[121, 31], [122, 31], [121.5, 32]],
+        [[120, 30], [121, 30], [120.5, 31]],
       ],
     })).toEqual({
       type: 'FeatureCollection',
@@ -59,11 +59,43 @@ describe('AMap district boundary parsing', () => {
         geometry: {
           type: 'MultiPolygon',
           coordinates: [
-            [[[121, 31], [122, 31], [121, 31]]],
-            [[[120, 30], [121, 30], [120, 30]]],
+            [[[121, 31], [122, 31], [121.5, 32], [121, 31]]],
+            [[[120, 30], [121, 30], [120.5, 31], [120, 30]]],
           ],
         },
       }],
     })
+  })
+
+  it('drops degenerate rings that cannot form valid GeoJSON polygons', () => {
+    expect(createDistrictBoundaryGeoJson({
+      name: 'invalid',
+      adcode: '000000',
+      level: 'district',
+      paths: [
+        [[121, 31], [122, 31], [121, 31]],
+      ],
+    }).features[0].geometry.coordinates).toEqual([])
+  })
+
+  it('converts AMap GCJ-02 boundary paths to WGS84 for Mapbox overlays', () => {
+    const geoJson = createDistrictBoundaryGeoJson({
+      name: '北京市',
+      adcode: '110000',
+      level: 'province',
+      targetCoordinateSystem: 'wgs84',
+      paths: [
+        [
+          [116.403372, 39.917931],
+          [116.404372, 39.917931],
+          [116.403372, 39.918931],
+        ],
+      ],
+    })
+
+    expect(geoJson.features[0].geometry.coordinates[0][0][0]).toEqual([
+      expect.closeTo(116.397128, 6),
+      expect.closeTo(39.916527, 6),
+    ])
   })
 })

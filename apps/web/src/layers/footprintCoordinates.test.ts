@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import { transformFootprintCoordinate } from './footprintCoordinates'
+import {
+  transformFootprintCoordinate,
+  transformGcj02ToWgs84Coordinate,
+} from './footprintCoordinates'
 
 describe('transformFootprintCoordinate', () => {
   it('converts WGS84 coordinates inside China to GCJ-02', () => {
@@ -44,4 +47,46 @@ describe('transformFootprintCoordinate', () => {
       })
     },
   )
+})
+
+describe('transformGcj02ToWgs84Coordinate', () => {
+  it('converts GCJ-02 coordinates inside China back to WGS84', () => {
+    expect(
+      transformGcj02ToWgs84Coordinate({
+        longitude: 116.403372,
+        latitude: 39.917931,
+      }),
+    ).toEqual({
+      longitude: expect.closeTo(116.397128, 6),
+      latitude: expect.closeTo(39.916527, 6),
+    })
+  })
+
+  it('keeps GCJ-02 coordinates outside China unchanged', () => {
+    expect(
+      transformGcj02ToWgs84Coordinate({
+        longitude: -122.4194,
+        latitude: 37.7749,
+      }),
+    ).toEqual({
+      longitude: -122.4194,
+      latitude: 37.7749,
+    })
+  })
+
+  it('round-trips WGS84 coordinates through GCJ-02 with sub-meter drift', () => {
+    const wgs84Coordinate = {
+      longitude: 121.473701,
+      latitude: 31.230416,
+    }
+    const gcj02Coordinate = transformFootprintCoordinate({
+      ...wgs84Coordinate,
+      sourceCoordinateSystem: 'wgs84',
+    })
+
+    expect(transformGcj02ToWgs84Coordinate(gcj02Coordinate)).toEqual({
+      longitude: expect.closeTo(wgs84Coordinate.longitude, 6),
+      latitude: expect.closeTo(wgs84Coordinate.latitude, 6),
+    })
+  })
 })

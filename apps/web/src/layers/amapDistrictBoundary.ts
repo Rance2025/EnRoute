@@ -1,3 +1,5 @@
+import { transformGcj02ToWgs84Coordinate } from './footprintCoordinates'
+
 type AmapBoundaryLngLat = {
   getLng?: () => number
   getLat?: () => number
@@ -17,6 +19,7 @@ export type DistrictBoundaryGeoJsonInput = {
   adcode: string
   level: AMap.DistrictSearchLevel
   paths: AmapBoundaryPath[]
+  targetCoordinateSystem?: 'gcj02' | 'wgs84'
 }
 
 export type DistrictBoundaryFeatureCollection = {
@@ -59,8 +62,16 @@ export function createDistrictBoundaryGeoJson({
   adcode,
   level,
   paths,
+  targetCoordinateSystem = 'gcj02',
 }: DistrictBoundaryGeoJsonInput): DistrictBoundaryFeatureCollection {
   const summary = summarizeDistrictBoundary(paths)
+  const coordinates = paths
+    .map((path) => targetCoordinateSystem === 'wgs84'
+      ? path.map(transformAmapPointToWgs84)
+      : path)
+    .map(normalizeGeoJsonLinearRing)
+    .filter((path): path is AmapBoundaryPath => path !== null)
+    .map((path) => [path])
 
   return {
     type: 'FeatureCollection',
@@ -75,7 +86,7 @@ export function createDistrictBoundaryGeoJson({
       },
       geometry: {
         type: 'MultiPolygon',
-        coordinates: paths.map((path) => [path]),
+        coordinates,
       },
     }],
   }
@@ -108,4 +119,25 @@ function extractLngLat(point: unknown): AMap.LngLatLike | null {
     : Number(amapPoint.lat)
 
   return Number.isFinite(lng) && Number.isFinite(lat) ? [lng, lat] : null
+}
+
+function transformAmapPointToWgs84([longitude, latitude]: AMap.LngLatLike): AMap.LngLatLike {
+  const transformedCoordinate = transformGcj02ToWgs84Coordinate({ longitude, latitude })
+
+  return [transformedCoordinate.longitude, transformedCoordinate.latitude]
+}
+
+function normalizeGeoJsonLinearRing(path: AmapBoundaryPath): AmapBoundaryPath | null {
+  if (path.length < 3) return null
+
+  const closedPath = isSameLngLat(path[0], path[path.length - 1])
+    ? path
+    : [...path, path[0]]
+  const uniquePointCount = new Set(closedPath.map(([lng, lat]) => `${lng},${lat}`)).size
+
+  return closedPath.length >= 4 && uniquePointCount >= 3 ? closedPath : null
+}
+
+function isSameLngLat([leftLng, leftLat]: AMap.LngLatLike, [rightLng, rightLat]: AMap.LngLatLike) {
+  return leftLng === rightLng && leftLat === rightLat
 }
