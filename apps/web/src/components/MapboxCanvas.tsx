@@ -64,6 +64,9 @@ type MapboxCanvasEnv = {
 type MapboxProjection = 'globe' | 'mercator'
 type MapboxLanguage = 'zh-Hans' | 'en'
 type MapboxLanguagePreference = 'auto' | MapboxLanguage
+type LanguageConfigurableMap = mapboxgl.Map & {
+  setLanguage?: (language?: MapboxLanguage) => mapboxgl.Map
+}
 type EnRouteMapboxOptions = ConstructorParameters<typeof mapboxgl.Map>[0] & {
   language?: MapboxLanguage
   worldview: 'CN'
@@ -152,7 +155,10 @@ function MapboxCanvasComponent({
   const [cameraZoom, setCameraZoom] = useState<number | undefined>(undefined)
   const [tileDebugMetrics, setTileDebugMetrics] = useState<FootprintTileDebugMetrics | null>(null)
   const [styleReady, setStyleReady] = useState(false)
+  const [styleLoadRevision, setStyleLoadRevision] = useState(0)
   const footprintStyleRef = useRef(footprintStyle)
+  const languageRef = useRef(language)
+  const appliedLanguageRef = useRef<MapboxLanguage | undefined>(undefined)
   const selectedFootprintBoundsRef = useRef<FootprintLngLatBounds | null>(null)
   const baseMapVisibilityRecordsRef = useRef<BaseMapVisibilityRecord[]>([])
   const hiddenBaseMapConfigOverridesRef = useRef<Set<BaseMapConfigPropertyName>>(new Set())
@@ -201,6 +207,10 @@ function MapboxCanvasComponent({
   useEffect(() => {
     latestResolvedStyleUrlRef.current = resolvedStyleUrl
   }, [resolvedStyleUrl])
+
+  useEffect(() => {
+    languageRef.current = language
+  }, [language])
 
   const refreshFootprintLayer = useCallback((
     range: FootprintVectorTileRange,
@@ -455,9 +465,10 @@ function MapboxCanvasComponent({
         fadeDuration: 0,
         worldview: 'CN',
       }
-      if (language) {
-        mapOptions.language = language
+      if (languageRef.current) {
+        mapOptions.language = languageRef.current
       }
+      appliedLanguageRef.current = languageRef.current
 
       const map = new mapboxgl.Map(mapOptions)
       mapRef.current = map
@@ -474,6 +485,7 @@ function MapboxCanvasComponent({
       const handleStyleLoad = () => {
         if (disposed) return
 
+        setStyleLoadRevision((revision) => revision + 1)
         setStyleReady(true)
         setStatus('ready')
       }
@@ -536,12 +548,21 @@ function MapboxCanvasComponent({
   }, [
     clearGlobeRotationTimer,
     resolvedAccessToken,
-    language,
     resolvedProjection,
     resetBaseMapVisibilityState,
     startGlobeRotation,
     stopGlobeRotation,
   ])
+
+  useEffect(() => {
+    const map = mapRef.current as LanguageConfigurableMap | null
+
+    if (!map || status !== 'ready') return
+    if (appliedLanguageRef.current === language) return
+
+    map.setLanguage?.(language)
+    appliedLanguageRef.current = language
+  }, [language, status])
 
   useEffect(() => {
     const map = mapRef.current
@@ -560,7 +581,7 @@ function MapboxCanvasComponent({
     if (status !== 'ready' || !styleReady) return
 
     refreshFootprintLayer(footprintTileRange, resolvedTileUrl)
-  }, [footprintTileRange, refreshFootprintLayer, resolvedTileUrl, status, styleReady])
+  }, [footprintTileRange, refreshFootprintLayer, resolvedTileUrl, status, styleLoadRevision, styleReady])
 
   useEffect(() => {
     if (status !== 'ready' || !styleReady) return
@@ -569,6 +590,7 @@ function MapboxCanvasComponent({
   }, [
     adminBoundariesVisible,
     placeLabelsVisible,
+    styleLoadRevision,
     styleReady,
     status,
     updateBaseMapLayerVisibility,
