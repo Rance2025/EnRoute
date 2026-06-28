@@ -629,6 +629,86 @@ describe('MapboxCanvas footprint vector tiles', () => {
     expect(mapRecords[0].easeToCalls).toHaveLength(1)
   })
 
+  it('keeps globe rotation stopped after switching styles from a zoomed-in view', async () => {
+    vi.useFakeTimers()
+    const { mapRecords } = mockMapboxRuntime({ styleReadyOnIdle: true })
+    const { MapboxCanvas } = await import('./MapboxCanvas')
+
+    const { rerender } = render(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        projection="globe"
+        styleUrl="mapbox://styles/enroute/day"
+        timeRange={selectedRange}
+      />,
+    )
+
+    mapRecords[0].setCenter([12, 34])
+    mapRecords[0].setZoom(6)
+    act(() => mapRecords[0].emit('idle'))
+    expect(mapRecords[0].easeToCalls).toHaveLength(1)
+
+    act(() => mapRecords[0].emit('zoomstart'))
+    act(() => {
+      vi.advanceTimersByTime(1000)
+    })
+    expect(mapRecords[0].easeToCalls).toHaveLength(1)
+
+    rerender(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        projection="globe"
+        styleUrl="mapbox://styles/enroute/night"
+        timeRange={selectedRange}
+      />,
+    )
+
+    act(() => mapRecords[0].emit('style.load'))
+    act(() => mapRecords[0].emit('style.import.load'))
+    act(() => mapRecords[0].emit('idle'))
+    act(() => {
+      vi.advanceTimersByTime(1000)
+    })
+
+    expect(mapRecords[0].setStyleCalls).toEqual(['mapbox://styles/enroute/night'])
+    expect(mapRecords[0].easeToCalls).toHaveLength(1)
+  })
+
+  it('resumes globe rotation after switching styles when the world view was rotating', async () => {
+    vi.useFakeTimers()
+    const { mapRecords } = mockMapboxRuntime({ styleReadyOnIdle: true })
+    const { MapboxCanvas } = await import('./MapboxCanvas')
+
+    const { rerender } = render(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        projection="globe"
+        styleUrl="mapbox://styles/enroute/day"
+        timeRange={selectedRange}
+      />,
+    )
+
+    mapRecords[0].setCenter([12, 34])
+    act(() => mapRecords[0].emit('idle'))
+    expect(mapRecords[0].easeToCalls).toHaveLength(1)
+
+    rerender(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        projection="globe"
+        styleUrl="mapbox://styles/enroute/night"
+        timeRange={selectedRange}
+      />,
+    )
+
+    act(() => mapRecords[0].emit('style.load'))
+    act(() => mapRecords[0].emit('style.import.load'))
+    act(() => mapRecords[0].emit('idle'))
+
+    expect(mapRecords[0].setStyleCalls).toEqual(['mapbox://styles/enroute/night'])
+    expect(mapRecords[0].easeToCalls).toHaveLength(2)
+  })
+
   it('pauses globe rotation before dragging and resumes after drag release', async () => {
     vi.useFakeTimers()
     const { mapRecords } = mockMapboxRuntime()
