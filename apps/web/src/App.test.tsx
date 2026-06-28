@@ -515,6 +515,31 @@ describe('App', () => {
     expect(window.localStorage.getItem('enroute:app-theme')).toBe('mist')
   })
 
+  it('exposes shared glass panel opacity as a slider-only general setting', () => {
+    render(<App amapConfig={missingAmapConfig} />)
+
+    fireEvent.click(screen.getByRole('button', { name: '打开设置' }))
+
+    const dialog = screen.getByRole('dialog', { name: '设置' })
+    const opacitySlider = within(dialog).getByLabelText('磨砂玻璃透明程度')
+
+    expect(opacitySlider).toHaveAttribute('type', 'range')
+    expect(opacitySlider).toHaveAttribute('min', '0.1')
+    expect(opacitySlider).toHaveAttribute('max', '1')
+    expect(opacitySlider).toHaveAttribute('step', '0.01')
+    expect(opacitySlider).toHaveValue('0.92')
+    expect(within(dialog).getByText('0.92')).toHaveClass('settings-range-row__value')
+    expect(within(dialog).queryByLabelText('磨砂玻璃透明程度数值')).not.toBeInTheDocument()
+    expect(screen.getByRole('main')).toHaveStyle({ '--glass-panel-opacity': '0.92' })
+
+    fireEvent.change(opacitySlider, { target: { value: '0.48' } })
+
+    expect(opacitySlider).toHaveValue('0.48')
+    expect(within(dialog).getByText('0.48')).toHaveClass('settings-range-row__value')
+    expect(screen.getByRole('main')).toHaveStyle({ '--glass-panel-opacity': '0.48' })
+    expect(window.localStorage.getItem('enroute:glass-panel-opacity')).toBe('0.48')
+  })
+
   it('switches settings pages and leaves accounting and schedule pages as empty states', () => {
     render(<App amapConfig={missingAmapConfig} />)
 

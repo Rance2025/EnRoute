@@ -162,10 +162,13 @@ describe('map chrome layout', () => {
     expect(appShellRule).toContain('--right-panel-width: var(--secondary-rail-width)')
     expect(appShellRule).toContain('--glass-panel-bg:')
     expect(appShellRule).toContain('--glass-panel-filter: blur(24px) saturate(1.22) brightness(1.02)')
+    expect(appShellRule).toContain('--glass-panel-opacity: 0.92')
     expect(appShellRule).toContain('--theme-mist-board-start: rgba(225, 234, 233, 0.86)')
     expect(appShellRule).toContain('--theme-mist-board-end: rgba(180, 193, 194, 0.92)')
     expect(appShellRule).toContain('--theme-mist-board-base: #b4c0c1')
-    expect(appShellRule).toContain('--theme-mist-glass-end: rgba(238, 246, 244, 0.44)')
+    expect(appShellRule).toContain(
+      '--theme-mist-glass-end: rgba(238, 246, 244, calc(var(--glass-panel-opacity) * 0.478))',
+    )
     expect(appShellRule).toContain('background: transparent')
     expect(cssRule('.app-shell:not(.app-shell--map)')).toContain('background: var(--page-board-bg)')
     expect(appSource).toContain('className="app-board"')
@@ -1735,9 +1738,16 @@ describe('map chrome layout', () => {
     const appShellRule = cssRule('.app-shell')
 
     expect(appShellRule).toContain('--solid-glass-panel-bg:')
-    expect(appShellRule).toContain('--theme-mist-solid-start: rgba(250, 252, 251, 0.94)')
-    expect(appShellRule).toContain('--theme-mist-solid-end: rgba(232, 242, 240, 0.84)')
-    expect(appShellRule).toContain('--theme-mist-solid-base: rgba(239, 246, 244, 0.92)')
+    expect(appShellRule).toContain('--glass-panel-opacity: 0.92')
+    expect(appShellRule).toContain(
+      '--theme-mist-solid-start: rgba(250, 252, 251, calc(var(--glass-panel-opacity) * 1.022))',
+    )
+    expect(appShellRule).toContain(
+      '--theme-mist-solid-end: rgba(232, 242, 240, calc(var(--glass-panel-opacity) * 0.913))',
+    )
+    expect(appShellRule).toContain(
+      '--theme-mist-solid-base: rgba(239, 246, 244, var(--glass-panel-opacity))',
+    )
     expect(appShellRule).toContain('linear-gradient(145deg, var(--theme-mist-solid-start), var(--theme-mist-solid-end))')
     expect(appShellRule).toContain('var(--theme-mist-solid-base)')
     expect(amapCanvasSource).toContain('className="glass-panel glass-panel--solid glass-panel--compact footprint-debug-panel"')

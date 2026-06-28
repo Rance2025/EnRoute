@@ -29,6 +29,7 @@ dist-ssr
 !.env.example
 
 # Local tooling output
+.playwright-cli/
 .playwright-mcp/
 .superpowers/
 .worktrees/
