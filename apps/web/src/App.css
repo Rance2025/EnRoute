@@ -17,6 +17,11 @@
   --theme-mist-solid-start: rgba(250, 252, 251, calc(var(--glass-panel-opacity) * 1.022));
   --theme-mist-solid-end: rgba(232, 242, 240, calc(var(--glass-panel-opacity) * 0.913));
   --theme-mist-solid-base: rgba(239, 246, 244, var(--glass-panel-opacity));
+  --theme-mist-glass-sheen-strong: rgba(255, 255, 255, calc(var(--glass-panel-opacity) * 0.686));
+  --theme-mist-glass-sheen-soft: rgba(255, 255, 255, calc(var(--glass-panel-opacity) * 0.314));
+  --theme-mist-glass-sheen-faint: rgba(255, 255, 255, calc(var(--glass-panel-opacity) * 0.057));
+  --theme-mist-glass-edge-top: rgba(255, 255, 255, calc(var(--glass-panel-opacity) * 0.743));
+  --theme-mist-glass-edge-bottom: rgba(18, 35, 32, calc(var(--glass-panel-opacity) * 0.071));
   --glass-panel-bg:
     radial-gradient(circle at 24% 0%, var(--theme-mist-glass-highlight), transparent 26%),
     linear-gradient(145deg, var(--theme-mist-glass-start), var(--theme-mist-glass-end));
@@ -69,11 +74,11 @@
   z-index: 0;
   border-radius: inherit;
   background:
-    radial-gradient(circle at 18% 0%, rgba(255, 255, 255, 0.48), transparent 32%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.04) 56%, rgba(16, 32, 29, 0.03));
+    radial-gradient(circle at 18% 0%, var(--theme-mist-glass-sheen-strong), transparent 32%),
+    linear-gradient(135deg, var(--theme-mist-glass-sheen-soft), var(--theme-mist-glass-sheen-faint) 56%, rgba(16, 32, 29, 0.03));
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.52),
-    inset 0 -1px 0 rgba(18, 35, 32, 0.05);
+    inset 0 1px 0 var(--theme-mist-glass-edge-top),
+    inset 0 -1px 0 var(--theme-mist-glass-edge-bottom);
   pointer-events: none;
 }
 
@@ -3823,10 +3828,10 @@
   position: absolute;
   inset: 0;
   border: 0;
-  background: transparent;
+  background: rgba(19, 29, 27, 0.28);
   cursor: pointer;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
 }
 
 .settings-dialog__panel {

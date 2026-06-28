@@ -176,6 +176,21 @@ describe('map chrome layout', () => {
     expect(appShellRule).toContain(
       '--theme-mist-glass-end: rgba(238, 246, 244, calc(var(--glass-panel-opacity) * 0.478))',
     )
+    expect(appShellRule).toContain(
+      '--theme-mist-glass-sheen-strong: rgba(255, 255, 255, calc(var(--glass-panel-opacity) * 0.686))',
+    )
+    expect(appShellRule).toContain(
+      '--theme-mist-glass-sheen-soft: rgba(255, 255, 255, calc(var(--glass-panel-opacity) * 0.314))',
+    )
+    expect(appShellRule).toContain(
+      '--theme-mist-glass-sheen-faint: rgba(255, 255, 255, calc(var(--glass-panel-opacity) * 0.057))',
+    )
+    expect(appShellRule).toContain(
+      '--theme-mist-glass-edge-top: rgba(255, 255, 255, calc(var(--glass-panel-opacity) * 0.743))',
+    )
+    expect(appShellRule).toContain(
+      '--theme-mist-glass-edge-bottom: rgba(18, 35, 32, calc(var(--glass-panel-opacity) * 0.071))',
+    )
     expect(appShellRule).toContain('background: transparent')
     expect(cssRule('.app-shell:not(.app-shell--map)')).toContain('background: var(--page-board-bg)')
     expect(appSource).toContain('className="app-board"')
@@ -195,6 +210,11 @@ describe('map chrome layout', () => {
     expect(sharedGlassRule).toContain('background: var(--solid-glass-panel-bg)')
     expect(sharedGlassRule).toContain('box-shadow: var(--glass-panel-shadow)')
     expect(sharedGlassRule).toContain('backdrop-filter: var(--glass-panel-filter)')
+    expect(cssRule('.glass-panel::before')).toContain('var(--theme-mist-glass-sheen-strong)')
+    expect(cssRule('.glass-panel::before')).toContain('var(--theme-mist-glass-sheen-soft)')
+    expect(cssRule('.glass-panel::before')).toContain('var(--theme-mist-glass-sheen-faint)')
+    expect(cssRule('.glass-panel::before')).toContain('var(--theme-mist-glass-edge-top)')
+    expect(cssRule('.glass-panel::before')).toContain('var(--theme-mist-glass-edge-bottom)')
     expect(appSource).toContain('glass-panel glass-panel--solid glass-panel--pill app-nav')
     expect(appSource).toContain('aria-label="二级导航"')
     expect(appSource).toContain('className="secondary-nav-rail"')
@@ -1140,11 +1160,9 @@ describe('map chrome layout', () => {
     expect(cssRule('.settings-dialog')).toContain('position: fixed')
     expect(cssRule('.settings-dialog')).toContain('place-items: center')
     expect(cssRule('.settings-dialog__backdrop')).toContain('position: absolute')
-    expect(cssRule('.settings-dialog__backdrop')).toContain('background: transparent')
-    expect(cssRule('.settings-dialog__backdrop')).toContain('backdrop-filter: none')
-    expect(cssRule('.settings-dialog__backdrop')).toContain('-webkit-backdrop-filter: none')
-    expect(cssRule('.settings-dialog__backdrop')).not.toContain('blur(')
-    expect(cssRule('.settings-dialog__backdrop')).not.toContain('rgba(19, 29, 27')
+    expect(cssRule('.settings-dialog__backdrop')).toContain('background: rgba(19, 29, 27, 0.28)')
+    expect(cssRule('.settings-dialog__backdrop')).toContain('backdrop-filter: blur(6px)')
+    expect(cssRule('.settings-dialog__backdrop')).toContain('-webkit-backdrop-filter: blur(6px)')
     expect(cssRule('.settings-dialog__panel')).toContain('width: min(680px, calc(100vw - 32px))')
     expect(cssRule('.settings-dialog__panel')).toContain('max-height: calc(100svh - 32px)')
     expect(cssRule('.settings-dialog__panel')).not.toContain('width: 100vw')
