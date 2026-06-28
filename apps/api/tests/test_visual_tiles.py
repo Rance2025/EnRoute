@@ -721,7 +721,7 @@ def test_serves_footprint_mvt_from_ready_visual_tile(tmp_path):
         store.close()
 
 
-def test_serves_footprint_tile_debug_metrics_for_viewport(tmp_path):
+def test_serves_whole_world_footprint_tile_debug_metrics_below_z2(tmp_path):
     db_path = tmp_path / "footprints.sqlite"
     data_path = tmp_path / "backUpData-all.csv"
     data_path.write_text(

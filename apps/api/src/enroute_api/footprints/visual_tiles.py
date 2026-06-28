@@ -811,7 +811,7 @@ def enumerate_visual_tile_keys_for_viewport(
         return []
 
     scale = 2**z
-    if z <= 1:
+    if z < 2:
         return [(x, y) for y in range(scale) for x in range(scale)]
 
     north_tile = coordinate_to_tile(longitude=0, latitude=max(north, south), z=z)[1]

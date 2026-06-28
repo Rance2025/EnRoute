@@ -862,7 +862,7 @@ function getCurrentFootprintTileDebugViewport(
   const z = visibleTileTarget?.z
     ?? Math.max(0, Math.min(MAX_FOOTPRINT_TILE_ZOOM, Math.floor(map.getZoom())))
 
-  if (projection === 'globe' && z <= 1) {
+  if (projection === 'globe' && z < 2) {
     return {
       z,
       west: -180,
