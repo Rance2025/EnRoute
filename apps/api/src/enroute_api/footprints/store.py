@@ -30,6 +30,8 @@ from .visual_tiles import (
     TIME_BUCKET_YEAR,
     VISUAL_TILE_ALGORITHM_SIGNATURE,
     VISUAL_TILE_ALGORITHM_SIGNATURE_KEY,
+    VISUAL_TILE_PRECOMPUTE_SIGNATURE,
+    VISUAL_TILE_PRECOMPUTE_SIGNATURE_KEY,
     coordinate_to_tile,
     encode_day,
     mark_visual_tile_dirty,
@@ -165,6 +167,13 @@ class FootprintStore:
                 range_value=range_value,
                 start_date=start_date,
                 end_date=end_date,
+            )
+            build_requested_visual_tile_if_precompute_is_missing(
+                self.connection,
+                z=z,
+                x=x,
+                y=y,
+                buckets=buckets,
             )
             read_result = read_visual_tile_records(
                 self.connection,
@@ -433,6 +442,8 @@ def import_footprints(
                 new_count += 1
                 mark_affected_visual_tiles_dirty(connection, point)
 
+        if new_count > 0:
+            delete_meta_value(connection, VISUAL_TILE_PRECOMPUTE_SIGNATURE_KEY)
         set_meta_value(connection, "sourceSignature", source_signature)
         set_meta_value(connection, "importCompatibilitySignature", compatibility_signature)
         set_meta_value(connection, ADMIN_REGION_STATS_SIGNATURE_KEY, compatibility_signature)
@@ -617,6 +628,7 @@ def clear_imported_footprints(connection: sqlite3.Connection) -> None:
             'sourceSignature',
             'importCompatibilitySignature',
             'visualTileAlgorithmSignature',
+            'visualTilePrecomputeSignature',
             'rowCount',
             'adminRegionStatsSignature'
         );
@@ -636,6 +648,31 @@ def ensure_visual_tiles_algorithm_current(connection: sqlite3.Connection) -> Non
     with connection:
         connection.execute("DELETE FROM visual_tiles")
         set_meta_value(connection, VISUAL_TILE_ALGORITHM_SIGNATURE_KEY, VISUAL_TILE_ALGORITHM_SIGNATURE)
+        delete_meta_value(connection, VISUAL_TILE_PRECOMPUTE_SIGNATURE_KEY)
+
+
+def build_requested_visual_tile_if_precompute_is_missing(
+    connection: sqlite3.Connection,
+    *,
+    z: int,
+    x: int,
+    y: int,
+    buckets: list[tuple[int, int]],
+) -> None:
+    if get_footprint_row_count(connection) == 0:
+        return
+    if get_meta_value(connection, VISUAL_TILE_PRECOMPUTE_SIGNATURE_KEY) == VISUAL_TILE_PRECOMPUTE_SIGNATURE:
+        return
+    if read_visual_tile_records(connection, z=z, x=x, y=y, buckets=buckets).records:
+        return
+
+    rebuild_dirty_visual_tiles(
+        connection,
+        z=z,
+        x=x,
+        y=y,
+        buckets=buckets,
+    )
 
 
 def ensure_admin_region_stats_current(

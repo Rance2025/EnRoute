@@ -129,6 +129,7 @@ function MapboxCanvasComponent({
   const [footprintStyle, setFootprintStyle] = useState<FootprintStyle>(readStoredFootprintStyle)
   const [cameraZoom, setCameraZoom] = useState<number | undefined>(undefined)
   const [tileDebugMetrics, setTileDebugMetrics] = useState<FootprintTileDebugMetrics | null>(null)
+  const [styleReady, setStyleReady] = useState(false)
   const footprintStyleRef = useRef(footprintStyle)
   const selectedFootprintBoundsRef = useRef<FootprintLngLatBounds | null>(null)
   const baseMapVisibilityRecordsRef = useRef<BaseMapVisibilityRecord[]>([])
@@ -185,7 +186,7 @@ function MapboxCanvasComponent({
   ) => {
     const map = mapRef.current
 
-    if (!map) return
+    if (!map || !map.isStyleLoaded()) return
 
     if (map.getLayer(FOOTPRINT_CIRCLE_LAYER_ID)) {
       map.removeLayer(FOOTPRINT_CIRCLE_LAYER_ID)
@@ -398,6 +399,7 @@ function MapboxCanvasComponent({
 
     setStatus('loading')
     setErrorMessage('')
+    setStyleReady(false)
     mapboxgl.accessToken = resolvedAccessToken
     resolvedStyleUrlRef.current = latestResolvedStyleUrlRef.current
 
@@ -436,6 +438,7 @@ function MapboxCanvasComponent({
         if (disposed) return
 
         setStatus('ready')
+        setStyleReady(map.isStyleLoaded())
         if (resolvedProjection === 'globe') {
           startGlobeRotation()
         }
@@ -443,6 +446,7 @@ function MapboxCanvasComponent({
       const handleStyleLoad = () => {
         if (disposed) return
 
+        setStyleReady(true)
         setStatus('ready')
       }
       const handleError = (event: ErrorEvent | { error?: unknown }) => {
@@ -518,23 +522,25 @@ function MapboxCanvasComponent({
 
     resolvedStyleUrlRef.current = resolvedStyleUrl
     setStatus('loading')
+    setStyleReady(false)
     resetBaseMapVisibilityState()
     map.setStyle(resolvedStyleUrl)
   }, [resetBaseMapVisibilityState, resolvedStyleUrl, status])
 
   useEffect(() => {
-    if (status !== 'ready') return
+    if (status !== 'ready' || !styleReady) return
 
     refreshFootprintLayer(footprintTileRange, resolvedTileUrl)
-  }, [footprintTileRange, refreshFootprintLayer, resolvedTileUrl, status])
+  }, [footprintTileRange, refreshFootprintLayer, resolvedTileUrl, status, styleReady])
 
   useEffect(() => {
-    if (status !== 'ready') return
+    if (status !== 'ready' || !styleReady) return
 
     updateBaseMapLayerVisibility()
   }, [
     adminBoundariesVisible,
     placeLabelsVisible,
+    styleReady,
     status,
     updateBaseMapLayerVisibility,
   ])
