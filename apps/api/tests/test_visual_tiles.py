@@ -1015,7 +1015,7 @@ def test_dirty_mvt_request_rebuilds_visual_tile_after_serving_old_cells(tmp_path
     assert {record.footprint_id for record in rebuilt_records} >= {1768144456, 1768144457}
 
 
-def test_mvt_request_treats_missing_visual_tile_row_as_empty_even_when_raw_points_exist(tmp_path):
+def test_mvt_request_rebuilds_empty_precomputed_table_before_reading_visual_tiles(tmp_path):
     db_path = tmp_path / "footprints.sqlite"
     data_path = tmp_path / "backUpData-all.csv"
     data_path.write_text(
@@ -1042,11 +1042,17 @@ def test_mvt_request_treats_missing_visual_tile_row_as_empty_even_when_raw_point
         "/api/map/tiles/footprints/16/54888/26764.mvt?start=2026-06-19&end=2026-06-19",
     )
 
-    assert response.status_code == 204
-    assert response.content == b""
+    assert response.status_code == 200
+    assert response.content
     with sqlite3.connect(db_path) as connection:
-        count = connection.execute("SELECT COUNT(*) FROM visual_tiles").fetchone()[0]
-    assert count == 0
+        row = connection.execute(
+            """
+            SELECT status, representative_count
+            FROM visual_tiles
+            WHERE z = 16 AND x = 54888 AND y = 26764 AND t_type = 3 AND t = 20260619
+            """,
+        ).fetchone()
+    assert row == (STATUS_READY, 1)
 
 
 def test_missing_visual_tile_row_means_empty_without_creating_row(tmp_path):
