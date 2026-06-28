@@ -44,9 +44,9 @@ describe('createFootprintVectorTileSource', () => {
     expect(createFootprintCircleLayer).toBeTypeOf('function')
 
     const layer = createFootprintCircleLayer?.({
-      pixelSize: 1.5,
+      pixelSize: 2,
       color: '#123f35',
-      opacity: 0.82,
+      opacity: 0.6,
     }) as {
       id?: string
       type?: string
@@ -61,9 +61,9 @@ describe('createFootprintVectorTileSource', () => {
       source: 'footprints',
       'source-layer': 'footprints',
       paint: {
-        'circle-radius': 0.75,
+        'circle-radius': 1,
         'circle-color': '#123f35',
-        'circle-opacity': 0.82,
+        'circle-opacity': 0.6,
       },
     })
     expect(JSON.stringify(layer)).not.toContain('heatmap')
