@@ -787,6 +787,86 @@ def test_serves_footprint_tile_debug_metrics_for_viewport(tmp_path):
         store.close()
 
 
+def test_serves_footprint_tile_debug_metrics_for_explicit_tile_keys(tmp_path):
+    db_path = tmp_path / "footprints.sqlite"
+    data_path = tmp_path / "backUpData-all.csv"
+    data_path.write_text(
+        "\n".join(
+            [
+                "dataTime,locType,longitude,latitude,heading,accuracy,speed,distance,isBackForeground,stepType,altitude",
+                "100,1,0,0,0,5,0,0,1,0,0",
+            ],
+        ),
+        encoding="utf-8",
+    )
+    store = FootprintStore(
+        db_path=db_path,
+        data_path=data_path,
+        coordinate_system="wgs84",
+        admin_region_data_path=tmp_path / "missing-admin-regions.geojson",
+    )
+    try:
+        store.import_footprints()
+        inside_blob = encode_visual_cells(
+            [
+                VisualCellRecord(cell_id=1, footprint_id=100, geom_x=2048, geom_y=2048),
+                VisualCellRecord(cell_id=2, footprint_id=101, geom_x=2050, geom_y=2050),
+            ],
+        )
+        outside_blob = encode_visual_cells(
+            [
+                VisualCellRecord(cell_id=3, footprint_id=200, geom_x=10, geom_y=10),
+            ],
+        )
+        store.connection.execute(
+            """
+            INSERT INTO visual_tiles (
+              z, x, y, t_type, t, status, cells, raw_count, representative_count, updated_at
+            )
+            VALUES (1, 1, 0, 0, 0, ?, ?, 5, 2, 1234)
+            """,
+            (STATUS_READY, inside_blob),
+        )
+        store.connection.execute(
+            """
+            INSERT INTO visual_tiles (
+              z, x, y, t_type, t, status, cells, raw_count, representative_count, updated_at
+            )
+            VALUES (1, 0, 0, 0, 0, ?, ?, 7, 1, 1234)
+            """,
+            (STATUS_READY, outside_blob),
+        )
+        store.connection.commit()
+        client = TestClient(
+            create_app(
+                settings=Settings(
+                    footprint_db_path=db_path,
+                    footprint_data_path=data_path,
+                    footprint_coordinate_system="wgs84",
+                    admin_region_data_path=tmp_path / "missing-admin-regions.geojson",
+                ),
+            ),
+        )
+
+        response = client.get(
+            "/api/map/tiles/footprints/debug?z=1&tiles=1/0,1/1&range=all",
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "tileZoom": 1,
+            "requestedTileCount": 2,
+            "populatedTileCount": 1,
+            "readyTileCount": 1,
+            "dirtyTileCount": 0,
+            "rawCount": 5,
+            "representativeCount": 2,
+            "renderRatio": 0.4,
+        }
+    finally:
+        store.close()
+
+
 def test_mvt_request_imports_changed_csv_before_reading_visual_tiles(tmp_path):
     db_path = tmp_path / "footprints.sqlite"
     data_path = tmp_path / "backUpData-all.csv"

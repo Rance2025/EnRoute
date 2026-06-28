@@ -585,6 +585,131 @@ describe('MapboxCanvas footprint vector tiles', () => {
     )
   })
 
+  it('uses the single root tile for globe z0 debug metrics', async () => {
+    const { mapRecords } = mockMapboxRuntime()
+    const fetchMock = mockMetricsAndDebugFetch({
+      ok: true,
+      json: async () => ({
+        tileZoom: 0,
+        requestedTileCount: 1,
+        populatedTileCount: 1,
+        readyTileCount: 1,
+        dirtyTileCount: 0,
+        rawCount: 120,
+        representativeCount: 40,
+        renderRatio: 0.333333,
+      }),
+    })
+    const { MapboxCanvas } = await import('./MapboxCanvas')
+
+    render(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        projection="globe"
+        tileUrl="/api/map/tiles/footprints/{z}/{x}/{y}.mvt"
+        timeRange={allRange}
+        debugPanelVisible
+      />,
+    )
+
+    mapRecords[0].setZoom(0.8)
+    mapRecords[0].setBounds({ west: 30, south: 10, east: 60, north: 40 })
+    act(() => mapRecords[0].emit('load'))
+    await act(async () => {})
+
+    const debugUrl = getLastDebugRequestUrl(fetchMock)
+    expect(debugUrl.searchParams.get('z')).toBe('0')
+    expect(debugUrl.searchParams.get('tiles')).toBe('0/0')
+    expect(debugUrl.searchParams.has('west')).toBe(false)
+    expect(debugUrl.searchParams.has('south')).toBe(false)
+    expect(debugUrl.searchParams.has('east')).toBe(false)
+    expect(debugUrl.searchParams.has('north')).toBe(false)
+  })
+
+  it('derives globe z1 debug tiles from the map center instead of unstable bounds', async () => {
+    const { mapRecords } = mockMapboxRuntime()
+    const fetchMock = mockMetricsAndDebugFetch({
+      ok: true,
+      json: async () => ({
+        tileZoom: 1,
+        requestedTileCount: 4,
+        populatedTileCount: 1,
+        readyTileCount: 1,
+        dirtyTileCount: 0,
+        rawCount: 40441,
+        representativeCount: 235,
+        renderRatio: 0.005811,
+      }),
+    })
+    const { MapboxCanvas } = await import('./MapboxCanvas')
+
+    render(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        projection="globe"
+        tileUrl="/api/map/tiles/footprints/{z}/{x}/{y}.mvt"
+        timeRange={allRange}
+        debugPanelVisible
+      />,
+    )
+
+    mapRecords[0].setZoom(1.8)
+    mapRecords[0].setCenter([90, 35])
+    mapRecords[0].setBounds({ west: -180, south: -40, east: 0, north: 90 })
+    act(() => mapRecords[0].emit('load'))
+    await act(async () => {})
+
+    const debugUrl = getLastDebugRequestUrl(fetchMock)
+    expect(debugUrl.searchParams.get('z')).toBe('1')
+    expect(debugUrl.searchParams.get('tiles')).toBe('0/0,1/0,0/1,1/1')
+    expect(debugUrl.searchParams.has('west')).toBe(false)
+    expect(debugUrl.searchParams.has('south')).toBe(false)
+    expect(debugUrl.searchParams.has('east')).toBe(false)
+    expect(debugUrl.searchParams.has('north')).toBe(false)
+  })
+
+  it('keeps bounds-based debug metrics for globe z2 and above', async () => {
+    const { mapRecords } = mockMapboxRuntime()
+    const fetchMock = mockMetricsAndDebugFetch({
+      ok: true,
+      json: async () => ({
+        tileZoom: 2,
+        requestedTileCount: 4,
+        populatedTileCount: 1,
+        readyTileCount: 1,
+        dirtyTileCount: 0,
+        rawCount: 900,
+        representativeCount: 45,
+        renderRatio: 0.05,
+      }),
+    })
+    const { MapboxCanvas } = await import('./MapboxCanvas')
+
+    render(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        projection="globe"
+        tileUrl="/api/map/tiles/footprints/{z}/{x}/{y}.mvt"
+        timeRange={allRange}
+        debugPanelVisible
+      />,
+    )
+
+    mapRecords[0].setZoom(2.2)
+    mapRecords[0].setCenter([90, 35])
+    mapRecords[0].setBounds({ west: 20, south: -10, east: 150, north: 80 })
+    act(() => mapRecords[0].emit('load'))
+    await act(async () => {})
+
+    const debugUrl = getLastDebugRequestUrl(fetchMock)
+    expect(debugUrl.searchParams.get('z')).toBe('2')
+    expect(debugUrl.searchParams.has('tiles')).toBe(false)
+    expect(debugUrl.searchParams.get('west')).toBe('20')
+    expect(debugUrl.searchParams.get('south')).toBe('-10')
+    expect(debugUrl.searchParams.get('east')).toBe('150')
+    expect(debugUrl.searchParams.get('north')).toBe('80')
+  })
+
   it('keeps the last successful debug metrics while a refresh fails', async () => {
     const { mapRecords } = mockMapboxRuntime()
     const fetchMock = mockMetricsAndDebugFetch({
@@ -1418,6 +1543,19 @@ function mockMetricsAndDebugFetch(...debugResponses: Array<{
 
   vi.stubGlobal('fetch', fetchMock)
   return fetchMock
+}
+
+function getLastDebugRequestUrl(fetchMock: ReturnType<typeof vi.fn>) {
+  const debugCall = fetchMock.mock.calls
+    .map(([calledUrl]) => String(calledUrl))
+    .filter((calledUrl) => calledUrl.includes('/api/map/tiles/footprints/debug'))
+    .at(-1)
+
+  if (!debugCall) {
+    throw new Error('Missing debug request')
+  }
+
+  return new URL(debugCall, window.location.origin)
 }
 
 function createDeferredResponse(body: Record<string, unknown>) {

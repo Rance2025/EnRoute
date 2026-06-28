@@ -74,6 +74,15 @@ type FootprintTileDebugMetrics = {
   renderRatio: number
 }
 
+type FootprintTileDebugViewport = {
+  z: number
+  west: number
+  south: number
+  east: number
+  north: number
+  tiles?: string[]
+}
+
 type BaseMapVisibilityLayerKind = 'place-label' | 'admin-boundary'
 type BaseMapVisibilityRecord = {
   id: string
@@ -96,6 +105,7 @@ const DEFAULT_MAP_ZOOM = 2.2
 const GLOBE_WORLD_ZOOM = 1.75
 const GLOBE_ROTATION_STEP_DEGREES = 1.2
 const GLOBE_ROTATION_INTERVAL_MS = 1000
+const MAX_MERCATOR_LATITUDE = 85.05112878
 const MAP_FIT_BOUNDS_DURATION_MS = 900
 const MAP_FIT_BOUNDS_PADDING_PX = 96
 const FOOTPRINT_STYLE_STORAGE_KEY = 'enroute.footprintStyle'
@@ -561,7 +571,7 @@ function MapboxCanvasComponent({
       const debugUrl = createFootprintTileDebugUrl(
         resolvedTileDebugUrl,
         footprintTileRange,
-        getCurrentFootprintTileDebugViewport(map),
+        getCurrentFootprintTileDebugViewport(map, resolvedProjection),
       )
 
       abortController?.abort()
@@ -592,20 +602,22 @@ function MapboxCanvasComponent({
     }
 
     refreshTileDebugMetrics()
-    map.on('moveend', () => {
+    const refreshTileDebugMetricsAfterMove = () => {
       refreshTileDebugMetrics()
       refreshCameraZoom()
-    })
+    }
+
+    map.on('moveend', refreshTileDebugMetricsAfterMove)
     map.on('zoomend', refreshTileDebugMetrics)
     map.on('zoom', refreshCameraZoom)
 
     return () => {
       abortController?.abort()
-      map.off('moveend', refreshTileDebugMetrics)
+      map.off('moveend', refreshTileDebugMetricsAfterMove)
       map.off('zoomend', refreshTileDebugMetrics)
       map.off('zoom', refreshCameraZoom)
     }
-  }, [debugPanelVisible, footprintTileRange, resolvedTileDebugUrl, status])
+  }, [debugPanelVisible, footprintTileRange, resolvedProjection, resolvedTileDebugUrl, status])
 
   const updateFootprintStyle = useCallback((nextFootprintStyle: FootprintStyle) => {
     const normalizedFootprintStyle = normalizeFootprintStyle(nextFootprintStyle)
@@ -754,20 +766,18 @@ function createFootprintMetricsUrl(
 function createFootprintTileDebugUrl(
   debugUrl: string,
   range: FootprintVectorTileRange,
-  viewport: {
-    z: number
-    west: number
-    south: number
-    east: number
-    north: number
-  },
+  viewport: FootprintTileDebugViewport,
 ) {
   const params = new URLSearchParams()
   params.set('z', String(viewport.z))
-  params.set('west', formatCoordinateParam(viewport.west))
-  params.set('south', formatCoordinateParam(viewport.south))
-  params.set('east', formatCoordinateParam(viewport.east))
-  params.set('north', formatCoordinateParam(viewport.north))
+  if (viewport.tiles) {
+    params.set('tiles', viewport.tiles.join(','))
+  } else {
+    params.set('west', formatCoordinateParam(viewport.west))
+    params.set('south', formatCoordinateParam(viewport.south))
+    params.set('east', formatCoordinateParam(viewport.east))
+    params.set('north', formatCoordinateParam(viewport.north))
+  }
 
   if (range.range === 'all') {
     params.set('range', 'all')
@@ -779,16 +789,87 @@ function createFootprintTileDebugUrl(
   return `${debugUrl}?${params.toString()}`
 }
 
-function getCurrentFootprintTileDebugViewport(map: mapboxgl.Map) {
+function getCurrentFootprintTileDebugViewport(
+  map: mapboxgl.Map,
+  projection: MapboxProjection,
+): FootprintTileDebugViewport {
   const bounds = map.getBounds()
+  const z = Math.max(0, Math.min(MAX_FOOTPRINT_TILE_ZOOM, Math.floor(map.getZoom())))
+
+  if (projection === 'globe' && z <= 1) {
+    return {
+      z,
+      west: -180,
+      south: -85,
+      east: 180,
+      north: 85,
+      tiles: getGlobeWorldDebugTiles(map, z),
+    }
+  }
 
   return {
-    z: Math.max(0, Math.min(MAX_FOOTPRINT_TILE_ZOOM, Math.floor(map.getZoom()))),
+    z,
     west: bounds?.getWest() ?? -180,
     south: bounds?.getSouth() ?? -85,
     east: bounds?.getEast() ?? 180,
     north: bounds?.getNorth() ?? 85,
   }
+}
+
+function getGlobeWorldDebugTiles(map: mapboxgl.Map, z: number) {
+  if (z === 0) return ['0/0']
+
+  const center = map.getCenter()
+  const z1Tiles = [
+    { x: 0, y: 0, west: -180, south: 0, east: 0, north: MAX_MERCATOR_LATITUDE },
+    { x: 1, y: 0, west: 0, south: 0, east: 180, north: MAX_MERCATOR_LATITUDE },
+    { x: 0, y: 1, west: -180, south: -MAX_MERCATOR_LATITUDE, east: 0, north: 0 },
+    { x: 1, y: 1, west: 0, south: -MAX_MERCATOR_LATITUDE, east: 180, north: 0 },
+  ]
+
+  return z1Tiles
+    .filter((tile) => globeHemisphereIntersectsTile(center.lng, center.lat, tile))
+    .map(({ x, y }) => `${x}/${y}`)
+}
+
+function globeHemisphereIntersectsTile(
+  centerLongitude: number,
+  centerLatitude: number,
+  tile: { west: number, south: number, east: number, north: number },
+) {
+  const closestLongitude = closestLongitudeInRange(
+    normalizeLongitude(centerLongitude),
+    tile.west,
+    tile.east,
+  )
+  const centerLatitudeRadians = degreesToRadians(
+    Math.max(-MAX_MERCATOR_LATITUDE, Math.min(MAX_MERCATOR_LATITUDE, centerLatitude)),
+  )
+  const deltaLongitudeRadians = degreesToRadians(normalizeLongitude(closestLongitude - centerLongitude))
+  const latitudeTerm = Math.sin(centerLatitudeRadians)
+  const longitudeTerm = Math.cos(centerLatitudeRadians) * Math.cos(deltaLongitudeRadians)
+  const bestLatitudeRadians = Math.max(
+    degreesToRadians(tile.south),
+    Math.min(degreesToRadians(tile.north), Math.atan2(latitudeTerm, longitudeTerm)),
+  )
+  const maxDotProduct = (
+    latitudeTerm * Math.sin(bestLatitudeRadians) +
+    longitudeTerm * Math.cos(bestLatitudeRadians)
+  )
+
+  return maxDotProduct > 1e-6
+}
+
+function closestLongitudeInRange(longitude: number, west: number, east: number) {
+  if (longitude >= west && longitude <= east) return longitude
+
+  return Math.abs(normalizeLongitude(longitude - west)) <= Math.abs(normalizeLongitude(longitude - east))
+    ? west
+    : east
+}
+
+function degreesToRadians(value: number) {
+  return value * Math.PI / 180
 }
 
 function formatCoordinateParam(value: number) {
