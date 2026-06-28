@@ -136,6 +136,45 @@ describe('MapboxCanvas footprint vector tiles', () => {
     expect(footprintDataSourceImported()).toBe(false)
   })
 
+  it('waits for Mapbox style readiness before adding the footprint source after load', async () => {
+    const { mapRecords } = mockMapboxRuntime({ styleReadyAfterStyleLoad: true })
+    const { MapboxCanvas } = await import('./MapboxCanvas')
+
+    render(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        tileUrl="/api/map/tiles/footprints/{z}/{x}/{y}.mvt"
+        timeRange={selectedRange}
+      />,
+    )
+
+    act(() => mapRecords[0].emit('load'))
+
+    expect(mapRecords[0].sources.footprints).toBeUndefined()
+    expect(mapRecords[0].layers.some((layer) => (
+      typeof layer === 'object' &&
+      layer !== null &&
+      'id' in layer &&
+      layer.id === 'footprints-circle'
+    ))).toBe(false)
+
+    act(() => mapRecords[0].emit('style.load'))
+
+    expect(mapRecords[0].sources.footprints).toMatchObject({
+      type: 'vector',
+      maxzoom: 16,
+      tiles: [
+        expectedMapboxTileUrl('?start=2026-06-19&end=2026-06-19'),
+      ],
+    })
+    expect(mapRecords[0].layers.some((layer) => (
+      typeof layer === 'object' &&
+      layer !== null &&
+      'id' in layer &&
+      layer.id === 'footprints-circle'
+    ))).toBe(true)
+  })
+
   it('switches Mapbox styles in place and restores footprint layers after the new style loads', async () => {
     const { mapRecords } = mockMapboxRuntime()
     const { MapboxCanvas } = await import('./MapboxCanvas')
@@ -965,6 +1004,7 @@ describe('MapboxCanvas footprint vector tiles', () => {
 function mockMapboxRuntime(runtimeOptions: {
   layers?: unknown[]
   syncBaseMapLayerVisibilityFromConfig?: boolean
+  styleReadyAfterStyleLoad?: boolean
 } = {}) {
   const mapRecords: MockMapRecord[] = []
   let footprintDataSourceWasImported = false
@@ -979,6 +1019,7 @@ function mockMapboxRuntime(runtimeOptions: {
   class MockMap {
     private readonly record: MockMapRecord
     private readonly handlers = new Map<string, Array<() => void>>()
+    private styleReady = !runtimeOptions.styleReadyAfterStyleLoad
     private zoom = 2.2
     private center: [number, number] = [104.195397, 35.86166]
     private bounds = { west: -180, south: -85, east: 180, north: 85 }
@@ -1054,6 +1095,10 @@ function mockMapboxRuntime(runtimeOptions: {
         stopCalls: 0,
         removeCalls: 0,
         emit: (eventName: string) => {
+          if (eventName === 'style.load') {
+            this.styleReady = true
+          }
+
           for (const handler of this.handlers.get(eventName) ?? []) handler()
         },
         setZoom: (zoom: number) => {
@@ -1083,6 +1128,10 @@ function mockMapboxRuntime(runtimeOptions: {
     }
 
     addSource(id: string, source: unknown) {
+      if (!this.styleReady) {
+        throw new Error('Style is not done loading')
+      }
+
       this.record.sources[id] = source
     }
 
@@ -1107,6 +1156,10 @@ function mockMapboxRuntime(runtimeOptions: {
       return {
         layers: this.record.layers,
       }
+    }
+
+    isStyleLoaded() {
+      return this.styleReady
     }
 
     removeLayer(id: string) {

@@ -21,9 +21,15 @@ VISUAL_CELL_SIZE = 4
 CELLS_PER_ROW = MVT_EXTENT // VISUAL_CELL_SIZE
 VISUAL_TILE_ALGORITHM_SIGNATURE_KEY = "visualTileAlgorithmSignature"
 VISUAL_TILE_ALGORITHM_SIGNATURE = f"mvt_extent={MVT_EXTENT};cell_size={VISUAL_CELL_SIZE}"
+VISUAL_TILE_PRECOMPUTE_SIGNATURE_KEY = "visualTilePrecomputeSignature"
 MAX_MERCATOR_LATITUDE = 85.05112878
 MAX_VISUAL_TILE_ZOOM = 16
 SHANGHAI_UTC_OFFSET_SECONDS = 8 * 60 * 60
+FULL_PRECOMPUTE_BUCKETS = ("all", "day", "month", "year")
+VISUAL_TILE_PRECOMPUTE_SIGNATURE = (
+    f"{VISUAL_TILE_ALGORITHM_SIGNATURE};zoom=0-{MAX_VISUAL_TILE_ZOOM};"
+    f"buckets={','.join(FULL_PRECOMPUTE_BUCKETS)}"
+)
 
 
 @dataclass(frozen=True)
@@ -176,6 +182,12 @@ def build_visual_tiles(
             candidate_count += result_count
             built_count += result_count
     set_visual_tile_algorithm_signature(connection)
+    set_visual_tile_precompute_signature_if_complete(
+        connection,
+        min_zoom=min_zoom,
+        max_zoom=max_zoom,
+        buckets=normalized_buckets,
+    )
     connection.commit()
     return VisualTileBuildResult(
         bucket=",".join(normalized_buckets),
@@ -457,6 +469,28 @@ def set_visual_tile_algorithm_signature(connection: sqlite3.Connection) -> None:
         ON CONFLICT(key) DO UPDATE SET value = excluded.value
         """,
         (VISUAL_TILE_ALGORITHM_SIGNATURE_KEY, VISUAL_TILE_ALGORITHM_SIGNATURE),
+    )
+
+
+def set_visual_tile_precompute_signature_if_complete(
+    connection: sqlite3.Connection,
+    *,
+    min_zoom: int,
+    max_zoom: int,
+    buckets: list[str],
+) -> None:
+    if min_zoom != 0 or max_zoom != MAX_VISUAL_TILE_ZOOM:
+        return
+    if set(buckets) != set(FULL_PRECOMPUTE_BUCKETS):
+        return
+
+    connection.execute(
+        """
+        INSERT INTO footprint_meta (key, value)
+        VALUES (?, ?)
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value
+        """,
+        (VISUAL_TILE_PRECOMPUTE_SIGNATURE_KEY, VISUAL_TILE_PRECOMPUTE_SIGNATURE),
     )
 
 

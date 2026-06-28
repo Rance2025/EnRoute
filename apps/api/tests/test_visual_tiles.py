@@ -25,10 +25,13 @@ from enroute_api.footprints.visual_tiles import (
     MAX_VISUAL_TILE_ZOOM,
     VISUAL_TILE_ALGORITHM_SIGNATURE,
     VISUAL_TILE_ALGORITHM_SIGNATURE_KEY,
+    VISUAL_TILE_PRECOMPUTE_SIGNATURE,
+    VISUAL_TILE_PRECOMPUTE_SIGNATURE_KEY,
     VISUAL_CELL_SIZE,
     build_visual_tile,
     build_visual_tiles,
     backfill_visual_tile_counts,
+    coordinate_to_tile,
     mark_visual_tile_dirty,
     summarize_visual_tiles_for_viewport,
     split_time_range_into_buckets,
@@ -427,6 +430,78 @@ def test_build_visual_tiles_records_current_algorithm_signature(tmp_path):
             (VISUAL_TILE_ALGORITHM_SIGNATURE_KEY,),
         ).fetchone()
         assert tuple(row) == (VISUAL_TILE_ALGORITHM_SIGNATURE,)
+    finally:
+        connection.close()
+
+
+def test_full_visual_tile_precompute_records_completion_signature(tmp_path):
+    connection = sqlite3.connect(tmp_path / "footprints.sqlite")
+    connection.row_factory = sqlite3.Row
+    try:
+        initialize_schema(connection)
+        connection.execute(
+            """
+            INSERT INTO footprints (
+              timestamp_seconds, longitude, latitude, accuracy, speed, distance, heading, altitude
+            ) VALUES (100, -100, 10, 5, 0, 0, 0, 0)
+            """,
+        )
+        connection.execute(
+            """
+            INSERT INTO footprint_spatial (
+              footprint_rowid, min_lng, max_lng, min_lat, max_lat
+            ) VALUES (100, -100, -100, 10, 10)
+            """,
+        )
+
+        build_visual_tiles(
+            connection,
+            bucket="all,day,month,year",
+            updated_at=1234,
+        )
+
+        row = connection.execute(
+            "SELECT value FROM footprint_meta WHERE key = ?",
+            (VISUAL_TILE_PRECOMPUTE_SIGNATURE_KEY,),
+        ).fetchone()
+        assert tuple(row) == (VISUAL_TILE_PRECOMPUTE_SIGNATURE,)
+    finally:
+        connection.close()
+
+
+def test_partial_visual_tile_precompute_does_not_record_completion_signature(tmp_path):
+    connection = sqlite3.connect(tmp_path / "footprints.sqlite")
+    connection.row_factory = sqlite3.Row
+    try:
+        initialize_schema(connection)
+        connection.execute(
+            """
+            INSERT INTO footprints (
+              timestamp_seconds, longitude, latitude, accuracy, speed, distance, heading, altitude
+            ) VALUES (100, -100, 10, 5, 0, 0, 0, 0)
+            """,
+        )
+        connection.execute(
+            """
+            INSERT INTO footprint_spatial (
+              footprint_rowid, min_lng, max_lng, min_lat, max_lat
+            ) VALUES (100, -100, -100, 10, 10)
+            """,
+        )
+
+        build_visual_tiles(
+            connection,
+            min_zoom=1,
+            max_zoom=1,
+            bucket="all",
+            updated_at=1234,
+        )
+
+        row = connection.execute(
+            "SELECT value FROM footprint_meta WHERE key = ?",
+            (VISUAL_TILE_PRECOMPUTE_SIGNATURE_KEY,),
+        ).fetchone()
+        assert row is None
     finally:
         connection.close()
 
@@ -933,6 +1008,98 @@ def test_dirty_mvt_request_rebuilds_visual_tile_after_serving_old_cells(tmp_path
     rebuilt_records = decode_visual_cells(row["cells"])
     assert len(rebuilt_records) >= 2
     assert {record.footprint_id for record in rebuilt_records} >= {1768144456, 1768144457}
+
+
+def test_mvt_request_builds_missing_visual_tile_when_precomputed_table_is_empty(tmp_path):
+    db_path = tmp_path / "footprints.sqlite"
+    data_path = tmp_path / "backUpData-all.csv"
+    data_path.write_text(
+        "\n".join(
+            [
+                "dataTime,locType,longitude,latitude,heading,accuracy,speed,distance,isBackForeground,stepType,altitude",
+                "1781840000,1,121.511383,31.296564,0.000000,5.729415,-1.000000,0.000000,1,0,10.146956",
+            ],
+        ),
+        encoding="utf-8",
+    )
+    client = TestClient(
+        create_app(
+            settings=Settings(
+                footprint_db_path=db_path,
+                footprint_data_path=data_path,
+                footprint_coordinate_system="wgs84",
+                admin_region_data_path=tmp_path / "missing-admin-regions.geojson",
+            ),
+        ),
+    )
+
+    response = client.get(
+        "/api/map/tiles/footprints/16/54888/26764.mvt?start=2026-06-19&end=2026-06-19",
+    )
+
+    assert response.status_code == 200
+    assert response.content
+    with sqlite3.connect(db_path) as connection:
+        row = connection.execute(
+            """
+            SELECT status, representative_count
+            FROM visual_tiles
+            WHERE z = 16 AND x = 54888 AND y = 26764 AND t_type = 3 AND t = 20260619
+            """,
+        ).fetchone()
+    assert row == (STATUS_READY, 1)
+
+
+def test_mvt_request_keeps_building_missing_visual_tiles_until_full_precompute_is_recorded(tmp_path):
+    db_path = tmp_path / "footprints.sqlite"
+    data_path = tmp_path / "backUpData-all.csv"
+    first_point = (1781840000, 121.511383, 31.296564)
+    second_point = (1781840100, 118.0, 30.0)
+    data_path.write_text(
+        "\n".join(
+            [
+                "dataTime,locType,longitude,latitude,heading,accuracy,speed,distance,isBackForeground,stepType,altitude",
+                f"{first_point[0]},1,{first_point[1]},{first_point[2]},0.000000,5.729415,-1.000000,0.000000,1,0,10.146956",
+                f"{second_point[0]},1,{second_point[1]},{second_point[2]},0.000000,5.729415,-1.000000,0.000000,1,0,10.146956",
+            ],
+        ),
+        encoding="utf-8",
+    )
+    client = TestClient(
+        create_app(
+            settings=Settings(
+                footprint_db_path=db_path,
+                footprint_data_path=data_path,
+                footprint_coordinate_system="wgs84",
+                admin_region_data_path=tmp_path / "missing-admin-regions.geojson",
+            ),
+        ),
+    )
+    first_x, first_y = coordinate_to_tile(longitude=first_point[1], latitude=first_point[2], z=16)
+    second_x, second_y = coordinate_to_tile(longitude=second_point[1], latitude=second_point[2], z=16)
+
+    first_response = client.get(
+        f"/api/map/tiles/footprints/16/{first_x}/{first_y}.mvt?start=2026-06-19&end=2026-06-19",
+    )
+    second_response = client.get(
+        f"/api/map/tiles/footprints/16/{second_x}/{second_y}.mvt?start=2026-06-19&end=2026-06-19",
+    )
+
+    assert first_response.status_code == 200
+    assert second_response.status_code == 200
+    with sqlite3.connect(db_path) as connection:
+        rows = connection.execute(
+            """
+            SELECT x, y, status, representative_count
+            FROM visual_tiles
+            WHERE z = 16 AND t_type = 3 AND t = 20260619
+            ORDER BY x, y
+            """,
+        ).fetchall()
+    assert rows == [
+        (second_x, second_y, STATUS_READY, 1),
+        (first_x, first_y, STATUS_READY, 1),
+    ]
 
 
 def test_missing_visual_tile_row_means_empty_without_creating_row(tmp_path):
