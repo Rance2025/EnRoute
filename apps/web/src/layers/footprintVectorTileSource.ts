@@ -21,6 +21,7 @@ export type FootprintCircleLayerStyle = {
 }
 
 export const DEFAULT_FOOTPRINT_TILE_URL = '/api/map/tiles/footprints/{z}/{x}/{y}.mvt'
+export const MAX_FOOTPRINT_TILE_ZOOM = 16
 export const FOOTPRINT_VECTOR_SOURCE_ID = 'footprints'
 export const FOOTPRINT_VECTOR_SOURCE_LAYER = 'footprints'
 export const FOOTPRINT_CIRCLE_LAYER_ID = 'footprints-circle'
@@ -42,7 +43,7 @@ export function createFootprintVectorTileSource(
     type: 'vector' as const,
     tiles: [`${tileUrl}?${params.toString()}`],
     minzoom: 0,
-    maxzoom: 18,
+    maxzoom: MAX_FOOTPRINT_TILE_ZOOM,
   }
 }
 

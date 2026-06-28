@@ -163,9 +163,9 @@ class ImportFootprintsTests(unittest.TestCase):
                     "--database",
                     str(database),
                     "--min-zoom",
-                    "18",
+                    "16",
                     "--max-zoom",
-                    "18",
+                    "16",
                 ],
                 cwd=root_dir,
                 text=True,
@@ -258,6 +258,21 @@ class ImportFootprintsTests(unittest.TestCase):
                     (3, 20260111, 2),
                 ],
             )
+
+    def test_build_footprint_visual_tiles_cli_defaults_to_zoom_16(self):
+        completed = subprocess.run(
+            [
+                sys.executable,
+                str(Path(__file__).resolve().parents[1] / "scripts" / "build_footprint_visual_tiles.py"),
+                "--help",
+            ],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertIn("Defaults to 16", completed.stdout)
 
     def test_describe_footprint_visual_tiles_cli_writes_count_charts(self):
         with tempfile.TemporaryDirectory() as tmp_dir:

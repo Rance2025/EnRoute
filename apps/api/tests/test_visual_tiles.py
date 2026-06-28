@@ -22,6 +22,7 @@ from enroute_api.footprints.visual_tiles import (
     TIME_BUCKET_DAY,
     TIME_BUCKET_MONTH,
     TIME_BUCKET_YEAR,
+    MAX_VISUAL_TILE_ZOOM,
     VISUAL_TILE_ALGORITHM_SIGNATURE,
     VISUAL_TILE_ALGORITHM_SIGNATURE_KEY,
     VISUAL_CELL_SIZE,
@@ -43,6 +44,24 @@ def column_names(connection: sqlite3.Connection, table_name: str) -> list[str]:
 def test_visual_tile_grid_uses_four_mvt_units_per_cell():
     assert VISUAL_CELL_SIZE == 4
     assert CELLS_PER_ROW == 1024
+
+
+def test_visual_tile_zoom_ceiling_is_16():
+    assert MAX_VISUAL_TILE_ZOOM == 16
+
+
+def test_build_visual_tiles_rejects_zoom_above_current_ceiling(tmp_path):
+    connection = sqlite3.connect(tmp_path / "footprints.sqlite")
+    try:
+        initialize_schema(connection)
+        try:
+            build_visual_tiles(connection, min_zoom=17, max_zoom=17, bucket="all")
+        except ValueError as error:
+            assert str(error) == "max_zoom must be less than or equal to 16"
+        else:
+            raise AssertionError("expected ValueError")
+    finally:
+        connection.close()
 
 
 def test_initializes_visual_tiles_table(tmp_path):
@@ -796,7 +815,7 @@ def test_mvt_request_imports_changed_csv_before_reading_visual_tiles(tmp_path):
         store.connection.execute(
             """
             INSERT INTO visual_tiles (z, x, y, t_type, t, status, cells, updated_at)
-            VALUES (18, 219553, 107056, 0, 0, ?, ?, 1000)
+            VALUES (16, 54888, 26764, 0, 0, ?, ?, 1000)
             """,
             (STATUS_READY, blob),
         )
@@ -825,7 +844,7 @@ def test_mvt_request_imports_changed_csv_before_reading_visual_tiles(tmp_path):
         ),
     )
 
-    response = client.get("/api/map/tiles/footprints/18/219553/107056.mvt?range=all")
+    response = client.get("/api/map/tiles/footprints/16/54888/26764.mvt?range=all")
 
     assert response.status_code == 200
     deadline = time.monotonic() + 5
@@ -837,7 +856,7 @@ def test_mvt_request_imports_changed_csv_before_reading_visual_tiles(tmp_path):
                 """
                 SELECT status
                 FROM visual_tiles
-                WHERE z = 18 AND x = 219553 AND y = 107056 AND t_type = 0 AND t = 0
+                WHERE z = 16 AND x = 54888 AND y = 26764 AND t_type = 0 AND t = 0
                 """,
             ).fetchone()
             footprint_count = connection.execute("SELECT COUNT(*) FROM footprints").fetchone()[0]
@@ -877,13 +896,13 @@ def test_dirty_mvt_request_rebuilds_visual_tile_after_serving_old_cells(tmp_path
         store.connection.execute(
             """
             INSERT INTO visual_tiles (z, x, y, t_type, t, status, cells, updated_at)
-            VALUES (18, 219553, 107056, 0, 0, ?, ?, 1000)
+            VALUES (16, 54888, 26764, 0, 0, ?, ?, 1000)
             """,
             (STATUS_DIRTY, blob),
         )
         store.connection.commit()
 
-        content = store.get_footprint_mvt(z=18, x=219553, y=107056, range_value="all")
+        content = store.get_footprint_mvt(z=16, x=54888, y=26764, range_value="all")
 
         deadline = time.monotonic() + 5
         row = None
@@ -892,7 +911,7 @@ def test_dirty_mvt_request_rebuilds_visual_tile_after_serving_old_cells(tmp_path
                 """
                 SELECT status, cells
                 FROM visual_tiles
-                WHERE z = 18 AND x = 219553 AND y = 107056 AND t_type = 0 AND t = 0
+                WHERE z = 16 AND x = 54888 AND y = 26764 AND t_type = 0 AND t = 0
                 """,
             ).fetchone()
             if row is not None and row["status"] == STATUS_READY:
@@ -902,7 +921,7 @@ def test_dirty_mvt_request_rebuilds_visual_tile_after_serving_old_cells(tmp_path
             """
             SELECT status, cells
             FROM visual_tiles
-            WHERE z = 18 AND x = 219553 AND y = 107056 AND t_type = 0 AND t = 0
+            WHERE z = 16 AND x = 54888 AND y = 26764 AND t_type = 0 AND t = 0
             """,
         ).fetchone()
     finally:
