@@ -12,6 +12,33 @@ export type AmapDistrictBoundarySummary = {
   pointCount: number
 }
 
+export type DistrictBoundaryGeoJsonInput = {
+  name: string
+  adcode: string
+  level: AMap.DistrictSearchLevel
+  paths: AmapBoundaryPath[]
+}
+
+export type DistrictBoundaryFeatureCollection = {
+  type: 'FeatureCollection'
+  features: DistrictBoundaryFeature[]
+}
+
+export type DistrictBoundaryFeature = {
+  type: 'Feature'
+  properties: {
+    name: string
+    adcode: string
+    level: AMap.DistrictSearchLevel
+    ringCount: number
+    pointCount: number
+  }
+  geometry: {
+    type: 'MultiPolygon'
+    coordinates: AmapBoundaryPath[][]
+  }
+}
+
 export function extractDistrictBoundaryPaths(boundaries: unknown): AmapBoundaryPath[] {
   if (!Array.isArray(boundaries)) return []
 
@@ -24,6 +51,33 @@ export function summarizeDistrictBoundary(paths: AmapBoundaryPath[]): AmapDistri
   return {
     ringCount: paths.length,
     pointCount: paths.reduce((total, path) => total + path.length, 0),
+  }
+}
+
+export function createDistrictBoundaryGeoJson({
+  name,
+  adcode,
+  level,
+  paths,
+}: DistrictBoundaryGeoJsonInput): DistrictBoundaryFeatureCollection {
+  const summary = summarizeDistrictBoundary(paths)
+
+  return {
+    type: 'FeatureCollection',
+    features: [{
+      type: 'Feature',
+      properties: {
+        name,
+        adcode,
+        level,
+        ringCount: summary.ringCount,
+        pointCount: summary.pointCount,
+      },
+      geometry: {
+        type: 'MultiPolygon',
+        coordinates: paths.map((path) => [path]),
+      },
+    }],
   }
 }
 

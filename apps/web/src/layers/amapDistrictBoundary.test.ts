@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  createDistrictBoundaryGeoJson,
   extractDistrictBoundaryPaths,
   summarizeDistrictBoundary,
 } from './amapDistrictBoundary'
@@ -32,6 +33,37 @@ describe('AMap district boundary parsing', () => {
     ])).toEqual({
       ringCount: 2,
       pointCount: 7,
+    })
+  })
+
+  it('creates a Mapbox-compatible GeoJSON multipolygon from AMap boundary paths', () => {
+    expect(createDistrictBoundaryGeoJson({
+      name: '浦东新区',
+      adcode: '310115',
+      level: 'district',
+      paths: [
+        [[121, 31], [122, 31], [121, 31]],
+        [[120, 30], [121, 30], [120, 30]],
+      ],
+    })).toEqual({
+      type: 'FeatureCollection',
+      features: [{
+        type: 'Feature',
+        properties: {
+          name: '浦东新区',
+          adcode: '310115',
+          level: 'district',
+          ringCount: 2,
+          pointCount: 6,
+        },
+        geometry: {
+          type: 'MultiPolygon',
+          coordinates: [
+            [[[121, 31], [122, 31], [121, 31]]],
+            [[[120, 30], [121, 30], [120, 30]]],
+          ],
+        },
+      }],
     })
   })
 })
