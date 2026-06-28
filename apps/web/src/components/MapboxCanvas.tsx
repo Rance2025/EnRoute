@@ -7,6 +7,7 @@ import {
   DEFAULT_FOOTPRINT_TILE_URL,
   FOOTPRINT_CIRCLE_LAYER_ID,
   FOOTPRINT_VECTOR_SOURCE_ID,
+  MAX_FOOTPRINT_TILE_ZOOM,
   type FootprintVectorTileRange,
 } from '../layers/footprintVectorTileSource'
 import {
@@ -416,7 +417,7 @@ function MapboxCanvasComponent({
         style: latestResolvedStyleUrlRef.current,
         center: DEFAULT_MAP_CENTER,
         zoom: resolvedProjection === 'globe' ? GLOBE_WORLD_ZOOM : DEFAULT_MAP_ZOOM,
-        maxZoom: 18,
+        maxZoom: MAX_FOOTPRINT_TILE_ZOOM,
         minPitch: 0,
         maxPitch: 0,
         pitch: 0,
@@ -777,7 +778,7 @@ function getCurrentFootprintTileDebugViewport(map: mapboxgl.Map) {
   const bounds = map.getBounds()
 
   return {
-    z: Math.max(0, Math.min(18, Math.floor(map.getZoom()))),
+    z: Math.max(0, Math.min(MAX_FOOTPRINT_TILE_ZOOM, Math.floor(map.getZoom()))),
     west: bounds?.getWest() ?? -180,
     south: bounds?.getSouth() ?? -85,
     east: bounds?.getEast() ?? 180,

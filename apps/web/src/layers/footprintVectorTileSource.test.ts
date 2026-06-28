@@ -3,14 +3,14 @@ import { describe, expect, it } from 'vitest'
 import * as footprintVectorTiles from './footprintVectorTileSource'
 
 describe('createFootprintVectorTileSource', () => {
-  it('builds a Mapbox vector source capped at zoom 18', () => {
+  it('builds a Mapbox vector source capped at zoom 16', () => {
     const source = footprintVectorTiles.createFootprintVectorTileSource({
       start: '2024-02-10',
       end: '2026-03-09',
     })
 
     expect(source.type).toBe('vector')
-    expect(source.maxzoom).toBe(18)
+    expect(source.maxzoom).toBe(16)
     expect(source.tiles).toEqual([
       '/api/map/tiles/footprints/{z}/{x}/{y}.mvt?start=2024-02-10&end=2026-03-09',
     ])
@@ -24,7 +24,7 @@ describe('createFootprintVectorTileSource', () => {
       range: 'all',
     } as Parameters<typeof footprintVectorTiles.createFootprintVectorTileSource>[0])
 
-    expect(source.maxzoom).toBe(18)
+    expect(source.maxzoom).toBe(16)
     expect(source.tiles).toEqual([
       '/api/map/tiles/footprints/{z}/{x}/{y}.mvt?range=all',
     ])

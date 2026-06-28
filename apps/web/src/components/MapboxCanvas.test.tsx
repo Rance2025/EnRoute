@@ -69,7 +69,7 @@ describe('MapboxCanvas footprint vector tiles', () => {
     })
   })
 
-  it('initializes Mapbox as a fixed globe map at max zoom 18 and adds the footprint vector circle layer', async () => {
+  it('initializes Mapbox as a fixed globe map at max zoom 16 and adds the footprint vector circle layer', async () => {
     const { mapRecords, footprintDataSourceImported } = mockMapboxRuntime()
     const { MapboxCanvas } = await import('./MapboxCanvas')
 
@@ -90,7 +90,7 @@ describe('MapboxCanvas footprint vector tiles', () => {
     expect(mapRecords[0].options).toMatchObject({
       dragRotate: false,
       maxPitch: 0,
-      maxZoom: 18,
+      maxZoom: 16,
       minPitch: 0,
       pitch: 0,
       projection: 'globe',
@@ -107,7 +107,7 @@ describe('MapboxCanvas footprint vector tiles', () => {
     expect(mapStage).not.toHaveClass('map-stage--loading')
     expect(mapRecords[0].sources.footprints).toMatchObject({
       type: 'vector',
-      maxzoom: 18,
+      maxzoom: 16,
       tiles: [
         expectedMapboxTileUrl('?start=2026-06-19&end=2026-06-19'),
       ],
@@ -177,7 +177,7 @@ describe('MapboxCanvas footprint vector tiles', () => {
 
     expect(mapRecords[0].sources.footprints).toMatchObject({
       type: 'vector',
-      maxzoom: 18,
+      maxzoom: 16,
     })
     expect(mapRecords[0].layers.some((layer) => (
       typeof layer === 'object' &&
@@ -264,7 +264,7 @@ describe('MapboxCanvas footprint vector tiles', () => {
     act(() => mapRecords[0].emit('load'))
 
     expect(mapRecords[0].sources.footprints).toMatchObject({
-      maxzoom: 18,
+      maxzoom: 16,
       tiles: [expectedMapboxTileUrl('?range=all')],
     })
   })
@@ -507,6 +507,43 @@ describe('MapboxCanvas footprint vector tiles', () => {
     expect(screen.getByLabelText('足迹渲染调试')).not.toHaveTextContent('视口瓦片')
     expect(screen.getByLabelText('足迹渲染调试')).not.toHaveTextContent('命中瓦片')
     expect(screen.getByLabelText('足迹渲染调试')).not.toHaveTextContent('脏瓦片')
+  })
+
+  it('clamps footprint tile debug metrics requests to z16', async () => {
+    const { mapRecords } = mockMapboxRuntime()
+    const fetchMock = mockMetricsAndDebugFetch({
+      ok: true,
+      json: async () => ({
+        tileZoom: 16,
+        requestedTileCount: 1,
+        populatedTileCount: 1,
+        readyTileCount: 1,
+        dirtyTileCount: 0,
+        rawCount: 12,
+        representativeCount: 6,
+        renderRatio: 0.5,
+      }),
+    })
+    const { MapboxCanvas } = await import('./MapboxCanvas')
+
+    render(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        tileUrl="/api/map/tiles/footprints/{z}/{x}/{y}.mvt"
+        timeRange={allRange}
+        debugPanelVisible
+      />,
+    )
+
+    mapRecords[0].setZoom(17.8)
+    mapRecords[0].setBounds({ west: 120, south: 30, east: 122, north: 32 })
+    act(() => mapRecords[0].emit('load'))
+    await act(async () => {})
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/map/tiles/footprints/debug?z=16&west=120&south=30&east=122&north=32&range=all',
+      expect.objectContaining({ method: 'GET' }),
+    )
   })
 
   it('keeps the last successful debug metrics while a refresh fails', async () => {

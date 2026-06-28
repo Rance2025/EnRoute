@@ -339,14 +339,14 @@ def test_importing_new_footprints_marks_existing_visual_tiles_dirty(tmp_path: Pa
         connection.execute(
             """
             INSERT INTO visual_tiles (z, x, y, t_type, t, status, cells, updated_at)
-            VALUES (18, 219553, 107056, 0, 0, ?, X'455654430100000000', 1000)
+            VALUES (16, 54888, 26764, 0, 0, ?, X'455654430100000000', 1000)
             """,
             (STATUS_READY,),
         )
         connection.execute(
             """
             INSERT INTO visual_tiles (z, x, y, t_type, t, status, cells, updated_at)
-            VALUES (18, 219553, 107056, 3, 20260111, ?, X'455654430100000000', 1000)
+            VALUES (16, 54888, 26764, 3, 20260111, ?, X'455654430100000000', 1000)
             """,
             (STATUS_READY,),
         )
@@ -363,7 +363,7 @@ def test_importing_new_footprints_marks_existing_visual_tiles_dirty(tmp_path: Pa
             """
             SELECT t_type, t, status
             FROM visual_tiles
-            WHERE z = 18 AND x = 219553 AND y = 107056
+            WHERE z = 16 AND x = 54888 AND y = 26764
             ORDER BY t_type, t
             """,
         ).fetchall()

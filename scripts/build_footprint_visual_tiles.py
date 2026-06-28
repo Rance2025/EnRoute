@@ -14,9 +14,9 @@ def main(argv: Sequence[str] | None = None, *, root_dir: Path | str | None = Non
 
   from enroute_api.config import Settings
   from enroute_api.footprints.store import FootprintStore
-  from enroute_api.footprints.visual_tiles import build_visual_tiles
+  from enroute_api.footprints.visual_tiles import MAX_VISUAL_TILE_ZOOM, build_visual_tiles
 
-  args = parse_args(argv)
+  args = parse_args(argv, max_zoom_default=MAX_VISUAL_TILE_ZOOM)
   settings = Settings.from_env()
   data_path = resolve_path(resolved_root_dir, args.source or settings.footprint_data_path)
   db_path = resolve_path(resolved_root_dir, args.database or settings.footprint_db_path)
@@ -56,7 +56,7 @@ def main(argv: Sequence[str] | None = None, *, root_dir: Path | str | None = Non
   return 0
 
 
-def parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
+def parse_args(argv: Sequence[str] | None, *, max_zoom_default: int) -> argparse.Namespace:
   parser = argparse.ArgumentParser(
     description="Build precomputed footprint visual tile rows from the local SQLite database.",
   )
@@ -73,7 +73,12 @@ def parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     help="Local admin region GeoJSON path. Defaults to ADMIN_REGION_DATA_PATH.",
   )
   parser.add_argument("--min-zoom", type=int, default=0, help="Minimum zoom to build. Defaults to 0.")
-  parser.add_argument("--max-zoom", type=int, default=18, help="Maximum zoom to build. Defaults to 18.")
+  parser.add_argument(
+    "--max-zoom",
+    type=int,
+    default=max_zoom_default,
+    help=f"Maximum zoom to build. Defaults to {max_zoom_default}.",
+  )
   parser.add_argument("--zoom", type=int, help="Build one zoom level, overriding --min-zoom and --max-zoom.")
   parser.add_argument(
     "--bucket",

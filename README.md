@@ -56,7 +56,7 @@ install:api` installs the Python backend service in editable mode with its test
 dependencies from `apps/api/pyproject.toml`. `npm run rebuild:footprints`
 recreates the ignored SQLite database from the WGS-84 source CSV, and
 `npm run prepare:footprint-tiles` precomputes the footprint visual tile cells
-for `all`, `day`, `month`, and `year` buckets up to zoom 18.
+for `all`, `day`, `month`, and `year` buckets up to zoom 16.
 
 Mapbox map appearance is configured from `.env.local`. Use
 `VITE_MAPBOX_PROJECTION=globe` for the default spherical map, or
@@ -121,7 +121,7 @@ npm run lint
 npm run build
 ```
 
-The current location page uses a Mapbox GL map surface capped at zoom 18 and a
+The current location page uses a Mapbox GL map surface capped at zoom 16 and a
 vector-tile circle layer for footprint points. Footprint rendering must stay on
 the MVT path instead of loading raw point arrays into browser memory.
 Future track and region layers should use viewport or tile loading instead of
