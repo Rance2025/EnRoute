@@ -274,6 +274,14 @@ def start_service(spec: ServiceSpec) -> bool:
     spec.pid_file.unlink(missing_ok=True)
 
   if is_port_open(spec.host, spec.port):
+    listener_pids = find_port_listener_pids(spec.host, spec.port)
+    listener_text = format_port_listener_pids(listener_pids)
+    if listener_text:
+      raise RuntimeError(
+        f"{spec.name} port {spec.port} is already open by {listener_text} "
+        "but no managed pid file is running",
+      )
+
     raise RuntimeError(
       f"{spec.name} port {spec.port} is already open but no managed pid file is running",
     )
@@ -355,6 +363,89 @@ def is_port_open(host: str, port: int) -> bool:
       return True
   except OSError:
     return False
+
+
+def find_port_listener_pids(host: str, port: int) -> list[int]:
+  if os.name != "nt":
+    return []
+
+  try:
+    completed = subprocess.run(
+      ["netstat", "-ano", "-p", "tcp"],
+      stdout=subprocess.PIPE,
+      stderr=subprocess.DEVNULL,
+      check=False,
+      encoding="utf-8",
+      errors="ignore",
+      timeout=3,
+    )
+  except (OSError, subprocess.TimeoutExpired):
+    return []
+
+  return parse_windows_netstat_listener_pids(completed.stdout, host, port)
+
+
+def parse_windows_netstat_listener_pids(output: str, host: str, port: int) -> list[int]:
+  matching_addresses = get_windows_listener_match_addresses(host)
+  pids: list[int] = []
+
+  for line in output.splitlines():
+    parts = line.split()
+    if len(parts) < 5 or parts[0].upper() != "TCP" or parts[-2].upper() != "LISTENING":
+      continue
+
+    local_address, local_port = parse_windows_netstat_endpoint(parts[1])
+    if local_port != port or local_address not in matching_addresses:
+      continue
+
+    try:
+      pid = int(parts[-1])
+    except ValueError:
+      continue
+
+    if pid not in pids:
+      pids.append(pid)
+
+  return pids
+
+
+def get_windows_listener_match_addresses(host: str) -> set[str]:
+  connect_host = to_connect_host(host)
+  addresses = {connect_host}
+  if connect_host == "127.0.0.1":
+    addresses.add("0.0.0.0")
+  if connect_host in {"::1", "localhost"}:
+    addresses.update({"::", "::1"})
+  if host == "0.0.0.0":
+    addresses.add("127.0.0.1")
+  return addresses
+
+
+def parse_windows_netstat_endpoint(endpoint: str) -> tuple[str, int | None]:
+  if endpoint.startswith("["):
+    address_end = endpoint.find("]:")
+    if address_end < 0:
+      return endpoint, None
+
+    address = endpoint[1:address_end]
+    port_value = endpoint[address_end + 2 :]
+  else:
+    address, separator, port_value = endpoint.rpartition(":")
+    if not separator:
+      return endpoint, None
+
+  try:
+    return address, int(port_value)
+  except ValueError:
+    return address, None
+
+
+def format_port_listener_pids(pids: Sequence[int]) -> str:
+  if len(pids) == 1:
+    return f"pid={pids[0]}"
+  if len(pids) > 1:
+    return "pids=" + ",".join(str(pid) for pid in pids)
+  return ""
 
 
 def is_process_running(pid: int) -> bool:
