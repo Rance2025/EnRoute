@@ -102,6 +102,7 @@ describe('MapboxCanvas footprint vector tiles', () => {
       dragRotate: false,
       maxPitch: 0,
       maxZoom: 16,
+      minZoom: 0,
       minPitch: 0,
       pitch: 0,
       projection: 'globe',
