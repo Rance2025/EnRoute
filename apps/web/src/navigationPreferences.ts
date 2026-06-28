@@ -3,6 +3,7 @@ import type { MapStylePreference } from './mapStyleOptions'
 export type NavigationStyle = 'icon' | 'mixed'
 export type AppTheme = 'mist'
 export type MapProjectionPreference = 'globe' | 'mercator'
+export type MapLanguagePreference = 'auto' | 'zh-Hans' | 'en'
 export type { MapStylePreference } from './mapStyleOptions'
 
 export const NAVIGATION_STYLE_STORAGE_KEY = 'enroute:navigation-style'
@@ -12,6 +13,7 @@ export const MAP_ADMIN_BOUNDARIES_VISIBLE_STORAGE_KEY = 'enroute:map-admin-bound
 export const APP_THEME_STORAGE_KEY = 'enroute:app-theme'
 export const MAP_PROJECTION_STORAGE_KEY = 'enroute:map-projection'
 export const MAP_STYLE_STORAGE_KEY = 'enroute:map-style'
+export const MAP_LANGUAGE_STORAGE_KEY = 'enroute:map-language'
 
 export function readNavigationStyle(
   storage: Pick<Storage, 'getItem'> | undefined = getBrowserStorage(),
@@ -145,6 +147,29 @@ export function writeMapStyle(
 ) {
   try {
     storage?.setItem(MAP_STYLE_STORAGE_KEY, style)
+  } catch {
+    // Local preference writes should never block the UI.
+  }
+}
+
+export function readMapLanguage(
+  storage: Pick<Storage, 'getItem'> | undefined = getBrowserStorage(),
+): MapLanguagePreference {
+  try {
+    const storedValue = storage?.getItem(MAP_LANGUAGE_STORAGE_KEY)
+
+    return storedValue === 'zh-Hans' || storedValue === 'en' ? storedValue : 'auto'
+  } catch {
+    return 'auto'
+  }
+}
+
+export function writeMapLanguage(
+  language: MapLanguagePreference,
+  storage: Pick<Storage, 'setItem'> | undefined = getBrowserStorage(),
+) {
+  try {
+    storage?.setItem(MAP_LANGUAGE_STORAGE_KEY, language)
   } catch {
     // Local preference writes should never block the UI.
   }

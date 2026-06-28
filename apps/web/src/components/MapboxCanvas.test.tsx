@@ -98,8 +98,10 @@ describe('MapboxCanvas footprint vector tiles', () => {
       style: 'mapbox://styles/enroute/test',
       touchPitch: false,
       touchZoomRotate: false,
+      worldview: 'CN',
       zoom: 1.75,
     })
+    expect(mapRecords[0].options).not.toHaveProperty('language')
 
     act(() => mapRecords[0].emit('load'))
 
@@ -285,6 +287,40 @@ describe('MapboxCanvas footprint vector tiles', () => {
       projection: 'mercator',
       renderWorldCopies: true,
       zoom: 2.2,
+    })
+  })
+
+  it('uses an explicit Mapbox display language while keeping China worldview fixed', async () => {
+    const { mapRecords } = mockMapboxRuntime()
+    const { MapboxCanvas } = await import('./MapboxCanvas')
+
+    const { rerender } = render(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        language="zh-Hans"
+        timeRange={selectedRange}
+      />,
+    )
+
+    expect(mapRecords).toHaveLength(1)
+    expect(mapRecords[0].options).toMatchObject({
+      language: 'zh-Hans',
+      worldview: 'CN',
+    })
+
+    rerender(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        language="en"
+        timeRange={selectedRange}
+      />,
+    )
+
+    expect(mapRecords).toHaveLength(2)
+    expect(mapRecords[0].removeCalls).toBe(1)
+    expect(mapRecords[1].options).toMatchObject({
+      language: 'en',
+      worldview: 'CN',
     })
   })
 

@@ -41,20 +41,24 @@ vi.mock('./MapboxCanvas', async () => {
       placeLabelsVisible = true,
       projection,
       styleUrl,
+      language,
       onAdminBoundariesVisibleChange,
       onPlaceLabelsVisibleChange,
       onMapStyleChange,
       onMapProjectionChange,
+      onMapLanguageChange,
     }: {
       adminRegionUnlockEnabled?: boolean
       adminBoundariesVisible?: boolean
       placeLabelsVisible?: boolean
       projection?: string
       styleUrl?: string
+      language?: string
       onAdminBoundariesVisibleChange?: (visible: boolean) => void
       onPlaceLabelsVisibleChange?: (visible: boolean) => void
       onMapStyleChange?: (styleId: string) => void
       onMapProjectionChange?: (projection: string) => void
+      onMapLanguageChange?: (language: string) => void
     }) => {
       const [footprintStyle, setFootprintStyle] = React.useState(readStoredFootprintStyle)
       const updateFootprintStyle = React.useCallback((nextFootprintStyle: typeof DEFAULT_FOOTPRINT_STYLE) => {
@@ -72,6 +76,7 @@ vi.mock('./MapboxCanvas', async () => {
           'data-place-labels-visible': String(placeLabelsVisible),
           'data-projection': projection,
           'data-style-url': styleUrl,
+          'data-language': language,
           'aria-label': MAP_STAGE_LABEL,
         },
         React.createElement('div', { className: 'amap-surface mapbox-surface' }),
@@ -89,8 +94,10 @@ vi.mock('./MapboxCanvas', async () => {
           onPlaceLabelsVisibleChange,
           mapStyle: styleUrl?.includes('cmqvb5b20001e01s72ia82lz5') ? 'alternate' : 'primary',
           mapProjection: projection === 'mercator' ? 'mercator' : 'globe',
+          mapLanguage: language === 'zh-Hans' || language === 'en' ? language : 'auto',
           onMapStyleChange,
           onMapProjectionChange,
+          onMapLanguageChange,
         }),
         adminRegionUnlockEnabled
           ? React.createElement(
@@ -112,6 +119,7 @@ import App from '../App'
 
 const MAP_STYLE_LABEL = '\u5730\u56fe\u6837\u5f0f'
 const MAP_PROJECTION_LABEL = '\u5730\u56fe\u5f62\u6001'
+const MAP_LANGUAGE_LABEL = '\u5730\u56fe\u8bed\u8a00'
 
 const localStorageMock = createLocalStorageMock()
 Object.defineProperty(window, 'localStorage', {
@@ -430,6 +438,44 @@ describe('unified shell layout', () => {
 
     expect(window.localStorage.getItem('enroute:map-projection')).toBe('globe')
     expect(mapStage).toHaveAttribute('data-projection', 'globe')
+  })
+
+  it('switches map language from the footprint settings popover and persists the choice without showing worldview', async () => {
+    render(<App amapConfig={configuredAmap} />)
+    await settleLazyImports()
+
+    const mapStage = document.querySelector('.map-stage')
+    expect(mapStage).toBeInstanceOf(HTMLElement)
+    expect(mapStage).not.toHaveAttribute('data-language')
+
+    fireEvent.click(screen.getByRole('button', { name: '足迹显示设置' }))
+
+    const popover = screen.getByRole('dialog', { name: '足迹显示设置' })
+    expect(within(popover).getByText(MAP_LANGUAGE_LABEL)).toBeInTheDocument()
+    expect(within(popover).queryByText(/worldview|世界观/i)).not.toBeInTheDocument()
+
+    const languageGroup = within(popover).getByRole('group', { name: MAP_LANGUAGE_LABEL })
+    expect(languageGroup).toHaveClass('pill-button-group')
+    const languageButtons = within(languageGroup).getAllByRole('button')
+
+    expect(languageButtons).toHaveLength(3)
+    expect(languageButtons.map((button) => button.textContent)).toEqual(['全', '中', '英'])
+    expect(languageButtons[0]).toHaveAttribute('aria-pressed', 'true')
+
+    fireEvent.click(languageButtons[1])
+
+    expect(window.localStorage.getItem('enroute:map-language')).toBe('zh-Hans')
+    expect(mapStage).toHaveAttribute('data-language', 'zh-Hans')
+
+    fireEvent.click(languageButtons[2])
+
+    expect(window.localStorage.getItem('enroute:map-language')).toBe('en')
+    expect(mapStage).toHaveAttribute('data-language', 'en')
+
+    fireEvent.click(languageButtons[0])
+
+    expect(window.localStorage.getItem('enroute:map-language')).toBe('auto')
+    expect(mapStage).not.toHaveAttribute('data-language')
   })
   it('shows an administrative region compatibility notice from the map region tab', async () => {
     render(<App amapConfig={configuredAmap} />)

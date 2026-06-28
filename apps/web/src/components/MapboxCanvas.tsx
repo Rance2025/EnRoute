@@ -23,6 +23,7 @@ type MapboxCanvasProps = {
   accessToken?: string
   styleUrl?: string
   projection?: MapboxProjection
+  language?: MapboxLanguage
   tileUrl?: string
   timeRange: TimeRangeSelection
   onFootprintMetricsChange?: (metrics: FootprintMetrics) => void
@@ -31,10 +32,12 @@ type MapboxCanvasProps = {
   placeLabelsVisible?: boolean
   adminBoundariesVisible?: boolean
   mapStyle?: MapStylePreference
+  mapLanguage?: MapboxLanguagePreference
   onPlaceLabelsVisibleChange?: (visible: boolean) => void
   onAdminBoundariesVisibleChange?: (visible: boolean) => void
   onMapStyleChange?: (style: MapStylePreference) => void
   onMapProjectionChange?: (projection: MapboxProjection) => void
+  onMapLanguageChange?: (language: MapboxLanguagePreference) => void
 }
 
 export type FootprintMetrics = {
@@ -59,6 +62,12 @@ type MapboxCanvasEnv = {
 }
 
 type MapboxProjection = 'globe' | 'mercator'
+type MapboxLanguage = 'zh-Hans' | 'en'
+type MapboxLanguagePreference = 'auto' | MapboxLanguage
+type EnRouteMapboxOptions = ConstructorParameters<typeof mapboxgl.Map>[0] & {
+  language?: MapboxLanguage
+  worldview: 'CN'
+}
 
 type MapStatus = 'missing-token' | 'loading' | 'ready' | 'error'
 
@@ -119,6 +128,7 @@ function MapboxCanvasComponent({
   accessToken,
   styleUrl,
   projection,
+  language,
   tileUrl,
   timeRange,
   onFootprintMetricsChange,
@@ -127,10 +137,12 @@ function MapboxCanvasComponent({
   placeLabelsVisible = true,
   adminBoundariesVisible = true,
   mapStyle,
+  mapLanguage = 'auto',
   onPlaceLabelsVisibleChange,
   onAdminBoundariesVisibleChange,
   onMapStyleChange,
   onMapProjectionChange,
+  onMapLanguageChange,
 }: MapboxCanvasProps) {
   const mapNodeRef = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<mapboxgl.Map | null>(null)
@@ -425,7 +437,7 @@ function MapboxCanvasComponent({
     try {
       const mapNode = mapNodeRef.current
       resetBaseMapVisibilityState()
-      const map = new mapboxgl.Map({
+      const mapOptions: EnRouteMapboxOptions = {
         container: mapNode,
         style: latestResolvedStyleUrlRef.current,
         center: DEFAULT_MAP_CENTER,
@@ -441,7 +453,13 @@ function MapboxCanvasComponent({
         projection: resolvedProjection,
         renderWorldCopies: resolvedProjection === 'mercator',
         fadeDuration: 0,
-      })
+        worldview: 'CN',
+      }
+      if (language) {
+        mapOptions.language = language
+      }
+
+      const map = new mapboxgl.Map(mapOptions)
       mapRef.current = map
 
       const handleLoad = () => {
@@ -518,6 +536,7 @@ function MapboxCanvasComponent({
   }, [
     clearGlobeRotationTimer,
     resolvedAccessToken,
+    language,
     resolvedProjection,
     resetBaseMapVisibilityState,
     startGlobeRotation,
@@ -700,10 +719,12 @@ function MapboxCanvasComponent({
         adminBoundariesVisible={adminBoundariesVisible}
         mapStyle={mapStyle}
         mapProjection={resolvedProjection}
+        mapLanguage={mapLanguage}
         onPlaceLabelsVisibleChange={onPlaceLabelsVisibleChange}
         onAdminBoundariesVisibleChange={onAdminBoundariesVisibleChange}
         onMapStyleChange={onMapStyleChange}
         onMapProjectionChange={onMapProjectionChange}
+        onMapLanguageChange={onMapLanguageChange}
       />
       {adminRegionUnlockEnabled ? (
         <div className="map-message map-message--compat" role="status">

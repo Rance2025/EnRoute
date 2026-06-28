@@ -18,6 +18,7 @@ import {
 export type { FootprintStyle }
 
 type MapProjectionPreference = 'globe' | 'mercator'
+type MapLanguagePreference = 'auto' | 'zh-Hans' | 'en'
 
 type MapControlsProps = {
   onFitFootprints: () => void
@@ -31,10 +32,12 @@ type MapControlsProps = {
   adminBoundariesVisible?: boolean
   mapStyle?: MapStylePreference
   mapProjection?: MapProjectionPreference
+  mapLanguage?: MapLanguagePreference
   onPlaceLabelsVisibleChange?: (visible: boolean) => void
   onAdminBoundariesVisibleChange?: (visible: boolean) => void
   onMapStyleChange?: (style: MapStylePreference) => void
   onMapProjectionChange?: (projection: MapProjectionPreference) => void
+  onMapLanguageChange?: (language: MapLanguagePreference) => void
 }
 
 type FootprintStylePopoverProps = {
@@ -44,19 +47,27 @@ type FootprintStylePopoverProps = {
   adminBoundariesVisible?: boolean
   mapStyle?: MapStylePreference
   mapProjection?: MapProjectionPreference
+  mapLanguage?: MapLanguagePreference
   onPlaceLabelsVisibleChange?: (visible: boolean) => void
   onAdminBoundariesVisibleChange?: (visible: boolean) => void
   onMapStyleChange?: (style: MapStylePreference) => void
   onMapProjectionChange?: (projection: MapProjectionPreference) => void
+  onMapLanguageChange?: (language: MapLanguagePreference) => void
 }
 
 const FOOTPRINT_COLOR_SWATCHES = ['#123f35', '#4f7cff', '#b8544c']
 const FOOTPRINT_STYLE_COMMIT_DELAY_MS = 180
 const MAP_STYLE_LABEL = '\u5730\u56fe\u6837\u5f0f'
 const MAP_PROJECTION_LABEL = '\u5730\u56fe\u5f62\u6001'
+const MAP_LANGUAGE_LABEL = '\u5730\u56fe\u8bed\u8a00'
 const MAP_PROJECTION_OPTIONS: Array<{ value: MapProjectionPreference; label: string }> = [
   { value: 'globe', label: '\u7403\u5f62' },
   { value: 'mercator', label: '\u5e73\u9762' },
+]
+const MAP_LANGUAGE_OPTIONS: Array<{ value: MapLanguagePreference; label: string }> = [
+  { value: 'auto', label: '\u5168' },
+  { value: 'zh-Hans', label: '\u4e2d' },
+  { value: 'en', label: '\u82f1' },
 ]
 
 export function MapControls({
@@ -71,10 +82,12 @@ export function MapControls({
   adminBoundariesVisible = true,
   mapStyle = 'primary',
   mapProjection = 'globe',
+  mapLanguage = 'auto',
   onPlaceLabelsVisibleChange,
   onAdminBoundariesVisibleChange,
   onMapStyleChange,
   onMapProjectionChange,
+  onMapLanguageChange,
 }: MapControlsProps) {
   const [isFootprintStyleOpen, setIsFootprintStyleOpen] = useState(false)
   const settingsRef = useRef<HTMLDivElement | null>(null)
@@ -151,10 +164,12 @@ export function MapControls({
             adminBoundariesVisible={adminBoundariesVisible}
             mapStyle={mapStyle}
             mapProjection={mapProjection}
+            mapLanguage={mapLanguage}
             onPlaceLabelsVisibleChange={onPlaceLabelsVisibleChange}
             onAdminBoundariesVisibleChange={onAdminBoundariesVisibleChange}
             onMapStyleChange={onMapStyleChange}
             onMapProjectionChange={onMapProjectionChange}
+            onMapLanguageChange={onMapLanguageChange}
           />
         ) : null}
         <button
@@ -179,10 +194,12 @@ function FootprintStylePopover({
   adminBoundariesVisible = true,
   mapStyle = 'primary',
   mapProjection = 'globe',
+  mapLanguage = 'auto',
   onPlaceLabelsVisibleChange,
   onAdminBoundariesVisibleChange,
   onMapStyleChange,
   onMapProjectionChange,
+  onMapLanguageChange,
 }: FootprintStylePopoverProps) {
   const [draftFootprintStyle, setDraftFootprintStyle] = useState(footprintStyle)
   const styleCommitTimerRef = useRef<number | null>(null)
@@ -257,6 +274,17 @@ function FootprintStylePopover({
 
   return (
     <div className="footprint-style-popover" role="dialog" aria-label="足迹显示设置">
+      {onMapLanguageChange ? (
+        <div className="footprint-style-popover__row footprint-style-popover__row--inline">
+          <span>{MAP_LANGUAGE_LABEL}</span>
+          <PillButtonGroup
+            ariaLabel={MAP_LANGUAGE_LABEL}
+            options={MAP_LANGUAGE_OPTIONS}
+            value={mapLanguage}
+            onChange={onMapLanguageChange}
+          />
+        </div>
+      ) : null}
       {onMapProjectionChange ? (
         <div className="footprint-style-popover__row footprint-style-popover__row--inline">
           <span>{MAP_PROJECTION_LABEL}</span>

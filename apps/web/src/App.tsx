@@ -40,6 +40,7 @@ import {
 import type { AmapConfig } from './config/amap'
 import {
   readMapAdminBoundariesVisible,
+  readMapLanguage,
   readMapProjection,
   readMapDebugPanelVisible,
   readMapPlaceLabelsVisible,
@@ -48,12 +49,14 @@ import {
   readAppTheme,
   writeAppTheme,
   writeMapAdminBoundariesVisible,
+  writeMapLanguage,
   writeMapProjection,
   writeMapDebugPanelVisible,
   writeMapPlaceLabelsVisible,
   writeMapStyle,
   writeNavigationStyle,
   type AppTheme,
+  type MapLanguagePreference,
   type MapStylePreference,
   type MapProjectionPreference,
   type NavigationStyle,
@@ -265,6 +268,7 @@ function App(props: AppProps) {
     readMapProjection,
   )
   const [mapStyle, setMapStyle] = useState<MapStylePreference>(readMapStyle)
+  const [mapLanguage, setMapLanguage] = useState<MapLanguagePreference>(readMapLanguage)
   const [topNavigationThumb, setTopNavigationThumb] = useState<TopNavigationThumbMetrics>({
     left: 0,
     width: 0,
@@ -326,6 +330,10 @@ function App(props: AppProps) {
   const handleMapStyleChange = useCallback((nextStyle: MapStylePreference) => {
     setMapStyle(nextStyle)
     writeMapStyle(nextStyle)
+  }, [])
+  const handleMapLanguageChange = useCallback((nextLanguage: MapLanguagePreference) => {
+    setMapLanguage(nextLanguage)
+    writeMapLanguage(nextLanguage)
   }, [])
   const previewTopNavigationPointerPosition = useCallback((clientX: number) => {
     const tabsElement = topNavigationTabsRef.current
@@ -655,9 +663,12 @@ function App(props: AppProps) {
             onAdminBoundariesVisibleChange={handleMapAdminBoundariesVisibleChange}
             projection={mapProjection}
             styleUrl={selectedMapStyle.url}
+            language={mapLanguage === 'auto' ? undefined : mapLanguage}
             mapStyle={mapStyle}
+            mapLanguage={mapLanguage}
             onMapStyleChange={handleMapStyleChange}
             onMapProjectionChange={handleMapProjectionChange}
+            onMapLanguageChange={handleMapLanguageChange}
           />
         </Suspense>
       ) : view === 'accounting' ? (

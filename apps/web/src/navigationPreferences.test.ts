@@ -4,16 +4,19 @@ import {
   MAP_ADMIN_BOUNDARIES_VISIBLE_STORAGE_KEY,
   MAP_PROJECTION_STORAGE_KEY,
   MAP_DEBUG_PANEL_VISIBLE_STORAGE_KEY,
+  MAP_LANGUAGE_STORAGE_KEY,
   MAP_PLACE_LABELS_VISIBLE_STORAGE_KEY,
   MAP_STYLE_STORAGE_KEY,
   NAVIGATION_STYLE_STORAGE_KEY,
   readMapAdminBoundariesVisible,
+  readMapLanguage,
   readMapProjection,
   readMapDebugPanelVisible,
   readMapPlaceLabelsVisible,
   readMapStyle,
   readNavigationStyle,
   writeMapAdminBoundariesVisible,
+  writeMapLanguage,
   writeMapProjection,
   writeMapDebugPanelVisible,
   writeMapPlaceLabelsVisible,
@@ -135,6 +138,30 @@ describe('navigationPreferences', () => {
     writeMapStyle('primary', storage)
 
     expect(storage.setItem).toHaveBeenCalledWith(MAP_STYLE_STORAGE_KEY, 'primary')
+  })
+
+  it('defaults map language to all/default and only accepts configured language ids', () => {
+    expect(readMapLanguage(createStorage())).toBe('auto')
+    expect(readMapLanguage(createStorage('wide', MAP_LANGUAGE_STORAGE_KEY))).toBe('auto')
+    expect(readMapLanguage(createStorage('auto', MAP_LANGUAGE_STORAGE_KEY))).toBe('auto')
+    expect(readMapLanguage(createStorage('zh-Hans', MAP_LANGUAGE_STORAGE_KEY))).toBe('zh-Hans')
+    expect(readMapLanguage(createStorage('en', MAP_LANGUAGE_STORAGE_KEY))).toBe('en')
+  })
+
+  it('writes the map language preference', () => {
+    const storage = createStorage()
+
+    writeMapLanguage('zh-Hans', storage)
+
+    expect(storage.setItem).toHaveBeenCalledWith(MAP_LANGUAGE_STORAGE_KEY, 'zh-Hans')
+
+    writeMapLanguage('en', storage)
+
+    expect(storage.setItem).toHaveBeenCalledWith(MAP_LANGUAGE_STORAGE_KEY, 'en')
+
+    writeMapLanguage('auto', storage)
+
+    expect(storage.setItem).toHaveBeenCalledWith(MAP_LANGUAGE_STORAGE_KEY, 'auto')
   })
 
   it('defaults map place labels and administrative boundaries to visible unless storage explicitly disables them', () => {
