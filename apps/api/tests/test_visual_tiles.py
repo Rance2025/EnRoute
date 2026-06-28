@@ -775,7 +775,7 @@ def test_serves_footprint_tile_debug_metrics_for_viewport(tmp_path):
         assert response.status_code == 200
         assert response.json() == {
             "tileZoom": 1,
-            "requestedTileCount": 1,
+            "requestedTileCount": 4,
             "populatedTileCount": 1,
             "readyTileCount": 1,
             "dirtyTileCount": 0,

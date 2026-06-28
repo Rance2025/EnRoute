@@ -869,7 +869,6 @@ function getCurrentFootprintTileDebugViewport(
       south: -85,
       east: 180,
       north: 85,
-      tiles: visibleTileTarget?.tiles ?? getGlobeWorldDebugTiles(map, z),
     }
   }
 
@@ -930,16 +929,6 @@ function getFootprintSourceCache(map: mapboxgl.Map): MapboxFootprintSourceCache 
     debugMap.style?._mergedSourceCaches?.[FOOTPRINT_VECTOR_SOURCE_ID] ??
     debugMap.style?._sourceCaches?.[FOOTPRINT_VECTOR_SOURCE_ID]
   )
-}
-
-function getGlobeWorldDebugTiles(map: mapboxgl.Map, z: number) {
-  if (z === 0) return ['0/0']
-
-  const center = map.getCenter()
-  const x = normalizeLongitude(center.lng) < 0 ? 0 : 1
-  const y = center.lat >= 0 ? 0 : 1
-
-  return [`${x}/${y}`]
 }
 
 function compareTileKeys(left: string, right: string) {
