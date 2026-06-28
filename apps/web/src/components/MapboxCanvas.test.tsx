@@ -12,6 +12,7 @@ type MockMapRecord = {
   configProperties: Array<[string, string, unknown]>
   configPropertyValues: Map<string, unknown>
   setStyleCalls: unknown[]
+  visibleTileCoordinates: MockVisibleTileCoordinate[]
   removedLayers: string[]
   removedSources: string[]
   paintProperties: Array<[string, string, unknown]>
@@ -24,6 +25,15 @@ type MockMapRecord = {
   setZoom: (zoom: number) => void
   setCenter: (center: [number, number]) => void
   setBounds: (bounds: { west: number, south: number, east: number, north: number }) => void
+  setVisibleTileCoordinates: (coordinates: MockVisibleTileCoordinate[]) => void
+}
+
+type MockVisibleTileCoordinate = {
+  canonical: {
+    z: number
+    x: number
+    y: number
+  }
 }
 
 const selectedRange: TimeRangeSelection = {
@@ -662,13 +672,13 @@ describe('MapboxCanvas footprint vector tiles', () => {
     expect(debugUrl.searchParams.has('north')).toBe(false)
   })
 
-  it('derives globe z1 debug tiles from the map center instead of unstable bounds', async () => {
+  it('falls back to the center z1 tile for globe debug metrics when visible source tiles are unavailable', async () => {
     const { mapRecords } = mockMapboxRuntime()
     const fetchMock = mockMetricsAndDebugFetch({
       ok: true,
       json: async () => ({
         tileZoom: 1,
-        requestedTileCount: 4,
+        requestedTileCount: 1,
         populatedTileCount: 1,
         readyTileCount: 1,
         dirtyTileCount: 0,
@@ -697,11 +707,99 @@ describe('MapboxCanvas footprint vector tiles', () => {
 
     const debugUrl = getLastDebugRequestUrl(fetchMock)
     expect(debugUrl.searchParams.get('z')).toBe('1')
-    expect(debugUrl.searchParams.get('tiles')).toBe('0/0,1/0,0/1,1/1')
+    expect(debugUrl.searchParams.get('tiles')).toBe('1/0')
     expect(debugUrl.searchParams.has('west')).toBe(false)
     expect(debugUrl.searchParams.has('south')).toBe(false)
     expect(debugUrl.searchParams.has('east')).toBe(false)
     expect(debugUrl.searchParams.has('north')).toBe(false)
+  })
+
+  it('uses Mapbox visible z1 source tiles for globe debug metrics at fractional camera zoom', async () => {
+    const { mapRecords } = mockMapboxRuntime()
+    const fetchMock = mockMetricsAndDebugFetch({
+      ok: true,
+      json: async () => ({
+        tileZoom: 1,
+        requestedTileCount: 2,
+        populatedTileCount: 1,
+        readyTileCount: 1,
+        dirtyTileCount: 0,
+        rawCount: 40441,
+        representativeCount: 235,
+        renderRatio: 0.005811,
+      }),
+    })
+    const { MapboxCanvas } = await import('./MapboxCanvas')
+
+    render(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        projection="globe"
+        tileUrl="/api/map/tiles/footprints/{z}/{x}/{y}.mvt"
+        timeRange={allRange}
+        debugPanelVisible
+      />,
+    )
+
+    mapRecords[0].setZoom(1.8)
+    mapRecords[0].setCenter([104, 35])
+    mapRecords[0].setBounds({ west: -180, south: -80, east: 180, north: 85 })
+    mapRecords[0].setVisibleTileCoordinates([
+      { canonical: { z: 1, x: 1, y: 0 } },
+      { canonical: { z: 1, x: 1, y: 1 } },
+    ])
+    act(() => mapRecords[0].emit('load'))
+    await act(async () => {})
+
+    const debugUrl = getLastDebugRequestUrl(fetchMock)
+    expect(debugUrl.searchParams.get('z')).toBe('1')
+    expect(debugUrl.searchParams.get('tiles')).toBe('1/0,1/1')
+    expect(debugUrl.searchParams.has('west')).toBe(false)
+    expect(debugUrl.searchParams.has('south')).toBe(false)
+    expect(debugUrl.searchParams.has('east')).toBe(false)
+    expect(debugUrl.searchParams.has('north')).toBe(false)
+  })
+
+  it('prefers the detailed visible z1 source tiles over a retained globe z0 parent tile', async () => {
+    const { mapRecords } = mockMapboxRuntime()
+    const fetchMock = mockMetricsAndDebugFetch({
+      ok: true,
+      json: async () => ({
+        tileZoom: 1,
+        requestedTileCount: 1,
+        populatedTileCount: 1,
+        readyTileCount: 1,
+        dirtyTileCount: 0,
+        rawCount: 40441,
+        representativeCount: 235,
+        renderRatio: 0.005811,
+      }),
+    })
+    const { MapboxCanvas } = await import('./MapboxCanvas')
+
+    render(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        projection="globe"
+        tileUrl="/api/map/tiles/footprints/{z}/{x}/{y}.mvt"
+        timeRange={allRange}
+        debugPanelVisible
+      />,
+    )
+
+    mapRecords[0].setZoom(1.8)
+    mapRecords[0].setCenter([104, 35])
+    mapRecords[0].setBounds({ west: -180, south: -80, east: 180, north: 85 })
+    mapRecords[0].setVisibleTileCoordinates([
+      { canonical: { z: 0, x: 0, y: 0 } },
+      { canonical: { z: 1, x: 1, y: 0 } },
+    ])
+    act(() => mapRecords[0].emit('load'))
+    await act(async () => {})
+
+    const debugUrl = getLastDebugRequestUrl(fetchMock)
+    expect(debugUrl.searchParams.get('z')).toBe('1')
+    expect(debugUrl.searchParams.get('tiles')).toBe('1/0')
   })
 
   it('keeps bounds-based debug metrics for globe z2 and above', async () => {
@@ -1247,6 +1345,7 @@ function mockMapboxRuntime(runtimeOptions: {
         configProperties: [],
         configPropertyValues: new Map(standardBasemapConfig),
         setStyleCalls: [],
+        visibleTileCoordinates: [],
         removedLayers: [],
         removedSources: [],
         paintProperties: [],
@@ -1270,6 +1369,9 @@ function mockMapboxRuntime(runtimeOptions: {
         },
         setBounds: (bounds: { west: number, south: number, east: number, north: number }) => {
           this.bounds = bounds
+        },
+        setVisibleTileCoordinates: (coordinates: MockVisibleTileCoordinate[]) => {
+          this.record.visibleTileCoordinates = coordinates
         },
       }
       mapRecords.push(this.record)
@@ -1316,6 +1418,14 @@ function mockMapboxRuntime(runtimeOptions: {
     getStyle() {
       return {
         layers: this.record.layers,
+      }
+    }
+
+    getStyleSourceCache(sourceId: string) {
+      if (sourceId !== 'footprints') return undefined
+
+      return {
+        getVisibleCoordinates: () => this.record.visibleTileCoordinates,
       }
     }
 
