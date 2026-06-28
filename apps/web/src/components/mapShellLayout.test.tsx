@@ -120,6 +120,13 @@ import App from '../App'
 const MAP_STYLE_LABEL = '\u5730\u56fe\u6837\u5f0f'
 const MAP_PROJECTION_LABEL = '\u5730\u56fe\u5f62\u6001'
 const MAP_LANGUAGE_LABEL = '\u5730\u56fe\u8bed\u8a00'
+const FOOTPRINT_SETTINGS_LABEL = '\u8db3\u8ff9\u663e\u793a\u8bbe\u7f6e'
+const FOOTPRINT_SIZE_LABEL = '\u8db3\u8ff9\u70b9\u5927\u5c0f'
+const FOOTPRINT_OPACITY_LABEL = '\u8db3\u8ff9\u70b9\u900f\u660e\u5ea6'
+const FOOTPRINT_COLOR_LABEL = '\u8db3\u8ff9\u70b9\u989c\u8272'
+const FOOTPRINT_COLOR_SWATCHES_LABEL = '\u8db3\u8ff9\u70b9\u989c\u8272\u9884\u8bbe'
+const PLACE_LABELS_LABEL = '\u663e\u793a\u5730\u540d'
+const ADMIN_BOUNDARIES_LABEL = '\u663e\u793a\u884c\u653f\u8fb9\u754c'
 
 const localStorageMock = createLocalStorageMock()
 Object.defineProperty(window, 'localStorage', {
@@ -310,6 +317,36 @@ describe('unified shell layout', () => {
     expect(opacityInput).toHaveValue('0.64')
     expect(within(popover).getByText('0.64')).toHaveClass('footprint-style-popover__value')
     expect(colorInput).toHaveValue('#4f7cff')
+  })
+
+  it('orders footprint, map, and map layer visibility controls in the settings popover', async () => {
+    render(<App amapConfig={configuredAmap} />)
+    await settleLazyImports()
+
+    fireEvent.click(screen.getByRole('button', { name: FOOTPRINT_SETTINGS_LABEL }))
+
+    const popover = screen.getByRole('dialog', { name: FOOTPRINT_SETTINGS_LABEL })
+    const controlLabels = Array.from(popover.children).map((child) => {
+      const item = child as HTMLElement
+
+      if (item.matches('.footprint-style-popover__row')) {
+        return item.querySelector('label, :scope > span')?.textContent ?? ''
+      }
+
+      return item.getAttribute('aria-label') ?? item.textContent ?? ''
+    })
+
+    expect(controlLabels).toEqual([
+      FOOTPRINT_SIZE_LABEL,
+      FOOTPRINT_OPACITY_LABEL,
+      FOOTPRINT_COLOR_LABEL,
+      FOOTPRINT_COLOR_SWATCHES_LABEL,
+      MAP_LANGUAGE_LABEL,
+      MAP_PROJECTION_LABEL,
+      MAP_STYLE_LABEL,
+      PLACE_LABELS_LABEL,
+      ADMIN_BOUNDARIES_LABEL,
+    ])
   })
 
   it('toggles map place labels and administrative boundaries from the footprint settings popover', async () => {
