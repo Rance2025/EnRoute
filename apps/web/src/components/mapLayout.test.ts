@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 
 const appCss = readFileSync('src/App.css', 'utf8')
 const appSource = readFileSync('src/App.tsx', 'utf8')
+const mainSource = readFileSync('src/main.tsx', 'utf8')
 const amapCanvasSource = readFileSync('src/components/AmapCanvas.tsx', 'utf8')
 const amapLoaderSource = readFileSync('src/services/amapLoader.ts', 'utf8')
 const mapboxCanvasSource = readFileSync('src/components/MapboxCanvas.tsx', 'utf8')
@@ -94,6 +95,17 @@ describe('map chrome layout', () => {
     expect(amapCanvasSource).not.toContain('className="brand-header"')
     expect(cssRule('.brand-header')).toBe('')
     expect(cssRule('.brand-header h1')).toBe('')
+  })
+
+  it('keeps the AMap boundary quality preview behind an explicit query switch', () => {
+    expect(mainSource).toContain("shouldRenderAmapBoundaryPreview(window.location.search)")
+    expect(mainSource).toContain("<AmapBoundaryPreview config={getAmapConfig()} />")
+    expect(mainSource).toContain("<App />")
+    expect(cssRule('.amap-boundary-preview')).toContain('position: fixed')
+    expect(cssRule('.amap-boundary-preview__map')).toContain('position: absolute')
+    expect(cssRule('.amap-boundary-preview__panel')).toContain('position: absolute')
+    expect(appSource).not.toContain('AmapBoundaryPreview')
+    expect(mapboxCanvasSource).not.toContain('AmapBoundaryPreview')
   })
 
   it('routes glass panel material through shared classes', () => {

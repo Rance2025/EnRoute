@@ -4061,6 +4061,128 @@
   line-height: 1.6;
 }
 
+.amap-boundary-preview {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: #dce5e3;
+}
+
+.amap-boundary-preview__map {
+  position: absolute;
+  inset: 0;
+}
+
+.amap-boundary-preview__panel {
+  position: absolute;
+  z-index: 4;
+  top: 22px;
+  left: 22px;
+  width: min(332px, calc(100vw - 44px));
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+}
+
+.amap-boundary-preview__panel header {
+  display: grid;
+  gap: 4px;
+}
+
+.amap-boundary-preview__panel header span {
+  color: rgba(23, 35, 31, 0.55);
+  font-size: 12px;
+  font-weight: 820;
+}
+
+.amap-boundary-preview__panel h1 {
+  margin: 0;
+  color: #17231f;
+  font-size: 28px;
+  font-weight: 880;
+  line-height: 1.05;
+}
+
+.amap-boundary-preview__panel p {
+  margin: 0;
+  color: rgba(23, 35, 31, 0.62);
+  font-size: 12px;
+  font-weight: 740;
+}
+
+.amap-boundary-preview__samples {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.amap-boundary-preview__samples button {
+  min-width: 0;
+  min-height: 32px;
+  padding: 0 9px;
+  overflow: hidden;
+  border: 1px solid rgba(23, 35, 31, 0.08);
+  border-radius: 999px;
+  color: rgba(23, 35, 31, 0.72);
+  background: rgba(255, 255, 255, 0.66);
+  font-size: 12px;
+  font-weight: 790;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.amap-boundary-preview__samples button[aria-pressed='true'] {
+  border-color: transparent;
+  color: #f8fbfa;
+  background: #123f35;
+}
+
+.amap-boundary-preview__rows {
+  display: grid;
+  gap: 8px;
+}
+
+.amap-boundary-preview__rows div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 30px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(23, 35, 31, 0.08);
+}
+
+.amap-boundary-preview__rows span,
+.amap-boundary-preview__status,
+.amap-boundary-preview__error,
+.amap-boundary-preview__missing span {
+  color: rgba(23, 35, 31, 0.58);
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.amap-boundary-preview__rows strong {
+  color: #17231f;
+  font-size: 13px;
+  font-weight: 860;
+}
+
+.amap-boundary-preview__error {
+  color: #a7332f;
+}
+
+.amap-boundary-preview__missing {
+  display: grid;
+  gap: 5px;
+}
+
+.amap-boundary-preview__missing strong {
+  color: #17231f;
+  font-size: 13px;
+  font-weight: 850;
+}
+
 .settings-navigation-tabs {
   --segmented-thumb-bg: #123f35;
   --segmented-label-color: rgba(23, 35, 31, 0.62);
