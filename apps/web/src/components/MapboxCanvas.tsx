@@ -190,6 +190,7 @@ function MapboxCanvasComponent({
   const globeRotationPendingWorldViewRef = useRef(false)
   const globeRotationRequestedRef = useRef(false)
   const globeRotationDraggingRef = useRef(false)
+  const initialGlobeRotationStartedRef = useRef(false)
 
   const resolvedAccessToken = resolveConfigValue(
     accessToken,
@@ -453,6 +454,7 @@ function MapboxCanvasComponent({
     setStatus('loading')
     setErrorMessage('')
     styleReadyRef.current = false
+    initialGlobeRotationStartedRef.current = false
     setStyleReady(false)
     mapboxgl.accessToken = resolvedAccessToken
     resolvedStyleUrlRef.current = latestResolvedStyleUrlRef.current
@@ -518,7 +520,12 @@ function MapboxCanvasComponent({
         setStyleReady(true)
         setStatus('ready')
         if (!wasStyleReady && resolvedProjection === 'globe') {
-          startGlobeRotation()
+          if (!initialGlobeRotationStartedRef.current) {
+            initialGlobeRotationStartedRef.current = true
+            startGlobeRotation()
+          } else if (globeRotationRequestedRef.current) {
+            startGlobeRotation()
+          }
         }
         return true
       }
