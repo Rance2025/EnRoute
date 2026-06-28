@@ -139,9 +139,9 @@ describe('MapboxCanvas footprint vector tiles', () => {
       source: 'footprints',
       'source-layer': 'footprints',
       paint: expect.objectContaining({
-        'circle-radius': 0.75,
+        'circle-radius': 1,
         'circle-color': '#123f35',
-        'circle-opacity': 0.82,
+        'circle-opacity': 0.6,
       }),
     })
     expect(JSON.stringify(footprintLayer)).not.toContain('heatmap')

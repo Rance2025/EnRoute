@@ -5,9 +5,9 @@ export type FootprintStyle = {
 }
 
 export const DEFAULT_FOOTPRINT_STYLE: FootprintStyle = {
-  pixelSize: 1.5,
+  pixelSize: 2,
   color: '#123f35',
-  opacity: 0.82,
+  opacity: 0.6,
 }
 
 export const FOOTPRINT_PIXEL_SIZE_MIN = 0.8

@@ -287,14 +287,14 @@ describe('unified shell layout', () => {
     const sizeInput = within(popover).getByLabelText('足迹点大小')
     const opacityInput = within(popover).getByLabelText('足迹点透明度')
     const colorInput = within(popover).getByLabelText('足迹点颜色')
-    const sizeValue = within(popover).getByText('1.5')
-    const opacityValue = within(popover).getByText('0.82')
+    const sizeValue = within(popover).getByText('2')
+    const opacityValue = within(popover).getByText('0.6')
 
     expect(sizeInput).toHaveAttribute('type', 'range')
     expect(sizeInput).toHaveAttribute('min', '0.8')
     expect(sizeInput).toHaveAttribute('max', '3.5')
     expect(sizeInput).toHaveAttribute('step', '0.1')
-    expect(sizeInput).toHaveValue('1.5')
+    expect(sizeInput).toHaveValue('2')
     expect(sizeValue).toHaveClass('footprint-style-popover__value')
     expect(within(popover).queryByLabelText('足迹点大小数值')).not.toBeInTheDocument()
     expect(within(popover).queryByRole('spinbutton')).not.toBeInTheDocument()
@@ -302,7 +302,7 @@ describe('unified shell layout', () => {
     expect(opacityInput).toHaveAttribute('min', '0.3')
     expect(opacityInput).toHaveAttribute('max', '1')
     expect(opacityInput).toHaveAttribute('step', '0.01')
-    expect(opacityInput).toHaveValue('0.82')
+    expect(opacityInput).toHaveValue('0.6')
     expect(opacityValue).toHaveClass('footprint-style-popover__value')
     expect(within(popover).queryByLabelText('足迹点透明度数值')).not.toBeInTheDocument()
     expect(colorInput).toHaveAttribute('type', 'color')
@@ -341,9 +341,9 @@ describe('unified shell layout', () => {
       FOOTPRINT_OPACITY_LABEL,
       FOOTPRINT_COLOR_LABEL,
       FOOTPRINT_COLOR_SWATCHES_LABEL,
-      MAP_LANGUAGE_LABEL,
       MAP_PROJECTION_LABEL,
       MAP_STYLE_LABEL,
+      MAP_LANGUAGE_LABEL,
       PLACE_LABELS_LABEL,
       ADMIN_BOUNDARIES_LABEL,
     ])
@@ -393,6 +393,53 @@ describe('unified shell layout', () => {
     )
     expect(window.localStorage.getItem('enroute:map-place-labels-visible')).toBe('true')
     expect(window.localStorage.getItem('enroute:map-admin-boundaries-visible')).toBe('true')
+  })
+
+  it('uses visible map defaults and preserves stored user display preferences on reload', async () => {
+    window.localStorage.setItem('enroute.footprintStyle', JSON.stringify({
+      pixelSize: 2.7,
+      color: '#4f7cff',
+      opacity: 0.64,
+    }))
+    window.localStorage.setItem('enroute:map-projection', 'mercator')
+    window.localStorage.setItem('enroute:map-style', 'alternate')
+    window.localStorage.setItem('enroute:map-language', 'en')
+    window.localStorage.setItem('enroute:map-place-labels-visible', 'false')
+    window.localStorage.setItem('enroute:map-admin-boundaries-visible', 'false')
+
+    render(<App amapConfig={configuredAmap} />)
+    await settleLazyImports()
+
+    const mapStage = document.querySelector('.map-stage')
+    expect(mapStage).toHaveAttribute('data-projection', 'mercator')
+    expect(mapStage).toHaveAttribute(
+      'data-style-url',
+      'mapbox://styles/oies0/cmqvb5b20001e01s72ia82lz5',
+    )
+    expect(mapStage).toHaveAttribute('data-language', 'en')
+    expect(mapStage).toHaveAttribute('data-place-labels-visible', 'false')
+    expect(mapStage).toHaveAttribute('data-admin-boundaries-visible', 'false')
+
+    fireEvent.click(screen.getByRole('button', { name: FOOTPRINT_SETTINGS_LABEL }))
+
+    const popover = screen.getByRole('dialog', { name: FOOTPRINT_SETTINGS_LABEL })
+    expect(within(popover).getByLabelText(FOOTPRINT_SIZE_LABEL)).toHaveValue('2.7')
+    expect(within(popover).getByLabelText(FOOTPRINT_OPACITY_LABEL)).toHaveValue('0.64')
+    expect(within(popover).getByLabelText(FOOTPRINT_COLOR_LABEL)).toHaveValue('#4f7cff')
+    const projectionButtons = within(within(popover).getByRole('group', { name: MAP_PROJECTION_LABEL }))
+      .getAllByRole('button')
+    const styleButtons = within(within(popover).getByRole('group', { name: MAP_STYLE_LABEL }))
+      .getAllByRole('button')
+    const languageButtons = within(within(popover).getByRole('group', { name: MAP_LANGUAGE_LABEL }))
+      .getAllByRole('button')
+
+    expect(projectionButtons.map((button) => button.getAttribute('aria-pressed'))).toEqual(['false', 'true'])
+    expect(styleButtons.map((button) => button.getAttribute('aria-pressed'))).toEqual(['false', 'true'])
+    expect(languageButtons.map((button) => button.getAttribute('aria-pressed'))).toEqual(['false', 'false', 'true'])
+    expect(within(popover).getByRole('switch', { name: PLACE_LABELS_LABEL }))
+      .toHaveAttribute('aria-checked', 'false')
+    expect(within(popover).getByRole('switch', { name: ADMIN_BOUNDARIES_LABEL }))
+      .toHaveAttribute('aria-checked', 'false')
   })
 
   it('switches Mapbox styles from the footprint settings popover and persists the choice', async () => {
@@ -668,7 +715,7 @@ describe('unified shell layout', () => {
 
     expect(screen.queryByRole('dialog', { name: '足迹显示设置' })).not.toBeInTheDocument()
     expect(window.localStorage.getItem('enroute.footprintStyle')).toBe(
-      JSON.stringify({ pixelSize: 2.1, color: '#4f7cff', opacity: 0.82 }),
+      JSON.stringify({ pixelSize: 2.1, color: '#4f7cff', opacity: 0.6 }),
     )
   })
 

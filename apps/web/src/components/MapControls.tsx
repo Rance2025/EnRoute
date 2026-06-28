@@ -323,17 +323,6 @@ function FootprintStylePopover({
           />
         ))}
       </div>
-      {onMapLanguageChange ? (
-        <div className="footprint-style-popover__row footprint-style-popover__row--inline">
-          <span className="footprint-style-popover__label">{MAP_LANGUAGE_LABEL}</span>
-          <PillButtonGroup
-            ariaLabel={MAP_LANGUAGE_LABEL}
-            options={MAP_LANGUAGE_OPTIONS}
-            value={mapLanguage}
-            onChange={onMapLanguageChange}
-          />
-        </div>
-      ) : null}
       {onMapProjectionChange ? (
         <div className="footprint-style-popover__row footprint-style-popover__row--inline">
           <span className="footprint-style-popover__label">{MAP_PROJECTION_LABEL}</span>
@@ -353,6 +342,17 @@ function FootprintStylePopover({
             options={MAP_STYLE_OPTIONS}
             value={mapStyle}
             onChange={onMapStyleChange}
+          />
+        </div>
+      ) : null}
+      {onMapLanguageChange ? (
+        <div className="footprint-style-popover__row footprint-style-popover__row--inline">
+          <span className="footprint-style-popover__label">{MAP_LANGUAGE_LABEL}</span>
+          <PillButtonGroup
+            ariaLabel={MAP_LANGUAGE_LABEL}
+            options={MAP_LANGUAGE_OPTIONS}
+            value={mapLanguage}
+            onChange={onMapLanguageChange}
           />
         </div>
       ) : null}

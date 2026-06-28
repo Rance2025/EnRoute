@@ -494,8 +494,8 @@ describe('AmapCanvas footprint layer wiring', () => {
       expect.any(Object),
       {
         color: '#123f35',
-        opacity: 0.82,
-        pixelSize: 1.5,
+        opacity: 0.6,
+        pixelSize: 2,
       },
     )
     expect(snapshotRequests[0]).toEqual(expect.objectContaining({
@@ -1194,7 +1194,7 @@ describe('AmapCanvas footprint layer wiring', () => {
 
     expect(layerRecords[0].scheduleStyleUpdate).toHaveBeenCalledWith({
       color: '#123f35',
-      opacity: 0.82,
+      opacity: 0.6,
       pixelSize: 2.2,
     })
   })

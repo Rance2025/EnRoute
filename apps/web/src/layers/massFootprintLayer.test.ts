@@ -68,19 +68,19 @@ describe('createMassFootprintLayer', () => {
       zIndex: 20,
     })
     const options = runtime.MassMarks.mock.calls[0]?.[1]
-    expect(options?.style.size.width).toBe(1.5)
-    expect(options?.style.size.height).toBe(1.5)
-    expect(options?.style.anchor.x).toBe(0.75)
-    expect(options?.style.anchor.y).toBe(0.75)
+    expect(options?.style.size.width).toBe(2)
+    expect(options?.style.size.height).toBe(2)
+    expect(options?.style.anchor.x).toBe(1)
+    expect(options?.style.anchor.y).toBe(1)
     const iconSvg = decodeURIComponent(options?.style.url ?? '')
     expect(iconSvg).toContain('#123f35')
-    expect(iconSvg).toContain('width="1.5"')
-    expect(iconSvg).toContain('height="1.5"')
+    expect(iconSvg).toContain('width="2"')
+    expect(iconSvg).toContain('height="2"')
     expect(iconSvg).toContain('<circle')
-    expect(iconSvg).toContain('cx="0.75"')
-    expect(iconSvg).toContain('cy="0.75"')
-    expect(iconSvg).toContain('r="0.75"')
-    expect(iconSvg).toContain('fill-opacity="0.82"')
+    expect(iconSvg).toContain('cx="1"')
+    expect(iconSvg).toContain('cy="1"')
+    expect(iconSvg).toContain('r="1"')
+    expect(iconSvg).toContain('fill-opacity="0.6"')
     expect(iconSvg).not.toContain('<rect')
     expect(runtime.setMap).toHaveBeenCalledWith(map)
 
@@ -155,13 +155,13 @@ describe('createMassFootprintLayer', () => {
     })
 
     const options = runtime.MassMarks.mock.calls[0]?.[1]
-    expect(options?.style.size.width).toBe(1.5)
-    expect(options?.style.size.height).toBe(1.5)
-    expect(options?.style.anchor.x).toBe(0.75)
-    expect(options?.style.anchor.y).toBe(0.75)
+    expect(options?.style.size.width).toBe(2)
+    expect(options?.style.size.height).toBe(2)
+    expect(options?.style.anchor.x).toBe(1)
+    expect(options?.style.anchor.y).toBe(1)
     const iconSvg = decodeURIComponent(options?.style.url ?? '')
     expect(iconSvg).toContain('#123f35')
-    expect(iconSvg).toContain('fill-opacity="0.82"')
+    expect(iconSvg).toContain('fill-opacity="0.6"')
     expect(iconSvg).not.toContain('javascript')
 
     layer.destroy()
@@ -278,7 +278,7 @@ describe('createMassFootprintLayer', () => {
     const layer = createMassFootprintLayer(runtime, {} as AMap.Map)
 
     layer.scheduleStyleUpdate({ color: '#4f7cff', pixelSize: 2.4 })
-    layer.scheduleStyleUpdate({ color: '#123f35', opacity: 0.82, pixelSize: 1.5 })
+    layer.scheduleStyleUpdate({ color: '#123f35', opacity: 0.6, pixelSize: 2 })
 
     vi.runOnlyPendingTimers()
 
