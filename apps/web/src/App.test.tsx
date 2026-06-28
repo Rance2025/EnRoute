@@ -268,8 +268,20 @@ describe('App', () => {
 
     expect(Array.from(rightPanel.children)).toEqual([secondaryNav, stack])
     expect(stack).toHaveClass('right-context-panel__stack')
-    expect(summary).toHaveClass('right-context-panel__glass', 'right-context-panel__summary')
-    expect(legend).toHaveClass('right-context-panel__glass', 'right-context-panel__legend')
+    expect(summary).toHaveClass(
+      'glass-panel',
+      'glass-panel--solid',
+      'glass-panel--card',
+      'right-context-panel__glass',
+      'right-context-panel__summary',
+    )
+    expect(legend).toHaveClass(
+      'glass-panel',
+      'glass-panel--solid',
+      'glass-panel--card',
+      'right-context-panel__glass',
+      'right-context-panel__legend',
+    )
     expect(within(summary).getByText('足迹')).toBeInTheDocument()
     expect(within(legend).getByText('WebGL 点层')).toBeInTheDocument()
   })

@@ -47,6 +47,35 @@
   background: transparent;
 }
 
+.glass-panel {
+  border: 1px solid var(--glass-panel-border);
+  color: #17231f;
+  background: var(--solid-glass-panel-bg);
+  box-shadow: var(--glass-panel-shadow);
+  backdrop-filter: var(--glass-panel-filter);
+  -webkit-backdrop-filter: var(--glass-panel-filter);
+}
+
+.glass-panel--solid {
+  background: var(--solid-glass-panel-bg);
+}
+
+.glass-panel--large {
+  border-radius: 28px;
+}
+
+.glass-panel--card {
+  border-radius: 24px;
+}
+
+.glass-panel--compact {
+  border-radius: 18px;
+}
+
+.glass-panel--pill {
+  border-radius: 999px;
+}
+
 .app-board {
   position: absolute;
   inset: 0;
@@ -68,12 +97,6 @@
   align-items: center;
   gap: 10px;
   padding: 7px;
-  border: 1px solid var(--glass-panel-border);
-  border-radius: 999px;
-  background: var(--solid-glass-panel-bg);
-  box-shadow: var(--glass-panel-shadow);
-  backdrop-filter: var(--glass-panel-filter);
-  -webkit-backdrop-filter: var(--glass-panel-filter);
   transform: translateX(-50%);
 }
 
@@ -401,12 +424,6 @@
   width: var(--data-panel-width, 0px);
   min-width: 0;
   overflow: visible;
-  border: 1px solid var(--glass-panel-border);
-  border-radius: 28px;
-  background: var(--solid-glass-panel-bg);
-  box-shadow: var(--glass-panel-shadow);
-  backdrop-filter: var(--glass-panel-filter);
-  -webkit-backdrop-filter: var(--glass-panel-filter);
   pointer-events: none;
 }
 
@@ -707,14 +724,8 @@
   width: 44px;
   height: 44px;
   place-items: center;
-  border: 1px solid var(--glass-panel-border);
-  border-radius: 999px;
   color: rgba(23, 35, 31, 0.66);
-  background: var(--solid-glass-panel-bg);
-  box-shadow: var(--glass-panel-shadow);
   cursor: pointer;
-  backdrop-filter: var(--glass-panel-filter);
-  -webkit-backdrop-filter: var(--glass-panel-filter);
   transition:
     color 160ms ease,
     background 160ms ease,
@@ -1635,13 +1646,6 @@
   min-width: 0;
   padding: 16px;
   overflow: hidden;
-  border: 1px solid var(--glass-panel-border);
-  border-radius: 24px;
-  color: #17231f;
-  background: var(--solid-glass-panel-bg);
-  box-shadow: var(--glass-panel-shadow);
-  backdrop-filter: var(--glass-panel-filter);
-  -webkit-backdrop-filter: var(--glass-panel-filter);
 }
 
 .right-context-panel__summary {
@@ -1727,12 +1731,6 @@
   min-width: 0;
   width: 100%;
   padding: 5px;
-  border: 1px solid var(--glass-panel-border);
-  border-radius: 999px;
-  background: var(--solid-glass-panel-bg);
-  box-shadow: var(--glass-panel-shadow);
-  backdrop-filter: var(--glass-panel-filter);
-  -webkit-backdrop-filter: var(--glass-panel-filter);
 }
 
 .secondary-nav-rail__button {
@@ -1912,12 +1910,6 @@
   align-items: center;
   gap: 2px;
   padding: 7px 8px;
-  border: 1px solid var(--glass-panel-border);
-  border-radius: 999px;
-  background: var(--solid-glass-panel-bg);
-  box-shadow: var(--glass-panel-shadow);
-  backdrop-filter: var(--glass-panel-filter);
-  -webkit-backdrop-filter: var(--glass-panel-filter);
   overflow: visible;
 }
 
@@ -1930,13 +1922,7 @@
   width: 140px;
   gap: 3px;
   padding: 6px 7px;
-  border: 1px solid var(--glass-panel-border);
-  border-radius: 10px;
   color: #17211f;
-  background: var(--solid-glass-panel-bg);
-  box-shadow: var(--glass-panel-shadow);
-  backdrop-filter: var(--glass-panel-filter);
-  -webkit-backdrop-filter: var(--glass-panel-filter);
 }
 
 .admin-region-unlock-panel {
@@ -1946,13 +1932,7 @@
   width: 258px;
   max-width: calc(100vw - 28px);
   padding: 10px;
-  border: 1px solid var(--glass-panel-border);
-  border-radius: 10px;
   color: #17211f;
-  background: var(--solid-glass-panel-bg);
-  box-shadow: var(--glass-panel-shadow);
-  backdrop-filter: var(--glass-panel-filter);
-  -webkit-backdrop-filter: var(--glass-panel-filter);
 }
 
 .footprint-style-popover {
@@ -1962,13 +1942,7 @@
   width: 218px;
   max-width: calc(100vw - 28px);
   padding: 12px;
-  border: 1px solid var(--glass-panel-border);
-  border-radius: 10px;
   color: #17211f;
-  background: var(--solid-glass-panel-bg);
-  box-shadow: var(--glass-panel-shadow);
-  backdrop-filter: var(--glass-panel-filter);
-  -webkit-backdrop-filter: var(--glass-panel-filter);
 }
 
 .map-message {
@@ -1977,13 +1951,7 @@
   left: 50%;
   width: min(440px, calc(100vw - 40px));
   padding: 22px;
-  border: 1px solid var(--glass-panel-border);
-  border-radius: 18px;
   color: #18211f;
-  background: var(--solid-glass-panel-bg);
-  box-shadow: var(--glass-panel-shadow);
-  backdrop-filter: var(--glass-panel-filter);
-  -webkit-backdrop-filter: var(--glass-panel-filter);
   transform: translate(-50%, -50%);
 }
 
@@ -2066,12 +2034,7 @@
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  border: 1px solid var(--glass-panel-border);
   border-radius: 26px;
-  background: var(--solid-glass-panel-bg);
-  box-shadow: var(--glass-panel-shadow);
-  backdrop-filter: var(--glass-panel-filter);
-  -webkit-backdrop-filter: var(--glass-panel-filter);
 }
 
 .ios-panel-head {
@@ -3502,13 +3465,7 @@
   width: 140px;
   gap: 3px;
   padding: 6px 7px;
-  border: 1px solid var(--glass-panel-border);
-  border-radius: 10px;
   color: #17211f;
-  background: var(--glass-panel-bg);
-  box-shadow: var(--glass-panel-shadow);
-  backdrop-filter: var(--glass-panel-filter);
-  -webkit-backdrop-filter: var(--glass-panel-filter);
 }
 
 .footprint-debug-panel__row {
@@ -3575,13 +3532,7 @@
   width: 258px;
   max-width: calc(100vw - 28px);
   padding: 10px;
-  border: 1px solid var(--glass-panel-border);
-  border-radius: 10px;
   color: #17211f;
-  background: var(--glass-panel-bg);
-  box-shadow: var(--glass-panel-shadow);
-  backdrop-filter: var(--glass-panel-filter);
-  -webkit-backdrop-filter: var(--glass-panel-filter);
 }
 
 .admin-region-unlock-levels {
@@ -3617,13 +3568,7 @@
   width: 218px;
   max-width: calc(100vw - 28px);
   padding: 12px;
-  border: 1px solid var(--glass-panel-border);
-  border-radius: 10px;
   color: #17211f;
-  background: var(--glass-panel-bg);
-  box-shadow: var(--glass-panel-shadow);
-  backdrop-filter: var(--glass-panel-filter);
-  -webkit-backdrop-filter: var(--glass-panel-filter);
 }
 
 .footprint-style-popover__row {
@@ -3817,13 +3762,7 @@
   left: 50%;
   width: min(440px, calc(100vw - 40px));
   padding: 22px;
-  border: 1px solid var(--glass-panel-border);
-  border-radius: 18px;
   color: #18211f;
-  background: var(--glass-panel-bg);
-  box-shadow: var(--glass-panel-shadow);
-  backdrop-filter: var(--glass-panel-filter);
-  -webkit-backdrop-filter: var(--glass-panel-filter);
   transform: translate(-50%, -50%);
 }
 
@@ -3879,13 +3818,7 @@
   gap: 18px;
   padding: 18px;
   overflow: auto;
-  border: 1px solid var(--glass-panel-border);
-  border-radius: 18px;
   color: #17231f;
-  background: var(--solid-glass-panel-bg);
-  box-shadow: var(--glass-panel-shadow);
-  backdrop-filter: var(--glass-panel-filter);
-  -webkit-backdrop-filter: var(--glass-panel-filter);
 }
 
 .settings-dialog__header {

@@ -727,7 +727,7 @@ function MapboxCanvasComponent({
         onMapLanguageChange={onMapLanguageChange}
       />
       {adminRegionUnlockEnabled ? (
-        <div className="map-message map-message--compat" role="status">
+        <div className="glass-panel glass-panel--solid glass-panel--compact map-message map-message--compat" role="status">
           <h2>行政区划图层迁移中</h2>
           <p>当前 Mapbox 底座已切换到足迹 MVT 瓦片，行政区划图层会在后续独立迁移。</p>
         </div>
@@ -739,14 +739,14 @@ function MapboxCanvasComponent({
           />
         ) : null}
       {status === 'missing-token' ? (
-        <div className="map-message" role="status">
+        <div className="glass-panel glass-panel--solid glass-panel--compact map-message" role="status">
           <h2>需要配置 Mapbox 访问令牌</h2>
           <p>在 `.env.local` 中配置 Mapbox 令牌后，位置页会加载 MVT 足迹瓦片。</p>
           <pre>VITE_MAPBOX_ACCESS_TOKEN</pre>
         </div>
       ) : null}
       {status === 'error' ? (
-        <div className="map-message" role="alert">
+        <div className="glass-panel glass-panel--solid glass-panel--compact map-message" role="alert">
           <h2>Mapbox 地图加载失败</h2>
           <p>{errorMessage}</p>
         </div>
@@ -1067,7 +1067,7 @@ function FootprintDebugPanel({
   cameraZoom?: number
 }) {
   return (
-    <aside className="footprint-debug-panel" aria-label="足迹渲染调试">
+    <aside className="glass-panel glass-panel--solid glass-panel--compact footprint-debug-panel" aria-label="足迹渲染调试">
       <div className="footprint-debug-panel__row">
         <span>相机/瓦片层级</span>
         <strong>

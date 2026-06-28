@@ -115,7 +115,7 @@ export function LedgerWorkspace({
       className="accounting-workspace ios-account-ledger-workspace"
       aria-label="账户与流水工作台"
     >
-      <section className="ios-panel ios-ledger-main">
+      <section className="glass-panel glass-panel--solid ios-panel ios-ledger-main">
         <header className="ios-ledger-toolbar">
           <div>
             <strong>流水明细</strong>
@@ -221,7 +221,7 @@ export function AccountsWorkspace({
       className="accounting-workspace ios-accounts-workspace"
       aria-label="账户工作台"
     >
-      <section className="ios-panel ios-account-filter-panel" aria-label="账户筛选卡片">
+      <section className="glass-panel glass-panel--solid ios-panel ios-account-filter-panel" aria-label="账户筛选卡片">
         <div className="ios-account-filter-panel__accounts">
           <header className="ios-panel-head">
             <strong>账户卡片</strong>
@@ -274,7 +274,7 @@ export function AccountsWorkspace({
         </div>
       </section>
 
-      <section className="ios-panel ios-account-movement-panel" aria-label="账户流动">
+      <section className="glass-panel glass-panel--solid ios-panel ios-account-movement-panel" aria-label="账户流动">
         <header className="ios-panel-head">
           <strong>账户流水</strong>
           <span>{activeAccountName}</span>

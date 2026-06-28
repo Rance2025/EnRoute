@@ -37,7 +37,7 @@ export function AnalyticsWorkspace({
 
   return (
     <div className="accounting-workspace ios-analytics-workspace" aria-label="统计工作区">
-      <section className="ios-panel ios-report-overview">
+      <section className="glass-panel glass-panel--solid ios-panel ios-report-overview">
         <header className="ios-panel-head">
           <strong>统计总览</strong>
           <button type="button" className="accounting-action" onClick={onBackToLedger}>
@@ -62,7 +62,7 @@ export function AnalyticsWorkspace({
         </div>
       </section>
 
-      <section className="ios-panel ios-category-chart">
+      <section className="glass-panel glass-panel--solid ios-panel ios-category-chart">
         <header className="ios-panel-head">
           <strong>分类占比</strong>
           <span>{activeCategoryStats.length} 类</span>
@@ -73,7 +73,7 @@ export function AnalyticsWorkspace({
         />
       </section>
 
-      <section className="ios-panel ios-tag-cross">
+      <section className="glass-panel glass-panel--solid ios-panel ios-tag-cross">
         <header className="ios-panel-head">
           <strong>标签关联</strong>
           <span>{tagCrossRows.length} 组</span>
@@ -173,7 +173,7 @@ function TreeStatsSection({
   const maxAmount = Math.max(...visibleStats.map((stat) => stat.amountInCents), 1)
 
   return (
-    <section className={`ios-panel ios-tree-stats ios-tree-stats--${variant}`} aria-label={ariaLabel}>
+    <section className={`glass-panel glass-panel--solid ios-panel ios-tree-stats ios-tree-stats--${variant}`} aria-label={ariaLabel}>
       <header className="ios-panel-head">
         <strong>{title}</strong>
         <span>{visibleStats.length} 节点</span>

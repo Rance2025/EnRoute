@@ -23,6 +23,30 @@ function lastCssRule(selector: string) {
   return matches.at(-1)?.[0] ?? ''
 }
 
+function allCssRules(selector: string) {
+  const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return [...appCss.matchAll(new RegExp(`${escapedSelector}\\s*\\{[^}]*\\}`, 'g'))].map(
+    (match) => match[0],
+  )
+}
+
+function expectMaterialRule(rule: string) {
+  expect(rule).toContain('border: 1px solid var(--glass-panel-border)')
+  expect(rule).toContain('background: var(--solid-glass-panel-bg)')
+  expect(rule).toContain('box-shadow: var(--glass-panel-shadow)')
+  expect(rule).toContain('backdrop-filter: var(--glass-panel-filter)')
+  expect(rule).toContain('-webkit-backdrop-filter: var(--glass-panel-filter)')
+}
+
+function expectNoOwnedGlassMaterial(rule: string) {
+  expect(rule).not.toContain('border: 1px solid var(--glass-panel-border)')
+  expect(rule).not.toContain('background: var(--solid-glass-panel-bg)')
+  expect(rule).not.toContain('background: var(--glass-panel-bg)')
+  expect(rule).not.toContain('box-shadow: var(--glass-panel-shadow)')
+  expect(rule).not.toContain('backdrop-filter: var(--glass-panel-filter)')
+  expect(rule).not.toContain('-webkit-backdrop-filter: var(--glass-panel-filter)')
+}
+
 function mediaBlock(queryStart: string) {
   const start = appCss.indexOf(queryStart)
   if (start < 0) return ''
@@ -63,12 +87,60 @@ describe('map chrome layout', () => {
     expect(cssRule('.brand-header h1')).toBe('')
   })
 
+  it('routes glass panel material through shared classes', () => {
+    const materialRule = cssRule('.glass-panel')
+    const solidRule = cssRule('.glass-panel--solid')
+    const largeRule = cssRule('.glass-panel--large')
+    const cardRule = cssRule('.glass-panel--card')
+    const compactRule = cssRule('.glass-panel--compact')
+    const pillRule = cssRule('.glass-panel--pill')
+
+    expectMaterialRule(materialRule)
+    expect(solidRule).toContain('background: var(--solid-glass-panel-bg)')
+    expect(largeRule).toContain('border-radius: 28px')
+    expect(cardRule).toContain('border-radius: 24px')
+    expect(compactRule).toContain('border-radius: 18px')
+    expect(pillRule).toContain('border-radius: 999px')
+
+    expect(timeContextPanelSource).toContain(
+      "className={`glass-panel glass-panel--solid glass-panel--large time-context-panel",
+    )
+    expect(appSource).toContain('className="glass-panel glass-panel--solid glass-panel--card right-context-panel__glass right-context-panel__summary"')
+    expect(appSource).toContain('className="glass-panel glass-panel--solid glass-panel--card right-context-panel__glass right-context-panel__legend"')
+    expect(appSource).toContain('className="glass-panel glass-panel--solid glass-panel--compact settings-dialog__panel"')
+    expect(mapControlsSource).toContain('className="glass-panel glass-panel--solid glass-panel--pill map-toolbar"')
+    expect(mapControlsSource).toContain('className="glass-panel glass-panel--solid glass-panel--compact footprint-style-popover"')
+    expect(amapCanvasSource).toContain('className="glass-panel glass-panel--solid glass-panel--compact footprint-debug-panel"')
+    expect(mapboxCanvasSource).toContain('className="glass-panel glass-panel--solid glass-panel--compact footprint-debug-panel"')
+    expect(amapCanvasSource).toContain('className="glass-panel glass-panel--solid glass-panel--compact admin-region-unlock-panel"')
+    expect(amapCanvasSource).toContain('className="glass-panel glass-panel--solid glass-panel--compact map-message"')
+    expect(mapboxCanvasSource).toContain('className="glass-panel glass-panel--solid glass-panel--compact map-message')
+
+    for (const selector of [
+      '.time-context-panel',
+      '.right-context-panel__glass',
+      '.settings-dialog__panel',
+      '.map-toolbar',
+      '.footprint-debug-panel',
+      '.admin-region-unlock-panel',
+      '.footprint-style-popover',
+      '.map-message',
+    ]) {
+      const rules = allCssRules(selector)
+      expect(rules.length, selector).toBeGreaterThan(0)
+      for (const rule of rules) {
+        expectNoOwnedGlassMaterial(rule)
+      }
+    }
+  })
+
   it('reserves symmetric side panels and keeps the map workspace between them', () => {
     const appShellRule = cssRule('.app-shell')
     const panelRule = cssRule('.time-context-panel')
     const rightPanelRule = cssRule('.right-context-panel')
     const rightPanelStackRule = cssRule('.right-context-panel__stack')
     const rightPanelGlassRule = cssRule('.right-context-panel__glass')
+    const sharedGlassRule = cssRule('.glass-panel')
     const secondaryRailRule = cssRule('.secondary-nav-rail')
     const secondaryItemsRule = cssRule('.secondary-nav-rail__items')
     const workspaceRule = cssRule('.main-workspace')
@@ -106,9 +178,10 @@ describe('map chrome layout', () => {
     expect(navRule).not.toContain('position: fixed')
     expect(navRule).toContain('top: 22px')
     expect(navRule).toContain('left: 50%')
-    expect(navRule).toContain('background: var(--solid-glass-panel-bg)')
-    expect(navRule).toContain('box-shadow: var(--glass-panel-shadow)')
-    expect(navRule).toContain('backdrop-filter: var(--glass-panel-filter)')
+    expect(sharedGlassRule).toContain('background: var(--solid-glass-panel-bg)')
+    expect(sharedGlassRule).toContain('box-shadow: var(--glass-panel-shadow)')
+    expect(sharedGlassRule).toContain('backdrop-filter: var(--glass-panel-filter)')
+    expect(appSource).toContain('glass-panel glass-panel--solid glass-panel--pill app-nav')
     expect(appSource).toContain('aria-label="二级导航"')
     expect(appSource).toContain('className="secondary-nav-rail"')
     expect(appSource).toContain('className="right-context-panel"')
@@ -135,8 +208,8 @@ describe('map chrome layout', () => {
     expect(rightPanelRule).toContain('backdrop-filter: none')
     expect(rightPanelRule).toContain('pointer-events: auto')
     expect(appSource).toContain('className="right-context-panel__stack"')
-    expect(appSource).toContain('className="right-context-panel__glass right-context-panel__summary"')
-    expect(appSource).toContain('className="right-context-panel__glass right-context-panel__legend"')
+    expect(appSource).toContain('glass-panel glass-panel--solid glass-panel--card right-context-panel__glass right-context-panel__summary')
+    expect(appSource).toContain('glass-panel glass-panel--solid glass-panel--card right-context-panel__glass right-context-panel__legend')
     expect(rightPanelRule).not.toContain('overflow: hidden')
     expect(rightPanelStackRule).toContain('display: grid')
     expect(rightPanelStackRule).toContain('gap: 14px')
@@ -149,28 +222,20 @@ describe('map chrome layout', () => {
     expect(rightPanelStackRule).toContain('overflow: visible')
     expect(rightPanelStackRule).not.toContain('overflow-x: hidden')
     expect(rightPanelStackRule).not.toContain('overflow-y: auto')
-    expect(rightPanelGlassRule).toContain('border: 1px solid var(--glass-panel-border)')
-    expect(rightPanelGlassRule).toContain('border-radius: 24px')
-    expect(rightPanelGlassRule).toContain('background: var(--solid-glass-panel-bg)')
-    expect(rightPanelGlassRule).toContain('box-shadow: var(--glass-panel-shadow)')
-    expect(rightPanelGlassRule).toContain('backdrop-filter: var(--glass-panel-filter)')
+    expectNoOwnedGlassMaterial(rightPanelGlassRule)
+    expect(cssRule('.glass-panel--card')).toContain('border-radius: 24px')
     expect(secondaryRailRule).toContain('display: grid')
     expect(secondaryItemsRule).toContain('display: flex')
     expect(secondaryItemsRule).toContain('padding: 5px')
-    expect(secondaryItemsRule).toContain('border-radius: 999px')
-    expect(secondaryItemsRule).toContain('background: var(--solid-glass-panel-bg)')
-    expect(secondaryItemsRule).toContain('backdrop-filter: var(--glass-panel-filter)')
+    expect(cssRule('.glass-panel--pill')).toContain('border-radius: 999px')
+    expectNoOwnedGlassMaterial(secondaryItemsRule)
     expect(panelRule).toContain('var(--shell-board-inset-x)')
     expect(panelRule).toContain('var(--shell-board-inset-y)')
     expect(panelRule).toMatch(/inset:\s*var\(--shell-board-inset-y\)/)
     expect(panelRule).not.toContain('calc(var(--shell-board-top-reserve) + var(--shell-board-inset-y))')
     expect(panelRule).not.toContain('inset: var(--shell-board-top-reserve) auto 0 0')
     expect(panelRule).toContain('box-sizing: border-box')
-    expect(panelRule).toContain('border: 1px solid var(--glass-panel-border)')
-    expect(panelRule).toContain('border-radius: 28px')
-    expect(panelRule).toContain('background: var(--solid-glass-panel-bg)')
-    expect(panelRule).toContain('backdrop-filter: var(--glass-panel-filter)')
-    expect(panelRule).toContain('box-shadow:')
+    expectNoOwnedGlassMaterial(panelRule)
     expect(panelRule).not.toContain('inset -1px 0 0 rgba(255, 255, 255, 0.42)')
     expect(panelRule).toContain('width: var(--data-panel-width, 0px)')
     expect(panelRule).toContain('overflow: visible')
@@ -359,12 +424,12 @@ describe('map chrome layout', () => {
   it('keeps the settings entry in the shared time-panel footer without view-specific placement', () => {
     expect(timeContextPanelSource).toContain('aria-label="打开设置"')
     expect(timeContextPanelSource).toContain('className="time-context-panel__footer"')
-    expect(timeContextPanelSource).toContain('className="time-settings-button"')
+    expect(timeContextPanelSource).toContain('glass-panel glass-panel--solid glass-panel--pill time-settings-button')
     expect(cssRule('.time-context-panel__footer')).toContain('align-self: end')
     expect(cssRule('.time-context-panel__footer')).toContain('justify-self: start')
     expect(cssRule('.time-settings-button')).toContain('width: 44px')
     expect(cssRule('.time-settings-button')).toContain('height: 44px')
-    expect(cssRule('.time-settings-button')).toContain('border-radius: 999px')
+    expect(cssRule('.glass-panel--pill')).toContain('border-radius: 999px')
     expect(cssRule('.app-shell--map .time-context-panel__footer')).toBe('')
     expect(cssRule('.app-shell--accounting .time-context-panel__footer')).toBe('')
     expect(cssRule('.app-shell--schedule .time-context-panel__footer')).toBe('')
@@ -1052,7 +1117,7 @@ describe('map chrome layout', () => {
 
   it('renders the settings dialog as a centered non-fullscreen modal', () => {
     expect(appSource).toContain('className="settings-dialog"')
-    expect(appSource).toContain('className="settings-dialog__panel"')
+    expect(appSource).toContain('className="glass-panel glass-panel--solid glass-panel--compact settings-dialog__panel"')
     expect(appSource).toContain('className="settings-dialog__body"')
     expect(appSource).toContain('className="settings-dialog__tabs"')
     expect(appSource).toContain('className="settings-dialog__content"')
@@ -1136,7 +1201,7 @@ describe('map chrome layout', () => {
     expect(workspaceRule).toContain(
       'grid-template-columns: minmax(0, 1fr)',
     )
-    expect(ledgerWorkspaceSource).toContain('className="ios-panel ios-ledger-main"')
+    expect(ledgerWorkspaceSource).toContain('className="glass-panel glass-panel--solid ios-panel ios-ledger-main"')
     expect(ledgerWorkspaceSource).not.toContain('className="ios-ledger-control-panel"')
     expect(ledgerWorkspaceSource).not.toContain('className="ios-panel ios-account-filter-panel"')
   })
@@ -1588,11 +1653,7 @@ describe('map chrome layout', () => {
     expect(popoverRule).toContain('bottom: calc(100% + 16px)')
     expect(popoverRule).toContain('width: 218px')
     expect(popoverRule).toContain('max-width: calc(100vw - 28px)')
-    expect(popoverRule).toContain('border-radius: 10px')
-    expect(popoverRule).toContain('background: var(--solid-glass-panel-bg)')
-    expect(popoverRule).toContain('box-shadow: var(--glass-panel-shadow)')
-    expect(popoverRule).toContain('backdrop-filter: var(--glass-panel-filter)')
-    expect(popoverRule).toContain('-webkit-backdrop-filter: var(--glass-panel-filter)')
+    expectNoOwnedGlassMaterial(popoverRule)
     expect(rowRule).toContain('grid-template-columns:')
     expect(switchRule).toContain('grid-template-columns: minmax(0, 1fr) 42px')
     expect(switchRule).toContain('font-size: 12px')
@@ -1658,13 +1719,11 @@ describe('map chrome layout', () => {
     expect(appShellRule).toContain('--theme-mist-solid-start: rgba(250, 252, 251, 0.80)')
     expect(appShellRule).toContain('--theme-mist-solid-end: rgba(232, 242, 240, 0.62)')
     expect(appShellRule).toContain('linear-gradient(145deg, var(--theme-mist-solid-start), var(--theme-mist-solid-end))')
-    expect(debugPanelRule).toContain('border: 1px solid var(--glass-panel-border)')
-    expect(debugPanelRule).toContain('box-shadow: var(--glass-panel-shadow)')
-    expect(debugPanelRule).toContain('backdrop-filter: var(--glass-panel-filter)')
-    expect(popoverRule).toContain('border: 1px solid var(--glass-panel-border)')
-    expect(popoverRule).toContain('background: var(--solid-glass-panel-bg)')
-    expect(popoverRule).toContain('box-shadow: var(--glass-panel-shadow)')
-    expect(popoverRule).toContain('backdrop-filter: var(--glass-panel-filter)')
+    expect(amapCanvasSource).toContain('className="glass-panel glass-panel--solid glass-panel--compact footprint-debug-panel"')
+    expect(mapboxCanvasSource).toContain('className="glass-panel glass-panel--solid glass-panel--compact footprint-debug-panel"')
+    expect(mapControlsSource).toContain('className="glass-panel glass-panel--solid glass-panel--compact footprint-style-popover"')
+    expectNoOwnedGlassMaterial(debugPanelRule)
+    expectNoOwnedGlassMaterial(popoverRule)
   })
 
   it('removes the AMap compass and limits map dragging to configured bounds', () => {
