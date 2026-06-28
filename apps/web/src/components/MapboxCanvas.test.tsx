@@ -603,7 +603,7 @@ describe('MapboxCanvas footprint vector tiles', () => {
     ])
   })
 
-  it('returns the flat map world view to longitude 0 and north latitude 20 at zoom 1.5', async () => {
+  it('returns the flat map world view to longitude 30 and north latitude 20 at zoom 1.5', async () => {
     const { mapRecords } = mockMapboxRuntime()
     const { MapboxCanvas } = await import('./MapboxCanvas')
 
@@ -620,7 +620,7 @@ describe('MapboxCanvas footprint vector tiles', () => {
 
     expect(mapRecords[0].flyToCalls).toEqual([
       {
-        center: [0, 20],
+        center: [30, 20],
         zoom: 1.5,
         bearing: 0,
         pitch: 0,
