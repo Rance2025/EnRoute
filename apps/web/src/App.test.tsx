@@ -10,45 +10,79 @@ vi.mock('./components/MapboxCanvas', async () => {
       adminBoundariesVisible,
       placeLabelsVisible,
       projection,
+      onFootprintMetricsChange,
       onMapProjectionChange,
     }: {
       adminBoundariesVisible?: boolean
       placeLabelsVisible?: boolean
       projection?: string
+      onFootprintMetricsChange?: (metrics: {
+        selectedCount: number
+        totalDistanceMeters: number
+        averageDistanceMetersPerDay: number
+        distanceSeries: {
+          granularity: 'hour' | 'day'
+          unit: 'hour' | 'day'
+          buckets: Array<{
+            key: string
+            label: string
+            distanceMeters: number
+          }>
+        }
+      }) => void
       onMapProjectionChange?: (projection: string) => void
-    }) => React.createElement(
-      'section',
-      {
-        className: 'map-stage',
-        'data-testid': 'mapbox-canvas',
-        'data-admin-boundaries-visible': String(adminBoundariesVisible),
-        'data-place-labels-visible': String(placeLabelsVisible),
-        'data-projection': projection,
-        'aria-label': '在途 EnRoute 地图工作区',
-      },
-      React.createElement(
-        'div',
+    }) => {
+      React.useEffect(() => {
+        onFootprintMetricsChange?.({
+          selectedCount: 12486,
+          totalDistanceMeters: 18732000,
+          averageDistanceMetersPerDay: 624400,
+          distanceSeries: {
+            granularity: 'hour',
+            unit: 'hour',
+            buckets: Array.from({ length: 24 }, (_, hour) => ({
+              key: `2026-06-19T${hour.toString().padStart(2, '0')}`,
+              label: `${hour.toString().padStart(2, '0')}:00`,
+              distanceMeters: hour === 10 ? 18732000 : 0,
+            })),
+          },
+        })
+      }, [onFootprintMetricsChange])
+
+      return React.createElement(
+        'section',
         {
-          className: 'map-message',
-          role: 'status',
+          className: 'map-stage',
+          'data-testid': 'mapbox-canvas',
+          'data-admin-boundaries-visible': String(adminBoundariesVisible),
+          'data-place-labels-visible': String(placeLabelsVisible),
+          'data-projection': projection,
+          'aria-label': '在途 EnRoute 地图工作区',
         },
-        React.createElement('h2', null, '需要配置 Mapbox 访问令牌'),
-        React.createElement('pre', null, 'VITE_MAPBOX_ACCESS_TOKEN'),
-      ),
-      React.createElement(
-        'div',
-        {
-          className: 'map-toolbar',
-          'aria-label': '地图工具',
-        },
-        React.createElement('button', { type: 'button' }, '聚焦当前足迹'),
-        React.createElement('button', { type: 'button' }, '显示世界地图'),
-        React.createElement('button', { type: 'button' }, '定位当前位置'),
-        React.createElement('button', { type: 'button' }, '放大地图'),
-        React.createElement('button', { type: 'button' }, '缩小地图'),
-        React.createElement('button', { type: 'button', onClick: () => onMapProjectionChange?.('mercator') }, '足迹显示设置'),
-      ),
-    ),
+        React.createElement(
+          'div',
+          {
+            className: 'map-message',
+            role: 'status',
+          },
+          React.createElement('h2', null, '需要配置 Mapbox 访问令牌'),
+          React.createElement('pre', null, 'VITE_MAPBOX_ACCESS_TOKEN'),
+        ),
+        React.createElement(
+          'div',
+          {
+            className: 'map-toolbar',
+            'aria-label': '地图工具',
+          },
+          React.createElement('button', { type: 'button' }, '聚焦当前足迹'),
+          React.createElement('button', { type: 'button' }, '显示世界地图'),
+          React.createElement('button', { type: 'button' }, '定位当前位置'),
+          React.createElement('button', { type: 'button' }, '放大地图'),
+          React.createElement('button', { type: 'button' }, '缩小地图'),
+          React.createElement('button', { type: 'button', onClick: () => onMapProjectionChange?.('mercator') }, '足迹显示设置'),
+        ),
+      )
+    },
   }
 })
 
@@ -85,6 +119,7 @@ const missingAmapConfig = {
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
+  vi.useRealTimers()
 })
 
 beforeEach(() => {
@@ -255,6 +290,43 @@ describe('App', () => {
       'aria-pressed',
       'true',
     )
+  })
+
+  it('renders four map metrics in the shared left panel', async () => {
+    render(<App amapConfig={missingAmapConfig} />)
+    await settleLazyImports()
+
+    const timePanel = screen.getByLabelText('时间范围面板')
+    const metricStrip = within(timePanel).getByLabelText('全局范围指标')
+
+    expect(metricStrip.children).toHaveLength(4)
+    expect(within(metricStrip).getByText('足迹总数')).toBeInTheDocument()
+    expect(within(metricStrip).getByText('12,486')).toBeInTheDocument()
+    expect(within(metricStrip).getByText('总距离')).toBeInTheDocument()
+    expect(within(metricStrip).getByText('18,732')).toBeInTheDocument()
+    expect(within(metricStrip).getAllByText('km')).toHaveLength(2)
+    expect(within(metricStrip).getByText('日均距离')).toBeInTheDocument()
+    expect(within(metricStrip).getByText('624.4')).toBeInTheDocument()
+    expect(within(metricStrip).getByText('范围天数')).toBeInTheDocument()
+    expect(within(metricStrip).getByText('1')).toBeInTheDocument()
+    expect(within(metricStrip).getByText('天')).toBeInTheDocument()
+  })
+
+  it('shows range days only through today for current ranges that extend into the future', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-06-20T10:20:30+08:00'))
+
+    render(<App amapConfig={missingAmapConfig} />)
+    await settleLazyImports()
+
+    fireEvent.click(screen.getByRole('button', { name: '年' }))
+
+    const timePanel = screen.getByLabelText('时间范围面板')
+    const metricStrip = within(timePanel).getByLabelText('全局范围指标')
+
+    expect(within(metricStrip).getByText('范围天数')).toBeInTheDocument()
+    expect(within(metricStrip).getByText('171')).toBeInTheDocument()
+    expect(within(metricStrip).queryByText('365')).not.toBeInTheDocument()
   })
 
   it('renders the right rail as separated glass panels on the shared base board', () => {
@@ -470,20 +542,26 @@ describe('App', () => {
     expect(within(mainNav).getAllByRole('button')[1]).toHaveAttribute('aria-pressed', 'true')
   })
 
-  it('opens a paged settings dialog from the time panel and toggles mixed navigation labels', () => {
-    render(<App amapConfig={missingAmapConfig} />)
+  it('opens a paged settings dialog from the right rail header and toggles mixed navigation labels', () => {
+    const { container } = render(<App amapConfig={missingAmapConfig} />)
 
-    fireEvent.click(screen.getByRole('button', { name: '打开设置' }))
+    const leftPanel = container.querySelector('.time-context-panel')
+    const settingsButton = container.querySelector('.right-context-settings-button')
+
+    expect(leftPanel?.querySelector('[aria-label="打开设置"]')).toBeNull()
+    expect(settingsButton).toBeInstanceOf(HTMLButtonElement)
+    expect(settingsButton).toHaveAttribute('aria-label', '打开设置')
+
+    fireEvent.click(settingsButton as HTMLButtonElement)
 
     const dialog = screen.getByRole('dialog', { name: '设置' })
+    const settingsTabs = dialog.querySelectorAll<HTMLButtonElement>('.settings-dialog__tab')
     expect(dialog).toBeInTheDocument()
-    expect(within(dialog).getByRole('button', { name: '通用' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    )
+    expect(settingsTabs[1]).toHaveAttribute('aria-pressed', 'true')
     expect(within(dialog).getByRole('button', { name: '地图' })).toBeInTheDocument()
     expect(within(dialog).getByRole('button', { name: '记账' })).toBeInTheDocument()
     expect(within(dialog).getByRole('button', { name: '日程' })).toBeInTheDocument()
+    fireEvent.click(settingsTabs[0])
     expect(within(dialog).getByRole('button', { name: '纯 icon' })).toHaveAttribute(
       'aria-pressed',
       'true',
@@ -497,12 +575,51 @@ describe('App', () => {
     expect(window.localStorage.getItem('enroute:navigation-style')).toBe('mixed')
   })
 
+  it('opens settings with the page tab that matches the current main navigation view', () => {
+    const { container } = render(<App amapConfig={missingAmapConfig} />)
+    const navButtons = Array.from(
+      container.querySelectorAll<HTMLButtonElement>('.app-nav__button'),
+    )
+    const settingsButton = container.querySelector<HTMLButtonElement>(
+      '.right-context-settings-button',
+    )
+
+    expect(settingsButton).not.toBeNull()
+
+    fireEvent.click(settingsButton as HTMLButtonElement)
+    let dialog = screen.getByRole('dialog', { name: '设置' })
+    let tabs = dialog.querySelectorAll<HTMLButtonElement>('.settings-dialog__tab')
+    expect(tabs[1]).toHaveAttribute('aria-pressed', 'true')
+
+    fireEvent.click(within(dialog).getByRole('button', { name: '关闭设置' }))
+    fireEvent.click(navButtons[0])
+    fireEvent.click(settingsButton as HTMLButtonElement)
+    dialog = screen.getByRole('dialog', { name: '设置' })
+    tabs = dialog.querySelectorAll<HTMLButtonElement>('.settings-dialog__tab')
+    expect(tabs[0]).toHaveAttribute('aria-pressed', 'true')
+
+    fireEvent.click(within(dialog).getByRole('button', { name: '关闭设置' }))
+    fireEvent.click(navButtons[2])
+    fireEvent.click(settingsButton as HTMLButtonElement)
+    dialog = screen.getByRole('dialog', { name: '设置' })
+    tabs = dialog.querySelectorAll<HTMLButtonElement>('.settings-dialog__tab')
+    expect(tabs[2]).toHaveAttribute('aria-pressed', 'true')
+
+    fireEvent.click(within(dialog).getByRole('button', { name: '关闭设置' }))
+    fireEvent.click(navButtons[3])
+    fireEvent.click(settingsButton as HTMLButtonElement)
+    dialog = screen.getByRole('dialog', { name: '设置' })
+    tabs = dialog.querySelectorAll<HTMLButtonElement>('.settings-dialog__tab')
+    expect(tabs[3]).toHaveAttribute('aria-pressed', 'true')
+  })
+
   it('shows the extracted shell color group as a selectable general theme', () => {
     render(<App amapConfig={missingAmapConfig} />)
 
     fireEvent.click(screen.getByRole('button', { name: '打开设置' }))
 
     const dialog = screen.getByRole('dialog', { name: '设置' })
+    fireEvent.click(within(dialog).getByRole('button', { name: '通用' }))
     const themeGroup = within(dialog).getByRole('group', { name: '界面色调' })
     const themeButton = within(themeGroup).getByRole('button', { name: '青瓷灰' })
 
@@ -521,6 +638,7 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: '打开设置' }))
 
     const dialog = screen.getByRole('dialog', { name: '设置' })
+    fireEvent.click(within(dialog).getByRole('button', { name: '通用' }))
     const opacitySlider = within(dialog).getByLabelText('磨砂玻璃透明程度')
 
     expect(opacitySlider).toHaveAttribute('type', 'range')
@@ -819,7 +937,12 @@ describe('App', () => {
     expect(within(timeCardSummary).getByText('支出')).toBeInTheDocument()
     expect(within(timeCardSummary).getByText('¥481.18')).toBeInTheDocument()
     expect(within(timeCardSummary).getByText('流水')).toBeInTheDocument()
-    expect(within(timeCardSummary).getByText('6 笔')).toBeInTheDocument()
+    expect(within(timeCardSummary).getByText('6')).toHaveClass(
+      'time-context-metric-strip__number',
+    )
+    expect(within(timeCardSummary).getByText('笔')).toHaveClass(
+      'time-context-metric-strip__unit',
+    )
     expect(within(timeCardSummary).queryByText('净流入')).not.toBeInTheDocument()
     expect(within(timeCardSummary).queryByText('账户')).not.toBeInTheDocument()
     expect(within(timeCardSummary).queryByText('¥420')).not.toBeInTheDocument()

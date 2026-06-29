@@ -7,9 +7,11 @@ import {
   selectDay,
   selectMonth,
   selectWeek,
+  selectYear,
   setCustomDateRange,
   type TimeRangeSelection,
 } from '../time/timeRange'
+import type { FootprintDistanceSeries } from '../layers/footprintTypes'
 import { TimeContextPanel } from './TimeContextPanel'
 
 beforeEach(() => {
@@ -25,9 +27,11 @@ afterEach(() => {
 function StatefulMapTimeContextPanel({
   initialSelection,
   onSelectionChange,
+  distanceSeries,
 }: {
   initialSelection: TimeRangeSelection
   onSelectionChange: (selection: TimeRangeSelection) => void
+  distanceSeries?: FootprintDistanceSeries
 }) {
   const [selection, setSelection] = useState(initialSelection)
 
@@ -35,6 +39,7 @@ function StatefulMapTimeContextPanel({
     <TimeContextPanel
       view="map"
       selection={selection}
+      distanceSeries={distanceSeries}
       onSelectionChange={(nextSelection) => {
         onSelectionChange(nextSelection)
         setSelection(nextSelection)
@@ -43,7 +48,332 @@ function StatefulMapTimeContextPanel({
   )
 }
 
+const hourlyDistanceSeries: FootprintDistanceSeries = {
+  granularity: 'hour',
+  unit: 'hour',
+  buckets: Array.from({ length: 24 }, (_, hour) => ({
+    key: `2026-06-19T${hour.toString().padStart(2, '0')}`,
+    label: `${hour.toString().padStart(2, '0')}:00`,
+    distanceMeters: { 0: 100, 11: 300 }[hour] ?? 0,
+  })),
+}
+
+const dailyDistanceSeries: FootprintDistanceSeries = {
+  granularity: 'day',
+  unit: 'day',
+  buckets: [
+    { key: '2026-06-18', label: '6月18日', distanceMeters: 0 },
+    { key: '2026-06-19', label: '6月19日', distanceMeters: 400 },
+    { key: '2026-06-20', label: '6月20日', distanceMeters: 1200 },
+  ],
+}
+
+const denseYearDistanceSeries: FootprintDistanceSeries = {
+  granularity: 'day',
+  unit: 'day',
+  buckets: Array.from({ length: 365 }, (_, index) => ({
+    key: createDateKeyFromOffset('2026-01-01', index),
+    label: `${Math.floor(index / 31) + 1}月${(index % 31) + 1}日`,
+    distanceMeters: index === 170 ? 1200 : 0,
+  })),
+}
+
+function createDateKeyFromOffset(startDateKey: string, offsetDays: number) {
+  const [year, month, day] = startDateKey.split('-').map(Number)
+  const date = new Date(year, month - 1, day)
+  date.setDate(date.getDate() + offsetDays)
+
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-')
+}
+
 describe('TimeContextPanel', () => {
+  it('keeps the map time selector and distance chart visible by default', () => {
+    const { container } = render(
+      <TimeContextPanel
+        view="map"
+        selection={selectDay('2026-06-15')}
+        metricItems={[{ label: 'Total distance', value: '12.3 km' }]}
+        onSelectionChange={vi.fn()}
+      />,
+    )
+
+    expect(container.querySelector('.time-panel-content')).toBeInTheDocument()
+    expect(container.querySelector('.time-context-trend')).toBeInTheDocument()
+    expect(container.querySelector('.time-context-card__today')).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    )
+  })
+
+  it('places distance aggregation metadata above the chart and the average value on the chart line', () => {
+    const { container } = render(
+      <TimeContextPanel
+        view="map"
+        selection={selectMonth(2026, 6)}
+        distanceSeries={dailyDistanceSeries}
+        metricItems={[
+          { label: 'Footprints', value: '12,486' },
+          { label: 'Distance', value: '18,732 km' },
+          { label: 'Average', value: '51.3 km/day' },
+          { label: 'Range days', value: '30 days' },
+        ]}
+        onSelectionChange={vi.fn()}
+      />,
+    )
+
+    const trend = container.querySelector('.time-context-trend')
+
+    expect(trend).toBeInTheDocument()
+    expect(within(trend as HTMLElement).getByText('\u5f53\u524d\u8303\u56f4\u8ddd\u79bb')).toBeInTheDocument()
+    expect(within(trend as HTMLElement).getByText(/\u6309\u65e5\u6c47\u603b/)).toBeInTheDocument()
+    expect(trend?.querySelector('.time-context-trend__head')).not.toHaveTextContent('\u5747\u503c')
+    expect(trend?.querySelector('.time-context-trend__average-label')).toHaveTextContent(
+      /^均值\s+\d+(\.\d)?\s+(m|km)\/日$/,
+    )
+  })
+
+  it('averages the current day distance chart by elapsed hours instead of all 24 hours', () => {
+    vi.setSystemTime(new Date('2026-06-20T10:00:00+08:00'))
+
+    const currentDaySeries: FootprintDistanceSeries = {
+      granularity: 'hour',
+      unit: 'hour',
+      buckets: Array.from({ length: 24 }, (_, hour) => ({
+        key: `2026-06-20T${hour.toString().padStart(2, '0')}`,
+        label: `${hour.toString().padStart(2, '0')}:00`,
+        distanceMeters: { 0: 40, 9: 60 }[hour] ?? 0,
+      })),
+    }
+    const { container } = render(
+      <TimeContextPanel
+        view="map"
+        selection={selectDay('2026-06-20')}
+        distanceSeries={currentDaySeries}
+        onSelectionChange={vi.fn()}
+      />,
+    )
+
+    expect(
+      container.querySelector('.time-context-trend__average-label')?.textContent,
+    ).toContain('10 m/')
+    expect(container.querySelector('.time-context-trend__head small')?.textContent).toContain(
+      '10.0小时',
+    )
+  })
+
+  it('averages multi-day distance charts only through today when the range extends into the future', () => {
+    vi.setSystemTime(new Date('2026-06-20T10:20:30+08:00'))
+
+    const currentMonthSeries: FootprintDistanceSeries = {
+      granularity: 'day',
+      unit: 'day',
+      buckets: Array.from({ length: 30 }, (_, index) => ({
+        key: `2026-06-${(index + 1).toString().padStart(2, '0')}`,
+        label: `6-${index + 1}`,
+        distanceMeters: index === 19 ? 2000 : 0,
+      })),
+    }
+    const { container } = render(
+      <TimeContextPanel
+        view="map"
+        selection={selectMonth(2026, 6)}
+        distanceSeries={currentMonthSeries}
+        onSelectionChange={vi.fn()}
+      />,
+    )
+
+    expect(
+      container.querySelector('.time-context-trend__average-label')?.textContent,
+    ).toContain('100 m/')
+    expect(container.querySelector('.time-context-trend__head small')?.textContent).toContain(
+      '20天',
+    )
+  })
+
+  it('positions the average line on the raw chart scale instead of clamping it away from the bars', () => {
+    const sparsePastSeries: FootprintDistanceSeries = {
+      granularity: 'day',
+      unit: 'day',
+      buckets: Array.from({ length: 100 }, (_, index) => ({
+        key: `2026-02-${(index + 1).toString().padStart(2, '0')}`,
+        label: `D${index + 1}`,
+        distanceMeters: index === 99 ? 100 : 0,
+      })),
+    }
+    const { container } = render(
+      <TimeContextPanel
+        view="map"
+        selection={setCustomDateRange('2026-01-01', '2026-04-10')}
+        distanceSeries={sparsePastSeries}
+        onSelectionChange={vi.fn()}
+      />,
+    )
+    const chart = container.querySelector<HTMLElement>('.time-context-trend__chart')
+
+    expect(chart?.style.getPropertyValue('--trend-average-position')).toBe('1%')
+  })
+
+  it('keeps zero-distance bars at zero height so the average line shares the same baseline', () => {
+    const zeroSeries: FootprintDistanceSeries = {
+      granularity: 'day',
+      unit: 'day',
+      buckets: Array.from({ length: 7 }, (_, index) => ({
+        key: `2026-06-${(index + 1).toString().padStart(2, '0')}`,
+        label: `D${index + 1}`,
+        distanceMeters: 0,
+      })),
+    }
+    const { container } = render(
+      <TimeContextPanel
+        view="map"
+        selection={selectWeek('2026-06-04')}
+        distanceSeries={zeroSeries}
+        onSelectionChange={vi.fn()}
+      />,
+    )
+    const chart = container.querySelector<HTMLElement>('.time-context-trend__chart')
+    const bars = Array.from(
+      container.querySelectorAll<HTMLElement>('.time-context-trend__bar'),
+    )
+
+    expect(chart?.style.getPropertyValue('--trend-average-position')).toBe('0%')
+    expect(bars.map((bar) => bar.style.getPropertyValue('--trend-height'))).toEqual(
+      Array.from({ length: 7 }, () => '0%'),
+    )
+  })
+
+  it('renders real distance buckets and only emphasizes the hovered or focused column', () => {
+    const { container } = render(
+      <TimeContextPanel
+        view="map"
+        selection={selectWeek('2026-06-19')}
+        distanceSeries={dailyDistanceSeries}
+        onSelectionChange={vi.fn()}
+      />,
+    )
+
+    const trend = screen.getByLabelText('当前范围距离')
+    const columns = Array.from(container.querySelectorAll('.time-context-trend__column'))
+    const bars = Array.from(container.querySelectorAll('.time-context-trend__bar'))
+
+    expect(columns).toHaveLength(3)
+    expect(bars).toHaveLength(3)
+    expect(within(trend).getByText('按日汇总 · 3天')).toBeInTheDocument()
+    expect(bars.filter((bar) => bar.classList.contains('is-active'))).toHaveLength(0)
+
+    fireEvent.pointerEnter(columns[1])
+
+    expect(within(trend).getByText('6月19日 · 400 m')).toBeInTheDocument()
+    expect(bars.filter((bar) => bar.classList.contains('is-active'))).toEqual([bars[1]])
+
+    fireEvent.focus(columns[2])
+
+    expect(within(trend).getByText('6月20日 · 1.2 km')).toBeInTheDocument()
+    expect(bars.filter((bar) => bar.classList.contains('is-active'))).toEqual([bars[2]])
+  })
+
+  it('keeps dense year distance buckets addressable through full-height columns', () => {
+    const { container } = render(
+      <TimeContextPanel
+        view="map"
+        selection={selectYear(2026)}
+        distanceSeries={denseYearDistanceSeries}
+        onSelectionChange={vi.fn()}
+      />,
+    )
+
+    const trend = screen.getByLabelText('当前范围距离')
+    const chart = container.querySelector('.time-context-trend__chart')
+    const columns = Array.from(container.querySelectorAll('.time-context-trend__column'))
+    const bars = Array.from(container.querySelectorAll('.time-context-trend__bar'))
+
+    expect(chart).toHaveClass('time-context-trend__chart--dense')
+    expect(columns).toHaveLength(365)
+    expect(bars).toHaveLength(365)
+    expect(within(trend).getByText('按日汇总 · 171天')).toBeInTheDocument()
+
+    fireEvent.pointerEnter(columns[170])
+
+    expect(within(trend).getByText(/1.2 km$/)).toBeInTheDocument()
+    expect(bars.filter((bar) => bar.classList.contains('is-active'))).toEqual([bars[170]])
+  })
+
+  it('maps pointer movement anywhere in the chart area to the bucket under the same x position', () => {
+    const { container } = render(
+      <TimeContextPanel
+        view="map"
+        selection={selectWeek('2026-06-19')}
+        distanceSeries={dailyDistanceSeries}
+        onSelectionChange={vi.fn()}
+      />,
+    )
+
+    const trend = screen.getByLabelText('当前范围距离')
+    const chart = container.querySelector('.time-context-trend__chart') as HTMLElement
+    const bars = Array.from(container.querySelectorAll('.time-context-trend__bar'))
+
+    chart.getBoundingClientRect = () => ({
+      x: 10,
+      y: 20,
+      width: 300,
+      height: 132,
+      top: 20,
+      right: 310,
+      bottom: 152,
+      left: 10,
+      toJSON: () => '',
+    })
+
+    fireEvent.pointerMove(chart, { clientX: 160, clientY: 30 })
+
+    expect(within(trend).getByText('6月19日 · 400 m')).toBeInTheDocument()
+    expect(bars.filter((bar) => bar.classList.contains('is-active'))).toEqual([bars[1]])
+  })
+
+  it('keeps the map distance chart in place and fades it while day mode shows the month calendar', () => {
+    render(
+      <StatefulMapTimeContextPanel
+        initialSelection={selectDay('2026-06-19')}
+        distanceSeries={hourlyDistanceSeries}
+        onSelectionChange={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByLabelText('当前范围距离')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '月历' }))
+
+    expect(screen.getByLabelText('当前范围距离')).toHaveClass('is-hidden')
+
+    fireEvent.click(screen.getByRole('button', { name: '周历' }))
+
+    expect(screen.getByLabelText('当前范围距离')).not.toHaveClass('is-hidden')
+  })
+
+  it('keeps the map distance chart in place and fades it while a custom date picker is expanded', () => {
+    render(
+      <StatefulMapTimeContextPanel
+        initialSelection={setCustomDateRange('2026-06-10', '2026-06-12')}
+        distanceSeries={dailyDistanceSeries}
+        onSelectionChange={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByLabelText('当前范围距离')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /打开开始日期选择器/ }))
+
+    expect(screen.getByLabelText('当前范围距离')).toHaveClass('is-hidden')
+
+    fireEvent.click(screen.getByRole('button', { name: /打开开始日期选择器/ }))
+
+    expect(screen.getByLabelText('当前范围距离')).not.toHaveClass('is-hidden')
+  })
+
   it('presents a compact travel dashboard and staged time editor actions', () => {
     render(
       <TimeContextPanel
@@ -65,11 +395,15 @@ describe('TimeContextPanel', () => {
     expect(within(overview).getByText('区域时间范围')).toBeInTheDocument()
     expect(within(overview).getByRole('heading', { name: '6月' })).toBeInTheDocument()
     expect(within(overview).getByText('2026年6月')).toBeInTheDocument()
-    expect(screen.getByLabelText('本月足迹趋势')).toBeInTheDocument()
-    expect(screen.getByText('本月足迹趋势')).toBeInTheDocument()
-    expect(screen.getByText('48,260 km')).toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: '修改时间' }))
+    expect(screen.getByLabelText('当前范围距离')).toBeInTheDocument()
+    expect(screen.getByText('当前范围距离')).toBeInTheDocument()
+    const metricStrip = screen.getByLabelText('全局范围指标')
+    expect(within(metricStrip).getByText('48,260')).toHaveClass(
+      'time-context-metric-strip__number',
+    )
+    expect(within(metricStrip).getByText('km')).toHaveClass(
+      'time-context-metric-strip__unit',
+    )
 
     const editor = screen.getByRole('region', { name: '时间编辑器' })
 
@@ -77,14 +411,14 @@ describe('TimeContextPanel', () => {
     expect(within(editor).queryByText('选择范围')).not.toBeInTheDocument()
     expect(within(editor).queryByRole('button', { name: '取消' })).not.toBeInTheDocument()
     expect(within(editor).queryByRole('button', { name: '应用时间' })).not.toBeInTheDocument()
-    expect(screen.queryByLabelText('本月足迹趋势')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('当前范围距离')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '回到本月' })).toHaveAttribute(
       'aria-expanded',
       'true',
     )
   })
 
-  it('marks the rail as editing so the time editor can use the available height', () => {
+  it('keeps the selector in the persistent rail instead of entering an editing state', () => {
     const { container } = render(
       <TimeContextPanel
         view="map"
@@ -95,12 +429,13 @@ describe('TimeContextPanel', () => {
     const panel = container.querySelector('.time-context-panel')
 
     expect(panel).not.toHaveClass('is-editing-time')
-    expect(container.querySelector('.time-context-panel__footer')).toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: '修改时间' }))
-
-    expect(panel).toHaveClass('is-editing-time')
+    expect(container.querySelector('.time-context-panel__footer')).not.toBeInTheDocument()
+    expect(within(panel as HTMLElement).queryByRole('button', { name: '打开设置' })).not.toBeInTheDocument()
     expect(container.querySelector('.time-panel-content')).toBeInTheDocument()
+    expect(container.querySelector('.time-context-card__today')).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    )
   })
 
   it('uses the day calendar header for either calendar mode controls or month selection context', () => {
@@ -111,8 +446,6 @@ describe('TimeContextPanel', () => {
         onSelectionChange={vi.fn()}
       />,
     )
-
-    fireEvent.click(screen.getByRole('button', { name: '修改时间' }))
 
     const calendar = screen.getByLabelText('日历选择')
 
@@ -207,7 +540,7 @@ describe('TimeContextPanel', () => {
     })
   })
 
-  it('keeps the mode switch visible while the time selector stays collapsed', () => {
+  it('keeps the mode switch and the time selector visible together', () => {
     render(
       <TimeContextPanel
         view="map"
@@ -216,9 +549,9 @@ describe('TimeContextPanel', () => {
       />,
     )
 
-    expect(screen.getByRole('button', { name: '修改时间' })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: '回到今天' })).toHaveAttribute(
       'aria-expanded',
-      'false',
+      'true',
     )
     expect(screen.getByRole('group', { name: '时间模式' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '日' })).toHaveAttribute(
@@ -229,20 +562,12 @@ describe('TimeContextPanel', () => {
       'aria-valuetext',
       '日',
     )
-    expect(screen.queryByLabelText('日历选择')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('日历选择')).toBeInTheDocument()
     expect(screen.queryByLabelText('时间选择页')).not.toBeInTheDocument()
     expect(screen.queryByLabelText('自定义时间范围')).not.toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: '修改时间' }))
-
-    expect(screen.getByRole('button', { name: '回到今天' })).toHaveAttribute(
-      'aria-expanded',
-      'true',
-    )
-    expect(screen.getByLabelText('日历选择')).toBeInTheDocument()
   })
 
-  it('resets to today and closes the time selector from the open editor state', () => {
+  it('resets to today while keeping the time selector visible', () => {
     const onSelectionChange = vi.fn()
 
     render(
@@ -252,7 +577,6 @@ describe('TimeContextPanel', () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: '修改时间' }))
     fireEvent.click(screen.getByRole('button', { name: '回到今天' }))
 
     expect(onSelectionChange).toHaveBeenLastCalledWith(
@@ -263,11 +587,11 @@ describe('TimeContextPanel', () => {
         anchorDate: '2026-06-20',
       }),
     )
-    expect(screen.getByRole('button', { name: '修改时间' })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: '回到今天' })).toHaveAttribute(
       'aria-expanded',
-      'false',
+      'true',
     )
-    expect(screen.queryByLabelText('日历选择')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('日历选择')).toBeInTheDocument()
   })
 
   it('switches time modes to the current range defaults while the editor stays open', () => {
@@ -280,7 +604,6 @@ describe('TimeContextPanel', () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: '修改时间' }))
     fireEvent.click(screen.getByRole('button', { name: '周' }))
 
     expect(onSelectionChange).toHaveBeenLastCalledWith(
@@ -315,7 +638,7 @@ describe('TimeContextPanel', () => {
     expect(screen.getByLabelText('自定义时间范围')).toBeInTheDocument()
   })
 
-  it('closes the time selector after the user picks a concrete day', () => {
+  it('keeps the time selector visible after the user picks a concrete day', () => {
     const onSelectionChange = vi.fn()
 
     render(
@@ -325,7 +648,6 @@ describe('TimeContextPanel', () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: '修改时间' }))
     fireEvent.click(within(screen.getByLabelText('日历日期')).getByRole('button', { name: '15' }))
 
     expect(onSelectionChange).toHaveBeenLastCalledWith(
@@ -336,11 +658,11 @@ describe('TimeContextPanel', () => {
         anchorDate: '2026-06-15',
       }),
     )
-    expect(screen.getByRole('button', { name: '修改时间' })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: '回到今天' })).toHaveAttribute(
       'aria-expanded',
-      'false',
+      'true',
     )
-    expect(screen.queryByLabelText('日历选择')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('日历选择')).toBeInTheDocument()
   })
 
   it('keeps the custom range editor open while editing date boundaries', () => {
@@ -352,8 +674,6 @@ describe('TimeContextPanel', () => {
         onSelectionChange={onSelectionChange}
       />,
     )
-
-    fireEvent.click(screen.getByRole('button', { name: '修改时间' }))
 
     const customPanel = screen.getByLabelText('自定义时间范围')
     fireEvent.change(within(customPanel).getByLabelText('开始日期'), {
@@ -389,7 +709,6 @@ describe('TimeContextPanel', () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: '修改时间' }))
     fireEvent.click(screen.getByRole('button', { name: '自定义' }))
 
     expect(mapSelectionChange).toHaveBeenCalledWith(
@@ -413,7 +732,6 @@ describe('TimeContextPanel', () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: '修改时间' }))
     fireEvent.click(screen.getByRole('button', { name: '自定义' }))
 
     expect(accountingSelectionChange).toHaveBeenCalledWith(
@@ -436,7 +754,6 @@ describe('TimeContextPanel', () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: '修改时间' }))
     fireEvent.click(screen.getByRole('button', { name: /打开开始日期选择器/ }))
 
     const picker = screen.getByRole('dialog', { name: '开始日期选择' })
@@ -471,7 +788,6 @@ describe('TimeContextPanel', () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: '修改时间' }))
     fireEvent.click(screen.getByRole('button', { name: /打开开始日期选择器/ }))
 
     const picker = screen.getByRole('dialog', { name: '开始日期选择' })
@@ -502,7 +818,6 @@ describe('TimeContextPanel', () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: '修改时间' }))
     const calendar = screen.getByLabelText('日历选择')
 
     fireEvent.click(
@@ -525,11 +840,11 @@ describe('TimeContextPanel', () => {
         anchorDate: '2026-05-20',
       }),
     )
-    expect(screen.getByRole('button', { name: '修改时间' })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: '回到今天' })).toHaveAttribute(
       'aria-expanded',
-      'false',
+      'true',
     )
-    expect(screen.queryByLabelText('日历选择')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('日历选择')).toBeInTheDocument()
   })
 
   it('lets the week picker title pick a month and return to week mode', () => {
@@ -542,7 +857,6 @@ describe('TimeContextPanel', () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: '修改时间' }))
     const picker = screen.getByLabelText('时间选择页')
 
     fireEvent.click(
@@ -565,11 +879,11 @@ describe('TimeContextPanel', () => {
         anchorDate: '2026-05-20',
       }),
     )
-    expect(screen.getByRole('button', { name: '修改时间' })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: '回到本周' })).toHaveAttribute(
       'aria-expanded',
-      'false',
+      'true',
     )
-    expect(screen.queryByLabelText('时间选择页')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('时间选择页')).toBeInTheDocument()
   })
 
   it('lets the month picker title pick a year and return to month mode', () => {
@@ -582,7 +896,6 @@ describe('TimeContextPanel', () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: '修改时间' }))
     const picker = screen.getByLabelText('时间选择页')
 
     fireEvent.click(
@@ -605,11 +918,11 @@ describe('TimeContextPanel', () => {
         anchorDate: '2025-06-01',
       }),
     )
-    expect(screen.getByRole('button', { name: '修改时间' })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: '回到本月' })).toHaveAttribute(
       'aria-expanded',
-      'false',
+      'true',
     )
-    expect(screen.queryByLabelText('时间选择页')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('时间选择页')).toBeInTheDocument()
   })
 
   it('renders accounting summary values through the shared metric strip', () => {
@@ -630,7 +943,12 @@ describe('TimeContextPanel', () => {
     expect(within(timeCardSummary).getByText('支出')).toBeInTheDocument()
     expect(within(timeCardSummary).getByText('¥481.18')).toBeInTheDocument()
     expect(within(timeCardSummary).getByText('流水')).toBeInTheDocument()
-    expect(within(timeCardSummary).getByText('6 笔')).toBeInTheDocument()
+    expect(within(timeCardSummary).getByText('6')).toHaveClass(
+      'time-context-metric-strip__number',
+    )
+    expect(within(timeCardSummary).getByText('笔')).toHaveClass(
+      'time-context-metric-strip__unit',
+    )
     expect(within(timeCardSummary).queryByText('净流入')).not.toBeInTheDocument()
     expect(within(timeCardSummary).queryByText('账户')).not.toBeInTheDocument()
     expect(screen.queryByLabelText('当前范围摘要')).not.toBeInTheDocument()
@@ -664,6 +982,48 @@ describe('TimeContextPanel', () => {
     expect(within(metricStrip).queryByText('账户')).not.toBeInTheDocument()
   })
 
+  it('splits metric values into a styled number and a normal unit', () => {
+    const { container } = render(
+      <TimeContextPanel
+        view="map"
+        selection={selectDay('2026-06-15')}
+        onSelectionChange={vi.fn()}
+        metricItems={[
+          { label: 'Footprints', value: '12,486' },
+          { label: 'Distance', value: '18,732 km' },
+          { label: 'Average', value: '51.3 km/day' },
+          { label: 'Active days', value: '214 days' },
+        ]}
+      />,
+    )
+
+    const metrics = container.querySelectorAll('.time-context-metric-strip > div')
+
+    expect(metrics).toHaveLength(4)
+    expect(metrics[0].querySelector('.time-context-metric-strip__number')).toHaveTextContent(
+      '12,486',
+    )
+    expect(metrics[0].querySelector('.time-context-metric-strip__unit')).toBeNull()
+    expect(metrics[1].querySelector('.time-context-metric-strip__number')).toHaveTextContent(
+      '18,732',
+    )
+    expect(metrics[1].querySelector('.time-context-metric-strip__unit')).toHaveTextContent(
+      'km',
+    )
+    expect(metrics[2].querySelector('.time-context-metric-strip__number')).toHaveTextContent(
+      '51.3',
+    )
+    expect(metrics[2].querySelector('.time-context-metric-strip__unit')).toHaveTextContent(
+      'km/day',
+    )
+    expect(metrics[3].querySelector('.time-context-metric-strip__number')).toHaveTextContent(
+      '214',
+    )
+    expect(metrics[3].querySelector('.time-context-metric-strip__unit')).toHaveTextContent(
+      'days',
+    )
+  })
+
   it('does not duplicate selected dates below native custom date controls', () => {
     render(
       <TimeContextPanel
@@ -673,7 +1033,6 @@ describe('TimeContextPanel', () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: '修改时间' }))
     const customPanel = screen.getByLabelText('自定义时间范围')
     const dateFields = within(customPanel).getByLabelText('自定义日期字段')
 
@@ -692,7 +1051,6 @@ describe('TimeContextPanel', () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: '修改时间' }))
     const dateFields = screen.getByLabelText('自定义日期字段')
     const separator = dateFields.querySelector('.time-range-separator')
     const children = Array.from(dateFields.children)

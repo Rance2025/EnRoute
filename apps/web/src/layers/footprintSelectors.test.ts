@@ -130,12 +130,29 @@ describe('footprint selectors', () => {
       selectedCount: 3,
       totalDistanceMeters: 300.5,
       averageDistanceMetersPerDay: 300.5,
+      distanceSeries: {
+        granularity: 'hour',
+        unit: 'hour',
+        buckets: Array.from({ length: 24 }, (_, hour) => ({
+          key: `2026-06-19T${hour.toString().padStart(2, '0')}`,
+          label: `${hour.toString().padStart(2, '0')}:00`,
+          distanceMeters: { 0: 100, 11: 200.5 }[hour] ?? 0,
+        })),
+      },
     })
 
     expect(calculateFootprintMetrics(points, setCustomDateRange('2026-06-19', '2026-06-20'))).toEqual({
       selectedCount: 3,
       totalDistanceMeters: 300.5,
       averageDistanceMetersPerDay: 150.25,
+      distanceSeries: {
+        granularity: 'day',
+        unit: 'day',
+        buckets: [
+          { key: '2026-06-19', label: '6月19日', distanceMeters: 300.5 },
+          { key: '2026-06-20', label: '6月20日', distanceMeters: 0 },
+        ],
+      },
     })
   })
 })

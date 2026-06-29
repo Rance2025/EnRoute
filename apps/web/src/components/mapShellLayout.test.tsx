@@ -176,8 +176,8 @@ const configuredAmap = {
   showLabel: false,
 }
 
-function openTimeEditor() {
-  fireEvent.click(screen.getByRole('button', { name: '修改时间' }))
+function expectPersistentTimeEditor() {
+  expect(screen.getByRole('region', { name: '时间编辑器' })).toBeInTheDocument()
 }
 
 async function settleLazyImports() {
@@ -196,9 +196,9 @@ describe('unified shell layout', () => {
 
     expect(screen.getByLabelText('时间范围面板')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: '今天' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '修改时间' })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: '回到今天' })).toHaveAttribute(
       'aria-expanded',
-      'false',
+      'true',
     )
     expect(screen.getByRole('group', { name: '时间模式' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '日' })).toHaveAttribute(
@@ -209,7 +209,7 @@ describe('unified shell layout', () => {
       'aria-valuetext',
       '日',
     )
-    expect(screen.queryByLabelText('日历选择')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('日历选择')).toBeInTheDocument()
     const mainNav = screen.getByRole('navigation', { name: '主导航' })
     expect(mainNav).toHaveClass('app-nav--icon')
     expect(mainNav.querySelector('.app-nav__thumb')).not.toBeNull()
@@ -225,7 +225,7 @@ describe('unified shell layout', () => {
     expect(within(mainNav).getByRole('button', { name: '日程' })).toBeInTheDocument()
     expect(screen.getByText('2026年6月19日')).toBeInTheDocument()
 
-    openTimeEditor()
+    expectPersistentTimeEditor()
 
     expect(screen.getByRole('group', { name: '时间模式' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '日' })).toHaveAttribute(
@@ -256,7 +256,11 @@ describe('unified shell layout', () => {
     expect(within(mapMetricStrip).getByText('足迹总数')).toBeInTheDocument()
     expect(within(mapMetricStrip).getByText('总距离')).toBeInTheDocument()
     expect(within(mapMetricStrip).getByText('日均距离')).toBeInTheDocument()
-    expect(within(mapMetricStrip).getAllByText('0 m')).toHaveLength(2)
+    expect(within(mapMetricStrip).getByText('范围天数')).toBeInTheDocument()
+    expect(within(mapMetricStrip).getAllByText('0')).toHaveLength(3)
+    expect(within(mapMetricStrip).getAllByText('m')).toHaveLength(2)
+    expect(within(mapMetricStrip).getByText('1')).toBeInTheDocument()
+    expect(within(mapMetricStrip).getByText('天')).toBeInTheDocument()
     expect(within(mapMetricStrip).queryByText('日均足迹')).not.toBeInTheDocument()
     expect(within(mapMetricStrip).queryByText('当前足迹')).not.toBeInTheDocument()
     expect(within(mapMetricStrip).queryByText('全部足迹')).not.toBeInTheDocument()
@@ -724,7 +728,7 @@ describe('unified shell layout', () => {
   it('uses project-facing time panel copy without implementation notes', () => {
     render(<App amapConfig={configuredAmap} />)
 
-    openTimeEditor()
+    expectPersistentTimeEditor()
 
     const pickerHead = screen.getByLabelText('日历选择').querySelector('.time-calendar-head')
 
@@ -798,10 +802,15 @@ describe('unified shell layout', () => {
 
     const rail = screen.getByRole('navigation', { name: '二级导航' })
     const getRailLabels = () =>
-      Array.from(rail.querySelectorAll('button')).map((button) => button.textContent)
+      Array.from(rail.querySelectorAll('.secondary-nav-rail__button')).map((button) => (
+        button.textContent
+      ))
+    const settingsButton = rail.querySelector('.right-context-settings-button')
 
     expect(rail).toHaveClass('secondary-nav-rail')
     expect(getRailLabels()).toEqual(['流水', '统计'])
+    expect(settingsButton).toBeInstanceOf(HTMLButtonElement)
+    expect(settingsButton).toHaveAttribute('aria-label', '打开设置')
     expect(rail.querySelector('[aria-pressed="true"]')).toHaveTextContent('流水')
     expect(document.querySelector('.ios-accounting-side-panel')).toBeNull()
     expect(document.querySelector('.ios-ledger-control-panel')).toBeNull()
@@ -821,7 +830,7 @@ describe('unified shell layout', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '记账' }))
     await settleLazyImports()
-    openTimeEditor()
+    expectPersistentTimeEditor()
 
     for (const range of ['日', '周', '月', '年', '自定义']) {
       expect(screen.getByRole('button', { name: range })).toBeInTheDocument()
@@ -861,7 +870,7 @@ describe('unified shell layout', () => {
   it('keeps all-time inside custom presets and supports real editable custom dates', async () => {
     render(<App amapConfig={configuredAmap} />)
 
-    openTimeEditor()
+    expectPersistentTimeEditor()
 
     expect(screen.getByRole('group', { name: '时间模式' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '全部' })).not.toBeInTheDocument()
@@ -878,9 +887,9 @@ describe('unified shell layout', () => {
     fireEvent.click(within(customPanel).getByRole('button', { name: '全部' }))
 
     expect(screen.getByRole('heading', { name: '全部' })).toBeInTheDocument()
-    expect(screen.queryByLabelText('自定义时间范围')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('自定义时间范围')).toBeInTheDocument()
 
-    openTimeEditor()
+    expectPersistentTimeEditor()
     let activeCustomPanel = screen.getByLabelText('自定义时间范围')
     expect(within(activeCustomPanel).getByLabelText('开始日期')).toHaveValue('2026-01-11')
     expect(within(activeCustomPanel).getByLabelText('结束日期')).toHaveValue('2026-06-19')
@@ -888,9 +897,9 @@ describe('unified shell layout', () => {
     fireEvent.click(within(activeCustomPanel).getByRole('button', { name: '最近一年' }))
 
     expect(screen.getByRole('heading', { name: '最近一年' })).toBeInTheDocument()
-    expect(screen.queryByLabelText('自定义时间范围')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('自定义时间范围')).toBeInTheDocument()
 
-    openTimeEditor()
+    expectPersistentTimeEditor()
     activeCustomPanel = screen.getByLabelText('自定义时间范围')
     expect(within(activeCustomPanel).getByLabelText('开始日期')).toHaveValue('2025-06-20')
     expect(within(activeCustomPanel).getByLabelText('结束日期')).toHaveValue('2026-06-19')
@@ -911,7 +920,7 @@ describe('unified shell layout', () => {
     fireEvent.click(screen.getByRole('button', { name: '记账' }))
     await settleLazyImports()
     expect(screen.getByRole('heading', { name: '6月' })).toBeInTheDocument()
-    openTimeEditor()
+    expectPersistentTimeEditor()
 
     fireEvent.click(screen.getByRole('button', { name: '自定义' }))
 
@@ -923,7 +932,7 @@ describe('unified shell layout', () => {
   it('uses the current range granularity for the reset action', () => {
     render(<App amapConfig={configuredAmap} />)
 
-    openTimeEditor()
+    expectPersistentTimeEditor()
     fireEvent.click(screen.getByRole('button', { name: '周' }))
 
     expect(screen.getByRole('button', { name: '回到本周' })).toBeInTheDocument()
@@ -935,15 +944,15 @@ describe('unified shell layout', () => {
     fireEvent.click(screen.getByRole('button', { name: /7月/ }))
 
     expect(screen.getByRole('heading', { name: '7月' })).toBeInTheDocument()
-    expect(screen.queryByLabelText('时间选择页')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('时间选择页')).toBeInTheDocument()
 
-    openTimeEditor()
+    expectPersistentTimeEditor()
     fireEvent.click(screen.getByRole('button', { name: '回到本月' }))
 
     expect(screen.getByRole('heading', { name: '6月' })).toBeInTheDocument()
-    expect(screen.queryByLabelText('时间选择页')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('时间选择页')).toBeInTheDocument()
 
-    openTimeEditor()
+    expectPersistentTimeEditor()
 
     fireEvent.click(screen.getByRole('button', { name: '年' }))
 
@@ -955,7 +964,7 @@ describe('unified shell layout', () => {
     const getActiveGridMotion = () =>
       document.querySelector('.time-calendar-grid-motion, .time-picker-grid-motion')
 
-    openTimeEditor()
+    expectPersistentTimeEditor()
 
     expect(screen.getByLabelText('时间范围内容')).not.toHaveClass(
       'time-panel-content__stage--previous',
@@ -1024,7 +1033,7 @@ describe('unified shell layout', () => {
   it('renders month aggregation as a compact two-row picker without helper copy', () => {
     render(<App amapConfig={configuredAmap} />)
 
-    openTimeEditor()
+    expectPersistentTimeEditor()
     fireEvent.click(screen.getByRole('button', { name: '月' }))
 
     const monthSelector = screen.getByLabelText('时间选择页')
@@ -1044,7 +1053,7 @@ describe('unified shell layout', () => {
   it('keeps day calendar week and month displays on the same date grid', () => {
     render(<App amapConfig={configuredAmap} />)
 
-    openTimeEditor()
+    expectPersistentTimeEditor()
 
     const weekCalendar = screen.getByLabelText('日历选择')
     const weekBody = screen.getByLabelText('日历日期').closest('.time-calendar-body')
@@ -1108,7 +1117,7 @@ describe('unified shell layout', () => {
     vi.useFakeTimers()
     render(<App amapConfig={configuredAmap} />)
 
-    openTimeEditor()
+    expectPersistentTimeEditor()
 
     const weekBody = screen.getByLabelText('日历日期').closest('.time-calendar-body')
 
@@ -1140,7 +1149,7 @@ describe('unified shell layout', () => {
   it('keeps calendar display mode local across parent rerenders', () => {
     const { rerender } = render(<App amapConfig={configuredAmap} />)
 
-    openTimeEditor()
+    expectPersistentTimeEditor()
     fireEvent.click(screen.getByRole('button', { name: '月历' }))
 
     expect(screen.getByLabelText('日历日期').closest('.time-calendar-body')).toHaveClass(
@@ -1157,7 +1166,7 @@ describe('unified shell layout', () => {
   it('renders top-level week, month, and year with paged aggregation grids', () => {
     render(<App amapConfig={configuredAmap} />)
 
-    openTimeEditor()
+    expectPersistentTimeEditor()
     fireEvent.click(screen.getByRole('button', { name: '周' }))
 
     const weekPicker = screen.getByLabelText('时间选择页')
@@ -1203,7 +1212,7 @@ describe('unified shell layout', () => {
   it('moves the day calendar active week into the month grid without replacing cells', () => {
     render(<App amapConfig={configuredAmap} />)
 
-    openTimeEditor()
+    expectPersistentTimeEditor()
 
     const weekBody = screen.getByLabelText('日历日期').closest('.time-calendar-body')
     const weekGrid = screen.getByLabelText('日历日期')
@@ -1245,13 +1254,13 @@ describe('unified shell layout', () => {
   it('keeps the same week row steady when selecting adjacent days across month end', () => {
     render(<App amapConfig={configuredAmap} />)
 
-    openTimeEditor()
+    expectPersistentTimeEditor()
     fireEvent.click(screen.getByRole('button', { name: '月历' }))
     fireEvent.click(screen.getByRole('button', { name: '下一段时间' }))
     fireEvent.click(screen.getByRole('button', { name: '31' }))
-    expect(screen.queryByLabelText('日历选择')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('日历选择')).toBeInTheDocument()
 
-    openTimeEditor()
+    expectPersistentTimeEditor()
     fireEvent.click(screen.getByRole('button', { name: '周历' }))
 
     const julyWeekGrid = screen.getByLabelText('日历日期')
@@ -1272,9 +1281,9 @@ describe('unified shell layout', () => {
     ])
 
     fireEvent.click(julyWeekButtons[33])
-    expect(screen.queryByLabelText('日历选择')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('日历选择')).toBeInTheDocument()
 
-    openTimeEditor()
+    expectPersistentTimeEditor()
 
     const augustWeekGrid = screen.getByLabelText('日历日期')
     const augustWeekBody = augustWeekGrid.closest('.time-calendar-body')
@@ -1297,14 +1306,14 @@ describe('unified shell layout', () => {
   it('applies concrete selections from every time panel button group', async () => {
     render(<App amapConfig={configuredAmap} />)
 
-    openTimeEditor()
+    expectPersistentTimeEditor()
     fireEvent.click(screen.getByRole('button', { name: '21' }))
 
     expect(screen.getByRole('heading', { name: '6月21日' })).toBeInTheDocument()
     expect(screen.getByText('2026年6月21日')).toBeInTheDocument()
-    expect(screen.queryByLabelText('日历选择')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('日历选择')).toBeInTheDocument()
 
-    openTimeEditor()
+    expectPersistentTimeEditor()
     fireEvent.click(screen.getByRole('button', { name: '上一段时间' }))
 
     expect(screen.getByRole('heading', { name: '6月14日' })).toBeInTheDocument()
@@ -1327,25 +1336,25 @@ describe('unified shell layout', () => {
     expect(
       within(selectedWeekCardTop as HTMLElement).getByText('2026年 6月29日 - 7月5日'),
     ).toBeInTheDocument()
-    expect(screen.queryByLabelText('时间选择页')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('时间选择页')).toBeInTheDocument()
 
-    openTimeEditor()
+    expectPersistentTimeEditor()
     fireEvent.click(screen.getByRole('button', { name: '月' }))
     fireEvent.click(screen.getByRole('button', { name: /7月/ }))
 
     expect(screen.getByRole('heading', { name: '7月' })).toBeInTheDocument()
     expect(screen.getByText('2026年7月')).toBeInTheDocument()
-    expect(screen.queryByLabelText('时间选择页')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('时间选择页')).toBeInTheDocument()
 
-    openTimeEditor()
+    expectPersistentTimeEditor()
     fireEvent.click(screen.getByRole('button', { name: '年' }))
     fireEvent.click(screen.getByRole('button', { name: /2025/ }))
 
     expect(screen.getByRole('heading', { name: '2025年' })).toBeInTheDocument()
     expect(screen.getAllByText('2025年').length).toBeGreaterThanOrEqual(2)
-    expect(screen.queryByLabelText('时间选择页')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('时间选择页')).toBeInTheDocument()
 
-    openTimeEditor()
+    expectPersistentTimeEditor()
     fireEvent.click(screen.getByRole('button', { name: '自定义' }))
     fireEvent.click(screen.getByRole('button', { name: '最近一月' }))
 

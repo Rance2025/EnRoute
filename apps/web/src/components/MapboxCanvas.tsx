@@ -16,6 +16,11 @@ import {
   type FootprintStyle,
 } from '../layers/footprintStyle'
 import { DEFAULT_MAPBOX_STYLE_URL, type MapStylePreference } from '../mapStyleOptions'
+import type {
+  FootprintDistanceSeries,
+  FootprintLngLatBounds,
+  FootprintMetrics,
+} from '../layers/footprintTypes'
 import type { TimeRangeSelection } from '../time/timeRange'
 import { MapControls } from './MapControls'
 
@@ -40,17 +45,7 @@ type MapboxCanvasProps = {
   onMapLanguageChange?: (language: MapboxLanguagePreference) => void
 }
 
-export type FootprintMetrics = {
-  selectedCount: number
-  totalDistanceMeters: number
-  averageDistanceMetersPerDay: number
-  selectedBounds?: FootprintLngLatBounds | null
-}
-
-type FootprintLngLatBounds = {
-  southWest: [number, number]
-  northEast: [number, number]
-}
+export type { FootprintMetrics } from '../layers/footprintTypes'
 
 type MapboxCanvasEnv = {
   VITE_MAPBOX_ACCESS_TOKEN?: string
@@ -147,6 +142,15 @@ const EMPTY_FOOTPRINT_METRICS: FootprintMetrics = {
   selectedCount: 0,
   totalDistanceMeters: 0,
   averageDistanceMetersPerDay: 0,
+  distanceSeries: createEmptyDistanceSeries(),
+}
+
+function createEmptyDistanceSeries(): FootprintDistanceSeries {
+  return {
+    granularity: 'day',
+    unit: 'day',
+    buckets: [],
+  }
 }
 
 function MapboxCanvasComponent({

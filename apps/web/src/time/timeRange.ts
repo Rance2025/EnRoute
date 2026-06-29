@@ -275,6 +275,15 @@ export function createTimeRangeTimestamps(selection: TimeRangeSelection): TimeRa
   }
 }
 
+export function countElapsedInclusiveDays(selection: TimeRangeSelection, now = new Date()) {
+  const today = createTodayKey(now)
+  const end = minDateKey(selection.end, today)
+
+  if (end < selection.start) return 0
+
+  return countInclusiveDays(selection.start, end)
+}
+
 export function getTimeRangeDisplay(selection: TimeRangeSelection): TimeRangeDisplay {
   const today = createTodayKey()
 
@@ -578,6 +587,10 @@ function countInclusiveDays(start: string, end: string) {
   const endTimestamp = dateKeyToShanghaiStartTimestampSeconds(end)
 
   return Math.max(1, Math.floor((endTimestamp - startTimestamp) / 86_400) + 1)
+}
+
+function minDateKey(left: string, right: string) {
+  return left <= right ? left : right
 }
 
 function formatDateKey(date: Date) {

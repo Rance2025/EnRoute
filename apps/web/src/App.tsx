@@ -20,12 +20,13 @@ import {
   List,
   MapPinned,
   Shapes,
+  Settings,
   Wallet,
   X,
   type LucideIcon,
 } from 'lucide-react'
 
-import type { FootprintMetrics } from './components/MapboxCanvas'
+import type { FootprintMetrics } from './layers/footprintTypes'
 import {
   formatAverageDistanceMeters,
   formatDistanceMeters,
@@ -70,6 +71,7 @@ import {
 } from './navigationPreferences'
 import { resolveMapStyleOption } from './mapStyleOptions'
 import {
+  countElapsedInclusiveDays,
   createCurrentSelection,
   createTodaySelection,
   type TimeRangeSelection,
@@ -126,6 +128,15 @@ const settingsPageItems: Array<{ id: SettingsPageId; label: string }> = [
   { id: 'accounting', label: '记账' },
   { id: 'schedule', label: '日程' },
 ]
+
+function getSettingsPageForView(view: AppView): SettingsPageId {
+  if (view === 'map') return 'map'
+  if (view === 'accounting') return 'accounting'
+  if (view === 'schedule') return 'schedule'
+
+  return 'general'
+}
+
 const appThemeOptions: Array<{
   value: AppTheme
   label: string
@@ -295,6 +306,11 @@ function App(props: AppProps) {
     selectedCount: 0,
     totalDistanceMeters: 0,
     averageDistanceMetersPerDay: 0,
+    distanceSeries: {
+      granularity: 'day',
+      unit: 'day',
+      buckets: [],
+    },
   })
   const [viewportSize, setViewportSize] = useState(getViewportSize)
   const handleViewChange = useCallback((nextView: AppView) => {
@@ -513,10 +529,12 @@ function App(props: AppProps) {
     { label: '足迹总数', value: formatMetricCount(footprintMetrics.selectedCount) },
     { label: '总距离', value: formatDistanceMeters(footprintMetrics.totalDistanceMeters) },
     { label: '日均距离', value: formatAverageDistanceMeters(footprintMetrics.averageDistanceMetersPerDay) },
+    { label: '范围天数', value: `${countElapsedInclusiveDays(selectedTimeRange)} 天` },
   ], [
     footprintMetrics.averageDistanceMetersPerDay,
     footprintMetrics.selectedCount,
     footprintMetrics.totalDistanceMeters,
+    selectedTimeRange,
   ])
   const selectedMapStyle = useMemo(() => resolveMapStyleOption(mapStyle), [mapStyle])
 
@@ -605,14 +623,11 @@ function App(props: AppProps) {
 
       <TimeContextPanel
         metricItems={view === 'map' ? mapMetricItems : undefined}
+        distanceSeries={view === 'map' ? footprintMetrics.distanceSeries : undefined}
         secondaryContextLabel={activeSecondaryNavItem?.label}
         view={view}
         selection={selectedTimeRange}
         onSelectionChange={setSelectedTimeRange}
-        onOpenSettings={() => {
-          setSettingsPage('general')
-          setIsSettingsOpen(true)
-        }}
       />
 
       <aside className="right-context-panel" aria-label="右侧上下文栏">
@@ -641,6 +656,18 @@ function App(props: AppProps) {
                 </button>
               )
             })}
+            <button
+              type="button"
+              className="right-context-settings-button"
+              aria-label="打开设置"
+              title="设置"
+              onClick={() => {
+                setSettingsPage(getSettingsPageForView(view))
+                setIsSettingsOpen(true)
+              }}
+            >
+              <Settings size={17} strokeWidth={1.9} aria-hidden="true" />
+            </button>
           </div>
         </nav>
         <div className="right-context-panel__stack" aria-label="右侧信息面板">

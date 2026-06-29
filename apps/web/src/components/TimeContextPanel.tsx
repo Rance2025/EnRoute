@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from 'react'
+import { useEffect, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import {
   CalendarDays,
   ChevronLeft,
@@ -8,7 +8,6 @@ import {
   MapPinned,
   Plane,
   Route,
-  Settings,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -40,6 +39,7 @@ import {
   type TimeRangeMode,
   type TimeRangeSelection,
 } from '../time/timeRange'
+import type { FootprintDistanceBucket, FootprintDistanceSeries } from '../layers/footprintTypes'
 
 export type TimeRangeKey = TimeRangeMode
 export type TimeContextMetricItem = {
@@ -72,15 +72,14 @@ const calendarModeOptions: Array<SegmentedOption<CalendarDisplayMode>> = [
 ]
 
 const weekdayLabels = ['一', '二', '三', '四', '五', '六', '日']
-const monthlyTrendValues = [1, 8, 2, 4, 2, 12, 1, 5, 14, 20, 2, 14, 10, 3, 8, 1, 5]
 
 type TimeContextPanelProps = {
   view: AppView
   selection: TimeRangeSelection
   secondaryContextLabel?: string
   metricItems?: TimeContextMetricItem[]
+  distanceSeries?: FootprintDistanceSeries
   onSelectionChange: (selection: TimeRangeSelection) => void
-  onOpenSettings?: () => void
 }
 
 type TimeNavigationDirection = 'previous' | 'next'
@@ -101,15 +100,16 @@ function TimeArrowIcon({ direction }: { direction: -1 | 1 }) {
 
 export function TimeContextPanel({
   metricItems,
+  distanceSeries,
   secondaryContextLabel,
   view,
   selection,
   onSelectionChange,
-  onOpenSettings,
 }: TimeContextPanelProps) {
   const [calendarMode, setCalendarMode] = useState<CalendarDisplayMode>('week')
-  const [isTimeEditorOpen, setIsTimeEditorOpen] = useState(false)
   const [isDayCalendarCollapsingWeek, setIsDayCalendarCollapsingWeek] = useState(false)
+  const [isCustomDatePickerOpen, setIsCustomDatePickerOpen] = useState(false)
+  const [activeTrendIndex, setActiveTrendIndex] = useState<number | null>(null)
   const [dayCalendarCollapseSequence, setDayCalendarCollapseSequence] = useState(0)
   const [navigationState, setNavigationState] = useState<TimeNavigationState>({
     direction: null,
@@ -117,11 +117,22 @@ export function TimeContextPanel({
   })
   const heading = getTimeRangeDisplay(selection)
   const resetLabel = getCurrentRangeActionLabel(selection.mode)
-  const timeActionLabel = isTimeEditorOpen ? resetLabel : '修改时间'
+  const timeActionLabel = resetLabel
   const summaryItems = metricItems ?? (view === 'accounting'
     ? getAccountingSummary(selection)
     : [])
-  const trendLabel = selection.mode === 'month' ? '本月足迹趋势' : '当前范围趋势'
+  const distanceTrend = getDistanceTrendModel(distanceSeries)
+  const activeTrendBucket = activeTrendIndex === null
+    ? null
+    : distanceTrend.values[activeTrendIndex] ?? null
+  const isDistanceTrendHidden = (
+    selection.mode === 'day' &&
+    calendarMode === 'month'
+  ) || (
+    selection.mode === 'custom' &&
+    isCustomDatePickerOpen
+  )
+  const shouldRenderDistanceTrend = view === 'map'
 
   useEffect(() => {
     if (!isDayCalendarCollapsingWeek) return undefined
@@ -137,29 +148,17 @@ export function TimeContextPanel({
 
   function handleSelectionChange(
     nextSelection: TimeRangeSelection,
-    { closeEditor = false }: { closeEditor?: boolean } = {},
   ) {
-    if (timeSelectionsAreEqual(selection, nextSelection)) {
-      if (closeEditor) setIsTimeEditorOpen(false)
-      return
-    }
+    if (timeSelectionsAreEqual(selection, nextSelection)) return
 
     setNavigationState((current) => (
       current.direction === null ? current : { ...current, direction: null }
     ))
     onSelectionChange(nextSelection)
-    if (closeEditor) setIsTimeEditorOpen(false)
   }
 
   function handleTimeActionClick() {
-    if (!isTimeEditorOpen) {
-      setIsTimeEditorOpen(true)
-      return
-    }
-
-    handleSelectionChange(createCurrentSelectionForView(selection.mode, view), {
-      closeEditor: true,
-    })
+    handleSelectionChange(createCurrentSelectionForView(selection.mode, view))
   }
 
   function handleCalendarModeChange(mode: CalendarDisplayMode) {
@@ -173,6 +172,25 @@ export function TimeContextPanel({
     }
 
     setCalendarMode(mode)
+  }
+
+  function handleTrendPointerMove(event: ReactPointerEvent<HTMLDivElement>) {
+    const bucketCount = distanceTrend.values.length
+    if (bucketCount === 0) return
+
+    const chartBounds = event.currentTarget.getBoundingClientRect()
+    if (chartBounds.width <= 0) return
+
+    const relativeX = Math.min(
+      Math.max(event.clientX - chartBounds.left, 0),
+      chartBounds.width - 0.01,
+    )
+    const nextIndex = Math.min(
+      bucketCount - 1,
+      Math.max(0, Math.floor((relativeX / chartBounds.width) * bucketCount)),
+    )
+
+    setActiveTrendIndex((current) => (current === nextIndex ? current : nextIndex))
   }
 
   function handlePeriodNavigate(
@@ -190,12 +208,14 @@ export function TimeContextPanel({
     if (range === selection.mode) return
 
     setIsDayCalendarCollapsingWeek(false)
+    setIsCustomDatePickerOpen(false)
+    setActiveTrendIndex(null)
     handleSelectionChange(createCurrentSelectionForView(range, view))
   }
 
   return (
     <aside
-      className={`glass-panel glass-panel--solid glass-panel--large time-context-panel${isTimeEditorOpen ? ' is-editing-time' : ''}`}
+      className="glass-panel glass-panel--solid glass-panel--large time-context-panel"
       aria-label="时间范围面板"
     >
       <div className="time-context-panel__scroll">
@@ -211,7 +231,7 @@ export function TimeContextPanel({
               className="time-context-card__today"
               aria-label={timeActionLabel}
               aria-controls="time-range-editor"
-              aria-expanded={isTimeEditorOpen}
+              aria-expanded="true"
               onClick={handleTimeActionClick}
             >
               {timeActionLabel}
@@ -220,11 +240,17 @@ export function TimeContextPanel({
 
           {summaryItems.length > 0 ? (
             <section
-              className="time-context-metric-strip"
+              className={[
+                'time-context-metric-strip',
+                view === 'map' ? 'time-context-metric-strip--map' : null,
+              ]
+                .filter(Boolean)
+                .join(' ')}
               aria-label="全局范围指标"
             >
               {summaryItems.map((item) => {
                 const Icon = getMetricIcon(item.label)
+                const metricValue = splitMetricValue(item.value)
 
                 return (
                 <div key={item.label}>
@@ -233,7 +259,17 @@ export function TimeContextPanel({
                     <span>{item.label}</span>
                   </span>
                   <strong className={item.tone ? `is-${item.tone}` : undefined}>
-                    {item.value}
+                    <span className="time-context-metric-strip__number">
+                      {metricValue.number}
+                    </span>
+                    {metricValue.unit ? (
+                      <>
+                        {' '}
+                        <span className="time-context-metric-strip__unit">
+                          {metricValue.unit}
+                        </span>
+                      </>
+                    ) : null}
                   </strong>
                 </div>
                 )
@@ -249,62 +285,103 @@ export function TimeContextPanel({
             onChange={handleModeChange}
           />
 
-          {view === 'map' && !isTimeEditorOpen ? (
-            <section className="time-context-trend" aria-label={trendLabel}>
-              <div className="time-context-trend__head">
-                <span>{trendLabel}</span>
-              </div>
-              <div className="time-context-trend__chart" aria-hidden="true">
-                {monthlyTrendValues.map((value, index) => (
-                  <span
-                    key={`${value}-${index}`}
-                    className={index === 9 || index === 10 ? 'is-emphasis' : undefined}
-                    style={{ '--trend-value': value } as CSSProperties}
-                  />
-                ))}
-              </div>
-            </section>
-          ) : null}
         </header>
 
-        {isTimeEditorOpen ? (
+        <div
+          id="time-range-editor"
+          className="time-panel-content"
+          role="region"
+          aria-label="时间编辑器"
+        >
           <div
-            id="time-range-editor"
-            className="time-panel-content"
-            role="region"
-            aria-label="时间编辑器"
+            className="time-panel-content__stage"
+            aria-label="时间范围内容"
           >
-            <div
-              className="time-panel-content__stage"
-              aria-label="时间范围内容"
-            >
-              {renderModeContent(
-                selection,
-                calendarMode,
-                isDayCalendarCollapsingWeek,
-                navigationState,
-                handleCalendarModeChange,
-                handleSelectionChange,
-                (nextSelection) => handleSelectionChange(nextSelection, { closeEditor: true }),
-                handlePeriodNavigate,
-                view,
-              )}
-            </div>
+            {renderModeContent(
+              selection,
+              calendarMode,
+              isDayCalendarCollapsingWeek,
+              navigationState,
+              handleCalendarModeChange,
+              handleSelectionChange,
+              handleSelectionChange,
+              handlePeriodNavigate,
+              setIsCustomDatePickerOpen,
+              view,
+            )}
           </div>
+        </div>
+
+        {shouldRenderDistanceTrend ? (
+          <section
+            className={[
+              'time-context-trend',
+              isDistanceTrendHidden ? 'is-hidden' : null,
+            ]
+              .filter(Boolean)
+              .join(' ')}
+            aria-label={distanceTrend.title}
+          >
+            <div className="time-context-trend__head">
+              <span>{distanceTrend.title}</span>
+              <small>{activeTrendBucket?.summaryLabel ?? distanceTrend.metadata}</small>
+            </div>
+            <div
+              className={[
+                'time-context-trend__chart',
+                distanceTrend.isDense ? 'time-context-trend__chart--dense' : null,
+              ]
+                .filter(Boolean)
+                .join(' ')}
+              role="img"
+              aria-label={`${distanceTrend.title}，${distanceTrend.averageLabel}`}
+              style={{
+                '--trend-average-position': distanceTrend.averagePosition,
+                '--trend-column-count': distanceTrend.values.length,
+              } as CSSProperties}
+              onPointerMove={handleTrendPointerMove}
+              onPointerLeave={() => setActiveTrendIndex(null)}
+            >
+              <div className="time-context-trend__average-line" />
+              <span className="time-context-trend__average-label">
+                {distanceTrend.averageLabel}
+              </span>
+              {distanceTrend.values.map((item, index) => (
+                <span
+                  key={item.key}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`${item.label}，${item.formattedValue}`}
+                  className={[
+                    'time-context-trend__column',
+                    activeTrendIndex === index ? 'is-active' : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                  onPointerEnter={() => setActiveTrendIndex(index)}
+                  onPointerLeave={() => setActiveTrendIndex((current) => (
+                    current === index ? null : current
+                  ))}
+                  onFocus={() => setActiveTrendIndex(index)}
+                  onBlur={() => setActiveTrendIndex((current) => (
+                    current === index ? null : current
+                  ))}
+                >
+                  <span
+                    className={[
+                      'time-context-trend__bar',
+                      activeTrendIndex === index ? 'is-active' : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                    style={{ '--trend-height': item.height } as CSSProperties}
+                  />
+                </span>
+              ))}
+            </div>
+          </section>
         ) : null}
 
-        <footer className="time-context-panel__footer" aria-label="应用设置">
-          <button
-            type="button"
-            className="glass-panel glass-panel--solid glass-panel--pill time-settings-button"
-            aria-label="打开设置"
-            title="设置"
-            onClick={onOpenSettings}
-          >
-            <Settings size={18} strokeWidth={1.9} aria-hidden="true" />
-            <span>设置</span>
-          </button>
-        </footer>
       </div>
     </aside>
   )
@@ -318,6 +395,156 @@ function getMetricIcon(label: string): LucideIcon {
   if (label.includes('足迹')) return Footprints
 
   return MapPinned
+}
+
+function splitMetricValue(value: string) {
+  const trimmedValue = value.trim()
+  const match = trimmedValue.match(/^([+-]?(?:\d|[,，.])+)(?:\s+(.+))?$/)
+
+  if (!match) return { number: trimmedValue, unit: '' }
+
+  return {
+    number: match[1] ?? trimmedValue,
+    unit: match[2] ?? '',
+  }
+}
+
+function getDistanceTrendModel(distanceSeries?: FootprintDistanceSeries) {
+  const buckets = distanceSeries?.buckets ?? []
+  const values = buckets.map((bucket) => Math.max(bucket.distanceMeters, 0))
+  const maxValue = Math.max(...values, 1)
+  const average = getDistanceTrendAverage(buckets, distanceSeries?.granularity)
+  const averageValue = average.value
+  const averagePosition = Math.min(Math.max((averageValue / maxValue) * 100, 0), 100)
+  const denominatorLabel = distanceSeries?.unit === 'hour' ? '小时' : '日'
+  const aggregationLabel = distanceSeries?.granularity === 'hour' ? '按小时汇总' : '按日汇总'
+
+  return {
+    title: '当前范围距离',
+    metadata: `${aggregationLabel} · ${average.rangeLabel}`,
+    averageLabel: `均值 ${formatDistanceTrendValue(averageValue)}/${denominatorLabel}`,
+    averagePosition: `${averagePosition}%`,
+    isDense: buckets.length > 90,
+    values: buckets.map((bucket, index) => createDistanceTrendValue(bucket, index, maxValue)),
+  }
+}
+
+function getDistanceTrendAverage(
+  buckets: FootprintDistanceBucket[],
+  granularity?: FootprintDistanceSeries['granularity'],
+) {
+  if (buckets.length === 0) {
+    return {
+      value: 0,
+      rangeLabel: granularity === 'hour' ? '0小时' : '0天',
+    }
+  }
+
+  if (granularity === 'hour') return getHourlyDistanceTrendAverage(buckets)
+
+  const now = new Date()
+  const todayKey = formatLocalDateKey(now)
+  const elapsedBuckets = buckets.filter((bucket) => {
+    const dayKey = bucket.key.slice(0, 10)
+
+    return dayKey <= todayKey
+  })
+
+  if (elapsedBuckets.length === 0) {
+    return {
+      value: 0,
+      rangeLabel: '0天',
+    }
+  }
+
+  return {
+    value: (
+      elapsedBuckets.reduce((total, bucket) => total + Math.max(bucket.distanceMeters, 0), 0) /
+      elapsedBuckets.length
+    ),
+    rangeLabel: `${elapsedBuckets.length}天`,
+  }
+}
+
+function getHourlyDistanceTrendAverage(buckets: FootprintDistanceBucket[]) {
+  const now = new Date()
+  const todayKey = formatLocalDateKey(now)
+  const bucketDateKey = buckets[0]?.key.slice(0, 10) ?? ''
+
+  if (bucketDateKey > todayKey) {
+    return {
+      value: 0,
+      rangeLabel: '0.0小时',
+    }
+  }
+
+  if (bucketDateKey < todayKey) {
+    return {
+      value: (
+        buckets.reduce((total, bucket) => total + Math.max(bucket.distanceMeters, 0), 0) /
+        buckets.length
+      ),
+      rangeLabel: `${buckets.length}小时`,
+    }
+  }
+
+  const selectedDayStart = new Date(`${bucketDateKey}T00:00:00`)
+  const elapsedHours = Math.min(
+    Math.max((now.getTime() - selectedDayStart.getTime()) / (60 * 60 * 1000), 0),
+    24,
+  )
+  const elapsedDistanceMeters = buckets.reduce((total, bucket) => {
+    const bucketHourStart = new Date(`${bucket.key.slice(0, 13)}:00:00`)
+
+    if (bucketHourStart >= now) return total
+
+    return total + Math.max(bucket.distanceMeters, 0)
+  }, 0)
+
+  return {
+    value: elapsedHours === 0 ? 0 : elapsedDistanceMeters / elapsedHours,
+    rangeLabel: `${elapsedHours.toFixed(1)}小时`,
+  }
+}
+
+function formatLocalDateKey(date: Date) {
+  const year = date.getFullYear()
+  const month = `${date.getMonth() + 1}`.padStart(2, '0')
+  const day = `${date.getDate()}`.padStart(2, '0')
+
+  return `${year}-${month}-${day}`
+}
+
+function createDistanceTrendValue(
+  bucket: FootprintDistanceBucket,
+  index: number,
+  maxValue: number,
+) {
+  const distanceMeters = Math.max(bucket.distanceMeters, 0)
+  const formattedValue = formatDistanceTrendValue(distanceMeters)
+
+  return {
+    key: bucket.key || `${bucket.label}-${index}`,
+    label: bucket.label,
+    formattedValue,
+    summaryLabel: `${bucket.label} · ${formattedValue}`,
+    height: `${(distanceMeters / maxValue) * 100}%`,
+  }
+}
+
+function formatDistanceTrendValue(value: number) {
+  if (!Number.isFinite(value) || value <= 0) return '0 m'
+
+  if (value < 1000) {
+    return `${new Intl.NumberFormat('zh-CN', {
+      maximumFractionDigits: 0,
+    }).format(value)} m`
+  }
+
+  return `${new Intl.NumberFormat('zh-CN', {
+    minimumFractionDigits: value >= 10_000 ? 0 : 1,
+    maximumFractionDigits: 1,
+  }).format(value / 1000)} km`
 }
 
 function getAccountingSummary(selection: TimeRangeSelection): TimeContextMetricItem[] {
@@ -406,6 +633,7 @@ function renderModeContent(
     direction: TimeNavigationDirection,
     selection: TimeRangeSelection,
   ) => void,
+  onCustomDatePickerOpenChange: (isOpen: boolean) => void,
   view: AppView,
 ) {
   if (selection.mode === 'day') {
@@ -453,6 +681,7 @@ function renderModeContent(
       selection={selection}
       onSelectionEdit={onSelectionEdit}
       onSelectionChange={onSelectionChange}
+      onPickerOpenChange={onCustomDatePickerOpenChange}
     />
   )
 }
@@ -462,18 +691,29 @@ function CustomRangeSection({
   selection,
   onSelectionEdit,
   onSelectionChange,
+  onPickerOpenChange,
 }: {
   view: AppView
   selection: TimeRangeSelection
   onSelectionEdit: (selection: TimeRangeSelection) => void
   onSelectionChange: (selection: TimeRangeSelection) => void
+  onPickerOpenChange: (isOpen: boolean) => void
 }) {
   const [activeBoundary, setActiveBoundary] = useState<'start' | 'end' | null>(null)
   const [pickerAnchorDate, setPickerAnchorDate] = useState(selection.anchorDate)
 
+  useEffect(() => {
+    return () => {
+      onPickerOpenChange(false)
+    }
+  }, [onPickerOpenChange])
+
   function openPicker(boundary: 'start' | 'end') {
-    setActiveBoundary((current) => (current === boundary ? null : boundary))
+    const nextBoundary = activeBoundary === boundary ? null : boundary
+
+    setActiveBoundary(nextBoundary)
     setPickerAnchorDate(selection[boundary])
+    onPickerOpenChange(nextBoundary !== null)
   }
 
   function handleBoundaryInput(boundary: 'start' | 'end', value: string) {
@@ -487,6 +727,7 @@ function CustomRangeSection({
     onSelectionChange(updateCustomDateBoundary(selection, activeBoundary, date))
     setPickerAnchorDate(date)
     setActiveBoundary(null)
+    onPickerOpenChange(false)
   }
 
   const activeValue = activeBoundary ? selection[activeBoundary] : selection.end
@@ -504,6 +745,7 @@ function CustomRangeSection({
             className={selection.label === preset.label ? 'is-active' : undefined}
             onClick={() => {
               setActiveBoundary(null)
+              onPickerOpenChange(false)
               onSelectionChange(selectPresetRangeForView(preset.value, view))
             }}
           >
