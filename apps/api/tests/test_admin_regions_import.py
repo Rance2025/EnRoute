@@ -935,3 +935,289 @@ def test_rejects_unavailable_admin_region_levels(tmp_path: Path):
 
     assert response.status_code == 400
     assert response.json()["detail"] == "level must be one of 2, 3, 4, or 5"
+
+
+def test_previews_local_shanghai_level4_regions_without_importing_footprints(tmp_path: Path):
+    data_path = tmp_path / "missing-points.csv"
+    db_path = tmp_path / "footprints.sqlite"
+    region_path = tmp_path / "admin-regions.geojson"
+    region_path.write_text(json.dumps(AREACITY_COLLECTION, ensure_ascii=False), encoding="utf-8")
+    settings = Settings(
+        footprint_data_path=data_path,
+        footprint_db_path=db_path,
+        footprint_coordinate_system="gcj02",
+        admin_region_data_path=region_path,
+    )
+    client = TestClient(create_app(settings=settings))
+
+    response = client.get("/api/admin-regions/preview/shanghai?source=local&level=4")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "source": "local",
+        "level": 4,
+        "available": True,
+        "coordinateSystem": "gcj02",
+        "reason": None,
+        "regions": [
+            {
+                "id": "310115",
+                "name": "Pudong",
+                "level": 4,
+                "geometry": AREACITY_COLLECTION["features"][2]["geometry"],
+            },
+        ],
+    }
+    connection = sqlite3.connect(db_path)
+    try:
+        assert connection.execute("SELECT COUNT(*) FROM footprints").fetchone()[0] == 0
+        assert connection.execute("SELECT COUNT(*) FROM admin_regions").fetchone()[0] == 0
+    finally:
+        connection.close()
+
+
+def test_previews_local_shanghai_regions_from_cached_sqlite_rows_without_geojson(tmp_path: Path):
+    db_path = tmp_path / "footprints.sqlite"
+    connection = sqlite3.connect(db_path)
+    connection.row_factory = sqlite3.Row
+    try:
+        initialize_admin_region_schema(connection)
+        load_admin_regions(connection, AREACITY_COLLECTION)
+    finally:
+        connection.close()
+    settings = Settings(
+        footprint_data_path=tmp_path / "missing-points.csv",
+        footprint_db_path=db_path,
+        footprint_coordinate_system="gcj02",
+        admin_region_data_path=tmp_path / "missing-admin-regions.geojson",
+    )
+    client = TestClient(create_app(settings=settings))
+
+    response = client.get("/api/admin-regions/preview/shanghai?source=local&level=4")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "source": "local",
+        "level": 4,
+        "available": True,
+        "coordinateSystem": "gcj02",
+        "reason": None,
+        "regions": [
+            {
+                "id": "310115",
+                "name": "Pudong",
+                "level": 4,
+                "geometry": AREACITY_COLLECTION["features"][2]["geometry"],
+            },
+        ],
+    }
+
+
+def test_preview_marks_local_shanghai_level5_unavailable_when_only_areacity_data_exists(
+    tmp_path: Path,
+):
+    region_path = tmp_path / "admin-regions.geojson"
+    region_path.write_text(json.dumps(AREACITY_COLLECTION, ensure_ascii=False), encoding="utf-8")
+    settings = Settings(
+        footprint_data_path=tmp_path / "missing-points.csv",
+        footprint_db_path=tmp_path / "footprints.sqlite",
+        footprint_coordinate_system="gcj02",
+        admin_region_data_path=region_path,
+    )
+    client = TestClient(create_app(settings=settings))
+
+    response = client.get("/api/admin-regions/preview/shanghai?source=local&level=5")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "source": "local",
+        "level": 5,
+        "available": False,
+        "coordinateSystem": None,
+        "reason": "本地 AreaCity 源只提供上海 level 2-4，level 5 请切换到 OSM 源。",
+        "regions": [],
+    }
+
+
+def test_previews_osm_shanghai_level5_regions_from_adjacent_geojson(tmp_path: Path):
+    region_path = tmp_path / "admin-regions.geojson"
+    region_path.write_text(json.dumps(AREACITY_COLLECTION, ensure_ascii=False), encoding="utf-8")
+    osm_path = tmp_path / "osm" / "shanghai-admin-level8.geojson"
+    osm_path.parent.mkdir()
+    osm_geometry = {
+        "type": "Polygon",
+        "coordinates": [
+            [
+                [121.399, 31.199],
+                [121.401, 31.199],
+                [121.401, 31.201],
+                [121.399, 31.201],
+                [121.399, 31.199],
+            ],
+        ],
+    }
+    osm_path.write_text(
+        json.dumps(
+            {
+                "type": "FeatureCollection",
+                "features": [
+                    {
+                        "type": "Feature",
+                        "properties": {
+                            "osm_id": "14179226",
+                            "admin_level": "8",
+                            "name": "Sanlin",
+                        },
+                        "geometry": osm_geometry,
+                    },
+                ],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    settings = Settings(
+        footprint_data_path=tmp_path / "missing-points.csv",
+        footprint_db_path=tmp_path / "footprints.sqlite",
+        footprint_coordinate_system="gcj02",
+        admin_region_data_path=region_path,
+    )
+    client = TestClient(create_app(settings=settings))
+
+    response = client.get("/api/admin-regions/preview/shanghai?source=osm&level=5")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "source": "osm",
+        "level": 5,
+        "available": True,
+        "coordinateSystem": "wgs84",
+        "reason": None,
+        "regions": [
+            {
+                "id": "osm:14179226",
+                "name": "Sanlin",
+                "level": 5,
+                "geometry": osm_geometry,
+            },
+        ],
+    }
+
+
+def test_previews_osm_shanghai_level5_regions_from_fclass_geojson(tmp_path: Path):
+    region_path = tmp_path / "admin-regions.geojson"
+    region_path.write_text(json.dumps(AREACITY_COLLECTION, ensure_ascii=False), encoding="utf-8")
+    osm_path = tmp_path / "osm" / "shanghai-admin-level8.geojson"
+    osm_path.parent.mkdir()
+    osm_geometry = {
+        "type": "Polygon",
+        "coordinates": [
+            [
+                [121.399, 31.199],
+                [121.401, 31.199],
+                [121.401, 31.201],
+                [121.399, 31.201],
+                [121.399, 31.199],
+            ],
+        ],
+    }
+    osm_path.write_text(
+        json.dumps(
+            {
+                "type": "FeatureCollection",
+                "features": [
+                    {
+                        "type": "Feature",
+                        "properties": {
+                            "osm_id": "14179226",
+                            "fclass": "admin_level8",
+                            "name": "Sanlin",
+                        },
+                        "geometry": osm_geometry,
+                    },
+                ],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    settings = Settings(
+        footprint_data_path=tmp_path / "missing-points.csv",
+        footprint_db_path=tmp_path / "footprints.sqlite",
+        footprint_coordinate_system="gcj02",
+        admin_region_data_path=region_path,
+    )
+    client = TestClient(create_app(settings=settings))
+
+    response = client.get("/api/admin-regions/preview/shanghai?source=osm&level=5")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["available"] is True
+    assert payload["regions"][0]["id"] == "osm:14179226"
+    assert payload["regions"][0]["level"] == 5
+
+
+def test_previews_osm_shanghai_level4_regions_from_adjacent_shapefile(tmp_path: Path):
+    import shapefile
+
+    region_path = tmp_path / "admin-regions.geojson"
+    region_path.write_text(json.dumps(AREACITY_COLLECTION, ensure_ascii=False), encoding="utf-8")
+    shape_base = tmp_path / "osm" / "shanghai-shp" / "gis_osm_adminareas_a_free_1"
+    shape_base.parent.mkdir(parents=True)
+    writer = shapefile.Writer(str(shape_base), shapeType=shapefile.POLYGON)
+    writer.field("osm_id", "C", size=12)
+    writer.field("code", "N", size=4)
+    writer.field("fclass", "C", size=28)
+    writer.field("name", "C", size=100)
+    writer.poly([
+        [
+            [121.45, 31.20],
+            [121.46, 31.20],
+            [121.46, 31.21],
+            [121.45, 31.21],
+            [121.45, 31.20],
+        ],
+    ])
+    writer.record("398351", 1206, "boundary", "Hongkou")
+    writer.close()
+
+    settings = Settings(
+        footprint_data_path=tmp_path / "missing-points.csv",
+        footprint_db_path=tmp_path / "footprints.sqlite",
+        footprint_coordinate_system="gcj02",
+        admin_region_data_path=region_path,
+    )
+    client = TestClient(create_app(settings=settings))
+
+    response = client.get("/api/admin-regions/preview/shanghai?source=osm&level=4")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload | {"regions": []} == {
+        "source": "osm",
+        "level": 4,
+        "available": True,
+        "coordinateSystem": "wgs84",
+        "reason": None,
+        "regions": [],
+    }
+    assert payload["regions"][0]["id"] == "osm:398351"
+    assert payload["regions"][0]["name"] == "Hongkou"
+    assert payload["regions"][0]["level"] == 4
+    assert payload["regions"][0]["geometry"]["type"] == "Polygon"
+
+
+def test_rejects_unknown_shanghai_preview_source(tmp_path: Path):
+    settings = Settings(
+        footprint_data_path=tmp_path / "missing-points.csv",
+        footprint_db_path=tmp_path / "footprints.sqlite",
+        footprint_coordinate_system="gcj02",
+        admin_region_data_path=tmp_path / "missing-admin-regions.geojson",
+    )
+    client = TestClient(create_app(settings=settings))
+
+    response = client.get("/api/admin-regions/preview/shanghai?source=unknown&level=4")
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "source must be one of amap, local, or osm"

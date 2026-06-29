@@ -4116,6 +4116,17 @@
   gap: 7px;
 }
 
+.amap-boundary-preview__control-group {
+  display: grid;
+  gap: 7px;
+}
+
+.amap-boundary-preview__control-group > span {
+  color: rgba(23, 35, 31, 0.55);
+  font-size: 12px;
+  font-weight: 820;
+}
+
 .amap-boundary-preview__samples button {
   min-width: 0;
   min-height: 32px;
