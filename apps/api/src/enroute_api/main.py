@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
 
+from .admin_regions.preview import get_shanghai_preview_regions
 from .config import Settings
 from .footprints.store import FootprintStore
 
@@ -94,6 +95,28 @@ def create_app(*, settings: Settings | None = None) -> FastAPI:
             return Response(status_code=204)
         return Response(content=content, media_type="application/vnd.mapbox-vector-tile")
 
+    @app.get("/api/map/tiles/admin-regions/{z}/{x}/{y}.mvt")
+    def get_admin_region_tile(
+        z: int,
+        x: int,
+        y: int,
+        focusRegionId: str = "world",
+        depth: int = 3,
+    ) -> Response:
+        try:
+            content = store.get_admin_region_mvt(
+                z=z,
+                x=x,
+                y=y,
+                focus_region_id=focusRegionId,
+                depth=depth,
+            )
+        except ValueError as error:
+            raise HTTPException(status_code=400, detail=str(error)) from error
+        if not content:
+            return Response(status_code=204)
+        return Response(content=content, media_type="application/vnd.mapbox-vector-tile")
+
     @app.get("/api/admin-regions")
     def get_admin_regions(
         level: int,
@@ -103,8 +126,8 @@ def create_app(*, settings: Settings | None = None) -> FastAPI:
         north: float | None = None,
         zoom: float | None = None,
     ) -> dict[str, object]:
-        if level not in {2, 3, 4, 5}:
-            raise HTTPException(status_code=400, detail="level must be one of 2, 3, 4, or 5")
+        if level not in {1, 2, 3}:
+            raise HTTPException(status_code=400, detail="level must be one of 1, 2, or 3")
         return store.get_admin_regions(
             level=level,
             west=west,
@@ -112,6 +135,20 @@ def create_app(*, settings: Settings | None = None) -> FastAPI:
             east=east,
             north=north,
             zoom=zoom,
+        )
+
+    @app.get("/api/admin-regions/preview/shanghai")
+    def get_shanghai_admin_region_preview(source: str, level: int) -> dict[str, object]:
+        if source not in {"amap", "local", "osm"}:
+            raise HTTPException(status_code=400, detail="source must be one of amap, local, or osm")
+        if level not in {2, 3, 4, 5}:
+            raise HTTPException(status_code=400, detail="level must be one of 2, 3, 4, or 5")
+
+        return get_shanghai_preview_regions(
+            source=source,
+            level=level,
+            admin_region_data_path=resolved_settings.admin_region_data_path,
+            db_path=resolved_settings.footprint_db_path,
         )
 
     @app.exception_handler(Exception)

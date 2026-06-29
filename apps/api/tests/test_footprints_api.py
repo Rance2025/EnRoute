@@ -190,7 +190,35 @@ def test_missing_csv_does_not_accept_legacy_database_without_import_signature(tm
         assert connection.execute("SELECT COUNT(*) FROM footprints").fetchone()[0] == 1
 
 
-def test_legacy_database_with_existing_csv_is_rebuilt_instead_of_treated_compatible(tmp_path: Path):
+def test_initialize_schema_rejects_legacy_footprints_shape_without_dropping_rows(tmp_path: Path):
+    db_path = tmp_path / "footprints.sqlite"
+    with sqlite3.connect(db_path) as connection:
+        connection.execute(
+            """
+            CREATE TABLE footprints (
+              timestamp_seconds INTEGER PRIMARY KEY,
+              longitude REAL NOT NULL,
+              latitude REAL NOT NULL
+            )
+            """,
+        )
+        connection.execute(
+            """
+            INSERT INTO footprints (timestamp_seconds, longitude, latitude)
+            VALUES (1, 122, 32)
+            """,
+        )
+        connection.commit()
+
+        with pytest.raises(RuntimeError, match="legacy footprints schema"):
+            initialize_schema(connection)
+
+        row_count = connection.execute("SELECT COUNT(*) FROM footprints").fetchone()
+
+    assert row_count == (1,)
+
+
+def test_import_preserves_existing_rows_and_visual_tiles_when_signature_is_missing(tmp_path: Path):
     db_path = tmp_path / "footprints.sqlite"
     data_path = write_csv(tmp_path, CSV)
     with sqlite3.connect(db_path) as connection:
@@ -236,12 +264,15 @@ def test_legacy_database_with_existing_csv_is_rebuilt_instead_of_treated_compati
         ).fetchone()
 
     assert result["new_count"] == 1
-    assert rows == [(1768144456, 121.511383, 31.296564)]
-    assert visual_tile_count == (0,)
+    assert rows == [
+        (1, 122.0, 32.0),
+        (1768144456, 121.511383, 31.296564),
+    ]
+    assert visual_tile_count == (1,)
     assert compatibility_signature is not None
 
 
-def test_import_clears_visual_tiles_when_algorithm_signature_is_stale(tmp_path: Path):
+def test_import_preserves_visual_tiles_when_algorithm_signature_is_stale(tmp_path: Path):
     data_path = write_csv(tmp_path, CSV)
     db_path = tmp_path / "footprints.sqlite"
     with sqlite3.connect(db_path) as connection:
@@ -281,11 +312,11 @@ def test_import_clears_visual_tiles_when_algorithm_signature_is_stale(tmp_path: 
         )
 
     assert result["new_count"] == 0
-    assert visual_tile_count == (0,)
+    assert visual_tile_count == (1,)
     assert visual_tile_signature == (VISUAL_TILE_ALGORITHM_SIGNATURE,)
 
 
-def test_reimport_that_clears_raw_footprints_also_clears_visual_tiles(tmp_path: Path):
+def test_coordinate_system_change_does_not_clear_visual_tiles_on_request_path(tmp_path: Path):
     data_path = write_csv(tmp_path, CSV)
     db_path = tmp_path / "footprints.sqlite"
     client = create_test_client(data_path=data_path, db_path=db_path)
@@ -316,10 +347,12 @@ def test_reimport_that_clears_raw_footprints_also_clears_visual_tiles(tmp_path: 
     assert response.status_code == 200
     connection = sqlite3.connect(db_path)
     try:
+        footprint_count = connection.execute("SELECT COUNT(*) FROM footprints").fetchone()
         visual_tile_count = connection.execute("SELECT COUNT(*) FROM visual_tiles").fetchone()
     finally:
         connection.close()
-    assert visual_tile_count == (0,)
+    assert footprint_count == (1,)
+    assert visual_tile_count == (1,)
 
 
 def test_importing_new_footprints_marks_existing_visual_tiles_dirty(tmp_path: Path):

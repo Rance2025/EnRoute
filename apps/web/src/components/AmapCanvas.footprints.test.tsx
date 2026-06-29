@@ -78,9 +78,9 @@ const emptyRenderSnapshot: FootprintRenderSnapshot = {
 
 const loadedAdminRegions: AdminRegion[] = [
   {
-    id: 'sanlin',
-    name: '三林镇',
-    level: 4,
+    id: 'shanghai',
+    name: '上海市',
+    level: 3,
     geometry: {
       type: 'Polygon',
       coordinates: [
@@ -1121,7 +1121,7 @@ describe('AmapCanvas footprint layer wiring', () => {
     await waitFor(() => expect(adminRegionRequests.length).toBeGreaterThanOrEqual(3))
   })
 
-  it('keeps district selection at city detail until the viewport is zoomed in enough', async () => {
+  it('switches the legacy AMap admin overlay between global levels without viewport gating', async () => {
     const {
       adminRegionRequests,
       loadAdminRegions,
@@ -1139,18 +1139,18 @@ describe('AmapCanvas footprint layer wiring', () => {
     rerenderWithAdminRegionUnlockEnabled(true)
     await waitFor(() => expect(loadAdminRegions).toHaveBeenCalled())
 
-    fireEvent.click(screen.getByRole('button', { name: '区县' }))
+    fireEvent.click(screen.getByRole('button', { name: '国家' }))
 
     await waitFor(() => expect(adminRegionRequests.length).toBeGreaterThanOrEqual(2))
     expect(adminRegionRequests.at(-1)).toMatchObject({
-      level: 3,
+      level: 1,
       zoom: 4,
       viewportBounds: { west: 70, south: 0, east: 140, north: 60 },
     })
-    expect(screen.getByRole('button', { name: '区县' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: '国家' })).toHaveAttribute('aria-pressed', 'true')
   })
 
-  it('loads district administrative regions after the selected viewport is detailed enough', async () => {
+  it('loads city administrative regions at detailed viewports', async () => {
     const {
       adminRegionRequests,
       loadAdminRegions,
@@ -1168,14 +1168,14 @@ describe('AmapCanvas footprint layer wiring', () => {
     rerenderWithAdminRegionUnlockEnabled(true)
     await waitFor(() => expect(loadAdminRegions).toHaveBeenCalled())
 
-    fireEvent.click(screen.getByRole('button', { name: '区县' }))
+    fireEvent.click(screen.getByRole('button', { name: '城市' }))
 
-    await waitFor(() => expect(adminRegionRequests.length).toBeGreaterThanOrEqual(2))
     expect(adminRegionRequests.at(-1)).toMatchObject({
-      level: 4,
+      level: 3,
       zoom: 8,
       viewportBounds: { west: 120, south: 30, east: 122, north: 32 },
     })
+    expect(screen.getByRole('button', { name: '城市' })).toHaveAttribute('aria-pressed', 'true')
   })
 
   it('schedules pending footprint style changes onto the existing native layer', async () => {

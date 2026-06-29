@@ -30,6 +30,33 @@ export function transformFootprintCoordinate({
   }
 }
 
+export function transformGcj02ToWgs84Coordinate({
+  longitude,
+  latitude,
+}: FootprintCoordinate): FootprintCoordinate {
+  if (isOutsideChina(longitude, latitude)) {
+    return { longitude, latitude }
+  }
+
+  let wgs84Longitude = longitude
+  let wgs84Latitude = latitude
+
+  for (let index = 0; index < 4; index += 1) {
+    const gcj02Coordinate = transformFootprintCoordinate({
+      longitude: wgs84Longitude,
+      latitude: wgs84Latitude,
+      sourceCoordinateSystem: 'wgs84',
+    })
+    wgs84Longitude -= gcj02Coordinate.longitude - longitude
+    wgs84Latitude -= gcj02Coordinate.latitude - latitude
+  }
+
+  return {
+    longitude: wgs84Longitude,
+    latitude: wgs84Latitude,
+  }
+}
+
 export function parseFootprintCoordinateSystem(
   value: string | undefined,
 ): FootprintCoordinateSystem {

@@ -30,7 +30,7 @@ export function loadAmap(config: AmapConfig): Promise<AMapNamespace> {
   amapLoadPromise = (AMapLoader.load({
     key: config.key,
     version: '2.0',
-    plugins: ['AMap.Adaptor', 'AMap.Scale', 'AMap.Geolocation'],
+    plugins: ['AMap.Adaptor', 'AMap.Scale', 'AMap.Geolocation', 'AMap.DistrictSearch'],
   }) as Promise<AMapNamespace>).catch((error: unknown) => {
     amapLoadPromise = null
     throw error

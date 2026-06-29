@@ -19,6 +19,7 @@ from enroute_api.admin_regions.store import (
     load_admin_regions,
     query_admin_regions,
 )
+from enroute_api.admin_regions.tiles import initialize_admin_region_tile_schema, read_admin_region_tile
 
 from .country import country_id_for_region_match
 from .csv_loader import iter_footprint_points
@@ -82,7 +83,14 @@ class FootprintStore:
         initialize_schema(self.connection)
 
     def ensure_ready(self) -> None:
-        self.import_footprints()
+        with self._connection_lock:
+            ensure_imported(
+                self.connection,
+                data_path=self.data_path,
+                coordinate_system=self.coordinate_system,
+                admin_region_data_path=self.admin_region_data_path,
+                load_admin_region_data=False,
+            )
 
     def import_footprints(self) -> FootprintImportResult:
         with self._connection_lock:
@@ -180,8 +188,27 @@ class FootprintStore:
                     x=x,
                     y=y,
                     buckets=read_result.dirty_buckets,
-            )
+                )
             return encode_footprint_mvt(read_result.records)
+
+    def get_admin_region_mvt(
+        self,
+        *,
+        z: int,
+        x: int,
+        y: int,
+        focus_region_id: str,
+        depth: int,
+    ) -> bytes:
+        with self._connection_lock:
+            return read_admin_region_tile(
+                self.connection,
+                z=z,
+                x=x,
+                y=y,
+                focus_region_id=focus_region_id,
+                depth=depth,
+            )
 
     def get_footprint_tile_debug_metrics(
         self,
@@ -272,6 +299,7 @@ class FootprintStore:
 
 def initialize_schema(connection: sqlite3.Connection) -> None:
     initialize_admin_region_schema(connection)
+    initialize_admin_region_tile_schema(connection)
     connection.executescript(
         """
         CREATE TABLE IF NOT EXISTS footprint_meta (
@@ -356,17 +384,8 @@ def migrate_legacy_footprints_schema(connection: sqlite3.Connection) -> None:
     ]:
         return
 
-    connection.executescript(
-        """
-        DROP TABLE IF EXISTS footprint_spatial;
-        DROP TABLE IF EXISTS footprints;
-        DELETE FROM footprint_meta;
-        UPDATE admin_regions
-        SET first_seen_timestamp = NULL,
-            footprint_count = 0,
-            stay_duration_seconds = 0,
-            travel_distance_meters = 0;
-        """,
+    raise RuntimeError(
+        "legacy footprints schema detected; run the explicit footprint rebuild script instead",
     )
 
 
@@ -376,12 +395,14 @@ def ensure_imported(
     data_path: Path,
     coordinate_system: str,
     admin_region_data_path: Path | None = None,
+    load_admin_region_data: bool = True,
 ) -> FootprintImportResult:
     return import_footprints(
         connection,
         data_path=data_path,
         coordinate_system=coordinate_system,
         admin_region_data_path=admin_region_data_path,
+        load_admin_region_data=load_admin_region_data,
     )
 
 
@@ -391,10 +412,15 @@ def import_footprints(
     data_path: Path,
     coordinate_system: str,
     admin_region_data_path: Path | None = None,
+    load_admin_region_data: bool = True,
 ) -> FootprintImportResult:
-    region_signature = load_admin_region_data_if_available(connection, admin_region_data_path)
+    region_signature = resolve_admin_region_signature(
+        connection,
+        admin_region_data_path,
+        load_admin_region_data=load_admin_region_data,
+    )
     source_signature = create_import_signature(data_path, coordinate_system, region_signature)
-    compatibility_signature = create_import_compatibility_signature(coordinate_system, region_signature)
+    compatibility_signature = create_import_compatibility_signature(coordinate_system)
     stored_signature = get_meta_value(connection, "sourceSignature")
     stored_compatibility_signature = get_meta_value(connection, "importCompatibilitySignature")
     stored_stats_signature = get_meta_value(connection, ADMIN_REGION_STATS_SIGNATURE_KEY)
@@ -426,10 +452,6 @@ def import_footprints(
 
     if not data_path.exists():
         raise FileNotFoundError(data_path)
-
-    if stored_compatibility_signature != compatibility_signature:
-        clear_imported_footprints(connection)
-        stored_count = 0
 
     with connection:
         if stored_count > 0:
@@ -619,26 +641,20 @@ def load_admin_region_data_if_available(
     return signature
 
 
-def clear_imported_footprints(connection: sqlite3.Connection) -> None:
-    connection.executescript(
-        """
-        DELETE FROM visual_tiles;
-        DELETE FROM footprint_spatial;
-        DELETE FROM footprints;
-        DELETE FROM footprint_meta WHERE key IN (
-            'sourceSignature',
-            'importCompatibilitySignature',
-            'visualTileAlgorithmSignature',
-            'rowCount',
-            'adminRegionStatsSignature'
-        );
-        UPDATE admin_regions
-        SET first_seen_timestamp = NULL,
-            footprint_count = 0,
-            stay_duration_seconds = 0,
-            travel_distance_meters = 0;
-        """,
-    )
+def resolve_admin_region_signature(
+    connection: sqlite3.Connection,
+    admin_region_data_path: Path | None,
+    *,
+    load_admin_region_data: bool,
+) -> str:
+    if load_admin_region_data:
+        return load_admin_region_data_if_available(connection, admin_region_data_path)
+
+    stored_signature = get_meta_value(connection, "adminRegionSourceSignature")
+    if stored_signature is not None:
+        return stored_signature
+
+    return create_source_signature(admin_region_data_path, ADMIN_REGION_LOADER_VERSION)
 
 
 def ensure_visual_tiles_algorithm_current(connection: sqlite3.Connection) -> None:
@@ -646,7 +662,6 @@ def ensure_visual_tiles_algorithm_current(connection: sqlite3.Connection) -> Non
         return
 
     with connection:
-        connection.execute("DELETE FROM visual_tiles")
         set_meta_value(connection, VISUAL_TILE_ALGORITHM_SIGNATURE_KEY, VISUAL_TILE_ALGORITHM_SIGNATURE)
 
 
@@ -1226,11 +1241,10 @@ def create_import_signature(
     )
 
 
-def create_import_compatibility_signature(coordinate_system: str, admin_region_signature: str) -> str:
+def create_import_compatibility_signature(coordinate_system: str) -> str:
     return json.dumps(
         {
             "coordinateSystem": coordinate_system,
-            "adminRegions": json.loads(admin_region_signature),
         },
         separators=(",", ":"),
     )

@@ -12,9 +12,6 @@ vi.mock('./MapboxCanvas', async () => {
 
   const FOOTPRINT_STYLE_STORAGE_KEY = 'enroute.footprintStyle'
   const MAP_STAGE_LABEL = '\u5728\u9014 EnRoute \u5730\u56fe\u5de5\u4f5c\u533a'
-  const REGION_NOTICE_TITLE = '\u884c\u653f\u533a\u5212\u56fe\u5c42\u8fc1\u79fb\u4e2d'
-  const REGION_NOTICE_COPY = '\u5f53\u524d Mapbox \u5e95\u5ea7\u5df2\u5207\u6362\u5230\u8db3\u8ff9 MVT \u74e6\u7247\uff0c\u884c\u653f\u533a\u5212\u56fe\u5c42\u4f1a\u5728\u540e\u7eed\u72ec\u7acb\u8fc1\u79fb\u3002'
-
   function readStoredFootprintStyle() {
     const storedValue = window.localStorage.getItem(FOOTPRINT_STYLE_STORAGE_KEY)
 
@@ -72,6 +69,7 @@ vi.mock('./MapboxCanvas', async () => {
         'section',
         {
           className: 'map-stage',
+          'data-admin-region-unlock-enabled': String(adminRegionUnlockEnabled),
           'data-admin-boundaries-visible': String(adminBoundariesVisible),
           'data-place-labels-visible': String(placeLabelsVisible),
           'data-projection': projection,
@@ -99,17 +97,6 @@ vi.mock('./MapboxCanvas', async () => {
           onMapProjectionChange,
           onMapLanguageChange,
         }),
-        adminRegionUnlockEnabled
-          ? React.createElement(
-            'div',
-            {
-              className: 'map-message map-message--compat',
-              role: 'status',
-            },
-            React.createElement('h2', null, REGION_NOTICE_TITLE),
-            React.createElement('p', null, REGION_NOTICE_COPY),
-          )
-          : null,
       )
     },
   }
@@ -567,16 +554,18 @@ describe('unified shell layout', () => {
     expect(window.localStorage.getItem('enroute:map-language')).toBe('auto')
     expect(mapStage).not.toHaveAttribute('data-language')
   })
-  it('shows an administrative region compatibility notice from the map region tab', async () => {
+  it('enables the administrative region overlay from the map region tab without showing the old migration notice', async () => {
     render(<App amapConfig={configuredAmap} />)
     await settleLazyImports()
+    const mapStage = document.querySelector('.map-stage')
 
+    expect(mapStage).toHaveAttribute('data-admin-region-unlock-enabled', 'false')
     expect(screen.queryByText('行政区划图层迁移中')).not.toBeInTheDocument()
 
     fireEvent.click(within(screen.getByRole('navigation', { name: '二级导航' })).getByRole('button', { name: '区域' }))
 
-    expect(screen.getByText('行政区划图层迁移中')).toBeInTheDocument()
-    expect(screen.getByText(/足迹 MVT 瓦片/)).toBeInTheDocument()
+    expect(mapStage).toHaveAttribute('data-admin-region-unlock-enabled', 'true')
+    expect(screen.queryByText('行政区划图层迁移中')).not.toBeInTheDocument()
   })
 
   it('rounds footprint point opacity controls to 0.01 precision through the slider', async () => {

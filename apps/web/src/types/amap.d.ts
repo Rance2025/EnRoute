@@ -44,6 +44,7 @@ declare namespace AMap {
     ): void
     setZoom(zoom: number, immediately?: boolean, duration?: number): void
     setBounds(bounds: BoundsLike, immediately?: boolean, avoid?: number[], duration?: number): void
+    setFitView(overlays?: unknown[] | null, immediately?: boolean, avoid?: number[], duration?: number): void
     setLimitBounds(bounds: Bounds): void
     getCenter(): { getLng: () => number; getLat: () => number }
     lnglatToPixel(lngLat: LngLatLike, level: number): { x: number; y: number }
@@ -70,7 +71,7 @@ declare namespace AMap {
   }
 
   type PolygonOptions = {
-    path: LngLatLike[][] | LngLatLike[][][]
+    path: LngLatLike[] | LngLatLike[][] | LngLatLike[][][]
     strokeColor?: string
     strokeOpacity?: number
     strokeWeight?: number
@@ -139,6 +140,39 @@ declare namespace AMap {
       }
     })
     getCurrentPosition(): void
+  }
+
+  type DistrictSearchLevel = 'country' | 'province' | 'city' | 'district'
+
+  type DistrictSearchOptions = {
+    level?: DistrictSearchLevel
+    subdistrict?: number
+    extensions?: 'base' | 'all'
+  }
+
+  type DistrictSearchResult = {
+    districtList?: DistrictSearchDistrict[]
+  }
+
+  type DistrictSearchDistrict = {
+    name?: string
+    adcode?: string
+    center?: {
+      getLng?: () => number
+      getLat?: () => number
+      lng?: number
+      lat?: number
+    }
+    boundaries?: unknown
+  }
+
+  class DistrictSearch {
+    constructor(options?: DistrictSearchOptions)
+    setLevel(level: DistrictSearchLevel): void
+    search(
+      keyword: string,
+      callback: (status: string, result: DistrictSearchResult | string) => void,
+    ): void
   }
 
   function plugin(name: string, callback: () => void): void

@@ -75,15 +75,11 @@ const EMPTY_FOOTPRINT_DEBUG: FootprintRenderDebug = {
   renderRatio: 0,
 }
 const ADMIN_REGION_LEVELS: Array<{ level: AdminRegionLevel; label: string }> = [
-  { level: 2, label: '省级' },
-  { level: 3, label: '市级' },
-  { level: 4, label: '区县' },
-  { level: 5, label: '街镇' },
+  { level: 1, label: '国家' },
+  { level: 2, label: '地区' },
+  { level: 3, label: '城市' },
 ]
 const DEFAULT_ADMIN_REGION_LEVEL: AdminRegionLevel = 3
-const DETAILED_ADMIN_REGION_MIN_ZOOM = 7
-const DETAILED_ADMIN_REGION_MAX_LONGITUDE_SPAN = 12
-const DETAILED_ADMIN_REGION_MAX_LATITUDE_SPAN = 10
 
 function AmapCanvasComponent({
   config,
@@ -203,12 +199,10 @@ function AmapCanvasComponent({
     adminRegionAbortControllerRef.current = abortController
     const layer = adminRegionLayerRef.current
 
-    const renderLevel = resolveRenderableAdminRegionLevel(level, viewport)
-
     loadAdminRegions(
       import.meta.env.VITE_ADMIN_REGION_API_URL,
       {
-        level: renderLevel,
+        level: resolveRenderableAdminRegionLevel(level),
         zoom: viewport.zoom,
         viewportBounds: viewport.bounds,
       },
@@ -681,34 +675,8 @@ function calculateCurrentViewportSampleInput(map: AMap.Map, container: HTMLEleme
 
 function resolveRenderableAdminRegionLevel(
   selectedLevel: AdminRegionLevel,
-  viewport: ReturnType<typeof calculateCurrentViewportSampleInput>,
 ): AdminRegionLevel {
-  if (selectedLevel < 4) {
-    return selectedLevel
-  }
-
-  return isDetailedAdminRegionViewport(viewport) ? selectedLevel : DEFAULT_ADMIN_REGION_LEVEL
-}
-
-function isDetailedAdminRegionViewport({
-  bounds,
-  zoom,
-}: ReturnType<typeof calculateCurrentViewportSampleInput>) {
-  if (zoom < DETAILED_ADMIN_REGION_MIN_ZOOM) {
-    return false
-  }
-
-  const longitudeSpan = calculateLongitudeSpan(bounds.west, bounds.east)
-  const latitudeSpan = Math.abs(bounds.north - bounds.south)
-  return (
-    longitudeSpan <= DETAILED_ADMIN_REGION_MAX_LONGITUDE_SPAN &&
-    latitudeSpan <= DETAILED_ADMIN_REGION_MAX_LATITUDE_SPAN
-  )
-}
-
-function calculateLongitudeSpan(west: number, east: number) {
-  const span = east >= west ? east - west : 360 - west + east
-  return Math.min(Math.abs(span), 360)
+  return selectedLevel
 }
 
 function FootprintDebugPanel({ debug }: { debug: FootprintRenderDebug }) {

@@ -16,7 +16,6 @@ from enroute_api.admin_regions.store import (
 )
 from enroute_api.config import Settings
 from enroute_api.main import create_app
-from enroute_api.footprints.coordinates import transform_wgs84_to_gcj02_coordinate
 from enroute_api.footprints.country import classify_country_lookup, country_id_for_region_match
 from enroute_api.footprints.store import FootprintStore, ensure_imported, initialize_schema
 
@@ -42,15 +41,15 @@ REGION_COLLECTION = {
         },
         {
             "type": "Feature",
-            "properties": {"id": "pudong", "name": "浦东新区", "level": 4, "parentId": "sh"},
+            "properties": {"id": "pudong", "name": "浦东新区", "level": 3, "parentId": "sh"},
             "geometry": {
                 "type": "Polygon",
-                "coordinates": [[[0, 0], [60, 0], [60, 60], [0, 60], [0, 0]]],
+                "coordinates": [[[30, 30], [60, 30], [60, 60], [30, 60], [30, 30]]],
             },
         },
         {
             "type": "Feature",
-            "properties": {"id": "sanlin", "name": "三林镇", "level": 5, "parentId": "pudong"},
+            "properties": {"id": "sanlin", "name": "三林镇", "level": 3, "parentId": "sh"},
             "geometry": {
                 "type": "Polygon",
                 "coordinates": [[[0, 0], [30, 0], [30, 30], [0, 30], [0, 0]]],
@@ -102,6 +101,67 @@ AREACITY_COLLECTION = {
                 "type": "Polygon",
                 "coordinates": [
                     [[121.4, 31.1], [121.8, 31.1], [121.8, 31.4], [121.4, 31.4], [121.4, 31.1]],
+                ],
+            },
+        },
+    ],
+}
+
+OVERTURE_COLLECTION = {
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "type": "Feature",
+            "properties": {
+                "id": "overture:country:us",
+                "names": {"primary": "United States"},
+                "subtype": "country",
+            },
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [[[-125, 24], [-66, 24], [-66, 50], [-125, 50], [-125, 24]]],
+            },
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "id": "overture:region:us-ca",
+                "names": {"primary": "California"},
+                "subtype": "region",
+                "parent": "overture:country:us",
+            },
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [[[-125, 32], [-114, 32], [-114, 42], [-125, 42], [-125, 32]]],
+            },
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "id": "overture:locality:sf",
+                "names": {"primary": "San Francisco"},
+                "subtype": "locality",
+                "parent_id": "overture:region:us-ca",
+            },
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [
+                    [[-122.55, 37.7], [-122.35, 37.7], [-122.35, 37.84], [-122.55, 37.84], [-122.55, 37.7]],
+                ],
+            },
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "id": "overture:county:sf",
+                "names": {"primary": "San Francisco County"},
+                "subtype": "county",
+                "parent": "overture:region:us-ca",
+            },
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [
+                    [[-122.6, 37.68], [-122.34, 37.68], [-122.34, 37.85], [-122.6, 37.85], [-122.6, 37.68]],
                 ],
             },
         },
@@ -168,18 +228,18 @@ def test_loads_regions_and_walks_chain(tmp_path: Path):
         initialize_admin_region_schema(connection)
         load_admin_regions(connection, REGION_COLLECTION)
 
-        chain = get_region_chain(connection, "sanlin")
-        regions = query_admin_regions_by_level(connection, 5)
+        chain = get_region_chain(connection, "pudong")
+        regions = query_admin_regions_by_level(connection, 3)
     finally:
         connection.close()
 
-    assert chain == ["sanlin", "pudong", "sh", "cn"]
-    assert [format_admin_region(row)["id"] for row in regions] == ["sanlin"]
+    assert chain == ["pudong", "sh", "cn"]
+    assert [format_admin_region(row)["id"] for row in regions] == ["pudong", "sanlin"]
     assert format_admin_region(regions[0]) == {
-        "id": "sanlin",
-        "name": "三林镇",
-        "level": 5,
-        "geometry": REGION_COLLECTION["features"][3]["geometry"],
+        "id": "pudong",
+        "name": "浦东新区",
+        "level": 3,
+        "geometry": REGION_COLLECTION["features"][2]["geometry"],
         "firstSeenTimestamp": None,
         "footprintCount": 0,
         "stayDurationSeconds": 0,
@@ -187,7 +247,7 @@ def test_loads_regions_and_walks_chain(tmp_path: Path):
     }
 
 
-def test_normalizes_areacity_province_city_district_geojson_without_coordinate_transform(tmp_path: Path):
+def test_normalizes_areacity_province_city_geojson_without_coordinate_transform(tmp_path: Path):
     connection = sqlite3.connect(tmp_path / "footprints.sqlite")
     connection.row_factory = sqlite3.Row
     try:
@@ -197,7 +257,7 @@ def test_normalizes_areacity_province_city_district_geojson_without_coordinate_t
         rows = connection.execute(
             "SELECT id, name, level, geometry FROM admin_regions ORDER BY level",
         ).fetchall()
-        chain = get_region_chain(connection, "310115")
+        chain = get_region_chain(connection, "310100")
     finally:
         connection.close()
 
@@ -206,13 +266,41 @@ def test_normalizes_areacity_province_city_district_geojson_without_coordinate_t
     assert [(row["id"], row["level"]) for row in rows] == [
         ("310000", 2),
         ("310100", 3),
-        ("310115", 4),
     ]
-    assert chain == ["310115", "310100", "310000"]
+    assert chain == ["310100", "310000"]
     assert stored_geometry["coordinates"][0][0] == [120, 30]
 
 
-def test_normalizes_prepared_areacity_features_with_distinct_ids_for_duplicate_adcodes(tmp_path: Path):
+def test_normalizes_overture_country_region_locality_as_global_levels_without_coordinate_transform(tmp_path: Path):
+    connection = sqlite3.connect(tmp_path / "footprints.sqlite")
+    connection.row_factory = sqlite3.Row
+    try:
+        initialize_admin_region_schema(connection)
+        load_admin_regions(connection, OVERTURE_COLLECTION)
+
+        rows = connection.execute(
+            "SELECT id, name, level, geometry FROM admin_regions ORDER BY level",
+        ).fetchall()
+        chain = get_region_chain(connection, "overture:locality:sf")
+    finally:
+        connection.close()
+
+    stored_geometry = json.loads(rows[0]["geometry"])
+
+    assert [(row["id"], row["name"], row["level"]) for row in rows] == [
+        ("overture:country:us", "United States", 1),
+        ("overture:region:us-ca", "California", 2),
+        ("overture:locality:sf", "San Francisco", 3),
+    ]
+    assert chain == [
+        "overture:locality:sf",
+        "overture:region:us-ca",
+        "overture:country:us",
+    ]
+    assert stored_geometry["coordinates"][0][0] == [-125, 24]
+
+
+def test_skips_areacity_district_features_when_global_scope_stops_at_city_level(tmp_path: Path):
     collection = {
         "type": "FeatureCollection",
         "features": [
@@ -253,15 +341,47 @@ def test_normalizes_prepared_areacity_features_with_distinct_ids_for_duplicate_a
         load_admin_regions(connection, collection)
 
         rows = connection.execute("SELECT id, level FROM admin_regions ORDER BY level").fetchall()
-        chain = get_region_chain(connection, "441900:district")
     finally:
         connection.close()
 
     assert [(row["id"], row["level"]) for row in rows] == [
         ("441900:city", 3),
-        ("441900:district", 4),
     ]
-    assert chain == ["441900:district", "441900:city", "440000"]
+
+
+def test_skips_legacy_explicit_levels_above_global_city_scope(tmp_path: Path):
+    collection = {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "properties": {"id": "city", "name": "City", "level": 3},
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]],
+                },
+            },
+            {
+                "type": "Feature",
+                "properties": {"id": "legacy-level5", "name": "Street", "level": 5},
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]],
+                },
+            },
+        ],
+    }
+    connection = sqlite3.connect(tmp_path / "footprints.sqlite")
+    connection.row_factory = sqlite3.Row
+    try:
+        initialize_admin_region_schema(connection)
+        load_admin_regions(connection, collection)
+
+        rows = connection.execute("SELECT id, level FROM admin_regions ORDER BY id").fetchall()
+    finally:
+        connection.close()
+
+    assert [(row["id"], row["level"]) for row in rows] == [("city", 3)]
 
 
 def test_region_matcher_reuses_parsed_geometries_across_points(tmp_path: Path, monkeypatch):
@@ -308,6 +428,15 @@ CSV = "\n".join(
     ],
 )
 
+GLOBAL_CSV = "\n".join(
+    [
+        "dataTime,locType,longitude,latitude,heading,accuracy,speed,distance,isBackForeground,stepType,altitude",
+        "100,1,-122.5,37.75,0,5,-1,0,1,0,3",
+        "130,1,-122.45,37.76,0,5,-1,40,1,0,3",
+        "160,1,-122.4,37.78,0,5,-1,60,1,0,3",
+    ],
+)
+
 
 def test_incremental_import_assigns_finest_region_and_updates_cached_stats(tmp_path: Path):
     data_path = tmp_path / "points.csv"
@@ -345,9 +474,9 @@ def test_incremental_import_assigns_finest_region_and_updates_cached_stats(tmp_p
     assert stats["sanlin"]["first_seen_timestamp"] == 100
     assert stats["sanlin"]["stay_duration_seconds"] == 30
     assert stats["sanlin"]["travel_distance_meters"] == 40
-    assert stats["pudong"]["footprint_count"] == 3
-    assert stats["pudong"]["stay_duration_seconds"] == 60
-    assert stats["pudong"]["travel_distance_meters"] == 100
+    assert stats["pudong"]["footprint_count"] == 1
+    assert stats["pudong"]["stay_duration_seconds"] == 0
+    assert stats["pudong"]["travel_distance_meters"] == 0
     assert stats["sh"]["footprint_count"] == 3
     assert stats["cn"]["footprint_count"] == 3
 
@@ -429,7 +558,7 @@ def test_appended_csv_imports_only_new_rows_without_resetting_region_stats(tmp_p
         "total_count": 2,
         "matched_count": 2,
         "region_count": 4,
-        "unlocked_region_count": 4,
+        "unlocked_region_count": 3,
     }
     assert second_result == {
         "new_count": 1,
@@ -446,9 +575,9 @@ def test_appended_csv_imports_only_new_rows_without_resetting_region_stats(tmp_p
     assert stats["sanlin"]["footprint_count"] == 2
     assert stats["sanlin"]["stay_duration_seconds"] == 30
     assert stats["sanlin"]["travel_distance_meters"] == 40
-    assert stats["pudong"]["footprint_count"] == 3
-    assert stats["pudong"]["stay_duration_seconds"] == 60
-    assert stats["pudong"]["travel_distance_meters"] == 100
+    assert stats["pudong"]["footprint_count"] == 1
+    assert stats["pudong"]["stay_duration_seconds"] == 0
+    assert stats["pudong"]["travel_distance_meters"] == 0
 
 
 def test_appended_csv_rebuilds_missing_region_stats_before_counting_new_rows(tmp_path: Path):
@@ -507,9 +636,9 @@ def test_appended_csv_rebuilds_missing_region_stats_before_counting_new_rows(tmp
     assert stats["sanlin"]["footprint_count"] == 2
     assert stats["sanlin"]["stay_duration_seconds"] == 30
     assert stats["sanlin"]["travel_distance_meters"] == 40
-    assert stats["pudong"]["footprint_count"] == 3
-    assert stats["pudong"]["stay_duration_seconds"] == 60
-    assert stats["pudong"]["travel_distance_meters"] == 100
+    assert stats["pudong"]["footprint_count"] == 1
+    assert stats["pudong"]["stay_duration_seconds"] == 0
+    assert stats["pudong"]["travel_distance_meters"] == 0
 
 
 def test_store_loads_boundary_file_before_incremental_import_and_reports_counts(tmp_path: Path):
@@ -588,9 +717,9 @@ def test_store_rebuilds_region_stats_when_boundary_reload_clears_cached_rows(tmp
     assert second_result["new_count"] == 0
     assert second_result["unlocked_region_count"] == 4
     assert dict(stats) == {
-        "footprint_count": 3,
-        "stay_duration_seconds": 60,
-        "travel_distance_meters": 100,
+        "footprint_count": 1,
+        "stay_duration_seconds": 0,
+        "travel_distance_meters": 0,
     }
 
 
@@ -634,7 +763,7 @@ def test_store_serializes_concurrent_initial_imports(tmp_path: Path, monkeypatch
     assert overlapped is False
 
 
-def test_store_normalizes_osm_level8_boundary_file_and_converts_geometry_to_gcj02(tmp_path: Path):
+def test_store_normalizes_osm_level5_boundary_file_and_preserves_wgs84_geometry(tmp_path: Path):
     data_path = tmp_path / "points.csv"
     data_path.write_text(
         "\n".join(
@@ -667,8 +796,8 @@ def test_store_normalizes_osm_level8_boundary_file_and_converts_geometry_to_gcj0
                         "type": "Feature",
                         "properties": {
                             "osm_id": "14179226",
-                            "fclass": "admin_level8",
-                            "name": "三林镇",
+                            "fclass": "admin_level5",
+                            "name": "San Francisco",
                         },
                         "geometry": wgs84_polygon,
                     },
@@ -695,10 +824,6 @@ def test_store_normalizes_osm_level8_boundary_file_and_converts_geometry_to_gcj0
     finally:
         store.close()
 
-    expected_first_position = transform_wgs84_to_gcj02_coordinate(
-        longitude=121.399,
-        latitude=31.199,
-    )
     stored_geometry = json.loads(region["geometry"])
 
     assert result == {
@@ -711,12 +836,12 @@ def test_store_normalizes_osm_level8_boundary_file_and_converts_geometry_to_gcj0
     assert footprint["region_id"] == "osm:14179226"
     assert dict(region) | {"geometry": {}} == {
         "id": "osm:14179226",
-        "name": "三林镇",
-        "level": 5,
+        "name": "San Francisco",
+        "level": 3,
         "geometry": {},
         "footprint_count": 1,
     }
-    assert stored_geometry["coordinates"][0][0] == list(expected_first_position)
+    assert stored_geometry["coordinates"][0][0] == [121.399, 31.199]
 
 
 def test_wgs84_raw_footprint_storage_keeps_region_matching_working(tmp_path: Path):
@@ -741,7 +866,7 @@ def test_wgs84_raw_footprint_storage_keeps_region_matching_working(tmp_path: Pat
                         "properties": {
                             "id": "wgs84-region",
                             "name": "WGS84 Region",
-                            "level": 5,
+                            "level": 3,
                             "sourceCoordinateSystem": "wgs84",
                         },
                         "geometry": {
@@ -784,32 +909,35 @@ def test_wgs84_raw_footprint_storage_keeps_region_matching_working(tmp_path: Pat
 
 def test_serves_admin_regions_by_level_from_cached_region_rows(tmp_path: Path):
     data_path = tmp_path / "points.csv"
-    data_path.write_text(CSV, encoding="utf-8")
+    data_path.write_text(GLOBAL_CSV, encoding="utf-8")
     db_path = tmp_path / "footprints.sqlite"
+    region_path = tmp_path / "overture-regions.geojson"
+    region_path.write_text(json.dumps(OVERTURE_COLLECTION), encoding="utf-8")
     settings = Settings(
         footprint_data_path=data_path,
         footprint_db_path=db_path,
-        footprint_coordinate_system="gcj02",
-        admin_region_data_path=tmp_path / "missing-admin-regions.geojson",
+        footprint_coordinate_system="wgs84",
+        admin_region_data_path=region_path,
     )
+    store = FootprintStore(
+        db_path=db_path,
+        data_path=data_path,
+        coordinate_system="wgs84",
+        admin_region_data_path=region_path,
+    )
+    try:
+        store.import_footprints()
+    finally:
+        store.close()
     client = TestClient(create_app(settings=settings))
 
-    connection = sqlite3.connect(db_path)
-    connection.row_factory = sqlite3.Row
-    try:
-        initialize_admin_region_schema(connection)
-        load_admin_regions(connection, REGION_COLLECTION)
-    finally:
-        connection.close()
-
-    client.get("/api/footprints")
-    response = client.get("/api/admin-regions?level=4")
+    response = client.get("/api/admin-regions?level=3")
 
     assert response.status_code == 200
-    assert response.json()["regions"][0] | {"geometry": {}, "name": ""} == {
-        "id": "pudong",
-        "name": "",
-        "level": 4,
+    assert response.json()["regions"][0] | {"geometry": {}} == {
+        "id": "overture:locality:sf",
+        "name": "San Francisco",
+        "level": 3,
         "geometry": {},
         "firstSeenTimestamp": 100,
         "footprintCount": 3,
@@ -830,17 +958,25 @@ def test_serves_admin_regions_intersecting_viewport_bbox(tmp_path: Path):
         footprint_coordinate_system="gcj02",
         admin_region_data_path=region_path,
     )
+    connection = sqlite3.connect(db_path)
+    connection.row_factory = sqlite3.Row
+    try:
+        initialize_schema(connection)
+        load_admin_regions(connection, AREACITY_COLLECTION)
+        connection.commit()
+    finally:
+        connection.close()
     client = TestClient(create_app(settings=settings))
 
     included = client.get(
-        "/api/admin-regions?level=4&west=121.3&south=31.0&east=121.9&north=31.5&zoom=10",
+        "/api/admin-regions?level=3&west=121.0&south=30.8&east=122.2&north=32.2&zoom=10",
     )
     excluded = client.get(
-        "/api/admin-regions?level=4&west=10&south=10&east=11&north=11&zoom=10",
+        "/api/admin-regions?level=3&west=10&south=10&east=11&north=11&zoom=10",
     )
 
     assert included.status_code == 200
-    assert [region["id"] for region in included.json()["regions"]] == ["310115"]
+    assert [region["id"] for region in included.json()["regions"]] == ["310100"]
     assert excluded.status_code == 200
     assert excluded.json()["regions"] == []
 
@@ -883,17 +1019,17 @@ def test_serves_admin_regions_while_snapshot_requests_share_store_connection(tmp
             "/api/footprints/snapshot",
             json=snapshot_payload,
         )
-        regions_future = executor.submit(client.get, "/api/admin-regions?level=4")
+        regions_future = executor.submit(client.get, "/api/admin-regions?level=3")
 
         snapshot_response = snapshot_future.result(timeout=3)
         regions_response = regions_future.result(timeout=3)
 
     assert snapshot_response.status_code == 200
     assert regions_response.status_code == 200
-    assert [region["id"] for region in regions_response.json()["regions"]] == ["pudong"]
+    assert [region["id"] for region in regions_response.json()["regions"]] == ["pudong", "sanlin"]
 
 
-def test_serves_shanghai_level5_admin_regions_from_cached_rows(tmp_path: Path):
+def test_serves_level3_admin_regions_from_cached_rows(tmp_path: Path):
     data_path = tmp_path / "points.csv"
     data_path.write_text(CSV, encoding="utf-8")
     db_path = tmp_path / "footprints.sqlite"
@@ -914,10 +1050,10 @@ def test_serves_shanghai_level5_admin_regions_from_cached_rows(tmp_path: Path):
         connection.close()
 
     client.get("/api/footprints")
-    response = client.get("/api/admin-regions?level=5")
+    response = client.get("/api/admin-regions?level=3")
 
     assert response.status_code == 200
-    assert [region["id"] for region in response.json()["regions"]] == ["sanlin"]
+    assert [region["id"] for region in response.json()["regions"]] == ["pudong", "sanlin"]
 
 
 def test_rejects_unavailable_admin_region_levels(tmp_path: Path):
@@ -931,7 +1067,286 @@ def test_rejects_unavailable_admin_region_levels(tmp_path: Path):
     )
     client = TestClient(create_app(settings=settings))
 
-    response = client.get("/api/admin-regions?level=6")
+    response = client.get("/api/admin-regions?level=4")
 
     assert response.status_code == 400
-    assert response.json()["detail"] == "level must be one of 2, 3, 4, or 5"
+    assert response.json()["detail"] == "level must be one of 1, 2, or 3"
+
+
+def test_previews_local_shanghai_level4_regions_without_importing_footprints(tmp_path: Path):
+    data_path = tmp_path / "missing-points.csv"
+    db_path = tmp_path / "footprints.sqlite"
+    region_path = tmp_path / "admin-regions.geojson"
+    region_path.write_text(json.dumps(AREACITY_COLLECTION, ensure_ascii=False), encoding="utf-8")
+    settings = Settings(
+        footprint_data_path=data_path,
+        footprint_db_path=db_path,
+        footprint_coordinate_system="gcj02",
+        admin_region_data_path=region_path,
+    )
+    client = TestClient(create_app(settings=settings))
+
+    response = client.get("/api/admin-regions/preview/shanghai?source=local&level=4")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "source": "local",
+        "level": 4,
+        "available": True,
+        "coordinateSystem": "gcj02",
+        "reason": None,
+        "regions": [
+            {
+                "id": "310115",
+                "name": "Pudong",
+                "level": 4,
+                "geometry": AREACITY_COLLECTION["features"][2]["geometry"],
+            },
+        ],
+    }
+    connection = sqlite3.connect(db_path)
+    try:
+        assert connection.execute("SELECT COUNT(*) FROM footprints").fetchone()[0] == 0
+        assert connection.execute("SELECT COUNT(*) FROM admin_regions").fetchone()[0] == 0
+    finally:
+        connection.close()
+
+
+def test_does_not_use_pruned_level4_sqlite_rows_for_local_shanghai_preview(tmp_path: Path):
+    db_path = tmp_path / "footprints.sqlite"
+    connection = sqlite3.connect(db_path)
+    connection.row_factory = sqlite3.Row
+    try:
+        initialize_admin_region_schema(connection)
+        load_admin_regions(connection, AREACITY_COLLECTION)
+    finally:
+        connection.close()
+    settings = Settings(
+        footprint_data_path=tmp_path / "missing-points.csv",
+        footprint_db_path=db_path,
+        footprint_coordinate_system="gcj02",
+        admin_region_data_path=tmp_path / "missing-admin-regions.geojson",
+    )
+    client = TestClient(create_app(settings=settings))
+
+    response = client.get("/api/admin-regions/preview/shanghai?source=local&level=4")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "source": "local",
+        "level": 4,
+        "available": False,
+        "coordinateSystem": None,
+        "reason": "未找到本地行政区划 GeoJSON。",
+        "regions": [],
+    }
+
+
+def test_preview_marks_local_shanghai_level5_unavailable_when_only_areacity_data_exists(
+    tmp_path: Path,
+):
+    region_path = tmp_path / "admin-regions.geojson"
+    region_path.write_text(json.dumps(AREACITY_COLLECTION, ensure_ascii=False), encoding="utf-8")
+    settings = Settings(
+        footprint_data_path=tmp_path / "missing-points.csv",
+        footprint_db_path=tmp_path / "footprints.sqlite",
+        footprint_coordinate_system="gcj02",
+        admin_region_data_path=region_path,
+    )
+    client = TestClient(create_app(settings=settings))
+
+    response = client.get("/api/admin-regions/preview/shanghai?source=local&level=5")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "source": "local",
+        "level": 5,
+        "available": False,
+        "coordinateSystem": None,
+        "reason": "本地 AreaCity 源只提供上海 level 2-4，level 5 请切换到 OSM 源。",
+        "regions": [],
+    }
+
+
+def test_previews_osm_shanghai_level5_regions_from_adjacent_geojson(tmp_path: Path):
+    region_path = tmp_path / "admin-regions.geojson"
+    region_path.write_text(json.dumps(AREACITY_COLLECTION, ensure_ascii=False), encoding="utf-8")
+    osm_path = tmp_path / "osm" / "shanghai-admin-level8.geojson"
+    osm_path.parent.mkdir()
+    osm_geometry = {
+        "type": "Polygon",
+        "coordinates": [
+            [
+                [121.399, 31.199],
+                [121.401, 31.199],
+                [121.401, 31.201],
+                [121.399, 31.201],
+                [121.399, 31.199],
+            ],
+        ],
+    }
+    osm_path.write_text(
+        json.dumps(
+            {
+                "type": "FeatureCollection",
+                "features": [
+                    {
+                        "type": "Feature",
+                        "properties": {
+                            "osm_id": "14179226",
+                            "admin_level": "8",
+                            "name": "Sanlin",
+                        },
+                        "geometry": osm_geometry,
+                    },
+                ],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    settings = Settings(
+        footprint_data_path=tmp_path / "missing-points.csv",
+        footprint_db_path=tmp_path / "footprints.sqlite",
+        footprint_coordinate_system="gcj02",
+        admin_region_data_path=region_path,
+    )
+    client = TestClient(create_app(settings=settings))
+
+    response = client.get("/api/admin-regions/preview/shanghai?source=osm&level=5")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "source": "osm",
+        "level": 5,
+        "available": True,
+        "coordinateSystem": "wgs84",
+        "reason": None,
+        "regions": [
+            {
+                "id": "osm:14179226",
+                "name": "Sanlin",
+                "level": 5,
+                "geometry": osm_geometry,
+            },
+        ],
+    }
+
+
+def test_previews_osm_shanghai_level5_regions_from_fclass_geojson(tmp_path: Path):
+    region_path = tmp_path / "admin-regions.geojson"
+    region_path.write_text(json.dumps(AREACITY_COLLECTION, ensure_ascii=False), encoding="utf-8")
+    osm_path = tmp_path / "osm" / "shanghai-admin-level8.geojson"
+    osm_path.parent.mkdir()
+    osm_geometry = {
+        "type": "Polygon",
+        "coordinates": [
+            [
+                [121.399, 31.199],
+                [121.401, 31.199],
+                [121.401, 31.201],
+                [121.399, 31.201],
+                [121.399, 31.199],
+            ],
+        ],
+    }
+    osm_path.write_text(
+        json.dumps(
+            {
+                "type": "FeatureCollection",
+                "features": [
+                    {
+                        "type": "Feature",
+                        "properties": {
+                            "osm_id": "14179226",
+                            "fclass": "admin_level8",
+                            "name": "Sanlin",
+                        },
+                        "geometry": osm_geometry,
+                    },
+                ],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    settings = Settings(
+        footprint_data_path=tmp_path / "missing-points.csv",
+        footprint_db_path=tmp_path / "footprints.sqlite",
+        footprint_coordinate_system="gcj02",
+        admin_region_data_path=region_path,
+    )
+    client = TestClient(create_app(settings=settings))
+
+    response = client.get("/api/admin-regions/preview/shanghai?source=osm&level=5")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["available"] is True
+    assert payload["regions"][0]["id"] == "osm:14179226"
+    assert payload["regions"][0]["level"] == 5
+
+
+def test_previews_osm_shanghai_level4_regions_from_adjacent_shapefile(tmp_path: Path):
+    import shapefile
+
+    region_path = tmp_path / "admin-regions.geojson"
+    region_path.write_text(json.dumps(AREACITY_COLLECTION, ensure_ascii=False), encoding="utf-8")
+    shape_base = tmp_path / "osm" / "shanghai-shp" / "gis_osm_adminareas_a_free_1"
+    shape_base.parent.mkdir(parents=True)
+    writer = shapefile.Writer(str(shape_base), shapeType=shapefile.POLYGON)
+    writer.field("osm_id", "C", size=12)
+    writer.field("code", "N", size=4)
+    writer.field("fclass", "C", size=28)
+    writer.field("name", "C", size=100)
+    writer.poly([
+        [
+            [121.45, 31.20],
+            [121.46, 31.20],
+            [121.46, 31.21],
+            [121.45, 31.21],
+            [121.45, 31.20],
+        ],
+    ])
+    writer.record("398351", 1206, "boundary", "Hongkou")
+    writer.close()
+
+    settings = Settings(
+        footprint_data_path=tmp_path / "missing-points.csv",
+        footprint_db_path=tmp_path / "footprints.sqlite",
+        footprint_coordinate_system="gcj02",
+        admin_region_data_path=region_path,
+    )
+    client = TestClient(create_app(settings=settings))
+
+    response = client.get("/api/admin-regions/preview/shanghai?source=osm&level=4")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload | {"regions": []} == {
+        "source": "osm",
+        "level": 4,
+        "available": True,
+        "coordinateSystem": "wgs84",
+        "reason": None,
+        "regions": [],
+    }
+    assert payload["regions"][0]["id"] == "osm:398351"
+    assert payload["regions"][0]["name"] == "Hongkou"
+    assert payload["regions"][0]["level"] == 4
+    assert payload["regions"][0]["geometry"]["type"] == "Polygon"
+
+
+def test_rejects_unknown_shanghai_preview_source(tmp_path: Path):
+    settings = Settings(
+        footprint_data_path=tmp_path / "missing-points.csv",
+        footprint_db_path=tmp_path / "footprints.sqlite",
+        footprint_coordinate_system="gcj02",
+        admin_region_data_path=tmp_path / "missing-admin-regions.geojson",
+    )
+    client = TestClient(create_app(settings=settings))
+
+    response = client.get("/api/admin-regions/preview/shanghai?source=unknown&level=4")
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "source must be one of amap, local, or osm"
