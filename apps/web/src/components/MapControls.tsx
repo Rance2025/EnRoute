@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react'
-import { useEffect, useId, useRef, useState } from 'react'
+import { forwardRef, useEffect, useId, useRef, useState } from 'react'
 import { Crosshair, Globe2, LocateFixed, Minus, Plus, Settings2 } from 'lucide-react'
 import { MAP_STYLE_OPTIONS, type MapStylePreference } from '../mapStyleOptions'
 import {
@@ -90,13 +90,15 @@ export function MapControls({
   onMapLanguageChange,
 }: MapControlsProps) {
   const [isFootprintStyleOpen, setIsFootprintStyleOpen] = useState(false)
-  const settingsRef = useRef<HTMLDivElement | null>(null)
+  const settingsButtonRef = useRef<HTMLDivElement | null>(null)
+  const popoverRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     if (!isFootprintStyleOpen) return
 
     function closeFootprintStyleOnOutsidePointer(event: PointerEvent) {
-      if (settingsRef.current?.contains(event.target as Node)) return
+      if (settingsButtonRef.current?.contains(event.target as Node)) return
+      if (popoverRef.current?.contains(event.target as Node)) return
 
       setIsFootprintStyleOpen(false)
     }
@@ -109,85 +111,88 @@ export function MapControls({
   }, [isFootprintStyleOpen])
 
   return (
-    <div className="glass-panel glass-panel--solid glass-panel--pill map-toolbar" aria-label="地图工具">
-      <button
-        type="button"
-        className="map-toolbar__button"
-        aria-label="聚焦当前足迹"
-        title="聚焦当前足迹"
-        onClick={onFitFootprints}
-      >
-        <Crosshair size={18} strokeWidth={1.8} />
-      </button>
-      <button
-        type="button"
-        className="map-toolbar__button"
-        aria-label="显示世界地图"
-        title="显示世界地图"
-        onClick={onShowWorld}
-      >
-        <Globe2 size={18} strokeWidth={1.8} />
-      </button>
-      <button
-        type="button"
-        className="map-toolbar__button"
-        aria-label="定位当前位置"
-        title="定位当前位置"
-        onClick={onLocate}
-      >
-        <LocateFixed size={18} strokeWidth={1.8} />
-      </button>
-      <button
-        type="button"
-        className="map-toolbar__button"
-        aria-label="放大地图"
-        title="放大地图"
-        onClick={onZoomIn}
-      >
-        <Plus size={18} strokeWidth={1.8} />
-      </button>
-      <button
-        type="button"
-        className="map-toolbar__button"
-        aria-label="缩小地图"
-        title="缩小地图"
-        onClick={onZoomOut}
-      >
-        <Minus size={18} strokeWidth={1.8} />
-      </button>
-      <div className="map-toolbar__settings" ref={settingsRef}>
-        {isFootprintStyleOpen ? (
-          <FootprintStylePopover
-            footprintStyle={footprintStyle}
-            onFootprintStyleChange={onFootprintStyleChange}
-            placeLabelsVisible={placeLabelsVisible}
-            adminBoundariesVisible={adminBoundariesVisible}
-            mapStyle={mapStyle}
-            mapProjection={mapProjection}
-            mapLanguage={mapLanguage}
-            onPlaceLabelsVisibleChange={onPlaceLabelsVisibleChange}
-            onAdminBoundariesVisibleChange={onAdminBoundariesVisibleChange}
-            onMapStyleChange={onMapStyleChange}
-            onMapProjectionChange={onMapProjectionChange}
-            onMapLanguageChange={onMapLanguageChange}
-          />
-        ) : null}
+    <>
+      <div className="glass-panel glass-panel--solid glass-panel--pill map-toolbar" aria-label="地图工具">
         <button
           type="button"
           className="map-toolbar__button"
-          aria-label="足迹显示设置"
-          title="足迹显示设置"
-          aria-expanded={isFootprintStyleOpen}
-          onClick={() => setIsFootprintStyleOpen((isOpen) => !isOpen)}
+          aria-label="聚焦当前足迹"
+          title="聚焦当前足迹"
+          onClick={onFitFootprints}
         >
-          <Settings2 size={18} strokeWidth={1.8} />
+          <Crosshair size={18} strokeWidth={1.8} />
         </button>
+        <button
+          type="button"
+          className="map-toolbar__button"
+          aria-label="显示世界地图"
+          title="显示世界地图"
+          onClick={onShowWorld}
+        >
+          <Globe2 size={18} strokeWidth={1.8} />
+        </button>
+        <button
+          type="button"
+          className="map-toolbar__button"
+          aria-label="定位当前位置"
+          title="定位当前位置"
+          onClick={onLocate}
+        >
+          <LocateFixed size={18} strokeWidth={1.8} />
+        </button>
+        <button
+          type="button"
+          className="map-toolbar__button"
+          aria-label="放大地图"
+          title="放大地图"
+          onClick={onZoomIn}
+        >
+          <Plus size={18} strokeWidth={1.8} />
+        </button>
+        <button
+          type="button"
+          className="map-toolbar__button"
+          aria-label="缩小地图"
+          title="缩小地图"
+          onClick={onZoomOut}
+        >
+          <Minus size={18} strokeWidth={1.8} />
+        </button>
+        <div className="map-toolbar__settings" ref={settingsButtonRef}>
+          <button
+            type="button"
+            className="map-toolbar__button"
+            aria-label="足迹显示设置"
+            title="足迹显示设置"
+            aria-expanded={isFootprintStyleOpen}
+            onClick={() => setIsFootprintStyleOpen((isOpen) => !isOpen)}
+          >
+            <Settings2 size={18} strokeWidth={1.8} />
+          </button>
+        </div>
       </div>
-    </div>
+      {isFootprintStyleOpen ? (
+        <FootprintStylePopover
+          ref={popoverRef}
+          footprintStyle={footprintStyle}
+          onFootprintStyleChange={onFootprintStyleChange}
+          placeLabelsVisible={placeLabelsVisible}
+          adminBoundariesVisible={adminBoundariesVisible}
+          mapStyle={mapStyle}
+          mapProjection={mapProjection}
+          mapLanguage={mapLanguage}
+          onPlaceLabelsVisibleChange={onPlaceLabelsVisibleChange}
+          onAdminBoundariesVisibleChange={onAdminBoundariesVisibleChange}
+          onMapStyleChange={onMapStyleChange}
+          onMapProjectionChange={onMapProjectionChange}
+          onMapLanguageChange={onMapLanguageChange}
+        />
+      ) : null}
+    </>
   )
 }
 
-function FootprintStylePopover({
+const FootprintStylePopover = forwardRef<HTMLDivElement, FootprintStylePopoverProps>(function FootprintStylePopover({
   footprintStyle,
   onFootprintStyleChange,
   placeLabelsVisible = true,
@@ -200,7 +205,7 @@ function FootprintStylePopover({
   onMapStyleChange,
   onMapProjectionChange,
   onMapLanguageChange,
-}: FootprintStylePopoverProps) {
+}, ref) {
   const [draftFootprintStyle, setDraftFootprintStyle] = useState(footprintStyle)
   const styleCommitTimerRef = useRef<number | null>(null)
   const pendingCommitStyleRef = useRef<FootprintStyle | null>(null)
@@ -273,7 +278,7 @@ function FootprintStylePopover({
   }
 
   return (
-    <div className="glass-panel glass-panel--solid glass-panel--compact footprint-style-popover" role="dialog" aria-label="足迹显示设置">
+    <div ref={ref} className="glass-panel glass-panel--solid glass-panel--card footprint-style-popover" role="dialog" aria-label="足迹显示设置">
       <div className="footprint-style-popover__row">
         <label className="footprint-style-popover__label" htmlFor={sizeInputId}>足迹点大小</label>
         <span className="footprint-style-popover__value">{draftFootprintStyle.pixelSize}</span>
@@ -390,7 +395,7 @@ function FootprintStylePopover({
       ) : null}
     </div>
   )
-}
+})
 
 type PillOption<Value extends string> = {
   value: Value

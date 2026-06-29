@@ -463,6 +463,8 @@ describe('unified shell layout', () => {
 
     const popover = document.querySelector('.footprint-style-popover')
     expect(popover).toBeInstanceOf(HTMLElement)
+    expect((popover as HTMLElement).closest('.map-toolbar')).toBeNull()
+    expect((popover as HTMLElement).closest('.map-stage')).toBe(mapStage)
     expect(within(popover as HTMLElement).getByText(MAP_STYLE_LABEL)).toBeInTheDocument()
     const styleGroup = within(popover as HTMLElement).getByRole('group', { name: MAP_STYLE_LABEL })
     expect(styleGroup).toHaveClass('pill-button-group')

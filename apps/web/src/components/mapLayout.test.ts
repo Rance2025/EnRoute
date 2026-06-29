@@ -118,7 +118,9 @@ describe('map chrome layout', () => {
     expect(appSource).toContain('className="glass-panel glass-panel--solid glass-panel--card right-context-panel__glass right-context-panel__legend"')
     expect(appSource).toContain('className="glass-panel glass-panel--solid glass-panel--compact settings-dialog__panel"')
     expect(mapControlsSource).toContain('className="glass-panel glass-panel--solid glass-panel--pill map-toolbar"')
-    expect(mapControlsSource).toContain('className="glass-panel glass-panel--solid glass-panel--compact footprint-style-popover"')
+    expect(mapControlsSource).toContain('className="glass-panel glass-panel--solid glass-panel--card footprint-style-popover"')
+    expect(mapControlsSource).not.toMatch(/\{isFootprintStyleOpen \? \(\r?\n\s{10}<FootprintStylePopover/)
+    expect(mapControlsSource).toMatch(/\{isFootprintStyleOpen \? \(\r?\n\s{8}<FootprintStylePopover/)
     expect(amapCanvasSource).toContain('className="glass-panel glass-panel--solid glass-panel--compact footprint-debug-panel"')
     expect(mapboxCanvasSource).toContain('className="glass-panel glass-panel--solid glass-panel--compact footprint-debug-panel"')
     expect(amapCanvasSource).toContain('className="glass-panel glass-panel--solid glass-panel--compact admin-region-unlock-panel"')
@@ -174,6 +176,21 @@ describe('map chrome layout', () => {
     expect(appShellRule).toContain(
       '--theme-mist-glass-end: rgba(238, 246, 244, calc(var(--glass-panel-opacity) * 0.478))',
     )
+    expect(appShellRule).toContain(
+      '--theme-mist-glass-sheen-strong: rgba(255, 255, 255, calc(var(--glass-panel-opacity) * 0.686))',
+    )
+    expect(appShellRule).toContain(
+      '--theme-mist-glass-sheen-soft: rgba(255, 255, 255, calc(var(--glass-panel-opacity) * 0.314))',
+    )
+    expect(appShellRule).toContain(
+      '--theme-mist-glass-sheen-faint: rgba(255, 255, 255, calc(var(--glass-panel-opacity) * 0.057))',
+    )
+    expect(appShellRule).toContain(
+      '--theme-mist-glass-edge-top: rgba(255, 255, 255, calc(var(--glass-panel-opacity) * 0.743))',
+    )
+    expect(appShellRule).toContain(
+      '--theme-mist-glass-edge-bottom: rgba(18, 35, 32, calc(var(--glass-panel-opacity) * 0.071))',
+    )
     expect(appShellRule).toContain('background: transparent')
     expect(cssRule('.app-shell:not(.app-shell--map)')).toContain('background: var(--page-board-bg)')
     expect(appSource).toContain('className="app-board"')
@@ -193,6 +210,11 @@ describe('map chrome layout', () => {
     expect(sharedGlassRule).toContain('background: var(--solid-glass-panel-bg)')
     expect(sharedGlassRule).toContain('box-shadow: var(--glass-panel-shadow)')
     expect(sharedGlassRule).toContain('backdrop-filter: var(--glass-panel-filter)')
+    expect(cssRule('.glass-panel::before')).toContain('var(--theme-mist-glass-sheen-strong)')
+    expect(cssRule('.glass-panel::before')).toContain('var(--theme-mist-glass-sheen-soft)')
+    expect(cssRule('.glass-panel::before')).toContain('var(--theme-mist-glass-sheen-faint)')
+    expect(cssRule('.glass-panel::before')).toContain('var(--theme-mist-glass-edge-top)')
+    expect(cssRule('.glass-panel::before')).toContain('var(--theme-mist-glass-edge-bottom)')
     expect(appSource).toContain('glass-panel glass-panel--solid glass-panel--pill app-nav')
     expect(appSource).toContain('aria-label="二级导航"')
     expect(appSource).toContain('className="secondary-nav-rail"')
@@ -271,8 +293,8 @@ describe('map chrome layout', () => {
     expect(stageRule).not.toContain('calc(var(--shell-board-top-reserve) + var(--shell-board-inset-y))')
     expect(stageRule).not.toContain('100vw')
     expect(stageRule).not.toContain('100svh')
+    expect(stageRule).toContain('--map-loading-bg: var(--page-board-bg)')
     expect(stageRule).toContain('background: transparent')
-    expect(stageRule).not.toContain('var(--page-board-bg)')
     expect(stageRule).toContain('z-index: 0')
     expect(cssRule('.map-stage::before')).toContain('background: var(--map-loading-bg)')
     expect(cssRule('.map-stage::before')).toContain('opacity: 0')
@@ -796,7 +818,7 @@ describe('map chrome layout', () => {
     expect(gridActiveRule).not.toContain('box-shadow')
   })
 
-  it('animates the day calendar by clipping and translating one stable month grid', () => {
+  it('animates the day calendar by translating one stable month grid without clipping shadows', () => {
     const shellRule = cssRule('.time-calendar-shell')
     const headRule = cssRule('.time-calendar-head')
     const switchRule = cssRule('.time-calendar-switch')
@@ -830,7 +852,7 @@ describe('map chrome layout', () => {
     expect(weekdaysRule).toContain('grid-template-columns: repeat(7, minmax(0, 1fr))')
     expect(weekdaysRule).toContain('margin-top: var(--time-calendar-grid-top-gap)')
     expect(gridWindowRule).toContain('height: calc(')
-    expect(gridWindowRule).toContain('overflow: hidden')
+    expect(gridWindowRule).toContain('overflow: visible')
     expect(gridWindowRule).toContain('transition: height 260ms cubic-bezier(0.22, 1, 0.36, 1)')
     expect(gridRule).toContain('grid-template-columns: repeat(7, minmax(0, 1fr))')
     expect(gridRule).not.toContain('margin-top: var(--time-calendar-grid-gap)')
@@ -975,15 +997,15 @@ describe('map chrome layout', () => {
     expect(dayWindowRule).toContain('padding: var(--time-picker-shadow-buffer)')
     expect(dayWindowRule).toContain('width: calc(100% + var(--time-picker-shadow-buffer) * 2)')
     expect(dayWindowRule).toContain('calc(var(--time-picker-shadow-buffer) * -1)')
-    expect(dayWindowRule).toContain('overflow: hidden')
+    expect(dayWindowRule).toContain('overflow: visible')
     expect(dayMotionRule).toContain('width: 100%')
     expect(pickerWindowRule).toContain('--time-picker-shadow-buffer')
     expect(pickerWindowRule).toContain('padding: var(--time-picker-shadow-buffer)')
     expect(pickerWindowRule).toContain('width: calc(100% + var(--time-picker-shadow-buffer) * 2)')
-    expect(pickerWindowRule).toContain('margin: 10px calc(var(--time-picker-shadow-buffer) * -1) 0')
-    expect(pickerWindowRule).toContain('overflow: hidden')
+    expect(pickerWindowRule).toContain('calc(var(--time-picker-shadow-buffer) * -1)')
+    expect(pickerWindowRule).toContain('overflow: visible')
     expect(pickerMotionRule).toContain('width: 100%')
-    expect(customDateWindowRule).toContain('overflow: hidden')
+    expect(customDateWindowRule).toContain('overflow: visible')
     expect(customDateMotionRule).toContain('width: 100%')
     expect(previousRule).toContain('--time-range-enter-x: -')
     expect(previousRule).toContain('animation:')
@@ -1230,6 +1252,9 @@ describe('map chrome layout', () => {
     expect(cssRule('.settings-dialog')).toContain('position: fixed')
     expect(cssRule('.settings-dialog')).toContain('place-items: center')
     expect(cssRule('.settings-dialog__backdrop')).toContain('position: absolute')
+    expect(cssRule('.settings-dialog__backdrop')).toContain('background: rgba(19, 29, 27, 0.28)')
+    expect(cssRule('.settings-dialog__backdrop')).toContain('backdrop-filter: blur(6px)')
+    expect(cssRule('.settings-dialog__backdrop')).toContain('-webkit-backdrop-filter: blur(6px)')
     expect(cssRule('.settings-dialog__panel')).toContain('width: min(680px, calc(100vw - 32px))')
     expect(cssRule('.settings-dialog__panel')).toContain('max-height: calc(100svh - 32px)')
     expect(cssRule('.settings-dialog__panel')).not.toContain('width: 100vw')
@@ -1757,10 +1782,18 @@ describe('map chrome layout', () => {
     expect(settingsRule).toContain('display: grid')
     expect(appCss).toContain('.map-toolbar__button:hover')
     expect(mapControlsSource).toContain('className="map-toolbar__settings"')
-    expect(mapControlsSource).toContain('ref={settingsRef}')
+    expect(mapControlsSource).not.toContain('<div className="map-toolbar__settings" ref={settingsRef}>')
+    expect(mapControlsSource).toContain('<div className="map-toolbar__settings" ref={settingsButtonRef}>')
+    expect(mapControlsSource).toContain('const settingsButtonRef = useRef<HTMLDivElement | null>(null)')
+    expect(mapControlsSource).toContain('const popoverRef = useRef<HTMLDivElement | null>(null)')
+    expect(mapControlsSource).toContain('ref={settingsButtonRef}')
+    expect(mapControlsSource).toContain('ref={popoverRef}')
+    expect(mapControlsSource).toContain('settingsButtonRef.current?.contains')
+    expect(mapControlsSource).toContain('popoverRef.current?.contains')
     expect(popoverRule).toContain('position: absolute')
-    expect(popoverRule).toContain('right: 0')
-    expect(popoverRule).toContain('bottom: calc(100% + 16px)')
+    expect(popoverRule).toContain('right: var(--map-chrome-x)')
+    expect(popoverRule).toContain('bottom: calc(var(--map-chrome-y) + 66px)')
+    expect(popoverRule).toContain('z-index: 3')
     expect(popoverRule).toContain('width: 218px')
     expect(popoverRule).toContain('max-width: calc(100vw - 28px)')
     expect(popoverRule).toContain('display: grid')
@@ -1849,7 +1882,7 @@ describe('map chrome layout', () => {
     expect(appShellRule).toContain('var(--theme-mist-solid-base)')
     expect(amapCanvasSource).toContain('className="glass-panel glass-panel--solid glass-panel--compact footprint-debug-panel"')
     expect(mapboxCanvasSource).toContain('className="glass-panel glass-panel--solid glass-panel--compact footprint-debug-panel"')
-    expect(mapControlsSource).toContain('className="glass-panel glass-panel--solid glass-panel--compact footprint-style-popover"')
+    expect(mapControlsSource).toContain('className="glass-panel glass-panel--solid glass-panel--card footprint-style-popover"')
 
     for (const selector of [
       '.footprint-debug-panel',
