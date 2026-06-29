@@ -181,6 +181,7 @@ describe('MapboxAmapBoundaryPreview', () => {
     }))
     expect(await screen.findByText('1 个区块')).toBeInTheDocument()
     expect(screen.getByText('3 个点')).toBeInTheDocument()
+    expect(screen.getByText('WGS84（源 GCJ-02）')).toBeInTheDocument()
   })
 
   it('loads local Shanghai level 4 regions through the preview API and converts GCJ-02 to WGS84', async () => {
@@ -238,7 +239,7 @@ describe('MapboxAmapBoundaryPreview', () => {
       expect.closeTo(39.916527, 6),
     ])
     expect(await screen.findByText('浦东新区')).toBeInTheDocument()
-    expect(screen.getByText('GCJ-02')).toBeInTheDocument()
+    expect(screen.getByText('WGS84（源 GCJ-02）')).toBeInTheDocument()
   })
 
   it('shows OSM level 5 through the preview API without GCJ conversion', async () => {
@@ -296,6 +297,56 @@ describe('MapboxAmapBoundaryPreview', () => {
     expect(overlayData.features[0].geometry.coordinates[0][0][0]).toEqual([121.399, 31.199])
     expect(await screen.findByText('三林镇')).toBeInTheDocument()
     expect(screen.getByText('WGS84')).toBeInTheDocument()
+  })
+
+  it('rejects an available API preview that omits the source coordinate system', async () => {
+    const addSource = vi.fn()
+    const addLayer = vi.fn()
+    const fitBounds = vi.fn()
+    const setData = vi.fn()
+    const mapbox = installMapboxMock({ addSource, addLayer, fitBounds, setData })
+    installAmapMock(vi.fn())
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      source: 'local',
+      level: 4,
+      available: true,
+      coordinateSystem: null,
+      reason: null,
+      regions: [{
+        id: '310115',
+        name: '浦东新区',
+        level: 4,
+        geometry: {
+          type: 'Polygon',
+          coordinates: [[
+            [116.403372, 39.917931],
+            [116.404372, 39.917931],
+            [116.403372, 39.918931],
+            [116.403372, 39.917931],
+          ]],
+        },
+      }],
+    }), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { MapboxAmapBoundaryPreview } = await import('./MapboxAmapBoundaryPreview')
+    render(<MapboxAmapBoundaryPreview
+      amapConfig={{
+        key: 'test-key',
+        securityJsCode: 'test-security-code',
+        isConfigured: true,
+        missingKeys: [],
+      }}
+      mapboxAccessToken="test-mapbox-token"
+    />)
+
+    mapbox.triggerLoad()
+    fireEvent.click(await screen.findByRole('button', { name: '本地' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('行政区划预览 API 响应格式无效')
+    const clearedOverlayData = setData.mock.calls.at(-1)?.[0] ?? addSource.mock.calls.at(-1)?.[1]?.data
+    expect(clearedOverlayData).toEqual({ type: 'FeatureCollection', features: [] })
+    expect(screen.queryByText('WGS84')).not.toBeInTheDocument()
   })
 
   it('clears stale overlay and reports unavailable AMap level 5', async () => {

@@ -35,19 +35,31 @@ type PreviewRegion = {
   geometry: AdminRegionGeometry
 }
 
-type PreviewApiResponse = {
+type AvailablePreviewApiResponse = {
   source: PreviewSource
   level: AdminRegionLevel
-  available: boolean
-  coordinateSystem: PreviewCoordinateSystem | null
-  reason: string | null
+  available: true
+  coordinateSystem: PreviewCoordinateSystem
+  reason: null
   regions: PreviewRegion[]
 }
+
+type UnavailablePreviewApiResponse = {
+  source: PreviewSource
+  level: AdminRegionLevel
+  available: false
+  coordinateSystem: null
+  reason: string | null
+  regions: []
+}
+
+type PreviewApiResponse = AvailablePreviewApiResponse | UnavailablePreviewApiResponse
 
 type BoundaryOverlayResult = {
   source: PreviewSource
   sourceLabel: string
-  coordinateSystem: PreviewCoordinateSystem
+  sourceCoordinateSystem: PreviewCoordinateSystem
+  renderCoordinateSystem: PreviewCoordinateSystem
   level: AdminRegionLevel
   regions: Array<{ id: string; name: string }>
   summary: {
@@ -203,7 +215,8 @@ export function MapboxAmapBoundaryPreview({
     applyFeatureCollection(geoJson, {
       source: 'amap',
       sourceLabel: getSourceLabel('amap'),
-      coordinateSystem: 'gcj02',
+      sourceCoordinateSystem: 'gcj02',
+      renderCoordinateSystem: 'wgs84',
       level: nextLevel,
       regions: districts.map((district) => ({
         id: district.adcode ?? '',
@@ -244,7 +257,8 @@ export function MapboxAmapBoundaryPreview({
     applyFeatureCollection(geoJson, {
       source: nextSource,
       sourceLabel: getSourceLabel(nextSource),
-      coordinateSystem: payload.coordinateSystem ?? 'wgs84',
+      sourceCoordinateSystem: payload.coordinateSystem,
+      renderCoordinateSystem: 'wgs84',
       level: nextLevel,
       regions: payload.regions.map((region) => ({
         id: region.id,
@@ -373,7 +387,7 @@ export function MapboxAmapBoundaryPreview({
       { label: '区块', value: `${result.summary.regionCount} 个区块` },
       { label: '边界', value: `${result.summary.ringCount} 条边界` },
       { label: '点数', value: `${result.summary.pointCount} 个点` },
-      { label: '坐标', value: getCoordinateSystemLabel(result.coordinateSystem) },
+      { label: '坐标', value: formatCoordinateSystemSummary(result) },
     ]
   }, [result])
 
@@ -746,6 +760,7 @@ function isPreviewApiResponse(payload: unknown): payload is PreviewApiResponse {
     isAdminRegionLevel(candidate.level) &&
     typeof candidate.available === 'boolean' &&
     (candidate.coordinateSystem === null || candidate.coordinateSystem === 'gcj02' || candidate.coordinateSystem === 'wgs84') &&
+    (!candidate.available || candidate.coordinateSystem !== null) &&
     (candidate.reason === null || typeof candidate.reason === 'string') &&
     Array.isArray(candidate.regions) &&
     candidate.regions.every(isPreviewRegion)
@@ -801,6 +816,13 @@ function getSourceColor(source: PreviewSource) {
 
 function getCoordinateSystemLabel(coordinateSystem: PreviewCoordinateSystem) {
   return coordinateSystem === 'gcj02' ? 'GCJ-02' : 'WGS84'
+}
+
+function formatCoordinateSystemSummary(result: Pick<BoundaryOverlayResult, 'renderCoordinateSystem' | 'sourceCoordinateSystem'>) {
+  const renderLabel = getCoordinateSystemLabel(result.renderCoordinateSystem)
+  const sourceLabel = getCoordinateSystemLabel(result.sourceCoordinateSystem)
+
+  return renderLabel === sourceLabel ? renderLabel : `${renderLabel}（源 ${sourceLabel}）`
 }
 
 function isSameCoordinate([leftLng, leftLat]: AMap.LngLatLike, [rightLng, rightLat]: AMap.LngLatLike) {
