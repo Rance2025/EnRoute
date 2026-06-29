@@ -45,18 +45,12 @@ class PrepareAdminRegionsTests(unittest.TestCase):
                 [
                     ("310000", "province"),
                     ("310100", "city"),
-                    ("310115", "district"),
                 ],
             )
             self.assertEqual(features[1]["properties"]["parent"], "310000")
-            self.assertEqual(features[2]["properties"]["parent"], "310100")
             self.assertEqual(features[0]["geometry"]["type"], "Polygon")
             self.assertEqual(features[0]["geometry"]["coordinates"][0][0], [120.0, 30.0])
             self.assertEqual(features[0]["geometry"]["coordinates"][0][-1], [120.0, 30.0])
-            self.assertEqual(features[2]["geometry"]["type"], "MultiPolygon")
-            self.assertEqual(len(features[2]["geometry"]["coordinates"]), 2)
-            self.assertEqual(features[2]["geometry"]["coordinates"][0][0][0], [121.4, 31.1])
-            self.assertEqual(features[2]["geometry"]["coordinates"][0][0][-1], [121.4, 31.1])
 
     def test_preserves_direct_administered_city_codes_without_colliding(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -91,9 +85,9 @@ class PrepareAdminRegionsTests(unittest.TestCase):
             self.assertEqual(exit_code, 0)
             self.assertEqual(
                 [feature["properties"]["id"] for feature in payload["features"]],
-                ["420000", "429004", "429005", "429004000"],
+                ["420000", "429004", "429005"],
             )
-            self.assertEqual(payload["features"][3]["properties"]["parent"], "429004")
+            self.assertEqual(payload["features"][1]["properties"]["parent"], "420000")
 
     def test_disambiguates_same_adcode_across_city_and_district_levels(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -129,12 +123,80 @@ class PrepareAdminRegionsTests(unittest.TestCase):
                 [(feature["properties"]["id"], feature["properties"].get("parent")) for feature in payload["features"]],
                 [
                     ("440000", None),
-                    ("441900:city", "440000"),
-                    ("441900:district", "441900:city"),
+                    ("441900", "440000"),
                 ],
             )
             self.assertEqual(payload["features"][1]["properties"]["adcode"], "441900")
-            self.assertEqual(payload["features"][2]["properties"]["adcode"], "441900")
+
+    def test_does_not_append_shanghai_osm_level8_boundaries_by_default(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root_dir = Path(temporary_directory)
+            source_path = root_dir / "ok_geo.csv"
+            default_osm_path = root_dir / "external" / "osm" / "shanghai-admin-level8.geojson"
+            output_path = root_dir / "admin-regions.geojson"
+            default_osm_path.parent.mkdir(parents=True)
+            source_path.write_text(
+                "\n".join(
+                    [
+                        "id,pid,deep,name,ext_path,geo,polygon",
+                        '31,0,0,"上海市","上海市","121.47 31.23","120 30,123 30,123 33,120 33"',
+                        '3101,31,1,"上海市","上海市 上海市","121.47 31.23","121 31,122 31,122 32,121 32"',
+                    ],
+                ),
+                encoding="utf-8",
+            )
+            default_osm_path.write_text(
+                json.dumps(
+                    {
+                        "type": "FeatureCollection",
+                        "features": [
+                            {
+                                "type": "Feature",
+                                "properties": {
+                                    "osm_id": "12867438",
+                                    "fclass": "admin_level8",
+                                    "name": "测试街道",
+                                },
+                                "geometry": {
+                                    "type": "Polygon",
+                                    "coordinates": [
+                                        [
+                                            [121.52, 31.18],
+                                            [121.58, 31.18],
+                                            [121.58, 31.24],
+                                            [121.52, 31.24],
+                                            [121.52, 31.18],
+                                        ],
+                                    ],
+                                },
+                            },
+                        ],
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            exit_code = main(
+                [
+                    "--source-csv",
+                    str(source_path),
+                    "--output",
+                    str(output_path),
+                ],
+                root_dir=root_dir,
+            )
+
+            payload = json.loads(output_path.read_text(encoding="utf-8"))
+
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(
+                [(feature["properties"]["id"], feature["properties"]["level"]) for feature in payload["features"]],
+                [
+                    ("310000", "province"),
+                    ("310100", "city"),
+                ],
+            )
 
     def test_appends_shanghai_osm_level8_boundaries_as_level5(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -207,12 +269,11 @@ class PrepareAdminRegionsTests(unittest.TestCase):
                 [
                     ("310000", "province"),
                     ("310100", "city"),
-                    ("310115", "district"),
                     ("osm:12867438", 5),
                 ],
             )
-            self.assertEqual(features[3]["properties"]["parentId"], "310115")
-            self.assertEqual(features[3]["properties"]["sourceCoordinateSystem"], "wgs84")
+            self.assertNotIn("parentId", features[2]["properties"])
+            self.assertEqual(features[2]["properties"]["sourceCoordinateSystem"], "wgs84")
 
     def test_reads_areacity_polygon_fields_larger_than_python_csv_default_limit(self):
         with tempfile.TemporaryDirectory() as temporary_directory:

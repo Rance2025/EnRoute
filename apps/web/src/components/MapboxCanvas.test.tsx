@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest'
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { TimeRangeSelection } from '../time/timeRange'
@@ -301,6 +301,36 @@ describe('MapboxCanvas footprint vector tiles', () => {
     ))).toBe(true)
   })
 
+  it('clears the loading overlay on style.load but waits for idle before mutating custom sources', async () => {
+    const { mapRecords } = mockMapboxRuntime({
+      styleMutationReadyOnStyleLoadButIsStyleLoadedFalse: true,
+    })
+    const { MapboxCanvas } = await import('./MapboxCanvas')
+
+    const { container } = render(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        tileUrl="/api/map/tiles/footprints/{z}/{x}/{y}.mvt"
+        timeRange={selectedRange}
+        adminRegionUnlockEnabled
+        adminBoundariesVisible
+      />,
+    )
+    const mapStage = container.querySelector('.map-stage')
+
+    act(() => mapRecords[0].emit('style.load'))
+
+    expect(mapStage).toHaveClass('map-stage--ready')
+    expect(mapRecords[0].sources.footprints).toBeUndefined()
+    expect(mapRecords[0].sources['admin-regions']).toBeUndefined()
+
+    act(() => mapRecords[0].emit('idle'))
+
+    await waitFor(() => expect(mapRecords[0].sources['admin-regions']).toBeDefined())
+    expect(mapRecords[0].sources.footprints).toBeUndefined()
+    expect(mapRecords[0].sources['admin-regions']).toBeDefined()
+  })
+
   it('restores footprint layers when style.load fires during setStyle', async () => {
     const { mapRecords } = mockMapboxRuntime({ emitStyleLoadDuringSetStyle: true })
     const { MapboxCanvas } = await import('./MapboxCanvas')
@@ -493,6 +523,223 @@ describe('MapboxCanvas footprint vector tiles', () => {
         expectedMapboxTileUrl('?start=2026-06-19&end=2026-06-19'),
       ],
     })
+  })
+
+  it('adds global admin-region vector layers when region mode and boundary visibility are enabled', async () => {
+    const { mapRecords } = mockMapboxRuntime()
+    const { MapboxCanvas } = await import('./MapboxCanvas')
+
+    render(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        timeRange={selectedRange}
+        adminRegionUnlockEnabled
+        adminBoundariesVisible
+      />,
+    )
+
+    act(() => mapRecords[0].emit('load'))
+
+    expect(document.querySelector('.map-message--compat')).toBeNull()
+    expect(mapRecords[0].sources['admin-regions']).toMatchObject({
+      type: 'vector',
+      maxzoom: 8,
+      promoteId: 'region_id',
+      tiles: [
+        `${window.location.origin}/api/map/tiles/admin-regions/{z}/{x}/{y}.mvt?focusRegionId=world&depth=3`,
+      ],
+    })
+    expect(mapRecords[0].layers.some((layer) => (
+      typeof layer === 'object' &&
+      layer !== null &&
+      'id' in layer &&
+      layer.id === 'admin-regions-fill'
+    ))).toBe(true)
+    expect(mapRecords[0].layers.some((layer) => (
+      typeof layer === 'object' &&
+      layer !== null &&
+      'id' in layer &&
+      layer.id === 'admin-regions-line'
+    ))).toBe(true)
+    expect(mapRecords[0].sources.footprints).toBeUndefined()
+  })
+
+  it('waits for Mapbox style readiness before adding admin-region vector layers', async () => {
+    const { mapRecords } = mockMapboxRuntime({ styleReadyAfterStyleLoad: true })
+    const { MapboxCanvas } = await import('./MapboxCanvas')
+
+    render(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        timeRange={selectedRange}
+        adminRegionUnlockEnabled
+        adminBoundariesVisible
+      />,
+    )
+
+    act(() => mapRecords[0].emit('load'))
+
+    expect(mapRecords[0].sources['admin-regions']).toBeUndefined()
+
+    act(() => mapRecords[0].emit('style.load'))
+
+    expect(mapRecords[0].sources['admin-regions']).toMatchObject({
+      tiles: [
+        `${window.location.origin}/api/map/tiles/admin-regions/{z}/{x}/{y}.mvt?focusRegionId=world&depth=3`,
+      ],
+    })
+  })
+
+  it('removes footprint vector layers after switching into admin-region mode', async () => {
+    const { mapRecords } = mockMapboxRuntime()
+    const { MapboxCanvas } = await import('./MapboxCanvas')
+
+    const { rerender } = render(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        timeRange={selectedRange}
+      />,
+    )
+    act(() => mapRecords[0].emit('load'))
+
+    expect(mapRecords[0].sources.footprints).toBeDefined()
+
+    mapRecords[0].removedLayers = []
+    mapRecords[0].removedSources = []
+    rerender(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        timeRange={selectedRange}
+        adminRegionUnlockEnabled
+        adminBoundariesVisible
+      />,
+    )
+
+    expect(mapRecords[0].removedLayers).toEqual(['footprints-circle'])
+    expect(mapRecords[0].removedSources).toEqual(['footprints'])
+    expect(mapRecords[0].sources.footprints).toBeUndefined()
+    expect(mapRecords[0].sources['admin-regions']).toBeDefined()
+  })
+
+  it('keeps the admin-region fill layer while hiding region boundary lines when boundary visibility is disabled', async () => {
+    const { mapRecords } = mockMapboxRuntime()
+    const { MapboxCanvas } = await import('./MapboxCanvas')
+
+    const { rerender } = render(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        timeRange={selectedRange}
+        adminRegionUnlockEnabled
+        adminBoundariesVisible
+      />,
+    )
+    act(() => mapRecords[0].emit('load'))
+
+    mapRecords[0].removedLayers = []
+    mapRecords[0].removedSources = []
+
+    rerender(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        timeRange={selectedRange}
+        adminRegionUnlockEnabled
+        adminBoundariesVisible={false}
+      />,
+    )
+
+    expect(mapRecords[0].removedLayers).toEqual([])
+    expect(mapRecords[0].removedSources).toEqual([])
+    expect(mapRecords[0].sources['admin-regions']).toBeDefined()
+    expect(mapRecords[0].layoutProperties).toContainEqual([
+      'admin-regions-line',
+      'visibility',
+      'none',
+    ])
+    expect(mapRecords[0].layers.some((layer) => (
+      typeof layer === 'object' &&
+      layer !== null &&
+      'id' in layer &&
+      layer.id === 'admin-regions-fill'
+    ))).toBe(true)
+  })
+
+  it('restores admin-region vector layers after a Mapbox style reload without duplicating layers', async () => {
+    const { mapRecords } = mockMapboxRuntime()
+    const { MapboxCanvas } = await import('./MapboxCanvas')
+
+    const { rerender } = render(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        styleUrl="mapbox://styles/enroute/day"
+        timeRange={selectedRange}
+        adminRegionUnlockEnabled
+        adminBoundariesVisible
+      />,
+    )
+    act(() => mapRecords[0].emit('load'))
+
+    rerender(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        styleUrl="mapbox://styles/enroute/night"
+        timeRange={selectedRange}
+        adminRegionUnlockEnabled
+        adminBoundariesVisible
+      />,
+    )
+
+    act(() => mapRecords[0].emit('style.load'))
+    act(() => mapRecords[0].emit('idle'))
+
+    expect(mapRecords[0].sources['admin-regions']).toMatchObject({
+      tiles: [
+        `${window.location.origin}/api/map/tiles/admin-regions/{z}/{x}/{y}.mvt?focusRegionId=world&depth=3`,
+      ],
+    })
+    expect(mapRecords[0].layers.filter((layer) => (
+      typeof layer === 'object' &&
+      layer !== null &&
+      'id' in layer &&
+      layer.id === 'admin-regions-line'
+    ))).toHaveLength(1)
+    expect(mapRecords[0].layers.filter((layer) => (
+      typeof layer === 'object' &&
+      layer !== null &&
+      'id' in layer &&
+      layer.id === 'admin-regions-fill'
+    ))).toHaveLength(1)
+  })
+
+  it('does not treat custom admin-region layers as base-map administrative boundary layers', async () => {
+    const { mapRecords } = mockMapboxRuntime()
+    const { MapboxCanvas } = await import('./MapboxCanvas')
+
+    render(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        timeRange={selectedRange}
+        adminRegionUnlockEnabled
+        adminBoundariesVisible={false}
+      />,
+    )
+
+    act(() => mapRecords[0].emit('load'))
+
+    expect(mapRecords[0].sources['admin-regions']).toMatchObject({
+      tiles: [
+        `${window.location.origin}/api/map/tiles/admin-regions/{z}/{x}/{y}.mvt?focusRegionId=world&depth=3`,
+      ],
+    })
+    expect(mapRecords[0].layoutProperties).toContainEqual([
+      'admin-1-boundary',
+      'visibility',
+      'none',
+    ])
+    expect(mapRecords[0].layoutProperties).toContainEqual([
+      'admin-regions-line',
+      'visibility',
+      'none',
+    ])
   })
 
   it('requests metrics for the selected time range without importing the snapshot data source', async () => {
@@ -1497,6 +1744,7 @@ function mockMapboxRuntime(runtimeOptions: {
   syncBaseMapLayerVisibilityFromConfig?: boolean
   styleReadyAfterStyleLoad?: boolean
   styleReadyOnIdle?: boolean
+  styleMutationReadyOnStyleLoadButIsStyleLoadedFalse?: boolean
 } = {}) {
   const mapRecords: MockMapRecord[] = []
   let footprintDataSourceWasImported = false
@@ -1511,7 +1759,9 @@ function mockMapboxRuntime(runtimeOptions: {
   class MockMap {
     private readonly record: MockMapRecord
     private readonly handlers = new Map<string, Array<() => void>>()
-    private styleReady = !runtimeOptions.styleReadyAfterStyleLoad
+    private styleReady = !runtimeOptions.styleReadyAfterStyleLoad &&
+      !runtimeOptions.styleMutationReadyOnStyleLoadButIsStyleLoadedFalse
+    private styleMutationReady = this.styleReady
     private zoom = 2.2
     private center: [number, number] = [104.195397, 35.86166]
     private bounds = { west: -180, south: -85, east: 180, north: 85 }
@@ -1589,11 +1839,18 @@ function mockMapboxRuntime(runtimeOptions: {
         stopCalls: 0,
         removeCalls: 0,
         emit: (eventName: string) => {
-          if (eventName === 'style.load' && !runtimeOptions.styleReadyOnIdle) {
+          if (
+            eventName === 'style.load' &&
+            runtimeOptions.styleMutationReadyOnStyleLoadButIsStyleLoadedFalse
+          ) {
+            this.styleMutationReady = true
+          } else if (eventName === 'style.load' && !runtimeOptions.styleReadyOnIdle) {
             this.styleReady = true
+            this.styleMutationReady = true
           }
           if (eventName === 'idle') {
             this.styleReady = true
+            this.styleMutationReady = true
           }
 
           for (const handler of this.handlers.get(eventName) ?? []) handler()
@@ -1628,7 +1885,7 @@ function mockMapboxRuntime(runtimeOptions: {
     }
 
     addSource(id: string, source: unknown) {
-      if (!this.styleReady) {
+      if (!this.styleMutationReady) {
         throw new Error('Style is not done loading')
       }
 
@@ -1667,6 +1924,9 @@ function mockMapboxRuntime(runtimeOptions: {
     }
 
     isStyleLoaded() {
+      if (runtimeOptions.styleMutationReadyOnStyleLoadButIsStyleLoadedFalse && !this.styleReady) {
+        return false
+      }
       return this.styleReady
     }
 

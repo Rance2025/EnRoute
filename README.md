@@ -26,6 +26,7 @@ VITE_MAPBOX_STYLE_URL=mapbox://styles/oies0/cmquspp54003i01qpazy084sq
 VITE_MAPBOX_PROJECTION=globe
 VITE_FOOTPRINT_TILE_URL=/api/map/tiles/footprints/{z}/{x}/{y}.mvt
 VITE_FOOTPRINT_METRICS_URL=/api/footprints/metrics
+VITE_ADMIN_REGION_TILE_URL=/api/map/tiles/admin-regions/{z}/{x}/{y}.mvt
 VITE_ADMIN_REGION_API_URL=/api/admin-regions
 FOOTPRINT_COORDINATE_SYSTEM=wgs84
 ```
@@ -37,6 +38,7 @@ npm install
 npm run install:api
 npm run rebuild:footprints
 npm run prepare:footprint-tiles
+npm run prepare:admin-region-tiles
 python start.py start
 ```
 
@@ -44,7 +46,8 @@ python start.py start
 `http://127.0.0.1:5173` and the local footprints API at
 `http://127.0.0.1:5178`. The frontend reads Mapbox vector tiles from
 `/api/map/tiles/footprints/{z}/{x}/{y}.mvt` and lightweight metrics from
-`/api/footprints/metrics`; Vite proxies those API routes to the local server.
+`/api/footprints/metrics`; administrative boundaries are read from
+`/api/map/tiles/admin-regions/{z}/{x}/{y}.mvt`. Vite proxies those API routes to the local server.
 Use `python start.py stop`,
 `python start.py restart`, and `python start.py status` to manage both services
 together; PID files and logs are written under `output/start-manager/`. You can
@@ -97,26 +100,38 @@ absent until a builder produces non-empty ready cells.
 
 Optional administrative boundary data is read from
 `ADMIN_REGION_DATA_PATH=external/admin-regions.geojson`. Boundary files stay
-local unless their license permits committing them. The preferred China source
-is `ok_geo.csv` from `xiangyuecn/AreaCity-JsSpider-StatsGov`, converted by
-`npm run prepare:admin-regions` into the project GeoJSON contract for China
-province/city/district levels. The same command can append
-`external/osm/shanghai-admin-level8.geojson` as the current Shanghai-only level
-5 source. AreaCity boundary coordinates are treated as GCJ-02 and are not
-converted again; appended OSM boundaries are marked as WGS84 and converted into
-the same local administrative-boundary coordinate convention during import.
-When boundaries exist, the import assigns each WGS-84 footprint to the finest matching
-`region_id`, writes `country_id=CHN` for local China matches, updates cached
-unlock counts and stay/travel totals across the available region chain, and
-serves the map overlay from `GET /api/admin-regions?level=N&west=...&south=...&east=...&north=...&zoom=...`.
-The frontend only requests `/api/admin-regions` after enabling the
-administrative-region unlock layer, and currently exposes China levels 2-5:
-province, city, district/county, and the Shanghai-only street/township layer.
+local unless their license permits committing them. The active global scope is
+EnRoute level 1-3: country, region/province/state, and city/locality. Runtime
+geometry is canonical WGS-84; the backend no longer converts administrative
+boundaries into GCJ-02 during import.
 
-Future non-China imports should first run the conservative local China bbox
-check. Points that may be in China should try the local AreaCity region match
-before any remote lookup; points outside that bbox are eligible for a later AMap
-reverse-geocode fallback for country assignment.
+Global boundary sources should be normalized into the local GeoJSON contract
+or Overture-style division features before import. Overture `country`,
+`region`, and `locality` subtypes map to EnRoute levels 1, 2, and 3; unsupported
+deeper divisions are skipped. OSM `admin_level` 2, 4, and 5 can also be imported
+as levels 1, 2, and 3. The legacy AreaCity converter remains available for
+China province/city data via `npm run prepare:admin-regions`, but the active
+global display intentionally stops at city level.
+
+Run `npm run prepare:admin-region-tiles` after changing
+`external/admin-regions.geojson`. It loads the boundary GeoJSON into SQLite,
+clears stale `admin_region_tiles`, and precomputes cached Mapbox vector tiles
+for world focus depth 3 up to zoom 8 by default. Runtime map tile requests only
+read cached rows. Missing `admin_region_tiles` rows mean empty and return 204;
+they do not trigger request-time rebuilds.
+
+When boundaries exist, the import assigns each WGS-84 footprint to the finest
+matching `region_id`, updates cached unlock counts and stay/travel totals
+across the available region chain, and serves the Mapbox overlay from
+`GET /api/map/tiles/admin-regions/{z}/{x}/{y}.mvt?focusRegionId=world&depth=3`.
+`GET /api/admin-regions?level=N&west=...` remains as a compatibility/debug JSON
+endpoint for levels 1-3, but it is not the active map-rendering path.
+
+Check the license of the selected boundary source before packaging data. If that
+source has ODbL or similar share-alike database terms, keep attribution visible
+in the product and treat redistributed derived databases, GeoJSON, or tile packs
+as data artifacts that may carry those obligations. Closed-source application
+code is not forced open merely because it displays those boundaries.
 
 The compatibility `GET /api/footprints` and `POST /api/footprints/snapshot`
 routes remain available for small/debug payloads, but the map no longer uses
@@ -132,8 +147,9 @@ npm run lint
 npm run build
 ```
 
-The current location page uses a Mapbox GL map surface capped at zoom 16 and a
-vector-tile circle layer for footprint points. Footprint rendering must stay on
-the MVT path instead of loading raw point arrays into browser memory.
-Future track and region layers should use viewport or tile loading instead of
-React DOM markers.
+The current location page uses a Mapbox GL map surface capped at zoom 16, a
+vector-tile circle layer for footprint points, and cached vector tiles for
+global administrative boundaries. Footprint and boundary rendering must stay on
+the MVT path instead of loading raw GeoJSON or point arrays into browser memory.
+Future track layers should use viewport or tile loading instead of React DOM
+markers.

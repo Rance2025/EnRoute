@@ -10,12 +10,10 @@ from typing import Any, Sequence
 AREACITY_DEEP_TO_LEVEL = {
     "0": "province",
     "1": "city",
-    "2": "district",
 }
 AREACITY_LEVEL_SUFFIX = {
     "province": "province",
     "city": "city",
-    "district": "district",
 }
 CSV_FIELD_SIZE_LIMIT = 1_000_000_000
 
@@ -64,8 +62,8 @@ def parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     parser.add_argument(
         "--shanghai-level5-geojson",
         type=Path,
-        default=Path("external/osm/shanghai-admin-level8.geojson"),
-        help="Optional Shanghai OSM admin_level8 GeoJSON to append as EnRoute level 5.",
+        default=None,
+        help="Legacy optional Shanghai OSM admin_level8 GeoJSON to append as EnRoute level 5.",
     )
     parser.add_argument(
         "--output",

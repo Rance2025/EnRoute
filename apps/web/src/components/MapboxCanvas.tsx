@@ -2,6 +2,16 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import mapboxgl, { type LayerSpecification } from 'mapbox-gl'
 
 import {
+  ADMIN_REGION_FILL_LAYER_ID,
+  ADMIN_REGION_LINE_LAYER_ID,
+  ADMIN_REGION_VECTOR_SOURCE_ID,
+  createAdminRegionFillLayer,
+  createAdminRegionLineLayer,
+  createAdminRegionVectorTileSource,
+  DEFAULT_ADMIN_REGION_TILE_URL,
+  type AdminRegionDepth,
+} from '../layers/adminRegionVectorTileSource'
+import {
   createFootprintCircleLayer,
   createFootprintVectorTileSource,
   DEFAULT_FOOTPRINT_TILE_URL,
@@ -59,6 +69,7 @@ type MapboxCanvasEnv = {
   VITE_FOOTPRINT_TILE_URL?: string
   VITE_FOOTPRINT_METRICS_URL?: string
   VITE_FOOTPRINT_TILE_DEBUG_URL?: string
+  VITE_ADMIN_REGION_TILE_URL?: string
 }
 
 type MapboxProjection = 'globe' | 'mercator'
@@ -70,6 +81,12 @@ type LanguageConfigurableMap = mapboxgl.Map & {
 type EnRouteMapboxOptions = ConstructorParameters<typeof mapboxgl.Map>[0] & {
   language?: MapboxLanguage
   worldview: 'CN'
+}
+
+declare global {
+  interface Window {
+    __ENROUTE_MAPBOX__?: mapboxgl.Map
+  }
 }
 
 type MapStatus = 'missing-token' | 'loading' | 'ready' | 'error'
@@ -133,6 +150,8 @@ type BaseMapConfigPropertyName =
 const DEFAULT_MAPBOX_PROJECTION: MapboxProjection = 'globe'
 const DEFAULT_FOOTPRINT_METRICS_URL = '/api/footprints/metrics'
 const DEFAULT_FOOTPRINT_TILE_DEBUG_URL = '/api/map/tiles/footprints/debug'
+const DEFAULT_ADMIN_REGION_FOCUS_ID = 'world'
+const DEFAULT_ADMIN_REGION_DEPTH: AdminRegionDepth = 3
 const DEFAULT_MAP_CENTER: [number, number] = [104.195397, 35.86166]
 const DEFAULT_MAP_ZOOM = 2.2
 const GLOBE_WORLD_ZOOM = 1.75
@@ -177,9 +196,11 @@ function MapboxCanvasComponent({
   const [cameraZoom, setCameraZoom] = useState<number | undefined>(undefined)
   const [tileDebugMetrics, setTileDebugMetrics] = useState<FootprintTileDebugMetrics | null>(null)
   const [styleReady, setStyleReady] = useState(false)
+  const [styleMutationReady, setStyleMutationReady] = useState(false)
   const [styleLoadRevision, setStyleLoadRevision] = useState(0)
   const footprintStyleRef = useRef(footprintStyle)
   const styleReadyRef = useRef(false)
+  const styleMutationReadyRef = useRef(false)
   const languageRef = useRef(language)
   const appliedLanguageRef = useRef<MapboxLanguage | undefined>(undefined)
   const selectedFootprintBoundsRef = useRef<FootprintLngLatBounds | null>(null)
@@ -223,6 +244,11 @@ function MapboxCanvasComponent({
     (import.meta.env as MapboxCanvasEnv).VITE_FOOTPRINT_TILE_DEBUG_URL,
     DEFAULT_FOOTPRINT_TILE_DEBUG_URL,
   )
+  const resolvedAdminRegionTileUrl = resolveConfigValue(
+    undefined,
+    (import.meta.env as MapboxCanvasEnv).VITE_ADMIN_REGION_TILE_URL,
+    DEFAULT_ADMIN_REGION_TILE_URL,
+  )
   const footprintTileRange = useMemo(
     () => createFootprintTileRange(timeRange),
     [timeRange],
@@ -242,7 +268,7 @@ function MapboxCanvasComponent({
   ) => {
     const map = mapRef.current
 
-    if (!map || !map.isStyleLoaded()) return
+    if (!map) return
 
     if (map.getLayer(FOOTPRINT_CIRCLE_LAYER_ID)) {
       map.removeLayer(FOOTPRINT_CIRCLE_LAYER_ID)
@@ -262,6 +288,20 @@ function MapboxCanvasComponent({
     map.addLayer(createFootprintCircleLayer(footprintStyleRef.current))
   }, [])
 
+  const removeFootprintLayer = useCallback(() => {
+    const map = mapRef.current
+
+    if (!map) return
+
+    if (map.getLayer(FOOTPRINT_CIRCLE_LAYER_ID)) {
+      map.removeLayer(FOOTPRINT_CIRCLE_LAYER_ID)
+    }
+
+    if (map.getSource(FOOTPRINT_VECTOR_SOURCE_ID)) {
+      map.removeSource(FOOTPRINT_VECTOR_SOURCE_ID)
+    }
+  }, [])
+
   const updateFootprintLayerPaint = useCallback((nextFootprintStyle: FootprintStyle) => {
     const map = mapRef.current
 
@@ -270,6 +310,48 @@ function MapboxCanvasComponent({
     map.setPaintProperty(FOOTPRINT_CIRCLE_LAYER_ID, 'circle-radius', nextFootprintStyle.pixelSize / 2)
     map.setPaintProperty(FOOTPRINT_CIRCLE_LAYER_ID, 'circle-color', nextFootprintStyle.color)
     map.setPaintProperty(FOOTPRINT_CIRCLE_LAYER_ID, 'circle-opacity', nextFootprintStyle.opacity)
+  }, [])
+
+  const removeAdminRegionLayers = useCallback(() => {
+    const map = mapRef.current
+
+    if (!map) return
+
+    if (map.getLayer(ADMIN_REGION_LINE_LAYER_ID)) {
+      map.removeLayer(ADMIN_REGION_LINE_LAYER_ID)
+    }
+    if (map.getLayer(ADMIN_REGION_FILL_LAYER_ID)) {
+      map.removeLayer(ADMIN_REGION_FILL_LAYER_ID)
+    }
+    if (map.getSource(ADMIN_REGION_VECTOR_SOURCE_ID)) {
+      map.removeSource(ADMIN_REGION_VECTOR_SOURCE_ID)
+    }
+  }, [])
+
+  const refreshAdminRegionLayers = useCallback((currentTileUrl: string) => {
+    const map = mapRef.current
+
+    if (!map) return
+
+    removeAdminRegionLayers()
+    map.addSource(
+      ADMIN_REGION_VECTOR_SOURCE_ID,
+      createAdminRegionVectorTileSource({
+        tileUrl: createMapboxTileUrl(currentTileUrl),
+        focusRegionId: DEFAULT_ADMIN_REGION_FOCUS_ID,
+        depth: DEFAULT_ADMIN_REGION_DEPTH,
+      }),
+    )
+    map.addLayer(createAdminRegionFillLayer())
+    map.addLayer(createAdminRegionLineLayer())
+  }, [removeAdminRegionLayers])
+
+  const updateAdminRegionLineVisibility = useCallback((visible: boolean) => {
+    const map = mapRef.current
+
+    if (!map?.getLayer(ADMIN_REGION_LINE_LAYER_ID)) return
+
+    map.setLayoutProperty(ADMIN_REGION_LINE_LAYER_ID, 'visibility', visible ? 'visible' : 'none')
   }, [])
 
   const updateBaseMapLayerVisibility = useCallback(() => {
@@ -416,6 +498,14 @@ function MapboxCanvasComponent({
   useEffect(() => {
     const abortController = new AbortController()
 
+    if (adminRegionUnlockEnabled) {
+      selectedFootprintBoundsRef.current = null
+      onFootprintMetricsChange?.(EMPTY_FOOTPRINT_METRICS)
+      return () => {
+        abortController.abort()
+      }
+    }
+
     fetch(createFootprintMetricsUrl(resolvedMetricsUrl, footprintTileRange), {
       method: 'GET',
       signal: abortController.signal,
@@ -443,7 +533,7 @@ function MapboxCanvasComponent({
     return () => {
       abortController.abort()
     }
-  }, [footprintTileRange, onFootprintMetricsChange, resolvedMetricsUrl])
+  }, [adminRegionUnlockEnabled, footprintTileRange, onFootprintMetricsChange, resolvedMetricsUrl])
 
   useEffect(() => {
     if (!resolvedAccessToken || !mapNodeRef.current) {
@@ -456,8 +546,10 @@ function MapboxCanvasComponent({
     setStatus('loading')
     setErrorMessage('')
     styleReadyRef.current = false
+    styleMutationReadyRef.current = false
     initialGlobeRotationStartedRef.current = false
     setStyleReady(false)
+    setStyleMutationReady(false)
     mapboxgl.accessToken = resolvedAccessToken
     resolvedStyleUrlRef.current = latestResolvedStyleUrlRef.current
 
@@ -499,11 +591,17 @@ function MapboxCanvasComponent({
 
       const map = new mapboxgl.Map(mapOptions)
       mapRef.current = map
+      if (import.meta.env.DEV) {
+        window.__ENROUTE_MAPBOX__ = map
+      }
 
-      const syncStyleReady = () => {
-        if (!map.isStyleLoaded()) {
+      const syncStyleReady = (eventStyleReady = false) => {
+        const canMutateStyle = map.isStyleLoaded()
+        if (!eventStyleReady && !canMutateStyle) {
           styleReadyRef.current = false
+          styleMutationReadyRef.current = false
           setStyleReady(false)
+          setStyleMutationReady(false)
           return false
         }
 
@@ -520,6 +618,10 @@ function MapboxCanvasComponent({
 
         styleReadyRef.current = true
         setStyleReady(true)
+        if (canMutateStyle) {
+          styleMutationReadyRef.current = true
+          setStyleMutationReady(true)
+        }
         setStatus('ready')
         if (!wasStyleReady && resolvedProjection === 'globe') {
           if (!initialGlobeRotationStartedRef.current) {
@@ -540,12 +642,12 @@ function MapboxCanvasComponent({
       const handleStyleLoad = () => {
         if (disposed) return
 
-        syncStyleReady()
+        syncStyleReady(true)
       }
       const handleStyleImportLoad = () => {
         if (disposed) return
 
-        syncStyleReady()
+        syncStyleReady(true)
       }
       const handleIdle = () => {
         if (disposed) return
@@ -608,7 +710,11 @@ function MapboxCanvasComponent({
         map.off('dragend', handleDragEnd)
         map.remove()
         mapRef.current = null
+        if (import.meta.env.DEV) {
+          delete window.__ENROUTE_MAPBOX__
+        }
         styleReadyRef.current = false
+        styleMutationReadyRef.current = false
       }
     } catch (error: unknown) {
       reportInitializationError(error)
@@ -641,16 +747,63 @@ function MapboxCanvasComponent({
     resolvedStyleUrlRef.current = resolvedStyleUrl
     setStatus('loading')
     styleReadyRef.current = false
+    styleMutationReadyRef.current = false
     setStyleReady(false)
+    setStyleMutationReady(false)
     resetBaseMapVisibilityState()
     map.setStyle(resolvedStyleUrl)
   }, [resetBaseMapVisibilityState, resolvedStyleUrl, status])
 
   useEffect(() => {
-    if (status !== 'ready' || !styleReady) return
+    if (status !== 'ready' || !styleMutationReady) return
+
+    if (adminRegionUnlockEnabled) {
+      removeFootprintLayer()
+      return
+    }
 
     refreshFootprintLayer(footprintTileRange, resolvedTileUrl)
-  }, [footprintTileRange, refreshFootprintLayer, resolvedTileUrl, status, styleLoadRevision, styleReady])
+  }, [
+    adminRegionUnlockEnabled,
+    footprintTileRange,
+    refreshFootprintLayer,
+    removeFootprintLayer,
+    resolvedTileUrl,
+    status,
+    styleLoadRevision,
+    styleMutationReady,
+  ])
+
+  useEffect(() => {
+    if (status !== 'ready' || !styleMutationReady) return
+
+    if (!adminRegionUnlockEnabled) {
+      removeAdminRegionLayers()
+      return
+    }
+
+    refreshAdminRegionLayers(resolvedAdminRegionTileUrl)
+  }, [
+    adminRegionUnlockEnabled,
+    refreshAdminRegionLayers,
+    removeAdminRegionLayers,
+    resolvedAdminRegionTileUrl,
+    status,
+    styleLoadRevision,
+    styleMutationReady,
+  ])
+
+  useEffect(() => {
+    if (status !== 'ready' || !styleMutationReady || !adminRegionUnlockEnabled) return
+
+    updateAdminRegionLineVisibility(adminBoundariesVisible)
+  }, [
+    adminBoundariesVisible,
+    adminRegionUnlockEnabled,
+    status,
+    styleMutationReady,
+    updateAdminRegionLineVisibility,
+  ])
 
   useEffect(() => {
     if (status !== 'ready' || !styleReady) return
@@ -666,7 +819,7 @@ function MapboxCanvasComponent({
   ])
 
   useEffect(() => {
-    if (!debugPanelVisible || status !== 'ready') {
+    if (!debugPanelVisible || adminRegionUnlockEnabled || status !== 'ready') {
       return
     }
 
@@ -727,7 +880,7 @@ function MapboxCanvasComponent({
       map.off('zoomend', refreshTileDebugMetrics)
       map.off('zoom', refreshCameraZoom)
     }
-  }, [debugPanelVisible, footprintTileRange, resolvedProjection, resolvedTileDebugUrl, status])
+  }, [adminRegionUnlockEnabled, debugPanelVisible, footprintTileRange, resolvedProjection, resolvedTileDebugUrl, status])
 
   const updateFootprintStyle = useCallback((nextFootprintStyle: FootprintStyle) => {
     const normalizedFootprintStyle = normalizeFootprintStyle(nextFootprintStyle)
@@ -824,12 +977,6 @@ function MapboxCanvasComponent({
         onMapProjectionChange={onMapProjectionChange}
         onMapLanguageChange={onMapLanguageChange}
       />
-      {adminRegionUnlockEnabled ? (
-        <div className="glass-panel glass-panel--solid glass-panel--compact map-message map-message--compat" role="status">
-          <h2>行政区划图层迁移中</h2>
-          <p>当前 Mapbox 底座已切换到足迹 MVT 瓦片，行政区划图层会在后续独立迁移。</p>
-        </div>
-      ) : null}
         {debugPanelVisible ? (
           <FootprintDebugPanel
             debugMetrics={status === 'ready' ? tileDebugMetrics : null}
@@ -1044,6 +1191,7 @@ function isPlaceLabelLayer(layer: LayerSpecification) {
 
 function isAdministrativeBoundaryLayer(layer: LayerSpecification) {
   if (layer.type !== 'line') return false
+  if (layer.source === ADMIN_REGION_VECTOR_SOURCE_ID) return false
 
   const id = layer.id.toLowerCase()
   const sourceLayer = getSourceLayer(layer).toLowerCase()

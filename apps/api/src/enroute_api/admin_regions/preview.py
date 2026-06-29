@@ -6,7 +6,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal, TypedDict
 
-from .store import OSM_ADMIN_LEVEL_TO_ENROUTE_LEVEL, parse_osm_admin_level
+from .store import parse_osm_admin_level
 
 ShanghaiPreviewSource = Literal["amap", "local", "osm"]
 PreviewCoordinateSystem = Literal["gcj02", "wgs84"]
@@ -17,6 +17,10 @@ LOCAL_LEVELS = {
     "province": 2,
     "city": 3,
     "district": 4,
+}
+OSM_PREVIEW_ADMIN_LEVEL_TO_ENROUTE_LEVEL = {
+    6: 4,
+    8: 5,
 }
 
 class PreviewRegion(TypedDict):
@@ -433,7 +437,7 @@ def get_osm_enroute_level(properties: dict[str, Any]) -> int | None:
     osm_admin_level = parse_osm_admin_level(properties)
     if osm_admin_level is None:
         return None
-    return OSM_ADMIN_LEVEL_TO_ENROUTE_LEVEL.get(osm_admin_level)
+    return OSM_PREVIEW_ADMIN_LEVEL_TO_ENROUTE_LEVEL.get(osm_admin_level)
 
 
 def normalize_geojson_geometry(geometry: dict[str, Any]) -> dict[str, Any]:

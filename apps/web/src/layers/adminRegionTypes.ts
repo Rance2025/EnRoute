@@ -1,4 +1,4 @@
-export type AdminRegionLevel = 2 | 3 | 4 | 5
+export type AdminRegionLevel = 1 | 2 | 3
 
 export type AdminRegionLngLat = [number, number]
 

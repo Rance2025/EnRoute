@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import json
+import copy
 import sqlite3
 from dataclasses import dataclass
 from typing import Any, Iterable
-
-from enroute_api.footprints.coordinates import transform_wgs84_to_gcj02_coordinate
 
 from .geometry import BoundingBox, calculate_geometry_bbox, geometry_contains_point
 
@@ -13,13 +12,15 @@ OSM_ADMIN_LEVEL_TO_ENROUTE_LEVEL = {
     2: 1,
     4: 2,
     5: 3,
-    6: 4,
-    8: 5,
 }
 AREACITY_LEVEL_TO_ENROUTE_LEVEL = {
     "province": 2,
     "city": 3,
-    "district": 4,
+}
+OVERTURE_SUBTYPE_TO_ENROUTE_LEVEL = {
+    "country": 1,
+    "region": 2,
+    "locality": 3,
 }
 
 
@@ -94,19 +95,16 @@ def normalize_admin_region_feature(feature: dict[str, Any]) -> dict[str, Any] | 
     geometry = feature.get("geometry")
     if not isinstance(properties, dict) or not isinstance(geometry, dict):
         return feature
-    areacity_feature = normalize_areacity_admin_region_feature(properties, geometry)
-    if areacity_feature is not None:
-        return areacity_feature
+    if is_overture_admin_region_feature(properties):
+        return normalize_overture_admin_region_feature(properties, geometry)
+    if is_areacity_admin_region_feature(properties):
+        return normalize_areacity_admin_region_feature(properties, geometry)
     if properties.get("id") and properties.get("level") is not None:
-        if properties.get("sourceCoordinateSystem") == "wgs84":
-            return {
-                "type": "Feature",
-                "properties": properties,
-                "geometry": transform_geometry_coordinates(
-                    geometry,
-                    source_coordinate_system="wgs84",
-                ),
-            }
+        level = parse_int(properties.get("level"))
+        if level is None:
+            raise ValueError("Admin region feature level must be numeric")
+        if level < 1 or level > 3:
+            return None
         return feature
 
     osm_admin_level = parse_osm_admin_level(properties)
@@ -137,8 +135,74 @@ def normalize_admin_region_feature(feature: dict[str, Any]) -> dict[str, Any] | 
     return {
         "type": "Feature",
         "properties": normalized_properties,
-        "geometry": transform_geometry_coordinates(geometry, source_coordinate_system="wgs84"),
+        "geometry": copy.deepcopy(geometry),
     }
+
+
+def normalize_overture_admin_region_feature(
+    properties: dict[str, Any],
+    geometry: dict[str, Any],
+) -> dict[str, Any] | None:
+    subtype = properties.get("subtype")
+    if not isinstance(subtype, str):
+        return None
+
+    enroute_level = OVERTURE_SUBTYPE_TO_ENROUTE_LEVEL.get(subtype)
+    if enroute_level is None:
+        return None
+
+    region_id = properties.get("id")
+    name = parse_overture_name(properties)
+    if not region_id or not name:
+        raise ValueError("Overture admin region feature requires id, names.primary, and subtype")
+
+    normalized_properties = {
+        "id": str(region_id),
+        "name": name,
+        "level": enroute_level,
+    }
+    parent_id = (
+        properties.get("parentId")
+        or properties.get("parent_id")
+        or properties.get("parent")
+        or properties.get("parent_division_id")
+    )
+    if parent_id not in {None, ""}:
+        normalized_properties["parentId"] = str(parent_id)
+
+    return {
+        "type": "Feature",
+        "properties": normalized_properties,
+        "geometry": copy.deepcopy(geometry),
+    }
+
+
+def is_overture_admin_region_feature(properties: dict[str, Any]) -> bool:
+    return (
+        isinstance(properties.get("subtype"), str)
+        and (
+            str(properties.get("id", "")).startswith("overture:")
+            or isinstance(properties.get("names"), dict)
+        )
+    )
+
+
+def parse_overture_name(properties: dict[str, Any]) -> str | None:
+    names = properties.get("names")
+    if isinstance(names, dict):
+        primary_name = names.get("primary")
+        if isinstance(primary_name, str) and primary_name:
+            return primary_name
+        common_names = names.get("common")
+        if isinstance(common_names, dict):
+            for value in common_names.values():
+                if isinstance(value, str) and value:
+                    return value
+
+    name = properties.get("name")
+    if isinstance(name, str) and name:
+        return name
+    return None
 
 
 def normalize_areacity_admin_region_feature(
@@ -181,6 +245,13 @@ def normalize_areacity_admin_region_feature(
     }
 
 
+def is_areacity_admin_region_feature(properties: dict[str, Any]) -> bool:
+    return (
+        (properties.get("adcode") not in {None, ""} or properties.get("pid") not in {None, ""})
+        and isinstance(properties.get("level"), str)
+    )
+
+
 def parse_osm_admin_level(properties: dict[str, Any]) -> int | None:
     fclass = properties.get("fclass")
     if isinstance(fclass, str) and fclass.startswith("admin_level"):
@@ -211,60 +282,6 @@ def format_osm_region_id(properties: dict[str, Any]) -> str | None:
 def format_osm_parent_region_id(properties: dict[str, Any]) -> str | None:
     parent_osm_id = properties.get("parent_osm_id") or properties.get("parentOsmId")
     return None if parent_osm_id in {None, ""} else f"osm:{parent_osm_id}"
-
-
-def transform_geometry_coordinates(
-    geometry: dict[str, Any],
-    *,
-    source_coordinate_system: str,
-) -> dict[str, Any]:
-    geometry_type = geometry.get("type")
-    coordinates = geometry.get("coordinates")
-    if geometry_type not in {"Polygon", "MultiPolygon"} or not isinstance(coordinates, list):
-        return geometry
-
-    return {
-        "type": geometry_type,
-        "coordinates": transform_nested_coordinates(
-            coordinates,
-            source_coordinate_system=source_coordinate_system,
-        ),
-    }
-
-
-def transform_nested_coordinates(
-    coordinates: list[Any],
-    *,
-    source_coordinate_system: str,
-) -> list[Any]:
-    if is_position(coordinates):
-        if source_coordinate_system == "wgs84":
-            longitude, latitude = transform_wgs84_to_gcj02_coordinate(
-                longitude=float(coordinates[0]),
-                latitude=float(coordinates[1]),
-            )
-        else:
-            longitude = float(coordinates[0])
-            latitude = float(coordinates[1])
-        return [longitude, latitude, *coordinates[2:]]
-
-    return [
-        transform_nested_coordinates(coordinate, source_coordinate_system=source_coordinate_system)
-        if isinstance(coordinate, list)
-        else coordinate
-        for coordinate in coordinates
-    ]
-
-
-def is_position(value: list[Any]) -> bool:
-    if len(value) < 2:
-        return False
-    try:
-        float(value[0])
-        float(value[1])
-    except (TypeError, ValueError):
-        return False
-    return True
 
 
 def insert_admin_region_feature(connection: sqlite3.Connection, feature: dict[str, Any]) -> None:
@@ -351,23 +368,19 @@ class RegionMatcher:
         longitude: float,
         latitude: float,
     ) -> str | None:
-        match_longitude, match_latitude = transform_wgs84_to_gcj02_coordinate(
-            longitude=longitude,
-            latitude=latitude,
-        )
         for region in self.regions:
             bbox = region.bbox
             if (
-                bbox["min_lng"] > match_longitude
-                or bbox["max_lng"] < match_longitude
-                or bbox["min_lat"] > match_latitude
-                or bbox["max_lat"] < match_latitude
+                bbox["min_lng"] > longitude
+                or bbox["max_lng"] < longitude
+                or bbox["min_lat"] > latitude
+                or bbox["max_lat"] < latitude
             ):
                 continue
             if geometry_contains_point(
                 region.geometry,
-                longitude=match_longitude,
-                latitude=match_latitude,
+                longitude=longitude,
+                latitude=latitude,
             ):
                 return region.id
         return None
