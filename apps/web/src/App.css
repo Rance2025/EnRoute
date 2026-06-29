@@ -1038,7 +1038,7 @@
   );
   margin: var(--time-calendar-grid-gap) calc(var(--time-picker-shadow-buffer) * -1)
     calc(var(--time-picker-shadow-buffer) * -1);
-  overflow: hidden;
+  overflow: visible;
   padding: var(--time-picker-shadow-buffer);
   width: calc(100% + var(--time-picker-shadow-buffer) * 2);
   transition: height 260ms cubic-bezier(0.22, 1, 0.36, 1);
@@ -1049,7 +1049,7 @@
 
   margin: 10px calc(var(--time-picker-shadow-buffer) * -1)
     calc(var(--time-picker-shadow-buffer) * -1);
-  overflow: hidden;
+  overflow: visible;
   padding: var(--time-picker-shadow-buffer);
   width: calc(100% + var(--time-picker-shadow-buffer) * 2);
 }
@@ -1540,7 +1540,7 @@
 }
 
 .time-date-picker__grid-window {
-  overflow: hidden;
+  overflow: visible;
 }
 
 .time-date-picker__grid-motion {
