@@ -9,6 +9,7 @@ from typing import Sequence
 
 
 DEFAULT_ADMIN_REGION_FOCUS_ID = "world"
+DEFAULT_ADMIN_REGION_DEPTHS = (1, 2)
 
 
 def main(argv: Sequence[str] | None = None, *, root_dir: Path | str | None = None) -> int:
@@ -59,23 +60,28 @@ def main(argv: Sequence[str] | None = None, *, root_dir: Path | str | None = Non
         )
         delete_meta_value(connection, ADMIN_REGION_STATS_SIGNATURE_KEY)
         clear_admin_region_tiles(connection)
-        result = build_admin_region_tiles(
-            connection,
-            focus_region_id=args.focus_region_id,
-            depth=args.depth,
-            min_zoom=min_zoom,
-            max_zoom=max_zoom,
-            commit_interval=args.commit_interval,
-        )
+        depths = resolve_depths(depth=args.depth, depths=args.depths)
+        results = [
+            build_admin_region_tiles(
+                connection,
+                focus_region_id=args.focus_region_id,
+                depth=depth,
+                min_zoom=min_zoom,
+                max_zoom=max_zoom,
+                commit_interval=args.commit_interval,
+            )
+            for depth in depths
+        ]
     finally:
         connection.close()
 
-    print(
-        f"Built {result.built_count} admin region tile rows "
-        f"from {result.candidate_count} candidate keys "
-        f"for focus {result.focus_region_id} depth {result.depth} "
-        f"zoom {result.min_zoom}-{result.max_zoom} into {db_path}",
-    )
+    for result in results:
+        print(
+            f"Built {result.built_count} admin region tile rows "
+            f"from {result.candidate_count} candidate keys "
+            f"for focus {result.focus_region_id} depth {result.depth} "
+            f"zoom {result.min_zoom}-{result.max_zoom} into {db_path}",
+        )
     return 0
 
 
@@ -94,7 +100,11 @@ def parse_args(argv: Sequence[str] | None, *, max_zoom_default: int) -> argparse
         default=DEFAULT_ADMIN_REGION_FOCUS_ID,
         help=f"Focused region id to build. Defaults to {DEFAULT_ADMIN_REGION_FOCUS_ID}.",
     )
-    parser.add_argument("--depth", type=int, default=3, help="Descendant depth to render. Defaults to 3.")
+    parser.add_argument("--depth", type=int, help="Descendant depth to render when --depths is not set.")
+    parser.add_argument(
+        "--depths",
+        help="Comma-separated depths to build. Defaults to 1,2 for the UI switch.",
+    )
     parser.add_argument("--min-zoom", type=int, default=0, help="Minimum zoom to build. Defaults to 0.")
     parser.add_argument(
         "--max-zoom",
@@ -110,6 +120,28 @@ def parse_args(argv: Sequence[str] | None, *, max_zoom_default: int) -> argparse
         help="Commit after this many populated tiles. Use 0 to commit only at the end.",
     )
     return parser.parse_args(argv)
+
+
+def resolve_depths(*, depth: int | None, depths: str | None) -> tuple[int, ...]:
+    if depths:
+        return tuple(parse_depths(depths))
+    if depth is not None:
+        return (depth,)
+    return DEFAULT_ADMIN_REGION_DEPTHS
+
+
+def parse_depths(value: str) -> list[int]:
+    depths: list[int] = []
+    for part in value.split(","):
+        text = part.strip()
+        if not text:
+            continue
+        depth = int(text)
+        if depth not in depths:
+            depths.append(depth)
+    if not depths:
+        raise ValueError("depths must include at least one depth")
+    return depths
 
 
 def add_api_src_to_path(root_dir: Path) -> None:

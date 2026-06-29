@@ -8,13 +8,14 @@ import {
   type AmapBoundaryPath,
   type DistrictBoundaryFeatureCollection,
 } from '../layers/amapDistrictBoundary'
-import type { AdminRegionGeometry, AdminRegionLevel } from '../layers/adminRegionTypes'
+import type { AdminRegionGeometry } from '../layers/adminRegionTypes'
 import { transformGcj02ToWgs84Coordinate } from '../layers/footprintCoordinates'
 import { DEFAULT_MAPBOX_STYLE_URL } from '../mapStyleOptions'
 import { loadAmap, type AMapNamespace } from '../services/amapLoader'
 
 type PreviewSource = 'amap' | 'local' | 'osm'
 type PreviewCoordinateSystem = 'gcj02' | 'wgs84'
+type PreviewAdminRegionLevel = 2 | 3 | 4 | 5
 type PreviewStatus = 'missing-config' | 'missing-token' | 'loading' | 'ready' | 'unavailable' | 'error'
 
 type SourceOption = {
@@ -24,20 +25,20 @@ type SourceOption = {
 }
 
 type LevelOption = {
-  level: AdminRegionLevel
+  level: PreviewAdminRegionLevel
   label: string
 }
 
 type PreviewRegion = {
   id: string
   name: string
-  level: AdminRegionLevel
+  level: PreviewAdminRegionLevel
   geometry: AdminRegionGeometry
 }
 
 type AvailablePreviewApiResponse = {
   source: PreviewSource
-  level: AdminRegionLevel
+  level: PreviewAdminRegionLevel
   available: true
   coordinateSystem: PreviewCoordinateSystem
   reason: null
@@ -46,7 +47,7 @@ type AvailablePreviewApiResponse = {
 
 type UnavailablePreviewApiResponse = {
   source: PreviewSource
-  level: AdminRegionLevel
+  level: PreviewAdminRegionLevel
   available: false
   coordinateSystem: null
   reason: string | null
@@ -60,7 +61,7 @@ type BoundaryOverlayResult = {
   sourceLabel: string
   sourceCoordinateSystem: PreviewCoordinateSystem
   renderCoordinateSystem: PreviewCoordinateSystem
-  level: AdminRegionLevel
+  level: PreviewAdminRegionLevel
   regions: Array<{ id: string; name: string }>
   summary: {
     regionCount: number
@@ -86,7 +87,7 @@ type AmapDistrictNode = AMap.DistrictSearchDistrict & {
 
 type PreviewSelection = {
   source: PreviewSource
-  level: AdminRegionLevel
+  level: PreviewAdminRegionLevel
 }
 
 const MAPBOX_BOUNDARY_SOURCE_ID = 'amap-boundary-preview'
@@ -124,7 +125,7 @@ const LEVEL_OPTIONS: LevelOption[] = [
   { level: 5, label: '5 街镇' },
 ]
 const DEFAULT_SOURCE: PreviewSource = 'amap'
-const DEFAULT_LEVEL: AdminRegionLevel = 4
+const DEFAULT_LEVEL: PreviewAdminRegionLevel = 4
 const DEFAULT_SELECTION: PreviewSelection = {
   source: DEFAULT_SOURCE,
   level: DEFAULT_LEVEL,
@@ -191,7 +192,7 @@ export function MapboxAmapBoundaryPreview({
   }, [clearOverlay])
 
   const queryAmapPreview = useCallback(async (
-    nextLevel: AdminRegionLevel,
+    nextLevel: PreviewAdminRegionLevel,
     requestId: number,
   ) => {
     const AMap = amapRef.current
@@ -228,7 +229,7 @@ export function MapboxAmapBoundaryPreview({
 
   const queryApiPreview = useCallback(async (
     nextSource: Exclude<PreviewSource, 'amap'>,
-    nextLevel: AdminRegionLevel,
+    nextLevel: PreviewAdminRegionLevel,
     requestId: number,
   ) => {
     const response = await fetch(createPreviewApiUrl(nextSource, nextLevel), {
@@ -268,7 +269,7 @@ export function MapboxAmapBoundaryPreview({
     })
   }, [applyFeatureCollection, showUnavailable])
 
-  const queryPreview = useCallback((nextSource: PreviewSource, nextLevel: AdminRegionLevel) => {
+  const queryPreview = useCallback((nextSource: PreviewSource, nextLevel: PreviewAdminRegionLevel) => {
     const map = mapRef.current
     if (!map || !mapReadyRef.current) return
 
@@ -407,7 +408,7 @@ export function MapboxAmapBoundaryPreview({
     queryPreview(nextSelection.source, nextSelection.level)
   }
 
-  const handleLevelChange = (nextLevel: AdminRegionLevel) => {
+  const handleLevelChange = (nextLevel: PreviewAdminRegionLevel) => {
     const nextSelection = { ...selectionRef.current, level: nextLevel }
     selectionRef.current = nextSelection
     setSelection(nextSelection)
@@ -481,7 +482,7 @@ export function MapboxAmapBoundaryPreview({
   )
 }
 
-function createPreviewApiUrl(source: Exclude<PreviewSource, 'amap'>, level: AdminRegionLevel) {
+function createPreviewApiUrl(source: Exclude<PreviewSource, 'amap'>, level: PreviewAdminRegionLevel) {
   const params = new URLSearchParams({
     source,
     level: String(level),
@@ -491,7 +492,7 @@ function createPreviewApiUrl(source: Exclude<PreviewSource, 'amap'>, level: Admi
 
 function loadAmapShanghaiDistricts(
   AMap: AMapNamespace,
-  level: AdminRegionLevel,
+  level: PreviewAdminRegionLevel,
 ): Promise<AmapDistrictNode[]> {
   if (level === 2) {
     return searchAmapDistrict(AMap, '310000', 'province').then((district) => district ? [district] : [])
@@ -539,7 +540,7 @@ function searchAmapDistrict(
 
 function createAmapDistrictsGeoJson(
   districts: AmapDistrictNode[],
-  level: AdminRegionLevel,
+  level: PreviewAdminRegionLevel,
 ): PreviewFeatureCollection {
   return mergeFeatureCollections(
     districts.map((district) => {
@@ -783,7 +784,7 @@ function isPreviewSource(value: unknown): value is PreviewSource {
   return value === 'amap' || value === 'local' || value === 'osm'
 }
 
-function isAdminRegionLevel(value: unknown): value is AdminRegionLevel {
+function isAdminRegionLevel(value: unknown): value is PreviewAdminRegionLevel {
   return value === 2 || value === 3 || value === 4 || value === 5
 }
 
@@ -796,13 +797,13 @@ function isAdminRegionGeometry(value: unknown): value is AdminRegionGeometry {
   )
 }
 
-function toAmapLevel(level: AdminRegionLevel): AMap.DistrictSearchLevel {
+function toAmapLevel(level: PreviewAdminRegionLevel): AMap.DistrictSearchLevel {
   if (level === 2) return 'province'
   if (level === 3) return 'city'
   return 'district'
 }
 
-function getLevelText(level: AdminRegionLevel) {
+function getLevelText(level: PreviewAdminRegionLevel) {
   return LEVEL_OPTIONS.find((option) => option.level === level)?.label ?? String(level)
 }
 

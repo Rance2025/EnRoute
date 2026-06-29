@@ -22,11 +22,14 @@ type MockMapRecord = {
   easeToCalls: unknown[]
   stopCalls: number
   removeCalls: number
-  emit: (eventName: string) => void
+  renderedFeatures: unknown[]
+  emit: (eventName: string, eventData?: unknown) => void
+  triggerLayerEvent: (eventName: string, layerId: string, eventData?: unknown) => void
   setZoom: (zoom: number) => void
   setCenter: (center: [number, number]) => void
   setBounds: (bounds: { west: number, south: number, east: number, north: number }) => void
   setVisibleTileCoordinates: (coordinates: MockVisibleTileCoordinate[]) => void
+  setRenderedFeatures: (features: unknown[]) => void
 }
 
 type MockVisibleTileCoordinate = {
@@ -327,7 +330,7 @@ describe('MapboxCanvas footprint vector tiles', () => {
     act(() => mapRecords[0].emit('idle'))
 
     await waitFor(() => expect(mapRecords[0].sources['admin-regions']).toBeDefined())
-    expect(mapRecords[0].sources.footprints).toBeUndefined()
+    expect(mapRecords[0].sources.footprints).toBeDefined()
     expect(mapRecords[0].sources['admin-regions']).toBeDefined()
   })
 
@@ -546,7 +549,7 @@ describe('MapboxCanvas footprint vector tiles', () => {
       maxzoom: 8,
       promoteId: 'region_id',
       tiles: [
-        `${window.location.origin}/api/map/tiles/admin-regions/{z}/{x}/{y}.mvt?focusRegionId=world&depth=3`,
+        `${window.location.origin}/api/map/tiles/admin-regions/{z}/{x}/{y}.mvt?focusRegionId=world&depth=2`,
       ],
     })
     expect(mapRecords[0].layers.some((layer) => (
@@ -561,7 +564,7 @@ describe('MapboxCanvas footprint vector tiles', () => {
       'id' in layer &&
       layer.id === 'admin-regions-line'
     ))).toBe(true)
-    expect(mapRecords[0].sources.footprints).toBeUndefined()
+    expect(mapRecords[0].sources.footprints).toBeDefined()
   })
 
   it('waits for Mapbox style readiness before adding admin-region vector layers', async () => {
@@ -585,12 +588,12 @@ describe('MapboxCanvas footprint vector tiles', () => {
 
     expect(mapRecords[0].sources['admin-regions']).toMatchObject({
       tiles: [
-        `${window.location.origin}/api/map/tiles/admin-regions/{z}/{x}/{y}.mvt?focusRegionId=world&depth=3`,
+        `${window.location.origin}/api/map/tiles/admin-regions/{z}/{x}/{y}.mvt?focusRegionId=world&depth=2`,
       ],
     })
   })
 
-  it('removes footprint vector layers after switching into admin-region mode', async () => {
+  it('keeps footprint vector layers after switching into admin-region mode', async () => {
     const { mapRecords } = mockMapboxRuntime()
     const { MapboxCanvas } = await import('./MapboxCanvas')
 
@@ -615,9 +618,9 @@ describe('MapboxCanvas footprint vector tiles', () => {
       />,
     )
 
-    expect(mapRecords[0].removedLayers).toEqual(['footprints-circle'])
-    expect(mapRecords[0].removedSources).toEqual(['footprints'])
-    expect(mapRecords[0].sources.footprints).toBeUndefined()
+    expect(mapRecords[0].removedLayers).toEqual([])
+    expect(mapRecords[0].removedSources).toEqual([])
+    expect(mapRecords[0].sources.footprints).toBeDefined()
     expect(mapRecords[0].sources['admin-regions']).toBeDefined()
   })
 
@@ -663,6 +666,91 @@ describe('MapboxCanvas footprint vector tiles', () => {
     ))).toBe(true)
   })
 
+  it('switches admin-region depth without recreating the map or resetting the viewport', async () => {
+    const { mapRecords } = mockMapboxRuntime()
+    const { MapboxCanvas } = await import('./MapboxCanvas')
+
+    render(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        timeRange={selectedRange}
+        adminRegionUnlockEnabled
+        adminBoundariesVisible
+      />,
+    )
+    act(() => mapRecords[0].emit('load'))
+    mapRecords[0].setCenter([121.47, 31.23])
+    mapRecords[0].setZoom(6.5)
+    mapRecords[0].removedLayers = []
+    mapRecords[0].removedSources = []
+    mapRecords[0].flyToCalls = []
+    mapRecords[0].fitBoundsCalls = []
+    mapRecords[0].easeToCalls = []
+
+    fireEvent.click(screen.getByRole('button', { name: '下一级' }))
+
+    expect(mapRecords).toHaveLength(1)
+    expect(mapRecords[0].removedLayers).toEqual(['admin-regions-line', 'admin-regions-fill'])
+    expect(mapRecords[0].removedSources).toEqual(['admin-regions'])
+    expect(mapRecords[0].sources['admin-regions']).toMatchObject({
+      tiles: [
+        `${window.location.origin}/api/map/tiles/admin-regions/{z}/{x}/{y}.mvt?focusRegionId=world&depth=1`,
+      ],
+    })
+    expect(mapRecords[0].flyToCalls).toEqual([])
+    expect(mapRecords[0].fitBoundsCalls).toEqual([])
+    expect(mapRecords[0].easeToCalls).toEqual([])
+
+    fireEvent.click(screen.getByRole('button', { name: '下两级' }))
+
+    expect(mapRecords).toHaveLength(1)
+    expect(mapRecords[0].sources['admin-regions']).toMatchObject({
+      tiles: [
+        `${window.location.origin}/api/map/tiles/admin-regions/{z}/{x}/{y}.mvt?focusRegionId=world&depth=2`,
+      ],
+    })
+  })
+
+  it('focuses clicked admin region without recreating the map or resetting the viewport', async () => {
+    const { mapRecords } = mockMapboxRuntime()
+    const { MapboxCanvas } = await import('./MapboxCanvas')
+
+    render(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        timeRange={selectedRange}
+        adminRegionUnlockEnabled
+        adminBoundariesVisible
+      />,
+    )
+    act(() => mapRecords[0].emit('load'))
+    mapRecords[0].setCenter([121.47, 31.23])
+    mapRecords[0].setZoom(6.5)
+    mapRecords[0].flyToCalls = []
+    mapRecords[0].fitBoundsCalls = []
+    mapRecords[0].easeToCalls = []
+    mapRecords[0].setRenderedFeatures([
+      {
+        layer: { id: 'admin-regions-fill' },
+        properties: {
+          region_id: 'overture:division:country:cn',
+        },
+      },
+    ])
+
+    act(() => mapRecords[0].triggerLayerEvent('click', 'admin-regions-fill', { point: { x: 10, y: 20 } }))
+
+    expect(mapRecords).toHaveLength(1)
+    expect(mapRecords[0].sources['admin-regions']).toMatchObject({
+      tiles: [
+        `${window.location.origin}/api/map/tiles/admin-regions/{z}/{x}/{y}.mvt?focusRegionId=overture%3Adivision%3Acountry%3Acn&depth=2`,
+      ],
+    })
+    expect(mapRecords[0].flyToCalls).toEqual([])
+    expect(mapRecords[0].fitBoundsCalls).toEqual([])
+    expect(mapRecords[0].easeToCalls).toEqual([])
+  })
+
   it('restores admin-region vector layers after a Mapbox style reload without duplicating layers', async () => {
     const { mapRecords } = mockMapboxRuntime()
     const { MapboxCanvas } = await import('./MapboxCanvas')
@@ -693,7 +781,7 @@ describe('MapboxCanvas footprint vector tiles', () => {
 
     expect(mapRecords[0].sources['admin-regions']).toMatchObject({
       tiles: [
-        `${window.location.origin}/api/map/tiles/admin-regions/{z}/{x}/{y}.mvt?focusRegionId=world&depth=3`,
+        `${window.location.origin}/api/map/tiles/admin-regions/{z}/{x}/{y}.mvt?focusRegionId=world&depth=2`,
       ],
     })
     expect(mapRecords[0].layers.filter((layer) => (
@@ -727,7 +815,7 @@ describe('MapboxCanvas footprint vector tiles', () => {
 
     expect(mapRecords[0].sources['admin-regions']).toMatchObject({
       tiles: [
-        `${window.location.origin}/api/map/tiles/admin-regions/{z}/{x}/{y}.mvt?focusRegionId=world&depth=3`,
+        `${window.location.origin}/api/map/tiles/admin-regions/{z}/{x}/{y}.mvt?focusRegionId=world&depth=2`,
       ],
     })
     expect(mapRecords[0].layoutProperties).toContainEqual([
@@ -1758,7 +1846,8 @@ function mockMapboxRuntime(runtimeOptions: {
 
   class MockMap {
     private readonly record: MockMapRecord
-    private readonly handlers = new Map<string, Array<() => void>>()
+    private readonly handlers = new Map<string, Array<(eventData?: unknown) => void>>()
+    private readonly layerHandlers = new Map<string, Array<(eventData?: unknown) => void>>()
     private styleReady = !runtimeOptions.styleReadyAfterStyleLoad &&
       !runtimeOptions.styleMutationReadyOnStyleLoadButIsStyleLoadedFalse
     private styleMutationReady = this.styleReady
@@ -1838,7 +1927,8 @@ function mockMapboxRuntime(runtimeOptions: {
         easeToCalls: [],
         stopCalls: 0,
         removeCalls: 0,
-        emit: (eventName: string) => {
+        renderedFeatures: [],
+        emit: (eventName: string, eventData?: unknown) => {
           if (
             eventName === 'style.load' &&
             runtimeOptions.styleMutationReadyOnStyleLoadButIsStyleLoadedFalse
@@ -1853,7 +1943,12 @@ function mockMapboxRuntime(runtimeOptions: {
             this.styleMutationReady = true
           }
 
-          for (const handler of this.handlers.get(eventName) ?? []) handler()
+          for (const handler of this.handlers.get(eventName) ?? []) handler(eventData)
+        },
+        triggerLayerEvent: (eventName: string, layerId: string, eventData?: unknown) => {
+          for (const handler of this.layerHandlers.get(`${eventName}:${layerId}`) ?? []) {
+            handler(eventData)
+          }
         },
         setZoom: (zoom: number) => {
           this.zoom = zoom
@@ -1867,19 +1962,35 @@ function mockMapboxRuntime(runtimeOptions: {
         setVisibleTileCoordinates: (coordinates: MockVisibleTileCoordinate[]) => {
           this.record.visibleTileCoordinates = coordinates
         },
+        setRenderedFeatures: (features: unknown[]) => {
+          this.record.renderedFeatures = features
+        },
       }
       mapRecords.push(this.record)
     }
 
-    on(eventName: string, handler: () => void) {
-      this.handlers.set(eventName, [...(this.handlers.get(eventName) ?? []), handler])
+    on(eventName: string, layerIdOrHandler: string | ((eventData?: unknown) => void), handler?: (eventData?: unknown) => void) {
+      if (typeof layerIdOrHandler === 'string') {
+        const key = `${eventName}:${layerIdOrHandler}`
+        this.layerHandlers.set(key, [...(this.layerHandlers.get(key) ?? []), handler as (eventData?: unknown) => void])
+        return this
+      }
+      this.handlers.set(eventName, [...(this.handlers.get(eventName) ?? []), layerIdOrHandler])
       return this
     }
 
-    off(eventName: string, handler: () => void) {
+    off(eventName: string, layerIdOrHandler: string | ((eventData?: unknown) => void), handler?: (eventData?: unknown) => void) {
+      if (typeof layerIdOrHandler === 'string') {
+        const key = `${eventName}:${layerIdOrHandler}`
+        this.layerHandlers.set(
+          key,
+          (this.layerHandlers.get(key) ?? []).filter((currentHandler) => currentHandler !== handler),
+        )
+        return this
+      }
       this.handlers.set(
         eventName,
-        (this.handlers.get(eventName) ?? []).filter((currentHandler) => currentHandler !== handler),
+        (this.handlers.get(eventName) ?? []).filter((currentHandler) => currentHandler !== layerIdOrHandler),
       )
       return this
     }
@@ -1921,6 +2032,10 @@ function mockMapboxRuntime(runtimeOptions: {
       return {
         getVisibleCoordinates: () => this.record.visibleTileCoordinates,
       }
+    }
+
+    queryRenderedFeatures() {
+      return this.record.renderedFeatures ?? []
     }
 
     isStyleLoaded() {

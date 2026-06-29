@@ -384,17 +384,8 @@ def migrate_legacy_footprints_schema(connection: sqlite3.Connection) -> None:
     ]:
         return
 
-    connection.executescript(
-        """
-        DROP TABLE IF EXISTS footprint_spatial;
-        DROP TABLE IF EXISTS footprints;
-        DELETE FROM footprint_meta;
-        UPDATE admin_regions
-        SET first_seen_timestamp = NULL,
-            footprint_count = 0,
-            stay_duration_seconds = 0,
-            travel_distance_meters = 0;
-        """,
+    raise RuntimeError(
+        "legacy footprints schema detected; run the explicit footprint rebuild script instead",
     )
 
 
@@ -429,7 +420,7 @@ def import_footprints(
         load_admin_region_data=load_admin_region_data,
     )
     source_signature = create_import_signature(data_path, coordinate_system, region_signature)
-    compatibility_signature = create_import_compatibility_signature(coordinate_system, region_signature)
+    compatibility_signature = create_import_compatibility_signature(coordinate_system)
     stored_signature = get_meta_value(connection, "sourceSignature")
     stored_compatibility_signature = get_meta_value(connection, "importCompatibilitySignature")
     stored_stats_signature = get_meta_value(connection, ADMIN_REGION_STATS_SIGNATURE_KEY)
@@ -461,10 +452,6 @@ def import_footprints(
 
     if not data_path.exists():
         raise FileNotFoundError(data_path)
-
-    if stored_compatibility_signature != compatibility_signature:
-        clear_imported_footprints(connection)
-        stored_count = 0
 
     with connection:
         if stored_count > 0:
@@ -670,34 +657,11 @@ def resolve_admin_region_signature(
     return create_source_signature(admin_region_data_path, ADMIN_REGION_LOADER_VERSION)
 
 
-def clear_imported_footprints(connection: sqlite3.Connection) -> None:
-    connection.executescript(
-        """
-        DELETE FROM visual_tiles;
-        DELETE FROM footprint_spatial;
-        DELETE FROM footprints;
-        DELETE FROM footprint_meta WHERE key IN (
-            'sourceSignature',
-            'importCompatibilitySignature',
-            'visualTileAlgorithmSignature',
-            'rowCount',
-            'adminRegionStatsSignature'
-        );
-        UPDATE admin_regions
-        SET first_seen_timestamp = NULL,
-            footprint_count = 0,
-            stay_duration_seconds = 0,
-            travel_distance_meters = 0;
-        """,
-    )
-
-
 def ensure_visual_tiles_algorithm_current(connection: sqlite3.Connection) -> None:
     if get_meta_value(connection, VISUAL_TILE_ALGORITHM_SIGNATURE_KEY) == VISUAL_TILE_ALGORITHM_SIGNATURE:
         return
 
     with connection:
-        connection.execute("DELETE FROM visual_tiles")
         set_meta_value(connection, VISUAL_TILE_ALGORITHM_SIGNATURE_KEY, VISUAL_TILE_ALGORITHM_SIGNATURE)
 
 
@@ -1157,11 +1121,10 @@ def create_import_signature(
     )
 
 
-def create_import_compatibility_signature(coordinate_system: str, admin_region_signature: str) -> str:
+def create_import_compatibility_signature(coordinate_system: str) -> str:
     return json.dumps(
         {
             "coordinateSystem": coordinate_system,
-            "adminRegions": json.loads(admin_region_signature),
         },
         separators=(",", ":"),
     )

@@ -26,6 +26,7 @@ from enroute_api.footprints.store import (
     initialize_schema,
     set_meta_value,
 )
+from enroute_api.footprints.visual_tiles import STATUS_READY
 from enroute_api.main import create_app
 
 
@@ -407,6 +408,77 @@ def test_footprint_runtime_keeps_precomputed_admin_tiles_when_region_source_sign
     assert tile_count == 1
     assert region_count == 4
     assert tile
+
+
+def test_admin_region_source_change_does_not_clear_imported_footprints_or_visual_tiles(tmp_path: Path):
+    db_path = tmp_path / "footprints.sqlite"
+    data_path = tmp_path / "points.csv"
+    region_path = tmp_path / "regions.geojson"
+    data_path.write_text(
+        "\n".join(
+            [
+                "dataTime,locType,longitude,latitude,heading,accuracy,speed,distance,isBackForeground,stepType,altitude",
+                "1768144456,0,0,0,0,10,0,0,0,0,0",
+            ],
+        ),
+        encoding="utf-8",
+    )
+    region_path.write_text(json.dumps(GLOBAL_REGION_COLLECTION), encoding="utf-8")
+    store = FootprintStore(
+        db_path=db_path,
+        data_path=data_path,
+        coordinate_system="wgs84",
+        admin_region_data_path=region_path,
+    )
+    try:
+        store.import_footprints()
+        store.connection.execute(
+            """
+            INSERT INTO visual_tiles (z, x, y, t_type, t, status, cells, updated_at)
+            VALUES (0, 0, 0, 0, 0, ?, X'0102', 1000)
+            """,
+            (STATUS_READY,),
+        )
+        store.connection.commit()
+    finally:
+        store.close()
+
+    region_path.write_text(
+        json.dumps(
+            {
+                "type": "FeatureCollection",
+                "features": [
+                    *GLOBAL_REGION_COLLECTION["features"],
+                    {
+                        "type": "Feature",
+                        "properties": {"id": "fr", "name": "France", "level": 1},
+                        "geometry": {
+                            "type": "Polygon",
+                            "coordinates": [[[2, 42], [8, 42], [8, 51], [2, 51], [2, 42]]],
+                        },
+                    },
+                ],
+            },
+        ),
+        encoding="utf-8",
+    )
+
+    store = FootprintStore(
+        db_path=db_path,
+        data_path=data_path,
+        coordinate_system="wgs84",
+        admin_region_data_path=region_path,
+    )
+    try:
+        metrics = store.get_footprint_metrics(range_value="all")
+        footprint_count = store.connection.execute("SELECT COUNT(*) FROM footprints").fetchone()[0]
+        visual_tile_count = store.connection.execute("SELECT COUNT(*) FROM visual_tiles").fetchone()[0]
+    finally:
+        store.close()
+
+    assert metrics["selectedCount"] == 1
+    assert footprint_count == 1
+    assert visual_tile_count == 1
 
 
 def test_footprint_metrics_runtime_does_not_load_admin_region_source_file(tmp_path: Path):
