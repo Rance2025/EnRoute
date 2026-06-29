@@ -501,6 +501,7 @@ describe('MapboxCanvas footprint vector tiles', () => {
       selectedCount: 3,
       totalDistanceMeters: 400,
       averageDistanceMetersPerDay: 400,
+      distanceSeries: createTestDistanceSeries('hour'),
     })
     const onFootprintMetricsChange = vi.fn()
     const { MapboxCanvas } = await import('./MapboxCanvas')
@@ -525,6 +526,7 @@ describe('MapboxCanvas footprint vector tiles', () => {
       selectedCount: 3,
       totalDistanceMeters: 400,
       averageDistanceMetersPerDay: 400,
+      distanceSeries: createTestDistanceSeries('hour'),
     })
     expect(footprintDataSourceImported()).toBe(false)
   })
@@ -535,6 +537,7 @@ describe('MapboxCanvas footprint vector tiles', () => {
       selectedCount: 3,
       totalDistanceMeters: 400,
       averageDistanceMetersPerDay: 400,
+      distanceSeries: createTestDistanceSeries('hour'),
       selectedBounds: {
         southWest: [118, 30],
         northEast: [121.5, 31.3],
@@ -1204,11 +1207,13 @@ describe('MapboxCanvas footprint vector tiles', () => {
         selectedCount: 4,
         totalDistanceMeters: 1399,
         averageDistanceMetersPerDay: 699.5,
+        distanceSeries: createTestDistanceSeries('day'),
       },
       {
         selectedCount: 3,
         totalDistanceMeters: 400,
         averageDistanceMetersPerDay: 400,
+        distanceSeries: createTestDistanceSeries('hour'),
       },
     )
     const onFootprintMetricsChange = vi.fn()
@@ -1255,6 +1260,7 @@ describe('MapboxCanvas footprint vector tiles', () => {
       selectedCount: 3,
       totalDistanceMeters: 400,
       averageDistanceMetersPerDay: 400,
+      distanceSeries: createTestDistanceSeries('hour'),
     })
   })
 
@@ -1895,6 +1901,15 @@ function mockMetricsFetch(...metricsResponses: Array<{
   selectedCount: number
   totalDistanceMeters: number
   averageDistanceMetersPerDay: number
+  distanceSeries?: {
+    granularity: 'hour' | 'day'
+    unit: 'hour' | 'day'
+    buckets: Array<{
+      key: string
+      label: string
+      distanceMeters: number
+    }>
+  }
   selectedBounds?: {
     southWest: [number, number]
     northEast: [number, number]
@@ -1913,6 +1928,29 @@ function mockMetricsFetch(...metricsResponses: Array<{
 
   vi.stubGlobal('fetch', fetchMock)
   return fetchMock
+}
+
+function createTestDistanceSeries(granularity: 'hour' | 'day') {
+  if (granularity === 'hour') {
+    return {
+      granularity: 'hour' as const,
+      unit: 'hour' as const,
+      buckets: Array.from({ length: 24 }, (_, hour) => ({
+        key: `2026-06-19T${hour.toString().padStart(2, '0')}`,
+        label: `${hour.toString().padStart(2, '0')}:00`,
+        distanceMeters: hour === 11 ? 400 : 0,
+      })),
+    }
+  }
+
+  return {
+    granularity: 'day' as const,
+    unit: 'day' as const,
+    buckets: [
+      { key: '2026-06-19', label: '6月19日', distanceMeters: 400 },
+      { key: '2026-06-20', label: '6月20日', distanceMeters: 999 },
+    ],
+  }
 }
 
 function mockMetricsAndDebugFetch(...debugResponses: Array<{

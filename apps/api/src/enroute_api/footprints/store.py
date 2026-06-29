@@ -4,7 +4,7 @@ import json
 import math
 import sqlite3
 import time
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from threading import RLock, Thread
 from typing import Any, Iterable, TypedDict
@@ -794,7 +794,7 @@ def query_snapshot(connection: sqlite3.Connection, input_payload: dict[str, Any]
     }
 
 
-def query_metrics(connection: sqlite3.Connection, input_payload: dict[str, Any]) -> dict[str, float]:
+def query_metrics(connection: sqlite3.Connection, input_payload: dict[str, Any]) -> dict[str, object]:
     row = connection.execute(
         """
         SELECT
@@ -815,7 +815,127 @@ def query_metrics(connection: sqlite3.Connection, input_payload: dict[str, Any])
         "selectedCount": int(row["selectedCount"]),
         "totalDistanceMeters": total_distance_meters,
         "averageDistanceMetersPerDay": total_distance_meters
-        / max(input_payload["timeRange"]["dayCount"], 1),
+        / get_elapsed_day_count_for_average(input_payload["timeRange"]),
+        "distanceSeries": query_distance_series(connection, input_payload),
+    }
+
+
+def get_elapsed_day_count_for_average(
+    time_range: dict[str, int],
+    *,
+    now_timestamp_seconds: int | None = None,
+) -> int:
+    now_seconds = int(time.time() if now_timestamp_seconds is None else now_timestamp_seconds)
+    start_seconds = int(time_range["startTimestampSeconds"])
+    end_seconds = int(time_range["endTimestampSeconds"])
+    start_date = shanghai_date_from_timestamp(start_seconds)
+    effective_end_date = shanghai_date_from_timestamp(min(end_seconds, now_seconds))
+
+    if effective_end_date < start_date:
+        return 1
+
+    return max((effective_end_date - start_date).days + 1, 1)
+
+
+def query_distance_series(
+    connection: sqlite3.Connection,
+    input_payload: dict[str, Any],
+) -> dict[str, object]:
+    time_range = input_payload["timeRange"]
+    day_count = max(int(time_range["dayCount"]), 1)
+
+    if day_count == 1:
+        return query_hourly_distance_series(connection, time_range)
+
+    return query_daily_distance_series(connection, time_range)
+
+
+def query_hourly_distance_series(
+    connection: sqlite3.Connection,
+    time_range: dict[str, int],
+) -> dict[str, object]:
+    start_date = shanghai_date_from_timestamp(int(time_range["startTimestampSeconds"]))
+    day_start_timestamp = shanghai_date_start_timestamp_seconds(
+        start_date.year,
+        start_date.month,
+        start_date.day,
+    )
+    distance_by_hour = {
+        int(row["bucketHour"]): float(row["distanceMeters"])
+        for row in connection.execute(
+            """
+            SELECT
+              CAST((timestamp_seconds - ?) / 3600 AS INTEGER) AS bucketHour,
+              COALESCE(SUM(CASE WHEN distance > 0 THEN distance ELSE 0 END), 0) AS distanceMeters
+            FROM footprints
+            WHERE timestamp_seconds >= ?
+              AND timestamp_seconds <= ?
+            GROUP BY bucketHour
+            """,
+            (
+                day_start_timestamp,
+                time_range["startTimestampSeconds"],
+                time_range["endTimestampSeconds"],
+            ),
+        )
+    }
+
+    return {
+        "granularity": "hour",
+        "unit": "hour",
+        "buckets": [
+            {
+                "key": f"{start_date.isoformat()}T{hour:02d}",
+                "label": f"{hour:02d}:00",
+                "distanceMeters": distance_by_hour.get(hour, 0),
+            }
+            for hour in range(24)
+        ],
+    }
+
+
+def query_daily_distance_series(
+    connection: sqlite3.Connection,
+    time_range: dict[str, int],
+) -> dict[str, object]:
+    start_date = shanghai_date_from_timestamp(int(time_range["startTimestampSeconds"]))
+    end_date = shanghai_date_from_timestamp(int(time_range["endTimestampSeconds"]))
+    distance_by_day = {
+        row["bucketDate"]: float(row["distanceMeters"])
+        for row in connection.execute(
+            """
+            SELECT
+              date(timestamp_seconds + 28800, 'unixepoch') AS bucketDate,
+              COALESCE(SUM(CASE WHEN distance > 0 THEN distance ELSE 0 END), 0) AS distanceMeters
+            FROM footprints
+            WHERE timestamp_seconds >= ?
+              AND timestamp_seconds <= ?
+            GROUP BY bucketDate
+            """,
+            (
+                time_range["startTimestampSeconds"],
+                time_range["endTimestampSeconds"],
+            ),
+        )
+    }
+
+    buckets = []
+    current_date = start_date
+    while current_date <= end_date:
+        key = current_date.isoformat()
+        buckets.append(
+            {
+                "key": key,
+                "label": f"{current_date.month}月{current_date.day}日",
+                "distanceMeters": distance_by_day.get(key, 0),
+            },
+        )
+        current_date += timedelta(days=1)
+
+    return {
+        "granularity": "day",
+        "unit": "day",
+        "buckets": buckets,
     }
 
 

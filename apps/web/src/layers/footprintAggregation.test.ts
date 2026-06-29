@@ -159,6 +159,15 @@ describe('aggregateFootprintPoints', () => {
       selectedCount: 3,
       totalDistanceMeters: 400,
       averageDistanceMetersPerDay: 400,
+      distanceSeries: {
+        granularity: 'hour',
+        unit: 'hour',
+        buckets: Array.from({ length: 24 }, (_, hour) => ({
+          key: `2026-06-19T${hour.toString().padStart(2, '0')}`,
+          label: `${hour.toString().padStart(2, '0')}:00`,
+          distanceMeters: { 0: 100, 11: 300 }[hour] ?? 0,
+        })),
+      },
     })
     expect(snapshot.selectedBounds).toEqual({
       southWest: [118, 30],

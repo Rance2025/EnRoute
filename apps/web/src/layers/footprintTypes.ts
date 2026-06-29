@@ -27,6 +27,20 @@ export type FootprintMetrics = {
   selectedCount: number
   totalDistanceMeters: number
   averageDistanceMetersPerDay: number
+  distanceSeries?: FootprintDistanceSeries
+  selectedBounds?: FootprintLngLatBounds | null
+}
+
+export type FootprintDistanceSeries = {
+  granularity: 'hour' | 'day'
+  unit: 'hour' | 'day'
+  buckets: FootprintDistanceBucket[]
+}
+
+export type FootprintDistanceBucket = {
+  key: string
+  label: string
+  distanceMeters: number
 }
 
 export type FootprintLngLatBounds = {

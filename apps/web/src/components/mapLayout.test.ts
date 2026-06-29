@@ -112,7 +112,7 @@ describe('map chrome layout', () => {
     expect(pillRule).toContain('border-radius: 999px')
 
     expect(timeContextPanelSource).toContain(
-      "className={`glass-panel glass-panel--solid glass-panel--large time-context-panel",
+      'className="glass-panel glass-panel--solid glass-panel--large time-context-panel"',
     )
     expect(appSource).toContain('className="glass-panel glass-panel--solid glass-panel--card right-context-panel__glass right-context-panel__summary"')
     expect(appSource).toContain('className="glass-panel glass-panel--solid glass-panel--card right-context-panel__glass right-context-panel__legend"')
@@ -385,9 +385,13 @@ describe('map chrome layout', () => {
     const scrollRule = cssRule('.time-context-panel__scroll')
 
     expect(scrollRule).toContain('--time-panel-shadow-buffer: 34px')
+    expect(scrollRule).toContain('position: relative')
     expect(scrollRule).toContain('width: calc(100% + var(--time-panel-shadow-buffer))')
     expect(scrollRule).toContain('margin-right: calc(0px - var(--time-panel-shadow-buffer))')
-    expect(scrollRule).toContain('grid-template-rows: auto auto 1fr')
+    expect(scrollRule).toContain(
+      'grid-template-rows: max-content minmax(0, 1fr)',
+    )
+    expect(scrollRule).not.toContain('grid-template-rows: max-content max-content minmax(174px, 1fr)')
     expect(scrollRule).not.toContain('grid-template-rows: auto minmax(0, 1fr) auto')
     expect(scrollRule).toContain(
       'padding: 24px calc(24px + var(--time-panel-shadow-buffer)) 18px 24px',
@@ -398,27 +402,25 @@ describe('map chrome layout', () => {
     expect(scrollRule).not.toContain('overflow-y: auto')
     expect(scrollRule).not.toContain('scrollbar-width')
     expect(cssRule('.time-panel-content')).toContain('overflow: visible')
+    expect(cssRule('.time-panel-content')).toContain('min-height: max-content')
     expect(cssRule('.time-panel-content')).not.toContain('overflow: auto')
     expect(cssRule('.time-panel-content::-webkit-scrollbar')).toBe('')
-    expect(cssRule('.time-context-panel.is-editing-time .time-context-panel__footer')).toContain(
-      'display: none',
-    )
     expect(scrollRule).toContain('pointer-events: none')
     expect(scrollRule).not.toContain('padding: 16px')
     expect(scrollRule).not.toContain('padding: 88px')
     expect(cssRule('.time-context-panel__scroll > *')).toContain('pointer-events: auto')
   })
 
-  it('lets the open time editor fit without relying on internal overflow', () => {
-    const editingScrollRule = cssRule('.time-context-panel.is-editing-time .time-context-panel__scroll')
-    const editingFooterRule = cssRule('.time-context-panel.is-editing-time .time-context-panel__footer')
+  it('keeps the persistent time editor on the shared panel grid without stale editing overrides', () => {
+    const scrollRule = cssRule('.time-context-panel__scroll')
 
-    expect(editingScrollRule).toContain('grid-template-rows: auto auto')
-    expect(editingScrollRule).toContain('gap: 14px')
-    expect(editingScrollRule).toContain('align-content: start')
-    expect(editingScrollRule).toContain('align-items: start')
-    expect(editingScrollRule).not.toContain('auto auto 0')
-    expect(editingFooterRule).toContain('display: none')
+    expect(scrollRule).toContain(
+      'grid-template-rows: max-content minmax(0, 1fr)',
+    )
+    expect(scrollRule).toContain('position: relative')
+    expect(scrollRule).toContain('gap: 20px')
+    expect(appCss).not.toContain('is-editing-time')
+    expect(timeContextPanelSource).not.toContain('is-editing-time')
   })
 
   it('keeps the left time panel layout isomorphic across navigation views', () => {
@@ -433,14 +435,23 @@ describe('map chrome layout', () => {
     expect(cssRule('.app-shell--schedule .time-context-panel__scroll')).toBe('')
   })
 
-  it('keeps the settings entry in the shared time-panel footer without view-specific placement', () => {
-    expect(timeContextPanelSource).toContain('aria-label="打开设置"')
-    expect(timeContextPanelSource).toContain('className="time-context-panel__footer"')
-    expect(timeContextPanelSource).toContain('glass-panel glass-panel--solid glass-panel--pill time-settings-button')
-    expect(cssRule('.time-context-panel__footer')).toContain('align-self: end')
-    expect(cssRule('.time-context-panel__footer')).toContain('justify-self: start')
-    expect(cssRule('.time-settings-button')).toContain('width: 44px')
-    expect(cssRule('.time-settings-button')).toContain('height: 44px')
+  it('places the icon-only settings entry at the far right of the right rail header', () => {
+    expect(timeContextPanelSource).not.toContain('aria-label="打开设置"')
+    expect(timeContextPanelSource).not.toContain('className="time-context-panel__footer"')
+    expect(timeContextPanelSource).not.toContain('time-settings-button')
+    expect(appSource).toContain('aria-label="打开设置"')
+    expect(appSource).toContain('className="right-context-settings-button"')
+    expect(cssRule('.secondary-nav-rail__items')).toContain('display: flex')
+    expect(cssRule('.secondary-nav-rail__items')).toContain('align-items: center')
+    expect(cssRule('.right-context-settings-button')).toContain('flex: 0 0 34px')
+    expect(cssRule('.right-context-settings-button')).toContain('width: 34px')
+    expect(cssRule('.right-context-settings-button')).toContain('height: 34px')
+    expect(cssRule('.right-context-settings-button')).toContain('border: 1px solid rgba(23, 35, 31, 0.06)')
+    expect(cssRule('.right-context-settings-button')).toContain('border-radius: 999px')
+    expect(cssRule('.right-context-settings-button')).toContain('background: rgba(255, 255, 255, 0.38)')
+    expect(cssRule('.right-context-settings-button:hover')).toContain(
+      'box-shadow: 0 7px 16px rgba(18, 63, 53, 0.08)',
+    )
     expect(cssRule('.glass-panel--pill')).toContain('border-radius: 999px')
     expect(cssRule('.app-shell--map .time-context-panel__footer')).toBe('')
     expect(cssRule('.app-shell--accounting .time-context-panel__footer')).toBe('')
@@ -572,12 +583,93 @@ describe('map chrome layout', () => {
     expect(timeContextPanelSource).not.toContain('aria-label="当前范围摘要"')
     expect(cssRule('.time-context-metric-strip')).toContain('grid-template-columns: repeat(2, minmax(0, 1fr))')
     expect(cssRule('.time-context-metric-strip__label')).toContain('display: inline-flex')
-    expect(cssRule('.time-context-trend__chart')).toContain('grid-template-columns: repeat(17, minmax(0, 1fr))')
+    expect(cssRule('.time-context-trend__chart')).toContain('grid-template-columns: repeat(var(--trend-column-count, 17), minmax(0, 1fr))')
     expect(timeContextPanelSource).not.toContain('className="time-panel-content__actions"')
     expect(cssRule('.time-panel-content__actions')).toBe('')
     expect(cssRule('.time-context-accounting-summary')).toBe('')
     expect(cssRule('.time-context-summary')).toBe('')
     expect(cssRule('.ios-summary-strip')).toBe('')
+  })
+
+  it('scopes condensed metric number typography to the map metric strip only', () => {
+    expect(timeContextPanelSource).toContain("'time-context-metric-strip--map'")
+    expect(cssRule('.time-context-metric-strip .time-context-metric-strip__number')).not.toContain(
+      'font-stretch: condensed',
+    )
+    expect(cssRule('.time-context-metric-strip--map .time-context-metric-strip__number')).toContain(
+      'font-family: "Aptos Narrow", "Arial Narrow", "Roboto Condensed", "Helvetica Neue", sans-serif',
+    )
+    expect(cssRule('.time-context-metric-strip--map .time-context-metric-strip__number')).not.toContain(
+      'font-stretch: condensed',
+    )
+    expect(cssRule('.time-context-metric-strip--map .time-context-metric-strip__number')).toContain(
+      'color: #0d1714',
+    )
+    expect(cssRule('.time-context-metric-strip--map .time-context-metric-strip__number')).toContain(
+      'font-size: 21px',
+    )
+    expect(cssRule('.time-context-metric-strip--map .time-context-metric-strip__number')).toContain(
+      'font-weight: 760',
+    )
+    expect(cssRule('.time-context-metric-strip--map .time-context-metric-strip__number')).toContain(
+      'transform: scaleX(1.035)',
+    )
+    expect(cssRule('.time-context-metric-strip--map .time-context-metric-strip__number')).toContain(
+      'transform-origin: left center',
+    )
+    expect(cssRule('.time-context-metric-strip--map .time-context-metric-strip__unit')).toContain(
+      'font-size: 11px',
+    )
+  })
+
+  it('locks the map metric and distance chart visual contract', () => {
+    expect(cssRule('.time-context-metric-strip--map .time-context-metric-strip__label span')).toContain(
+      'color: rgba(21, 48, 42, 0.72)',
+    )
+    expect(cssRule('.time-context-metric-strip--map .time-context-metric-strip__label svg')).toContain(
+      'color: rgba(15, 106, 92, 0.9)',
+    )
+    expect(cssRule('.time-context-metric-strip--map .time-context-metric-strip__unit')).toContain(
+      'color: rgba(21, 48, 42, 0.68)',
+    )
+    expect(cssRule('.time-context-panel__scroll')).toContain(
+      'grid-template-rows: max-content minmax(0, 1fr)',
+    )
+    expect(cssRule('.time-context-trend')).toContain('height: 174px')
+    expect(cssRule('.time-context-trend')).toContain('position: absolute')
+    expect(cssRule('.time-context-trend')).toContain('right: calc(24px + var(--time-panel-shadow-buffer))')
+    expect(cssRule('.time-context-trend')).toContain('bottom: 18px')
+    expect(cssRule('.time-context-trend')).toContain('left: 24px')
+    expect(cssRule('.time-context-trend')).not.toContain('margin-top')
+    expect(cssRule('.time-context-trend')).toContain('transition:')
+    expect(cssRule('.time-context-trend')).toContain('opacity 180ms ease')
+    expect(cssRule('.time-context-trend.is-hidden')).toContain('opacity: 0')
+    expect(cssRule('.time-context-trend.is-hidden')).toContain('visibility: hidden')
+    expect(cssRule('.time-context-trend.is-hidden')).toContain('pointer-events: none')
+    expect(cssRule('.time-context-trend.is-hidden')).not.toContain('display:')
+    expect(cssRule('.time-context-trend.is-hidden')).not.toContain('height:')
+    expect(cssRule('.time-context-trend__chart')).toContain('height: 132px')
+    expect(cssRule('.time-context-trend__chart')).toContain('padding: 6px 1px 0')
+    expect(cssRule('.time-context-trend__chart')).toContain('overflow: hidden')
+    expect(cssRule('.time-context-trend__column')).toContain('height: calc(100% - 6px)')
+    expect(cssRule('.time-context-trend__column')).toContain('align-items: end')
+    expect(cssRule('.time-context-trend__bar')).toContain('width: min(9px, 82%)')
+    expect(cssRule('.time-context-trend__bar')).not.toContain('min-height')
+    expect(cssRule('.time-context-trend__bar')).toContain('border-radius: 2px 2px 1px 1px')
+    expect(cssRule('.time-context-trend__chart--dense')).toContain('gap: 0')
+    expect(cssRule('.time-context-trend__chart--dense .time-context-trend__bar')).toContain(
+      'width: 100%',
+    )
+    expect(cssRule('.time-context-trend__chart--dense .time-context-trend__bar')).not.toContain(
+      'min-height',
+    )
+    expect(cssRule('.time-context-trend__average-label')).not.toContain('background:')
+    expect(cssRule('.time-context-trend__average-label')).toContain(
+      'bottom: var(--trend-average-position, 50%)',
+    )
+    expect(cssRule('.time-context-trend__average-label')).toContain('transform: translateY(-6px)')
+    expect(cssRule('.time-context-trend__bar.is-active')).toContain('background: #0f7f70')
+    expect(cssRule('.time-context-trend__bar.is-emphasis')).toBe('')
   })
 
   it('keeps calendar display mode local to the time panel to avoid map rerenders', () => {
@@ -888,7 +980,7 @@ describe('map chrome layout', () => {
     expect(pickerWindowRule).toContain('--time-picker-shadow-buffer')
     expect(pickerWindowRule).toContain('padding: var(--time-picker-shadow-buffer)')
     expect(pickerWindowRule).toContain('width: calc(100% + var(--time-picker-shadow-buffer) * 2)')
-    expect(pickerWindowRule).toContain('calc(var(--time-picker-shadow-buffer) * -1)')
+    expect(pickerWindowRule).toContain('margin: 10px calc(var(--time-picker-shadow-buffer) * -1) 0')
     expect(pickerWindowRule).toContain('overflow: hidden')
     expect(pickerMotionRule).toContain('width: 100%')
     expect(customDateWindowRule).toContain('overflow: hidden')

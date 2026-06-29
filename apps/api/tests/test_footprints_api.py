@@ -382,6 +382,18 @@ def test_serves_footprint_metrics_without_raw_points_for_date_range(tmp_path: Pa
         "selectedCount": 3,
         "totalDistanceMeters": 400,
         "averageDistanceMetersPerDay": 400,
+        "distanceSeries": {
+            "granularity": "hour",
+            "unit": "hour",
+            "buckets": [
+                {
+                    "key": f"2026-06-19T{hour:02d}",
+                    "label": f"{hour:02d}:00",
+                    "distanceMeters": {0: 100, 11: 300}.get(hour, 0),
+                }
+                for hour in range(24)
+            ],
+        },
         "selectedBounds": {
             "southWest": [118.0, 30.0],
             "northEast": [121.511384, 31.296565],
@@ -389,6 +401,50 @@ def test_serves_footprint_metrics_without_raw_points_for_date_range(tmp_path: Pa
     }
     assert "points" not in payload
     assert "debug" not in payload
+
+
+def test_serves_daily_distance_series_for_multi_day_metrics(tmp_path: Path):
+    data_path = write_csv(tmp_path, SNAPSHOT_CSV)
+    client = create_test_client(data_path=data_path, db_path=tmp_path / "footprints.sqlite")
+
+    response = client.get("/api/footprints/metrics?start=2026-06-18&end=2026-06-19")
+
+    assert response.status_code == 200
+    assert response.json()["distanceSeries"] == {
+        "granularity": "day",
+        "unit": "day",
+        "buckets": [
+            {
+                "key": "2026-06-18",
+                "label": "6月18日",
+                "distanceMeters": 0,
+            },
+            {
+                "key": "2026-06-19",
+                "label": "6月19日",
+                "distanceMeters": 400,
+            },
+        ],
+    }
+
+
+def test_averages_current_date_range_metrics_only_through_today(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    data_path = write_csv(tmp_path, SNAPSHOT_CSV)
+    client = create_test_client(data_path=data_path, db_path=tmp_path / "footprints.sqlite")
+    monkeypatch.setattr(
+        "enroute_api.footprints.store.time.time",
+        lambda: 1781886000,
+    )
+
+    response = client.get("/api/footprints/metrics?start=2026-06-01&end=2026-06-30")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["totalDistanceMeters"] == 1399
+    assert payload["averageDistanceMetersPerDay"] == pytest.approx(69.95)
 
 
 def test_serves_footprint_metrics_for_all_range_without_raw_points(tmp_path: Path):
@@ -403,6 +459,22 @@ def test_serves_footprint_metrics_for_all_range_without_raw_points(tmp_path: Pat
         "selectedCount": 4,
         "totalDistanceMeters": 1399,
         "averageDistanceMetersPerDay": 699.5,
+        "distanceSeries": {
+            "granularity": "day",
+            "unit": "day",
+            "buckets": [
+                {
+                    "key": "2026-06-19",
+                    "label": "6月19日",
+                    "distanceMeters": 400,
+                },
+                {
+                    "key": "2026-06-20",
+                    "label": "6月20日",
+                    "distanceMeters": 999,
+                },
+            ],
+        },
         "selectedBounds": {
             "southWest": [118.0, 30.0],
             "northEast": [121.511385, 31.296566],
@@ -453,6 +525,18 @@ def test_serves_snapshot_from_database_backed_viewport_query(tmp_path: Path):
             "selectedCount": 3,
             "totalDistanceMeters": 400,
             "averageDistanceMetersPerDay": 400,
+            "distanceSeries": {
+                "granularity": "hour",
+                "unit": "hour",
+                "buckets": [
+                    {
+                        "key": f"2026-06-19T{hour:02d}",
+                        "label": f"{hour:02d}:00",
+                        "distanceMeters": {0: 100, 11: 300}.get(hour, 0),
+                    }
+                    for hour in range(24)
+                ],
+            },
         },
         "selectedBounds": {
             "southWest": [118, 30],

@@ -23,7 +23,11 @@ import { createAdminRegionLayer } from '../layers/adminRegionLayer'
 import type { AdminRegionLevel } from '../layers/adminRegionTypes'
 import { loadFootprintSnapshot, type FootprintRenderDebug } from '../layers/footprintDataSource'
 import { createMassFootprintLayer } from '../layers/massFootprintLayer'
-import type { FootprintLngLatBounds } from '../layers/footprintTypes'
+import type {
+  FootprintDistanceSeries,
+  FootprintLngLatBounds,
+  FootprintMetrics,
+} from '../layers/footprintTypes'
 import {
   DEFAULT_FOOTPRINT_STYLE,
   normalizeFootprintStyle,
@@ -42,11 +46,7 @@ type AmapCanvasProps = {
   debugPanelVisible?: boolean
 }
 
-export type FootprintMetrics = {
-  selectedCount: number
-  totalDistanceMeters: number
-  averageDistanceMetersPerDay: number
-}
+export type { FootprintMetrics } from '../layers/footprintTypes'
 
 type MapStatus = 'missing-config' | 'loading' | 'ready' | 'error'
 
@@ -59,6 +59,15 @@ const EMPTY_FOOTPRINT_METRICS: FootprintMetrics = {
   selectedCount: 0,
   totalDistanceMeters: 0,
   averageDistanceMetersPerDay: 0,
+  distanceSeries: createEmptyDistanceSeries(),
+}
+
+function createEmptyDistanceSeries(): FootprintDistanceSeries {
+  return {
+    granularity: 'day',
+    unit: 'day',
+    buckets: [],
+  }
 }
 const EMPTY_FOOTPRINT_DEBUG: FootprintRenderDebug = {
   rawCount: 0,

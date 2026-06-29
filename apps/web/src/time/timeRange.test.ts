@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
 
 import {
+  countElapsedInclusiveDays,
   createCurrentSelection,
   createTodaySelection,
   createTodayKey,
@@ -480,6 +481,14 @@ describe('time range selection model', () => {
       endTimestampSeconds: Number.POSITIVE_INFINITY,
       dayCount: 1572,
     })
+  })
+
+  it('counts elapsed visible days through today without changing the selected range', () => {
+    vi.setSystemTime(new Date('2026-06-20T10:20:30+08:00'))
+
+    expect(createTimeRangeTimestamps(selectYear(2026)).dayCount).toBe(365)
+    expect(countElapsedInclusiveDays(selectYear(2026))).toBe(171)
+    expect(countElapsedInclusiveDays(selectDay('2026-06-21'))).toBe(0)
   })
 
   it('preserves the previous custom date when native date inputs emit empty or invalid values', () => {
