@@ -91,6 +91,7 @@ type TimeNavigationState = {
 
 type CustomDatePickerMode = 'day' | 'month'
 type TemporaryPickerMode = 'default' | 'month' | 'year'
+type DistanceTrendScale = 'linear' | 'log'
 
 function TimeArrowIcon({ direction }: { direction: -1 | 1 }) {
   const Icon = direction === -1 ? ChevronLeft : ChevronRight
@@ -110,6 +111,7 @@ export function TimeContextPanel({
   const [isDayCalendarCollapsingWeek, setIsDayCalendarCollapsingWeek] = useState(false)
   const [isCustomDatePickerOpen, setIsCustomDatePickerOpen] = useState(false)
   const [activeTrendIndex, setActiveTrendIndex] = useState<number | null>(null)
+  const [distanceTrendScale, setDistanceTrendScale] = useState<DistanceTrendScale>('linear')
   const [dayCalendarCollapseSequence, setDayCalendarCollapseSequence] = useState(0)
   const [navigationState, setNavigationState] = useState<TimeNavigationState>({
     direction: null,
@@ -121,7 +123,7 @@ export function TimeContextPanel({
   const summaryItems = metricItems ?? (view === 'accounting'
     ? getAccountingSummary(selection)
     : [])
-  const distanceTrend = getDistanceTrendModel(distanceSeries)
+  const distanceTrend = getDistanceTrendModel(distanceSeries, distanceTrendScale)
   const activeTrendBucket = activeTrendIndex === null
     ? null
     : distanceTrend.values[activeTrendIndex] ?? null
@@ -323,7 +325,17 @@ export function TimeContextPanel({
             aria-label={distanceTrend.title}
           >
             <div className="time-context-trend__head">
-              <span>{distanceTrend.title}</span>
+              <div className="time-context-trend__title">
+                <span>{distanceTrend.title}</span>
+                <button
+                  className="time-context-trend__scale-button"
+                  type="button"
+                  aria-label={`距离图表尺度：${distanceTrend.scaleLabel}，点击切换到${distanceTrend.nextScaleLabel}`}
+                  onClick={() => setDistanceTrendScale(distanceTrend.nextScale)}
+                >
+                  {distanceTrend.scaleLabel}
+                </button>
+              </div>
               <small>{activeTrendBucket?.summaryLabel ?? distanceTrend.metadata}</small>
             </div>
             <div
@@ -409,23 +421,34 @@ function splitMetricValue(value: string) {
   }
 }
 
-function getDistanceTrendModel(distanceSeries?: FootprintDistanceSeries) {
+function getDistanceTrendModel(
+  distanceSeries?: FootprintDistanceSeries,
+  scale: DistanceTrendScale = 'linear',
+) {
   const buckets = distanceSeries?.buckets ?? []
-  const values = buckets.map((bucket) => Math.max(bucket.distanceMeters, 0))
-  const maxValue = Math.max(...values, 1)
+  const rawValues = buckets.map((bucket) => Math.max(bucket.distanceMeters, 0))
+  const maxValue = Math.max(...rawValues, 1)
+  const maxScaledValue = getDistanceTrendScaledValue(maxValue, scale)
   const average = getDistanceTrendAverage(buckets, distanceSeries?.granularity)
   const averageValue = average.value
-  const averagePosition = Math.min(Math.max((averageValue / maxValue) * 100, 0), 100)
+  const averagePosition = getDistanceTrendPosition(averageValue, maxScaledValue, scale)
   const denominatorLabel = distanceSeries?.unit === 'hour' ? '小时' : '日'
   const aggregationLabel = distanceSeries?.granularity === 'hour' ? '按小时汇总' : '按日汇总'
+  const nextScale: DistanceTrendScale = scale === 'linear' ? 'log' : 'linear'
 
   return {
     title: '当前范围距离',
     metadata: `${aggregationLabel} · ${average.rangeLabel}`,
     averageLabel: `均值 ${formatDistanceTrendValue(averageValue)}/${denominatorLabel}`,
-    averagePosition: `${averagePosition}%`,
+    averagePosition,
+    scale,
+    nextScale,
+    scaleLabel: scale === 'linear' ? '线性' : '对数',
+    nextScaleLabel: nextScale === 'linear' ? '线性' : '对数',
     isDense: buckets.length > 90,
-    values: buckets.map((bucket, index) => createDistanceTrendValue(bucket, index, maxValue)),
+    values: buckets.map((bucket, index) => (
+      createDistanceTrendValue(bucket, index, maxScaledValue, scale)
+    )),
   }
 }
 
@@ -515,10 +538,32 @@ function formatLocalDateKey(date: Date) {
   return `${year}-${month}-${day}`
 }
 
+function getDistanceTrendScaledValue(value: number, scale: DistanceTrendScale) {
+  const safeValue = Math.max(value, 0)
+
+  if (!Number.isFinite(safeValue) || safeValue <= 0) return 0
+  if (scale === 'log') return Math.log1p(safeValue / 1000)
+
+  return safeValue
+}
+
+function getDistanceTrendPosition(
+  value: number,
+  maxScaledValue: number,
+  scale: DistanceTrendScale,
+) {
+  if (!Number.isFinite(maxScaledValue) || maxScaledValue <= 0) return '0%'
+
+  const scaledValue = getDistanceTrendScaledValue(value, scale)
+
+  return `${Math.min(Math.max((scaledValue / maxScaledValue) * 100, 0), 100)}%`
+}
+
 function createDistanceTrendValue(
   bucket: FootprintDistanceBucket,
   index: number,
-  maxValue: number,
+  maxScaledValue: number,
+  scale: DistanceTrendScale,
 ) {
   const distanceMeters = Math.max(bucket.distanceMeters, 0)
   const formattedValue = formatDistanceTrendValue(distanceMeters)
@@ -528,7 +573,7 @@ function createDistanceTrendValue(
     label: bucket.label,
     formattedValue,
     summaryLabel: `${bucket.label} · ${formattedValue}`,
-    height: `${(distanceMeters / maxValue) * 100}%`,
+    height: getDistanceTrendPosition(distanceMeters, maxScaledValue, scale),
   }
 }
 

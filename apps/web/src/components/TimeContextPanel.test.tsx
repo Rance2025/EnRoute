@@ -246,6 +246,76 @@ describe('TimeContextPanel', () => {
     )
   })
 
+  it('toggles the distance chart between linear and logarithmic scales without changing real labels', () => {
+    const longTailSeries: FootprintDistanceSeries = {
+      granularity: 'day',
+      unit: 'day',
+      buckets: [
+        { key: '2026-06-18', label: '6月18日', distanceMeters: 0 },
+        { key: '2026-06-19', label: '6月19日', distanceMeters: 1000 },
+        { key: '2026-06-20', label: '6月20日', distanceMeters: 100000 },
+      ],
+    }
+    const { container } = render(
+      <TimeContextPanel
+        view="map"
+        selection={selectWeek('2026-06-19')}
+        distanceSeries={longTailSeries}
+        onSelectionChange={vi.fn()}
+      />,
+    )
+    const bars = Array.from(
+      container.querySelectorAll<HTMLElement>('.time-context-trend__bar'),
+    )
+    const chart = container.querySelector<HTMLElement>('.time-context-trend__chart')
+    const scaleButton = screen.getByRole('button', {
+      name: '距离图表尺度：线性，点击切换到对数',
+    })
+
+    expect(scaleButton).toHaveClass('time-context-trend__scale-button')
+    expect(container.querySelector('.time-context-trend__title')).toBeInTheDocument()
+    expect(bars.map((bar) => bar.style.getPropertyValue('--trend-height'))).toEqual([
+      '0%',
+      '1%',
+      '100%',
+    ])
+    expect(chart?.style.getPropertyValue('--trend-average-position')).toBe(
+      '33.666666666666664%',
+    )
+
+    fireEvent.click(scaleButton)
+
+    expect(
+      screen.getByRole('button', { name: '距离图表尺度：对数，点击切换到线性' }),
+    ).toBeInTheDocument()
+    expect(bars[0]?.style.getPropertyValue('--trend-height')).toBe('0%')
+    expect(parseFloat(bars[1]?.style.getPropertyValue('--trend-height') ?? '')).toBeCloseTo(
+      15.019,
+      3,
+    )
+    expect(bars[2]?.style.getPropertyValue('--trend-height')).toBe('100%')
+    expect(
+      parseFloat(chart?.style.getPropertyValue('--trend-average-position') ?? ''),
+    ).toBeCloseTo(76.83, 2)
+
+    fireEvent.pointerEnter(container.querySelectorAll('.time-context-trend__column')[1])
+
+    expect(screen.getByText('6月19日 · 1.0 km')).toBeInTheDocument()
+
+    fireEvent.click(
+      screen.getByRole('button', { name: '距离图表尺度：对数，点击切换到线性' }),
+    )
+
+    expect(
+      screen.getByRole('button', { name: '距离图表尺度：线性，点击切换到对数' }),
+    ).toBeInTheDocument()
+    expect(bars.map((bar) => bar.style.getPropertyValue('--trend-height'))).toEqual([
+      '0%',
+      '1%',
+      '100%',
+    ])
+  })
+
   it('renders real distance buckets and only emphasizes the hovered or focused column', () => {
     const { container } = render(
       <TimeContextPanel
