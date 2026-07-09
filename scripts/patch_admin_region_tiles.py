@@ -80,6 +80,21 @@ def main(argv: Sequence[str] | None = None) -> int:
                     f"from {result.candidate_count} candidate keys "
                     f"for depth {depth} zoom {args.min_zoom}-{args.max_zoom}",
                 )
+        if args.patch_missing_tiles:
+            for depth in depths:
+                result = patch_missing_admin_region_tile_keys(
+                    connection,
+                    focus_region_id=ADMIN_REGION_WORLD_FOCUS_ID,
+                    depth=depth,
+                    min_zoom=args.min_zoom,
+                    max_zoom=args.max_zoom,
+                    commit_interval=args.commit_interval,
+                )
+                print(
+                    f"Patched {result.built_count} missing admin region tile rows "
+                    f"from {result.candidate_count} missing candidate keys "
+                    f"for depth {depth} zoom {args.min_zoom}-{args.max_zoom}",
+                )
     finally:
         connection.close()
 
@@ -106,6 +121,11 @@ def parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     parser.set_defaults(patch_greenland=True)
     parser.add_argument("--skip-build-zooms", dest="build_zooms", action="store_false")
     parser.set_defaults(build_zooms=True)
+    parser.add_argument(
+        "--patch-missing-tiles",
+        action="store_true",
+        help="Build only missing admin_region_tiles rows for the selected world focus/depth/zoom range.",
+    )
     parser.add_argument("--depth", type=int, help="Build one depth instead of --depths.")
     parser.add_argument("--depths", default="1,2,3,4", help="Comma-separated depths to build.")
     parser.add_argument("--min-zoom", type=int, default=8)
@@ -353,6 +373,87 @@ def patch_admin_region_overlay_tile_keys(
         min_zoom=min_zoom,
         max_zoom=max_zoom,
         candidate_count=len(resolved_tile_keys),
+        built_count=built_count,
+        feature_count=len(source_rows),
+    )
+
+
+def patch_missing_admin_region_tile_keys(
+    connection: sqlite3.Connection,
+    *,
+    focus_region_id: str,
+    depth: int,
+    min_zoom: int,
+    max_zoom: int,
+    commit_interval: int,
+) -> AdminRegionTileBuildResult:
+    source_rows = resolve_focused_region_rows(
+        connection,
+        focus_region_id=focus_region_id,
+        depth=depth,
+    )
+    prepared_rows = prepare_admin_region_tile_rows(source_rows)
+    rows_by_tile_key = index_admin_region_tile_rows(
+        prepared_rows,
+        min_zoom=min_zoom,
+        max_zoom=max_zoom,
+    )
+    existing_tile_keys = {
+        (int(row["z"]), int(row["x"]), int(row["y"]))
+        for row in connection.execute(
+            """
+            SELECT z, x, y
+            FROM admin_region_tiles
+            WHERE focus_region_id = ?
+              AND depth = ?
+              AND z BETWEEN ? AND ?
+            """,
+            (focus_region_id, depth, min_zoom, max_zoom),
+        )
+    }
+    missing_tile_keys = sorted(set(rows_by_tile_key) - existing_tile_keys)
+    updated_at = int(time.time() * 1000)
+    built_count = 0
+
+    for z, x, y in missing_tile_keys:
+        tile = encode_admin_region_mvt_from_prepared_rows(
+            rows_by_tile_key[(z, x, y)],
+            z=z,
+            x=x,
+            y=y,
+        )
+        if not tile:
+            continue
+        connection.execute(
+            """
+            INSERT INTO admin_region_tiles (
+              z, x, y, focus_region_id, depth, algorithm_signature, tile, feature_count, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                z,
+                x,
+                y,
+                focus_region_id,
+                depth,
+                ADMIN_REGION_TILE_ALGORITHM_SIGNATURE,
+                tile,
+                count_tile_features(tile),
+                updated_at,
+            ),
+        )
+        built_count += 1
+        if commit_interval > 0 and built_count % commit_interval == 0:
+            connection.commit()
+
+    connection.commit()
+    return AdminRegionTileBuildResult(
+        focus_region_id=focus_region_id,
+        depth=depth,
+        min_zoom=min_zoom,
+        max_zoom=max_zoom,
+        candidate_count=len(missing_tile_keys),
         built_count=built_count,
         feature_count=len(source_rows),
     )
