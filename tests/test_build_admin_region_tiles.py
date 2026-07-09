@@ -480,7 +480,7 @@ class BuildAdminRegionTilesTests(unittest.TestCase):
                 },
             )
 
-    def test_country_level_assigns_china_world_gap_to_neighbor_country(self):
+    def test_country_level_preserves_china_world_gap_as_china_country(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root_dir = Path(temporary_directory)
             world_source_path = root_dir / "world-countries.geojson"
@@ -580,6 +580,8 @@ class BuildAdminRegionTilesTests(unittest.TestCase):
                 detailed_china_hits = self._country_hits(connection, longitude=7, latitude=5)
                 gap_hits = self._country_hits(connection, longitude=9, latitude=5)
                 neighbor_hits = self._country_hits(connection, longitude=12, latitude=5)
+                china_geometry = self._country_geometry(connection, region_id="cn")
+                neighbor_geometry = self._country_geometry(connection, region_id="neighbor")
                 neighbor_line_mask_geometry = self._country_line_mask_geometry(connection, region_id="neighbor")
                 far_line_mask_geometry = self._country_line_mask_geometry(connection, region_id="far")
             finally:
@@ -588,8 +590,10 @@ class BuildAdminRegionTilesTests(unittest.TestCase):
             self.assertEqual(exit_code, 0)
             self.assertEqual(country_ids, ["cn", "far", "neighbor"])
             self.assertEqual(detailed_china_hits, ["cn"])
-            self.assertEqual(gap_hits, ["neighbor"])
+            self.assertEqual(gap_hits, ["cn"])
             self.assertEqual(neighbor_hits, ["neighbor"])
+            self.assertTrue(china_geometry.contains(Point(9, 5)))
+            self.assertFalse(neighbor_geometry.contains(Point(9, 5)))
             self.assertTrue(neighbor_line_mask_geometry.contains(Point(10, 5)))
             self.assertTrue(neighbor_line_mask_geometry.contains(Point(10.03, 5)))
             self.assertIsNone(far_line_mask_geometry)

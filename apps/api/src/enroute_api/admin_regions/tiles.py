@@ -25,8 +25,9 @@ ADMIN_REGION_LINE_FEATURE_KIND = "line"
 MAX_ADMIN_REGION_TILE_ZOOM = 16
 DEFAULT_ADMIN_REGION_TILE_MAX_ZOOM = 9
 MAX_MERCATOR_LATITUDE = 85.05112878
-ADMIN_REGION_TILE_ALGORITHM_SIGNATURE = "admin-region-mvt-v14-render-wgs84-index-preclip-fill-derived-boundary-line-dedupe-no-antarctica"
+ADMIN_REGION_TILE_ALGORITHM_SIGNATURE = "admin-region-mvt-v15-cn-worldview-country-union-render-wgs84-index-preclip-fill-derived-boundary-line-dedupe-no-antarctica"
 LEGACY_COUNTRY_ADMIN_REGION_TILE_ALGORITHM_SIGNATURES = (
+    "admin-region-mvt-v14-render-wgs84-index-preclip-fill-derived-boundary-line-dedupe-no-antarctica",
     "admin-region-mvt-v13-render-wgs84-preclip-fill-derived-boundary-line-dedupe-no-antarctica",
     "admin-region-mvt-v12-render-wgs84-fill-derived-boundary-line-dedupe-no-antarctica",
     "admin-region-mvt-v11-render-wgs84-fill-derived-boundary-line-dedupe",
@@ -38,6 +39,7 @@ LEGACY_COUNTRY_ADMIN_REGION_TILE_ALGORITHM_SIGNATURES = (
     "admin-region-mvt-v1-wgs84-global-l1-l3",
 )
 LEGACY_NON_COUNTRY_ADMIN_REGION_TILE_ALGORITHM_SIGNATURES = (
+    "admin-region-mvt-v14-render-wgs84-index-preclip-fill-derived-boundary-line-dedupe-no-antarctica",
     "admin-region-mvt-v13-render-wgs84-preclip-fill-derived-boundary-line-dedupe-no-antarctica",
     "admin-region-mvt-v12-render-wgs84-fill-derived-boundary-line-dedupe-no-antarctica",
     "admin-region-mvt-v11-render-wgs84-fill-derived-boundary-line-dedupe",
@@ -53,6 +55,7 @@ ADMIN_REGION_LEGACY_REBUILD_TILE_BBOX_PADDING_DEGREES = 0.02
 ADMIN_REGION_CACHED_LEGACY_NON_COUNTRY_MAX_ZOOM = 7
 ADMIN_REGION_DIRECT_READ_LEGACY_NON_COUNTRY_MAX_ZOOM = 4
 ADMIN_REGION_LINE_READY_ALGORITHM_SIGNATURES = (
+    "admin-region-mvt-v14-render-wgs84-index-preclip-fill-derived-boundary-line-dedupe-no-antarctica",
     "admin-region-mvt-v13-render-wgs84-preclip-fill-derived-boundary-line-dedupe-no-antarctica",
     "admin-region-mvt-v12-render-wgs84-fill-derived-boundary-line-dedupe-no-antarctica",
     "admin-region-mvt-v11-render-wgs84-fill-derived-boundary-line-dedupe",

@@ -271,17 +271,11 @@ def merge_china_country_geometry(
         world_feature_collection,
         region_id=china_country_id,
     )
-    china_world_gap_geometry = None
     china_world_line_mask_geometry = None
     if world_china_geometry is not None:
-        china_world_gap_geometry = world_china_geometry.difference(china_geometry).buffer(0)
+        china_geometry = unary_union([world_china_geometry, china_geometry]).buffer(0)
+        china_country_geometry = to_geojson_geometry(china_geometry)
         china_world_line_mask_geometry = world_china_geometry.buffer(COUNTRY_LINE_MASK_BUFFER_DEGREES)
-    gap_geometries_by_country_id = assign_china_world_gap_to_neighbor_countries(
-        world_feature_collection,
-        china_country_id=china_country_id,
-        china_geometry=china_geometry,
-        gap_geometry=china_world_gap_geometry,
-    )
 
     for feature in copy_features(world_feature_collection):
         properties = feature.get("properties") or {}
@@ -302,17 +296,10 @@ def merge_china_country_geometry(
             continue
 
         difference_geometry = normalize_country_difference_geometry(shape(geometry).difference(china_geometry).buffer(0))
-        gap_geometry = gap_geometries_by_country_id.get(str(region_id))
-        if gap_geometry is not None and not gap_geometry.is_empty:
-            difference_geometry = normalize_country_difference_geometry(
-                unary_union([difference_geometry, gap_geometry]).buffer(0),
-            )
         if difference_geometry.is_empty:
             continue
         feature["geometry"] = to_geojson_geometry(difference_geometry)
         mask_source_geometries = [china_world_line_mask_geometry]
-        if gap_geometry is not None:
-            mask_source_geometries.append(gap_geometry)
         line_mask_geometry = create_country_line_mask_geometry(
             difference_geometry,
             mask_source_geometries=mask_source_geometries,
