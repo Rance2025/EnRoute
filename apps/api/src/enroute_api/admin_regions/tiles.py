@@ -68,6 +68,7 @@ ADMIN_REGION_LINE_READY_ALGORITHM_SIGNATURES = (
 ADMIN_REGION_DIRECT_READ_COUNTRY_ALGORITHM_SIGNATURES = (
     "admin-region-mvt-v1-wgs84-global-l1-l3",
 )
+ADMIN_REGION_RENDER_SIMPLIFY_MVT_UNITS = 2.0
 
 
 @dataclass(frozen=True)
@@ -85,7 +86,9 @@ class AdminRegionTileBuildResult:
 class PreparedAdminRegionTileRow:
     row: sqlite3.Row
     geometry: BaseGeometry
+    render_geometry: BaseGeometry
     boundary: BaseGeometry | None = None
+    render_boundary: BaseGeometry | None = None
     line_mask_geometry: BaseGeometry | None = None
 
 
@@ -505,10 +508,9 @@ def index_admin_region_tile_rows(
 ) -> dict[tuple[int, int, int], list[PreparedAdminRegionTileRow]]:
     rows_by_tile_key: dict[tuple[int, int, int], list[PreparedAdminRegionTileRow]] = defaultdict(list)
     for row in rows:
-        render_geometry = transform_admin_region_render_geometry(row.geometry, row.row)
         for geometry, render_key_geometry in zip(
             iter_tile_key_geometries(row.geometry),
-            iter_tile_key_geometries(render_geometry),
+            iter_tile_key_geometries(row.render_geometry),
             strict=False,
         ):
             render_min_lng, render_min_lat, render_max_lng, render_max_lat = render_key_geometry.bounds
@@ -530,10 +532,20 @@ def index_admin_region_tile_rows(
                             PreparedAdminRegionTileRow(
                                 row=row.row,
                                 geometry=geometry,
+                                render_geometry=render_key_geometry,
                                 boundary=None
                                 if row.boundary is None
                                 else clip_prepared_geometry_to_tile(
                                     row.boundary,
+                                    west=west,
+                                    south=south,
+                                    east=east,
+                                    north=north,
+                                ),
+                                render_boundary=None
+                                if row.render_boundary is None
+                                else clip_prepared_geometry_to_tile(
+                                    row.render_boundary,
                                     west=west,
                                     south=south,
                                     east=east,
@@ -729,15 +741,20 @@ def prepare_admin_region_tile_rows(rows: list[sqlite3.Row]) -> list[PreparedAdmi
     prepared_rows = []
     for row in rows:
         geometry = shape(json.loads(str(row["geometry"])))
+        render_geometry = transform_admin_region_render_geometry(geometry, row)
         line_mask_geometry = get_optional_row_value(row, "line_mask_geometry")
         line_mask = None
         if line_mask_geometry is not None:
             line_mask = shape(json.loads(str(line_mask_geometry)))
+        boundary = geometry.boundary
+        render_boundary = render_geometry.boundary
         prepared_rows.append(
             PreparedAdminRegionTileRow(
                 row=row,
                 geometry=geometry,
-                boundary=None,
+                render_geometry=render_geometry,
+                boundary=boundary,
+                render_boundary=render_boundary,
                 line_mask_geometry=line_mask,
             ),
         )
@@ -774,15 +791,17 @@ def encode_admin_region_mvt_from_prepared_rows(
         if not row_intersects_tile(prepared_row, west=west, south=south, east=east, north=north):
             continue
         properties = create_admin_region_tile_properties(prepared_row.row)
-        render_source_geometry = transform_admin_region_render_geometry(
-            prepared_row.geometry,
-            prepared_row.row,
+        render_geometry = simplify_admin_region_render_geometry_for_tile(
+            prepared_row.render_geometry,
+            z=z,
         )
-        clipped_geometry = clip_by_rect(render_source_geometry, west, south, east, north)
+        clipped_geometry = clip_by_rect(render_geometry, west, south, east, north)
         boundary = prepared_row.geometry.boundary if prepared_row.boundary is None else prepared_row.boundary
         if prepared_row.line_mask_geometry is not None and not boundary.is_empty:
             boundary = boundary.difference(prepared_row.line_mask_geometry)
-        render_boundary = transform_admin_region_render_geometry(boundary, prepared_row.row)
+            render_boundary = transform_admin_region_render_geometry(boundary, prepared_row.row)
+        else:
+            render_boundary = render_geometry.boundary
         clipped_boundary = clip_by_rect(render_boundary, west, south, east, north)
         projected_geometry = project_shapely_geometry_to_tile(clipped_geometry, z=z, x=x, y=y)
         row_fill_features = (
@@ -835,6 +854,22 @@ def encode_admin_region_mvt_from_prepared_rows(
             "y_coord_down": True,
         },
     )
+
+
+def simplify_admin_region_render_geometry_for_tile(
+    geometry: BaseGeometry,
+    *,
+    z: int,
+) -> BaseGeometry:
+    tolerance = admin_region_render_simplify_tolerance_degrees(z=z)
+    if tolerance <= 0 or geometry.is_empty:
+        return geometry
+    simplified = geometry.simplify(tolerance, preserve_topology=True)
+    return geometry if simplified.is_empty else simplified
+
+
+def admin_region_render_simplify_tolerance_degrees(*, z: int) -> float:
+    return (360.0 / (2**z) / MVT_EXTENT) * ADMIN_REGION_RENDER_SIMPLIFY_MVT_UNITS
 
 
 def transform_admin_region_render_geometry(geometry: BaseGeometry, row: sqlite3.Row) -> BaseGeometry:
@@ -1545,10 +1580,9 @@ def row_intersects_tile(
     east: float,
     north: float,
 ) -> bool:
-    if row.geometry.is_empty:
+    if row.render_geometry.is_empty:
         return False
-    render_geometry = transform_admin_region_render_geometry(row.geometry, row.row)
-    min_lng, min_lat, max_lng, max_lat = render_geometry.bounds
+    min_lng, min_lat, max_lng, max_lat = row.render_geometry.bounds
     return (
         float(min_lng) <= east
         and float(max_lng) >= west

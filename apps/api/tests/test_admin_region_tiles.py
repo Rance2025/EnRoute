@@ -2192,6 +2192,140 @@ def test_tile_range_builder_indexes_china_areacity_by_wgs84_render_bbox(tmp_path
     assert fill_features
 
 
+def test_tile_range_builder_reuses_china_areacity_wgs84_render_geometry(
+    tmp_path: Path,
+    monkeypatch,
+):
+    connection = sqlite3.connect(tmp_path / "footprints.sqlite")
+    connection.row_factory = sqlite3.Row
+    collection = {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "properties": {"id": "cn", "name": "China", "level": 1},
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [[[70, 15], [135, 15], [135, 55], [70, 55], [70, 15]]],
+                },
+            },
+            {
+                "type": "Feature",
+                "properties": {"id": "310000", "name": "Shanghai", "level": 2, "parentId": "cn"},
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [[[120, 30], [123, 30], [123, 33], [120, 33], [120, 30]]],
+                },
+            },
+        ],
+    }
+    transform_calls = 0
+
+    def counted_transform(*, longitude: float, latitude: float):
+        nonlocal transform_calls
+        transform_calls += 1
+        return longitude, latitude
+
+    monkeypatch.setattr(
+        admin_region_tiles,
+        "transform_gcj02_to_wgs84_coordinate",
+        counted_transform,
+    )
+    try:
+        initialize_schema(connection)
+        load_admin_regions(connection, collection)
+
+        result = build_admin_region_tiles(
+            connection,
+            focus_region_id="world",
+            depth=2,
+            min_zoom=0,
+            max_zoom=1,
+            updated_at=1234,
+        )
+    finally:
+        connection.close()
+
+    assert result.built_count > 0
+    assert transform_calls == 5
+
+
+def test_low_zoom_admin_region_tiles_simplify_dense_china_boundaries(tmp_path: Path):
+    dense_ring = [
+        [110 + (step / 500), 30 + (0.1 if step % 2 else 0)]
+        for step in range(501)
+    ]
+    dense_ring.extend([[111, 30 + (step / 500)] for step in range(1, 501)])
+    dense_ring.extend(
+        [
+            [111 - (step / 500), 31 + (0.1 if step % 2 else 0)]
+            for step in range(1, 501)
+        ],
+    )
+    dense_ring.extend([[110, 31 - (step / 500)] for step in range(1, 501)])
+    dense_ring.append(dense_ring[0])
+    connection = sqlite3.connect(tmp_path / "footprints.sqlite")
+    connection.row_factory = sqlite3.Row
+    try:
+        initialize_schema(connection)
+        load_admin_regions(
+            connection,
+            {
+                "type": "FeatureCollection",
+                "features": [
+                    {
+                        "type": "Feature",
+                        "properties": {"id": "cn", "name": "China", "level": 1},
+                        "geometry": {
+                            "type": "Polygon",
+                            "coordinates": [[[70, 15], [135, 15], [135, 55], [70, 55], [70, 15]]],
+                        },
+                    },
+                    {
+                        "type": "Feature",
+                        "properties": {"id": "310000", "name": "Shanghai", "level": 2, "parentId": "cn"},
+                        "geometry": {
+                            "type": "Polygon",
+                            "coordinates": [dense_ring],
+                        },
+                    },
+                ],
+            },
+        )
+
+        built = build_admin_region_tile(
+            connection,
+            z=0,
+            x=0,
+            y=0,
+            focus_region_id="world",
+            depth=2,
+            updated_at=1234,
+        )
+        tile = read_admin_region_tile(
+            connection,
+            z=0,
+            x=0,
+            y=0,
+            focus_region_id="world",
+            depth=2,
+        )
+    finally:
+        connection.close()
+
+    decoded = decode(tile)
+    fill_features = [
+        feature
+        for feature in decoded[ADMIN_REGION_TILE_LAYER_NAME]["features"]
+        if feature["properties"]["kind"] == "fill"
+        and feature["properties"]["region_id"] == "310000"
+    ]
+    point_count = len(list(iter_tile_feature_points(fill_features)))
+
+    assert built is True
+    assert point_count < 80
+
+
 def test_reading_legacy_china_areacity_tile_rebuilds_fill_from_current_rows(tmp_path: Path):
     tile_z = 8
     tile_x, tile_y = admin_region_tiles.coordinate_to_tile(
