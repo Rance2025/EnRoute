@@ -4,6 +4,7 @@ import argparse
 import json
 import sqlite3
 import sys
+import time
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 
@@ -15,10 +16,19 @@ if str(api_src_dir) not in sys.path:
 
 from enroute_api.admin_regions.geometry import calculate_geometry_bbox
 from enroute_api.admin_regions.tiles import (
+    ADMIN_REGION_TILE_ALGORITHM_SIGNATURE,
+    ADMIN_REGION_TILE_LAYER_NAME,
     ADMIN_REGION_WORLD_FOCUS_ID,
-    build_admin_region_tile_keys,
+    AdminRegionTileBuildResult,
     build_admin_region_tiles,
+    count_tile_features,
+    decode_admin_region_tile,
+    encode_admin_region_mvt_from_prepared_rows,
+    enumerate_admin_region_tile_keys,
+    index_admin_region_tile_rows,
     initialize_admin_region_tile_schema,
+    prepare_admin_region_tile_rows,
+    resolve_focused_region_rows,
 )
 from enroute_api.config import Settings
 from enroute_api.footprints.store import initialize_schema
@@ -231,26 +241,39 @@ def patch_region_tile_keys(
     commit_interval: int,
 ) -> None:
     row = connection.execute(
-        "SELECT * FROM admin_regions WHERE id = ?",
+        """
+        SELECT
+          r.id,
+          r.name,
+          r.level,
+          r.geometry,
+          r.line_geometry,
+          r.line_mask_geometry,
+          r.min_lng,
+          r.max_lng,
+          r.min_lat,
+          r.max_lat,
+          NULL AS parent_id
+        FROM admin_regions r
+        WHERE r.id = ?
+        """,
         (region_id,),
     ).fetchone()
     if row is None:
         raise ValueError(f"Admin region {region_id} does not exist")
-    from enroute_api.admin_regions.tiles import (
-        enumerate_admin_region_tile_keys,
-        prepare_admin_region_tile_rows,
-    )
 
+    prepared_rows = prepare_admin_region_tile_rows([row])
     tile_keys = enumerate_admin_region_tile_keys(
-        prepare_admin_region_tile_rows([row]),
+        prepared_rows,
         min_zoom=min_zoom,
         max_zoom=max_zoom,
     )
     for depth in depths:
-        result = build_admin_region_tile_keys(
+        result = patch_admin_region_overlay_tile_keys(
             connection,
             focus_region_id=ADMIN_REGION_WORLD_FOCUS_ID,
             depth=depth,
+            region_id=region_id,
             tile_keys=tile_keys,
             commit_interval=commit_interval,
         )
@@ -259,6 +282,101 @@ def patch_region_tile_keys(
             f"from {result.candidate_count} {region_id} tile keys "
             f"for depth {depth} zoom {min_zoom}-{max_zoom}",
         )
+
+
+def patch_admin_region_overlay_tile_keys(
+    connection: sqlite3.Connection,
+    *,
+    focus_region_id: str,
+    depth: int,
+    region_id: str,
+    tile_keys: Iterable[tuple[int, int, int]],
+    commit_interval: int,
+) -> AdminRegionTileBuildResult:
+    resolved_tile_keys = sorted(set(tile_keys))
+    updated_at = int(time.time() * 1000)
+    built_count = 0
+    min_zoom = min((z for z, _x, _y in resolved_tile_keys), default=0)
+    max_zoom = max((z for z, _x, _y in resolved_tile_keys), default=0)
+    source_rows = resolve_focused_region_rows(
+        connection,
+        focus_region_id=focus_region_id,
+        depth=depth,
+    )
+    rows_by_tile_key = index_admin_region_tile_rows(
+        prepare_admin_region_tile_rows(source_rows),
+        min_zoom=min_zoom,
+        max_zoom=max_zoom,
+    )
+
+    for z, x, y in resolved_tile_keys:
+        tile = encode_admin_region_mvt_from_prepared_rows(
+            rows_by_tile_key.get((z, x, y), []),
+            z=z,
+            x=x,
+            y=y,
+        )
+        if not tile or not tile_has_region_fill(tile, region_id=region_id):
+            continue
+        connection.execute(
+            """
+            INSERT INTO admin_region_tiles (
+              z, x, y, focus_region_id, depth, algorithm_signature, tile, feature_count, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(z, x, y, focus_region_id, depth) DO UPDATE SET
+              algorithm_signature = excluded.algorithm_signature,
+              tile = excluded.tile,
+              feature_count = excluded.feature_count,
+              updated_at = excluded.updated_at
+            """,
+            (
+                z,
+                x,
+                y,
+                focus_region_id,
+                depth,
+                ADMIN_REGION_TILE_ALGORITHM_SIGNATURE,
+                tile,
+                count_tile_features(tile),
+                updated_at,
+            ),
+        )
+        built_count += 1
+        if commit_interval > 0 and built_count % commit_interval == 0:
+            connection.commit()
+
+    connection.commit()
+    return AdminRegionTileBuildResult(
+        focus_region_id=focus_region_id,
+        depth=depth,
+        min_zoom=min_zoom,
+        max_zoom=max_zoom,
+        candidate_count=len(resolved_tile_keys),
+        built_count=built_count,
+        feature_count=len(source_rows),
+    )
+
+
+def get_admin_region_tile_features(tile: bytes) -> list[dict[str, Any]]:
+    decoded = decode_admin_region_tile(tile)
+    layer = decoded.get(ADMIN_REGION_TILE_LAYER_NAME)
+    if not isinstance(layer, dict):
+        return []
+    features = layer.get("features")
+    if not isinstance(features, list):
+        return []
+    return [feature for feature in features if isinstance(feature, dict)]
+
+
+def tile_has_region_fill(tile: bytes, *, region_id: str) -> bool:
+    for feature in get_admin_region_tile_features(tile):
+        properties = feature.get("properties")
+        if not isinstance(properties, dict):
+            continue
+        if str(properties.get("region_id")) == region_id and properties.get("kind") == "fill":
+            return True
+    return False
 
 
 if __name__ == "__main__":
