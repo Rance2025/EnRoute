@@ -34,6 +34,7 @@ vi.mock('./MapboxCanvas', async () => {
   return {
     MapboxCanvas: ({
       adminRegionUnlockEnabled = false,
+      adminRegionDepth = 4,
       adminBoundariesVisible = true,
       placeLabelsVisible = true,
       projection,
@@ -46,6 +47,7 @@ vi.mock('./MapboxCanvas', async () => {
       onMapLanguageChange,
     }: {
       adminRegionUnlockEnabled?: boolean
+      adminRegionDepth?: number
       adminBoundariesVisible?: boolean
       placeLabelsVisible?: boolean
       projection?: string
@@ -70,6 +72,7 @@ vi.mock('./MapboxCanvas', async () => {
         {
           className: 'map-stage',
           'data-admin-region-unlock-enabled': String(adminRegionUnlockEnabled),
+          'data-admin-region-depth': String(adminRegionDepth),
           'data-admin-boundaries-visible': String(adminBoundariesVisible),
           'data-place-labels-visible': String(placeLabelsVisible),
           'data-projection': projection,
@@ -566,6 +569,30 @@ describe('unified shell layout', () => {
 
     expect(mapStage).toHaveAttribute('data-admin-region-unlock-enabled', 'true')
     expect(screen.queryByText('行政区划图层迁移中')).not.toBeInTheDocument()
+  })
+
+  it('moves administrative region depth controls into the right context panel', async () => {
+    render(<App amapConfig={configuredAmap} />)
+    await settleLazyImports()
+    const mapStage = document.querySelector('.map-stage')
+    const rightPanel = document.querySelector('.right-context-panel__stack')
+    const rail = screen.getByRole('navigation', { name: '二级导航' })
+
+    expect(mapStage).toHaveAttribute('data-admin-region-depth', '1')
+    expect(rightPanel?.querySelector('.right-context-panel__depth-control')).toBeNull()
+
+    fireEvent.click(within(rail).getByRole('button', { name: '区域' }))
+
+    const depthControl = rightPanel?.querySelector('.right-context-panel__depth-control')
+    expect(depthControl).toBeInstanceOf(HTMLElement)
+    expect(document.querySelector('.map-stage > .admin-region-depth-control')).toBeNull()
+    expect(mapStage).toHaveAttribute('data-admin-region-depth', '1')
+
+    const districtButton = within(depthControl as HTMLElement).getByRole('button', { name: '中国区县' })
+    fireEvent.click(districtButton)
+
+    expect(mapStage).toHaveAttribute('data-admin-region-depth', '4')
+    expect(districtButton).toHaveAttribute('aria-pressed', 'true')
   })
 
   it('rounds footprint point opacity controls to 0.01 precision through the slider', async () => {

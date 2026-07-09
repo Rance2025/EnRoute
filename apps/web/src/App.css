@@ -2040,7 +2040,6 @@
 }
 
 .map-toolbar,
-.admin-region-depth-control,
 .admin-region-unlock-panel,
 .footprint-style-popover,
 .map-message {
@@ -2080,14 +2079,15 @@
   color: #17211f;
 }
 
-.admin-region-depth-control {
-  right: var(--map-chrome-x);
-  bottom: calc(var(--map-chrome-y) + 66px);
+.right-context-panel__depth-control {
   display: grid;
-  grid-template-columns: repeat(2, minmax(58px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 4px;
+  margin-top: 2px;
   padding: 7px;
   color: #17211f;
+  border-radius: 14px;
+  background: rgba(23, 35, 31, 0.045);
 }
 
 .admin-region-depth-control button {

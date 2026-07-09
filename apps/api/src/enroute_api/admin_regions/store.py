@@ -7,21 +7,20 @@ from dataclasses import dataclass
 from typing import Any, Iterable
 
 from .geometry import BoundingBox, calculate_geometry_bbox, geometry_contains_point
+from .scope import is_antarctica_admin_region_properties
 
 OSM_ADMIN_LEVEL_TO_ENROUTE_LEVEL = {
     2: 1,
-    4: 2,
-    5: 3,
 }
 AREACITY_LEVEL_TO_ENROUTE_LEVEL = {
     "province": 2,
     "city": 3,
+    "district": 4,
 }
 OVERTURE_SUBTYPE_TO_ENROUTE_LEVEL = {
     "country": 1,
-    "region": 2,
-    "locality": 3,
 }
+CHINA_REGION_IDS = {"cn", "CN", "chn", "CHN", "156"}
 
 
 def initialize_admin_region_schema(connection: sqlite3.Connection) -> None:
@@ -32,6 +31,8 @@ def initialize_admin_region_schema(connection: sqlite3.Connection) -> None:
           name TEXT NOT NULL,
           level INTEGER NOT NULL,
           geometry TEXT NOT NULL,
+          line_geometry TEXT,
+          line_mask_geometry TEXT,
           min_lng REAL NOT NULL,
           max_lng REAL NOT NULL,
           min_lat REAL NOT NULL,
@@ -55,7 +56,21 @@ def initialize_admin_region_schema(connection: sqlite3.Connection) -> None:
           ON admin_region_tree(child_id);
         """,
     )
+    migrate_admin_region_line_geometry(connection)
+    migrate_admin_region_line_mask_geometry(connection)
     connection.commit()
+
+
+def migrate_admin_region_line_geometry(connection: sqlite3.Connection) -> None:
+    columns = [column[1] for column in connection.execute("PRAGMA table_info(admin_regions)")]
+    if "line_geometry" not in columns:
+        connection.execute("ALTER TABLE admin_regions ADD COLUMN line_geometry TEXT")
+
+
+def migrate_admin_region_line_mask_geometry(connection: sqlite3.Connection) -> None:
+    columns = [column[1] for column in connection.execute("PRAGMA table_info(admin_regions)")]
+    if "line_mask_geometry" not in columns:
+        connection.execute("ALTER TABLE admin_regions ADD COLUMN line_mask_geometry TEXT")
 
 
 def load_admin_regions(connection: sqlite3.Connection, feature_collection: dict[str, Any]) -> None:
@@ -87,29 +102,107 @@ def normalize_admin_region_features(feature_collection: dict[str, Any]) -> list[
         normalized_feature = normalize_admin_region_feature(feature)
         if normalized_feature is not None:
             normalized_features.append(normalized_feature)
-    return normalized_features
+    return filter_supported_admin_region_scope(normalized_features)
+
+
+def filter_supported_admin_region_scope(features: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    feature_by_id: dict[str, dict[str, Any]] = {}
+    for feature in features:
+        properties = feature.get("properties") or {}
+        region_id = properties.get("id")
+        if region_id not in {None, ""}:
+            feature_by_id[str(region_id)] = feature
+
+    return [
+        feature
+        for feature in features
+        if is_supported_admin_region_feature(feature, feature_by_id)
+    ]
+
+
+def is_supported_admin_region_feature(
+    feature: dict[str, Any],
+    feature_by_id: dict[str, dict[str, Any]],
+) -> bool:
+    properties = feature.get("properties") or {}
+    level = parse_int(properties.get("level"))
+    region_id = properties.get("id")
+    if level is None or region_id in {None, ""}:
+        return True
+    if level == 1 and is_antarctica_admin_region_properties(properties):
+        return False
+    if level == 1:
+        return True
+    if level < 1 or level > 4:
+        return False
+    return is_china_region_id(str(region_id)) or has_china_ancestor(properties, feature_by_id)
+
+
+def has_china_ancestor(
+    properties: dict[str, Any],
+    feature_by_id: dict[str, dict[str, Any]],
+) -> bool:
+    parent_id = get_admin_region_parent_id(properties)
+    seen: set[str] = set()
+    while parent_id:
+        if is_china_region_id(parent_id):
+            return True
+        if parent_id in seen:
+            return False
+        seen.add(parent_id)
+        parent = feature_by_id.get(parent_id)
+        if parent is None:
+            return False
+        parent_properties = parent.get("properties") or {}
+        parent_id = get_admin_region_parent_id(parent_properties)
+    return False
+
+
+def is_china_region_id(region_id: str) -> bool:
+    if region_id in CHINA_REGION_IDS:
+        return True
+    adcode_prefix = region_id[:6]
+    if len(adcode_prefix) != 6 or not adcode_prefix.isdigit():
+        return False
+    province_code = int(adcode_prefix[:2])
+    return 11 <= province_code <= 82
+
+
+def get_admin_region_parent_id(properties: dict[str, Any]) -> str | None:
+    parent_id = properties.get("parentId") or properties.get("parent_id")
+    return None if parent_id in {None, ""} else str(parent_id)
 
 
 def normalize_admin_region_feature(feature: dict[str, Any]) -> dict[str, Any] | None:
     properties = feature.get("properties") or {}
     geometry = feature.get("geometry")
+    line_geometry = get_feature_line_geometry(feature)
+    line_mask_geometry = get_feature_line_mask_geometry(feature)
     if not isinstance(properties, dict) or not isinstance(geometry, dict):
-        return feature
+        return attach_feature_line_metadata(feature, line_geometry, line_mask_geometry)
     if is_overture_admin_region_feature(properties):
-        return normalize_overture_admin_region_feature(properties, geometry)
+        return attach_feature_line_metadata(
+            normalize_overture_admin_region_feature(properties, geometry),
+            line_geometry,
+            line_mask_geometry,
+        )
     if is_areacity_admin_region_feature(properties):
-        return normalize_areacity_admin_region_feature(properties, geometry)
+        return attach_feature_line_metadata(
+            normalize_areacity_admin_region_feature(properties, geometry),
+            line_geometry,
+            line_mask_geometry,
+        )
     if properties.get("id") and properties.get("level") is not None:
         level = parse_int(properties.get("level"))
         if level is None:
             raise ValueError("Admin region feature level must be numeric")
-        if level < 1 or level > 3:
+        if level < 1 or level > 4:
             return None
-        return feature
+        return attach_feature_line_metadata(feature, line_geometry, line_mask_geometry)
 
     osm_admin_level = parse_osm_admin_level(properties)
     if osm_admin_level is None:
-        return feature
+        return attach_feature_line_metadata(feature, line_geometry, line_mask_geometry)
     enroute_level = OSM_ADMIN_LEVEL_TO_ENROUTE_LEVEL.get(osm_admin_level)
     if enroute_level is None:
         return None
@@ -132,11 +225,40 @@ def normalize_admin_region_feature(feature: dict[str, Any]) -> dict[str, Any] | 
     if parent_id:
         normalized_properties["parentId"] = parent_id
 
-    return {
-        "type": "Feature",
-        "properties": normalized_properties,
-        "geometry": copy.deepcopy(geometry),
-    }
+    return attach_feature_line_metadata(
+        {
+            "type": "Feature",
+            "properties": normalized_properties,
+            "geometry": copy.deepcopy(geometry),
+        },
+        line_geometry,
+        line_mask_geometry,
+    )
+
+
+def get_feature_line_geometry(feature: dict[str, Any]) -> dict[str, Any] | None:
+    line_geometry = feature.get("lineGeometry") or feature.get("line_geometry")
+    return line_geometry if isinstance(line_geometry, dict) else None
+
+
+def get_feature_line_mask_geometry(feature: dict[str, Any]) -> dict[str, Any] | None:
+    line_mask_geometry = feature.get("lineMaskGeometry") or feature.get("line_mask_geometry")
+    return line_mask_geometry if isinstance(line_mask_geometry, dict) else None
+
+
+def attach_feature_line_metadata(
+    feature: dict[str, Any] | None,
+    line_geometry: dict[str, Any] | None,
+    line_mask_geometry: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    if feature is None or (line_geometry is None and line_mask_geometry is None):
+        return feature
+    feature_with_line_metadata = copy.deepcopy(feature)
+    if line_geometry is not None:
+        feature_with_line_metadata["lineGeometry"] = copy.deepcopy(line_geometry)
+    if line_mask_geometry is not None:
+        feature_with_line_metadata["lineMaskGeometry"] = copy.deepcopy(line_mask_geometry)
+    return feature_with_line_metadata
 
 
 def normalize_overture_admin_region_feature(
@@ -294,6 +416,8 @@ def insert_admin_region_feature(connection: sqlite3.Connection, feature: dict[st
         raise ValueError("Admin region feature requires id, name, level, and geometry")
 
     bbox = calculate_geometry_bbox(geometry)
+    line_geometry = get_feature_line_geometry(feature)
+    line_mask_geometry = get_feature_line_mask_geometry(feature)
     connection.execute(
         """
         INSERT INTO admin_regions (
@@ -301,6 +425,8 @@ def insert_admin_region_feature(connection: sqlite3.Connection, feature: dict[st
           name,
           level,
           geometry,
+          line_geometry,
+          line_mask_geometry,
           min_lng,
           max_lng,
           min_lat,
@@ -309,13 +435,19 @@ def insert_admin_region_feature(connection: sqlite3.Connection, feature: dict[st
           footprint_count,
           stay_duration_seconds,
           travel_distance_meters
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, 0, 0)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, 0, 0)
         """,
         (
             str(region_id),
             str(name),
             int(level),
             json.dumps(geometry, ensure_ascii=False, separators=(",", ":")),
+            None
+            if line_geometry is None
+            else json.dumps(line_geometry, ensure_ascii=False, separators=(",", ":")),
+            None
+            if line_mask_geometry is None
+            else json.dumps(line_mask_geometry, ensure_ascii=False, separators=(",", ":")),
             bbox["min_lng"],
             bbox["max_lng"],
             bbox["min_lat"],
@@ -458,6 +590,14 @@ def query_admin_regions(
 ) -> list[sqlite3.Row]:
     del zoom
     parameters: dict[str, float | int] = {"level": level}
+    country_scope_filter = ""
+    if level == 1:
+        country_scope_filter = """
+          AND lower(name) != 'antarctica'
+          AND lower(id) NOT IN ('aq', 'ata', '010', 'country:aq', 'country:ata')
+          AND lower(id) NOT LIKE '%:aq'
+          AND lower(id) NOT LIKE '%:ata'
+        """
     bbox_filter = ""
     if None not in {west, south, east, north}:
         parameters.update(
@@ -492,6 +632,7 @@ def query_admin_regions(
               travel_distance_meters
             FROM admin_regions
             WHERE level = :level
+            {country_scope_filter}
             {bbox_filter}
             ORDER BY id
             """,

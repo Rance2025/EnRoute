@@ -101,7 +101,7 @@ def create_app(*, settings: Settings | None = None) -> FastAPI:
         x: int,
         y: int,
         focusRegionId: str = "world",
-        depth: int = 3,
+        depth: int = 4,
     ) -> Response:
         try:
             content = store.get_admin_region_mvt(
@@ -126,8 +126,8 @@ def create_app(*, settings: Settings | None = None) -> FastAPI:
         north: float | None = None,
         zoom: float | None = None,
     ) -> dict[str, object]:
-        if level not in {1, 2, 3}:
-            raise HTTPException(status_code=400, detail="level must be one of 1, 2, or 3")
+        if level not in {1, 2, 3, 4}:
+            raise HTTPException(status_code=400, detail="level must be one of 1, 2, 3, or 4")
         return store.get_admin_regions(
             level=level,
             west=west,
