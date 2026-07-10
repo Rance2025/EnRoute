@@ -20,6 +20,7 @@ from enroute_api.footprints.country import classify_country_lookup, country_id_f
 from enroute_api.footprints.store import (
     ADMIN_REGION_STATS_SIGNATURE_KEY,
     FootprintStore,
+    classify_footprint_admin_region,
     create_import_compatibility_signature,
     create_import_signature,
     ensure_imported,
@@ -582,6 +583,28 @@ def test_region_matcher_reuses_parsed_geometries_across_points(tmp_path: Path, m
     assert first_match == "sanlin"
     assert second_match == "sanlin"
     assert geometry_parse_count == 4
+
+
+def test_classifies_new_footprint_against_finest_cached_admin_region(tmp_path: Path):
+    connection = sqlite3.connect(tmp_path / "footprints.sqlite")
+    connection.row_factory = sqlite3.Row
+    try:
+        initialize_admin_region_schema(connection)
+        load_admin_regions(connection, REGION_COLLECTION)
+        matcher = create_region_matcher(connection)
+
+        match = classify_footprint_admin_region(
+            connection,
+            {"longitude": 10, "latitude": 10},
+            region_matcher=matcher,
+        )
+    finally:
+        connection.close()
+
+    assert match == {
+        "region_id": "sanlin",
+        "country_id": "CHN",
+    }
 
 
 def column_names(connection: sqlite3.Connection, table_name: str) -> list[str]:

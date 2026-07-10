@@ -29,6 +29,16 @@ def make_square(west: float, south: float, east: float, north: float) -> dict:
     }
 
 
+def make_multi_square(*squares: tuple[float, float, float, float]) -> dict:
+    return {
+        "type": "MultiPolygon",
+        "coordinates": [
+            [[[west, south], [east, south], [east, north], [west, north], [west, south]]]
+            for west, south, east, north in squares
+        ],
+    }
+
+
 def write_taiwan_source_files(
     tmp_path: Path,
     *,
@@ -133,6 +143,7 @@ def insert_test_admin_region(
     geometry: dict | None = None,
 ) -> None:
     resolved_geometry = geometry or make_square(0, 0, 1, 1)
+    min_lng, min_lat, max_lng, max_lat = shape(resolved_geometry).bounds
     connection.execute(
         """
         INSERT INTO admin_regions (
@@ -157,10 +168,10 @@ def insert_test_admin_region(
             name,
             level,
             json.dumps(resolved_geometry, separators=(",", ":")),
-            resolved_geometry["coordinates"][0][0][0],
-            resolved_geometry["coordinates"][0][1][0],
-            resolved_geometry["coordinates"][0][0][1],
-            resolved_geometry["coordinates"][0][2][1],
+            min_lng,
+            max_lng,
+            min_lat,
+            max_lat,
         ),
     )
 
@@ -171,6 +182,13 @@ def fetch_region_geometry(connection: sqlite3.Connection, region_id: str):
         (region_id,),
     ).fetchone()
     return shape(json.loads(str(row["geometry"])))
+
+
+def fetch_region_ids(connection: sqlite3.Connection) -> list[str]:
+    return [
+        str(row["id"])
+        for row in connection.execute("SELECT id FROM admin_regions ORDER BY id")
+    ]
 
 
 def test_loads_taiwan_official_boundaries_as_level_three_and_four(tmp_path: Path):
@@ -450,15 +468,15 @@ def test_taiwan_mainland_overlap_patch_clips_generated_rows_for_future_point_mat
         )
         insert_test_admin_region(
             connection,
-            region_id="tw-county-09020",
-            name="金門縣",
+            region_id="tw-county-99999",
+            name="測試縣",
             level=3,
             geometry=make_square(118.5, 24.2, 119.5, 24.8),
         )
         insert_test_admin_region(
             connection,
-            region_id="tw-town-09020010",
-            name="金城鎮",
+            region_id="tw-town-99999010",
+            name="測試鎮",
             level=4,
             geometry=make_square(118.5, 24.2, 119.5, 24.8),
         )
@@ -473,8 +491,8 @@ def test_taiwan_mainland_overlap_patch_clips_generated_rows_for_future_point_mat
             """
             INSERT INTO admin_region_tree (parent_id, child_id)
             VALUES
-              ('710000', 'tw-county-09020'),
-              ('tw-county-09020', 'tw-town-09020010'),
+              ('710000', 'tw-county-99999'),
+              ('tw-county-99999', 'tw-town-99999010'),
               ('710000', 'tw-county-63000')
             """,
         )
@@ -495,8 +513,8 @@ def test_taiwan_mainland_overlap_patch_clips_generated_rows_for_future_point_mat
             rebuild_tiles=False,
         )
 
-        kinmen = fetch_region_geometry(connection, "tw-county-09020")
-        kincheng = fetch_region_geometry(connection, "tw-town-09020010")
+        kinmen = fetch_region_geometry(connection, "tw-county-99999")
+        kincheng = fetch_region_geometry(connection, "tw-town-99999010")
         taipei = fetch_region_geometry(connection, "tw-county-63000")
         visual_tile_count = connection.execute("SELECT COUNT(*) FROM visual_tiles").fetchone()[0]
         overlap_point_match = find_finest_region_id(
@@ -519,7 +537,7 @@ def test_taiwan_mainland_overlap_patch_clips_generated_rows_for_future_point_mat
     assert taipei.equals(shape(make_square(121, 25, 122, 26)))
     assert visual_tile_count == 1
     assert overlap_point_match == "350000"
-    assert taiwan_only_match == "tw-town-09020010"
+    assert taiwan_only_match == "tw-town-99999010"
 
 
 def test_taiwan_mainland_overlap_patch_skips_far_mainland_authority_rows(
@@ -554,15 +572,15 @@ def test_taiwan_mainland_overlap_patch_skips_far_mainland_authority_rows(
         )
         insert_test_admin_region(
             connection,
-            region_id="tw-county-09020",
-            name="金門縣",
+            region_id="tw-county-99999",
+            name="測試縣",
             level=3,
             geometry=make_square(118.5, 24.2, 119.5, 24.8),
         )
         insert_test_admin_region(
             connection,
-            region_id="tw-town-09020010",
-            name="金城鎮",
+            region_id="tw-town-99999010",
+            name="測試鎮",
             level=4,
             geometry=make_square(118.5, 24.2, 119.5, 24.8),
         )
@@ -570,8 +588,8 @@ def test_taiwan_mainland_overlap_patch_skips_far_mainland_authority_rows(
             """
             INSERT INTO admin_region_tree (parent_id, child_id)
             VALUES
-              ('710000', 'tw-county-09020'),
-              ('tw-county-09020', 'tw-town-09020010')
+              ('710000', 'tw-county-99999'),
+              ('tw-county-99999', 'tw-town-99999010')
             """,
         )
         connection.commit()
@@ -604,6 +622,117 @@ def test_taiwan_mainland_overlap_patch_skips_far_mainland_authority_rows(
     assert result["changed_region_count"] == 2
     assert any("350000" in label for label in mainland_repair_labels)
     assert all("650000" not in label for label in mainland_repair_labels)
+
+
+def test_taiwan_mainland_overlap_patch_removes_regions_outside_taiwan_province_mask(tmp_path: Path):
+    database_path = tmp_path / "footprints.sqlite"
+    connection = sqlite3.connect(database_path)
+    connection.row_factory = sqlite3.Row
+    try:
+        initialize_admin_region_patch_test_schema(connection)
+        connection.executescript(
+            """
+            CREATE TABLE admin_region_tiles (
+              z INTEGER NOT NULL,
+              x INTEGER NOT NULL,
+              y INTEGER NOT NULL,
+              focus_region_id TEXT NOT NULL,
+              depth INTEGER NOT NULL,
+              algorithm_signature TEXT NOT NULL DEFAULT '',
+              tile BLOB NOT NULL,
+              feature_count INTEGER NOT NULL,
+              updated_at INTEGER NOT NULL,
+              PRIMARY KEY (z, x, y, focus_region_id, depth)
+            ) WITHOUT ROWID;
+            """
+        )
+        insert_test_admin_region(
+            connection,
+            region_id="350000",
+            name="福建省",
+            level=2,
+            geometry=make_square(118, 24, 119.5, 25),
+        )
+        insert_test_admin_region(
+            connection,
+            region_id="710000",
+            name="台湾省",
+            level=2,
+            geometry=make_square(120, 22, 122, 25.5),
+        )
+        insert_test_admin_region(
+            connection,
+            region_id="tw-county-09020",
+            name="金門縣",
+            level=3,
+            geometry=make_square(118.2, 24.2, 119.2, 24.8),
+        )
+        insert_test_admin_region(
+            connection,
+            region_id="tw-town-09020010",
+            name="金城鎮",
+            level=4,
+            geometry=make_square(118.2, 24.2, 119.2, 24.8),
+        )
+        insert_test_admin_region(
+            connection,
+            region_id="tw-county-64000",
+            name="高雄市",
+            level=3,
+            geometry=make_multi_square((120.1, 22.5, 120.4, 22.8), (114.0, 10.0, 115.0, 11.0)),
+        )
+        insert_test_admin_region(
+            connection,
+            region_id="tw-town-64000100",
+            name="旗津區",
+            level=4,
+            geometry=make_multi_square((120.2, 22.55, 120.3, 22.65), (114.2, 10.2, 114.8, 10.8)),
+        )
+        connection.execute(
+            """
+            INSERT INTO admin_region_tree (parent_id, child_id)
+            VALUES
+              ('710000', 'tw-county-09020'),
+              ('tw-county-09020', 'tw-town-09020010'),
+              ('710000', 'tw-county-64000'),
+              ('tw-county-64000', 'tw-town-64000100')
+            """,
+        )
+        connection.commit()
+
+        result = patch_taiwan_mainland_overlaps(
+            connection,
+            depths=[3, 4],
+            min_zoom=0,
+            max_zoom=0,
+            commit_interval=1000,
+            rebuild_tiles=False,
+        )
+
+        region_ids = fetch_region_ids(connection)
+        tree_rows = [
+            (str(row["parent_id"]), str(row["child_id"]))
+            for row in connection.execute("SELECT parent_id, child_id FROM admin_region_tree ORDER BY child_id")
+        ]
+        kaohsiung = fetch_region_geometry(connection, "tw-county-64000")
+        qijin = fetch_region_geometry(connection, "tw-town-64000100")
+        kinmen_match = find_finest_region_id(
+            connection,
+            longitude=118.4,
+            latitude=24.4,
+        )
+    finally:
+        connection.close()
+
+    assert result["deleted_region_count"] == 2
+    assert result["changed_region_count"] == 4
+    assert "tw-county-09020" not in region_ids
+    assert "tw-town-09020010" not in region_ids
+    assert ("710000", "tw-county-09020") not in tree_rows
+    assert ("tw-county-09020", "tw-town-09020010") not in tree_rows
+    assert kaohsiung.equals(shape(make_square(120.1, 22.5, 120.4, 22.8)))
+    assert qijin.equals(shape(make_square(120.2, 22.55, 120.3, 22.65)))
+    assert kinmen_match == "350000"
 
 
 def test_taiwan_mainland_overlap_patch_rebuilds_only_affected_depth_tiles(tmp_path: Path, monkeypatch):

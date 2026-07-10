@@ -500,12 +500,13 @@ def insert_footprint_if_new(
     *,
     region_matcher: RegionMatcher | None = None,
 ) -> bool:
-    matcher = region_matcher or create_region_matcher(connection)
-    region_id = matcher.find_finest_region_id(
-        longitude=float(point["longitude"]),
-        latitude=float(point["latitude"]),
+    admin_region_match = classify_footprint_admin_region(
+        connection,
+        point,
+        region_matcher=region_matcher,
     )
-    country_id = country_id_for_region_match(region_id)
+    region_id = admin_region_match["region_id"]
+    country_id = admin_region_match["country_id"]
     cursor = connection.execute(
         """
         INSERT OR IGNORE INTO footprints (
@@ -558,6 +559,23 @@ def insert_footprint_if_new(
     )
     update_region_unlock_stats(connection, point, region_id)
     return True
+
+
+def classify_footprint_admin_region(
+    connection: sqlite3.Connection,
+    point: dict[str, Any],
+    *,
+    region_matcher: RegionMatcher | None = None,
+) -> dict[str, str | None]:
+    matcher = region_matcher or create_region_matcher(connection)
+    region_id = matcher.find_finest_region_id(
+        longitude=float(point["longitude"]),
+        latitude=float(point["latitude"]),
+    )
+    return {
+        "region_id": region_id,
+        "country_id": country_id_for_region_match(region_id),
+    }
 
 
 def mark_affected_visual_tiles_dirty(connection: sqlite3.Connection, point: dict[str, Any]) -> None:
