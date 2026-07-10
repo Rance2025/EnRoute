@@ -337,7 +337,12 @@ describe('TimeContextPanel', () => {
     const groupedColumns = Array.from(container.querySelectorAll('.time-context-trend__column'))
     fireEvent.pointerEnter(groupedColumns[56])
 
-    expect(within(trend).getByText('6月18日-6月20日 · 日均 400 m · 共 1.2 km')).toBeInTheDocument()
+    const summary = trend.querySelector('.time-context-trend__summary')
+    const summaryLines = summary?.querySelectorAll('.time-context-trend__summary-line')
+
+    expect(summaryLines).toHaveLength(2)
+    expect(summaryLines?.[0]).toHaveTextContent('6\u670818\u65e5-6\u670820\u65e5')
+    expect(summaryLines?.[1]).toHaveTextContent('\u65e5\u5747 400 m \u00b7 \u5171 1.2 km')
 
     fireEvent.click(groupedButton)
 
@@ -393,7 +398,12 @@ describe('TimeContextPanel', () => {
     const groupedColumns = Array.from(container.querySelectorAll('.time-context-trend__column'))
     fireEvent.pointerEnter(groupedColumns[0])
 
-    expect(within(trend).getByText('1月1日-1月2日 · 日均 1.0 km · 共 2.0 km')).toBeInTheDocument()
+    const summary = trend.querySelector('.time-context-trend__summary')
+    const summaryLines = summary?.querySelectorAll('.time-context-trend__summary-line')
+
+    expect(summaryLines).toHaveLength(2)
+    expect(summaryLines?.[0]).toHaveTextContent('1\u67081\u65e5-1\u67082\u65e5')
+    expect(summaryLines?.[1]).toHaveTextContent('\u65e5\u5747 1.0 km \u00b7 \u5171 2.0 km')
   })
 
   it('renders real distance buckets and only emphasizes the hovered or focused column', () => {
