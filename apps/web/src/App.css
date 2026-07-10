@@ -756,24 +756,25 @@
 }
 
 .time-context-trend__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 10px;
+  display: grid;
+  align-items: start;
+  gap: 6px;
+  margin-bottom: 8px;
 }
 
 .time-context-trend__title {
   min-width: 0;
-  display: inline-flex;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .time-context-trend__title span {
   color: rgba(21, 48, 42, 0.72);
   font-size: 12px;
   font-weight: 860;
+  white-space: nowrap;
 }
 
 .time-context-trend__scale-button,
@@ -801,17 +802,33 @@
   background: rgba(255, 255, 255, 0.72);
 }
 
-.time-context-trend__head small {
+.time-context-trend__summary {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  min-height: 24px;
+  align-content: start;
   color: rgba(21, 48, 42, 0.46);
   font-size: 10px;
   font-weight: 760;
-  line-height: 1;
+  line-height: 1.2;
+  white-space: normal;
+}
+
+.time-context-trend__summary-line {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.time-context-trend__summary-line--secondary {
+  color: rgba(21, 48, 42, 0.5);
 }
 
 .time-context-trend__chart {
   position: relative;
-  height: 178px;
+  height: 144px;
   padding: 0 1px;
   overflow: hidden;
 }

@@ -93,6 +93,10 @@ type CustomDatePickerMode = 'day' | 'month'
 type TemporaryPickerMode = 'default' | 'month' | 'year'
 type DistanceTrendScale = 'linear' | 'log'
 type DistanceTrendGroupingMode = 'daily' | 'grouped'
+type DistanceTrendSummaryLabel = string | {
+  primary: string
+  secondary: string
+}
 
 const DISTANCE_TREND_GROUP_TARGET = 120
 const DISTANCE_TREND_GROUP_MIN = 100
@@ -366,7 +370,7 @@ export function TimeContextPanel({
                   </button>
                 ) : null}
               </div>
-              <small>{activeTrendBucket?.summaryLabel ?? distanceTrend.metadata}</small>
+              <DistanceTrendSummary summary={activeTrendBucket?.summaryLabel ?? distanceTrend.metadata} />
             </div>
             <div
               className={[
@@ -453,6 +457,28 @@ function splitMetricValue(value: string) {
   }
 }
 
+function DistanceTrendSummary({ summary }: { summary: DistanceTrendSummaryLabel }) {
+  if (typeof summary === 'string') {
+    return (
+      <small className="time-context-trend__summary">
+        <span className="time-context-trend__summary-line">{summary}</span>
+      </small>
+    )
+  }
+
+  return (
+    <small
+      className="time-context-trend__summary"
+      aria-label={`${summary.primary} · ${summary.secondary}`}
+    >
+      <span className="time-context-trend__summary-line">{summary.primary}</span>
+      <span className="time-context-trend__summary-line time-context-trend__summary-line--secondary">
+        {summary.secondary}
+      </span>
+    </small>
+  )
+}
+
 function getDistanceTrendModel(
   distanceSeries?: FootprintDistanceSeries,
   scale: DistanceTrendScale = 'linear',
@@ -497,7 +523,7 @@ function getDistanceTrendModel(
 }
 
 type DistanceTrendDisplayBucket = FootprintDistanceBucket & {
-  summaryLabel?: string
+  summaryLabel?: DistanceTrendSummaryLabel
 }
 
 function getDistanceTrendGrouping(
@@ -584,7 +610,10 @@ function createGroupedDistanceTrendBuckets(
       key: `${first.key}..${last.key}`,
       label,
       distanceMeters: averageDistanceMeters,
-      summaryLabel: `${label} · 日均 ${formatDistanceTrendValue(averageDistanceMeters)} · 共 ${formatDistanceTrendValue(totalDistanceMeters)}`,
+      summaryLabel: {
+        primary: label,
+        secondary: `日均 ${formatDistanceTrendValue(averageDistanceMeters)} · 共 ${formatDistanceTrendValue(totalDistanceMeters)}`,
+      },
     })
   }
 
