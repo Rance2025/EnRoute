@@ -1654,6 +1654,113 @@ def test_admin_regions_endpoint_allows_china_level_four_regions(tmp_path: Path):
     assert [region["id"] for region in response.json()["regions"]] == ["310115"]
 
 
+def test_serves_active_admin_region_ids_for_date_range(tmp_path: Path):
+    collection = {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "properties": {"id": "cn", "name": "China", "level": 1},
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [[[70, 15], [135, 15], [135, 55], [70, 55], [70, 15]]],
+                },
+            },
+            {
+                "type": "Feature",
+                "properties": {"id": "310000", "name": "Shanghai", "level": 2, "parentId": "cn"},
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [[[120, 30], [123, 30], [123, 33], [120, 33], [120, 30]]],
+                },
+            },
+            {
+                "type": "Feature",
+                "properties": {"id": "310100", "name": "Shanghai City", "level": 3, "parentId": "310000"},
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [[[121, 31], [122, 31], [122, 32], [121, 32], [121, 31]]],
+                },
+            },
+            {
+                "type": "Feature",
+                "properties": {"id": "310115", "name": "Pudong", "level": 4, "parentId": "310100"},
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [[[121.4, 31.1], [121.8, 31.1], [121.8, 31.4], [121.4, 31.4], [121.4, 31.1]]],
+                },
+            },
+            {
+                "type": "Feature",
+                "properties": {"id": "310101", "name": "Huangpu", "level": 4, "parentId": "310100"},
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [[[121.45, 31.2], [121.5, 31.2], [121.5, 31.25], [121.45, 31.25], [121.45, 31.2]]],
+                },
+            },
+        ],
+    }
+    db_path = tmp_path / "footprints.sqlite"
+    settings = Settings(
+        footprint_data_path=tmp_path / "missing-points.csv",
+        footprint_db_path=db_path,
+        footprint_coordinate_system="wgs84",
+        admin_region_data_path=tmp_path / "missing-admin-regions.geojson",
+    )
+    with sqlite3.connect(db_path) as connection:
+        connection.row_factory = sqlite3.Row
+        initialize_schema(connection)
+        load_admin_regions(connection, collection)
+        connection.executemany(
+            """
+            INSERT INTO footprints (
+              timestamp_seconds, longitude, latitude, accuracy, speed, distance, heading, altitude, region_id
+            )
+            VALUES (?, ?, ?, 5, 0, 0, 0, 0, ?)
+            """,
+            [
+                (1781798400, 121.5, 31.2, "310115"),
+                (1781840000, 121.46, 31.22, "310101"),
+                (1781884800, 121.5, 31.2, "310115"),
+            ],
+        )
+        connection.executemany(
+            """
+            INSERT INTO footprint_spatial (
+              footprint_rowid, min_lng, max_lng, min_lat, max_lat
+            )
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            [
+                (1781798400, 121.5, 121.5, 31.2, 31.2),
+                (1781840000, 121.46, 121.46, 31.22, 31.22),
+                (1781884800, 121.5, 121.5, 31.2, 31.2),
+            ],
+        )
+        connection.commit()
+    client = TestClient(create_app(settings=settings))
+
+    city_response = client.get("/api/admin-regions/active?start=2026-06-19&end=2026-06-19&depth=3")
+    district_response = client.get("/api/admin-regions/active?start=2026-06-19&end=2026-06-19&depth=4")
+    all_response = client.get("/api/admin-regions/active?range=all&depth=4")
+
+    assert city_response.status_code == 200
+    assert city_response.json() == {
+        "depth": 3,
+        "regionIds": ["310100"],
+    }
+    assert district_response.status_code == 200
+    assert district_response.json() == {
+        "depth": 4,
+        "regionIds": ["310101", "310115"],
+    }
+    assert all_response.status_code == 200
+    assert all_response.json() == {
+        "depth": 4,
+        "regionIds": ["310101", "310115"],
+    }
+
+
 def test_previews_local_shanghai_level4_regions_without_importing_footprints(tmp_path: Path):
     data_path = tmp_path / "missing-points.csv"
     db_path = tmp_path / "footprints.sqlite"
