@@ -710,7 +710,7 @@ function getDistanceTrendScaledValue(value: number, scale: DistanceTrendScale) {
   const safeValue = Math.max(value, 0)
 
   if (!Number.isFinite(safeValue) || safeValue <= 0) return 0
-  if (scale === 'log') return Math.log1p(safeValue / 1000)
+  if (scale === 'log') return Math.log1p(safeValue / 10000)
 
   return safeValue
 }
