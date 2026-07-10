@@ -16,7 +16,6 @@ from enroute_api.admin_regions.store import (
 )
 from enroute_api.config import Settings
 from enroute_api.main import create_app
-from enroute_api.footprints.country import classify_country_lookup, country_id_for_region_match
 from enroute_api.footprints.store import (
     ADMIN_REGION_STATS_SIGNATURE_KEY,
     FootprintStore,
@@ -178,18 +177,6 @@ OVERTURE_COLLECTION = {
 }
 
 
-def test_country_lookup_prefers_local_china_regions_before_remote_lookup():
-    assert country_id_for_region_match("310115") == "CHN"
-    assert classify_country_lookup(longitude=121.5, latitude=31.2) == {
-        "possibly_china": True,
-        "remote_lookup_allowed": False,
-    }
-    assert classify_country_lookup(longitude=-73.98, latitude=40.75) == {
-        "possibly_china": False,
-        "remote_lookup_allowed": True,
-    }
-
-
 def test_initializes_admin_region_tables_and_new_footprint_contract(tmp_path: Path):
     connection = sqlite3.connect(tmp_path / "footprints.sqlite")
     try:
@@ -210,7 +197,6 @@ def test_initializes_admin_region_tables_and_new_footprint_contract(tmp_path: Pa
         "heading",
         "altitude",
         "region_id",
-        "country_id",
     ]
     assert "loc_type" not in footprint_columns
     assert region_columns == [
@@ -230,6 +216,66 @@ def test_initializes_admin_region_tables_and_new_footprint_contract(tmp_path: Pa
         "travel_distance_meters",
     ]
     assert tree_columns == ["parent_id", "child_id"]
+
+
+def test_initialize_schema_migrates_country_id_out_of_existing_footprints(tmp_path: Path):
+    connection = sqlite3.connect(tmp_path / "footprints.sqlite")
+    connection.row_factory = sqlite3.Row
+    try:
+        connection.execute(
+            """
+            CREATE TABLE footprints (
+              timestamp_seconds INTEGER PRIMARY KEY,
+              longitude REAL NOT NULL,
+              latitude REAL NOT NULL,
+              accuracy REAL NOT NULL,
+              speed REAL NOT NULL,
+              distance REAL NOT NULL,
+              heading REAL NOT NULL,
+              altitude REAL NOT NULL,
+              region_id TEXT,
+              country_id TEXT
+            )
+            """,
+        )
+        connection.execute(
+            """
+            INSERT INTO footprints (
+              timestamp_seconds, longitude, latitude, accuracy, speed, distance, heading, altitude, region_id, country_id
+            ) VALUES (100, 121.5, 31.2, 5, -1, 0, 0, 3, '310115', 'CHN')
+            """,
+        )
+        connection.commit()
+
+        initialize_schema(connection)
+
+        footprint_columns = column_names(connection, "footprints")
+        row = connection.execute(
+            """
+            SELECT timestamp_seconds, longitude, latitude, region_id
+            FROM footprints
+            """,
+        ).fetchone()
+    finally:
+        connection.close()
+
+    assert footprint_columns == [
+        "timestamp_seconds",
+        "longitude",
+        "latitude",
+        "accuracy",
+        "speed",
+        "distance",
+        "heading",
+        "altitude",
+        "region_id",
+    ]
+    assert dict(row) == {
+        "timestamp_seconds": 100,
+        "longitude": 121.5,
+        "latitude": 31.2,
+        "region_id": "310115",
+    }
 
 
 def test_loads_regions_and_walks_chain(tmp_path: Path):
@@ -601,10 +647,7 @@ def test_classifies_new_footprint_against_finest_cached_admin_region(tmp_path: P
     finally:
         connection.close()
 
-    assert match == {
-        "region_id": "sanlin",
-        "country_id": "CHN",
-    }
+    assert match == "sanlin"
 
 
 def column_names(connection: sqlite3.Connection, table_name: str) -> list[str]:
@@ -642,7 +685,7 @@ def test_incremental_import_assigns_finest_region_and_updates_cached_stats(tmp_p
         ensure_imported(connection, data_path=data_path, coordinate_system="gcj02")
 
         footprints = connection.execute(
-            "SELECT timestamp_seconds, region_id, country_id FROM footprints ORDER BY timestamp_seconds",
+            "SELECT timestamp_seconds, region_id FROM footprints ORDER BY timestamp_seconds",
         ).fetchall()
         stats = {
             row["id"]: dict(row)
@@ -657,10 +700,10 @@ def test_incremental_import_assigns_finest_region_and_updates_cached_stats(tmp_p
     finally:
         connection.close()
 
-    assert [(row["timestamp_seconds"], row["region_id"], row["country_id"]) for row in footprints] == [
-        (100, "sanlin", "CHN"),
-        (130, "sanlin", "CHN"),
-        (160, "pudong", "CHN"),
+    assert [(row["timestamp_seconds"], row["region_id"]) for row in footprints] == [
+        (100, "sanlin"),
+        (130, "sanlin"),
+        (160, "pudong"),
     ]
     assert stats["sanlin"]["footprint_count"] == 2
     assert stats["sanlin"]["first_seen_timestamp"] == 100
