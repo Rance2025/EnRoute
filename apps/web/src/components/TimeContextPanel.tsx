@@ -92,6 +92,12 @@ type TimeNavigationState = {
 type CustomDatePickerMode = 'day' | 'month'
 type TemporaryPickerMode = 'default' | 'month' | 'year'
 type DistanceTrendScale = 'linear' | 'log'
+type DistanceTrendGroupingMode = 'daily' | 'grouped'
+
+const DISTANCE_TREND_GROUP_TARGET = 120
+const DISTANCE_TREND_GROUP_MIN = 100
+const DISTANCE_TREND_GROUP_MAX = 160
+const DISTANCE_TREND_CUSTOM_GROUP_THRESHOLD = 200
 
 function TimeArrowIcon({ direction }: { direction: -1 | 1 }) {
   const Icon = direction === -1 ? ChevronLeft : ChevronRight
@@ -112,6 +118,8 @@ export function TimeContextPanel({
   const [isCustomDatePickerOpen, setIsCustomDatePickerOpen] = useState(false)
   const [activeTrendIndex, setActiveTrendIndex] = useState<number | null>(null)
   const [distanceTrendScale, setDistanceTrendScale] = useState<DistanceTrendScale>('linear')
+  const [distanceTrendGroupingMode, setDistanceTrendGroupingMode] =
+    useState<DistanceTrendGroupingMode>('grouped')
   const [dayCalendarCollapseSequence, setDayCalendarCollapseSequence] = useState(0)
   const [navigationState, setNavigationState] = useState<TimeNavigationState>({
     direction: null,
@@ -123,7 +131,12 @@ export function TimeContextPanel({
   const summaryItems = metricItems ?? (view === 'accounting'
     ? getAccountingSummary(selection)
     : [])
-  const distanceTrend = getDistanceTrendModel(distanceSeries, distanceTrendScale)
+  const distanceTrend = getDistanceTrendModel(
+    distanceSeries,
+    distanceTrendScale,
+    selection.mode,
+    distanceTrendGroupingMode,
+  )
   const activeTrendBucket = activeTrendIndex === null
     ? null
     : distanceTrend.values[activeTrendIndex] ?? null
@@ -193,6 +206,13 @@ export function TimeContextPanel({
     )
 
     setActiveTrendIndex((current) => (current === nextIndex ? current : nextIndex))
+  }
+
+  function handleTrendGroupingToggle() {
+    setActiveTrendIndex(null)
+    setDistanceTrendGroupingMode((current) => (
+      current === 'grouped' ? 'daily' : 'grouped'
+    ))
   }
 
   function handlePeriodNavigate(
@@ -335,6 +355,16 @@ export function TimeContextPanel({
                 >
                   {distanceTrend.scaleLabel}
                 </button>
+                {distanceTrend.canToggleGrouping ? (
+                  <button
+                    className="time-context-trend__group-button"
+                    type="button"
+                    aria-label={distanceTrend.groupingLabel}
+                    onClick={handleTrendGroupingToggle}
+                  >
+                    {distanceTrend.groupingLabel}
+                  </button>
+                ) : null}
               </div>
               <small>{activeTrendBucket?.summaryLabel ?? distanceTrend.metadata}</small>
             </div>
@@ -354,42 +384,44 @@ export function TimeContextPanel({
               onPointerMove={handleTrendPointerMove}
               onPointerLeave={() => setActiveTrendIndex(null)}
             >
-              <div className="time-context-trend__average-line" />
-              <span className="time-context-trend__average-label">
-                {distanceTrend.averageLabel}
-              </span>
-              {distanceTrend.values.map((item, index) => (
-                <span
-                  key={item.key}
-                  role="button"
-                  tabIndex={0}
-                  aria-label={`${item.label}，${item.formattedValue}`}
-                  className={[
-                    'time-context-trend__column',
-                    activeTrendIndex === index ? 'is-active' : null,
-                  ]
-                    .filter(Boolean)
-                    .join(' ')}
-                  onPointerEnter={() => setActiveTrendIndex(index)}
-                  onPointerLeave={() => setActiveTrendIndex((current) => (
-                    current === index ? null : current
-                  ))}
-                  onFocus={() => setActiveTrendIndex(index)}
-                  onBlur={() => setActiveTrendIndex((current) => (
-                    current === index ? null : current
-                  ))}
-                >
+              <div className="time-context-trend__plot">
+                <div className="time-context-trend__average-line" />
+                <span className="time-context-trend__average-label">
+                  {distanceTrend.averageLabel}
+                </span>
+                {distanceTrend.values.map((item, index) => (
                   <span
+                    key={item.key}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`${item.label}，${item.formattedValue}`}
                     className={[
-                      'time-context-trend__bar',
+                      'time-context-trend__column',
                       activeTrendIndex === index ? 'is-active' : null,
                     ]
                       .filter(Boolean)
                       .join(' ')}
-                    style={{ '--trend-height': item.height } as CSSProperties}
-                  />
-                </span>
-              ))}
+                    onPointerEnter={() => setActiveTrendIndex(index)}
+                    onPointerLeave={() => setActiveTrendIndex((current) => (
+                      current === index ? null : current
+                    ))}
+                    onFocus={() => setActiveTrendIndex(index)}
+                    onBlur={() => setActiveTrendIndex((current) => (
+                      current === index ? null : current
+                    ))}
+                  >
+                    <span
+                      className={[
+                        'time-context-trend__bar',
+                        activeTrendIndex === index ? 'is-active' : null,
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                      style={{ '--trend-height': item.height } as CSSProperties}
+                    />
+                  </span>
+                ))}
+              </div>
             </div>
           </section>
         ) : null}
@@ -424,16 +456,26 @@ function splitMetricValue(value: string) {
 function getDistanceTrendModel(
   distanceSeries?: FootprintDistanceSeries,
   scale: DistanceTrendScale = 'linear',
+  selectionMode: TimeRangeMode = 'custom',
+  groupingMode: DistanceTrendGroupingMode = 'grouped',
 ) {
-  const buckets = distanceSeries?.buckets ?? []
-  const rawValues = buckets.map((bucket) => Math.max(bucket.distanceMeters, 0))
+  const sourceBuckets = distanceSeries?.buckets ?? []
+  const grouping = getDistanceTrendGrouping(
+    sourceBuckets,
+    distanceSeries?.granularity,
+    selectionMode,
+    groupingMode,
+  )
+  const rawValues = grouping.buckets.map((bucket) => Math.max(bucket.distanceMeters, 0))
   const maxValue = Math.max(...rawValues, 1)
   const maxScaledValue = getDistanceTrendScaledValue(maxValue, scale)
-  const average = getDistanceTrendAverage(buckets, distanceSeries?.granularity)
+  const average = getDistanceTrendAverage(sourceBuckets, distanceSeries?.granularity)
   const averageValue = average.value
   const averagePosition = getDistanceTrendPosition(averageValue, maxScaledValue, scale)
   const denominatorLabel = distanceSeries?.unit === 'hour' ? '小时' : '日'
-  const aggregationLabel = distanceSeries?.granularity === 'hour' ? '按小时汇总' : '按日汇总'
+  const aggregationLabel = grouping.isGrouped
+    ? `按${grouping.groupSize}日归并`
+    : distanceSeries?.granularity === 'hour' ? '按小时汇总' : '按日汇总'
   const nextScale: DistanceTrendScale = scale === 'linear' ? 'log' : 'linear'
 
   return {
@@ -445,11 +487,108 @@ function getDistanceTrendModel(
     nextScale,
     scaleLabel: scale === 'linear' ? '线性' : '对数',
     nextScaleLabel: nextScale === 'linear' ? '线性' : '对数',
-    isDense: buckets.length > 90,
-    values: buckets.map((bucket, index) => (
+    canToggleGrouping: grouping.canToggle,
+    groupingLabel: groupingMode === 'grouped' ? '归并' : '逐日',
+    isDense: grouping.buckets.length > 90,
+    values: grouping.buckets.map((bucket, index) => (
       createDistanceTrendValue(bucket, index, maxScaledValue, scale)
     )),
   }
+}
+
+type DistanceTrendDisplayBucket = FootprintDistanceBucket & {
+  summaryLabel?: string
+}
+
+function getDistanceTrendGrouping(
+  buckets: FootprintDistanceBucket[],
+  granularity: FootprintDistanceSeries['granularity'] | undefined,
+  selectionMode: TimeRangeMode,
+  groupingMode: DistanceTrendGroupingMode,
+) {
+  const canToggle = granularity === 'day' && (
+    selectionMode === 'year' ||
+    (selectionMode === 'custom' && buckets.length > DISTANCE_TREND_CUSTOM_GROUP_THRESHOLD)
+  )
+  const groupSize = canToggle && groupingMode === 'grouped'
+    ? getDistanceTrendGroupSize(buckets.length)
+    : 1
+  const isGrouped = groupSize > 1
+
+  return {
+    canToggle,
+    groupSize,
+    isGrouped,
+    buckets: isGrouped
+      ? createGroupedDistanceTrendBuckets(buckets, groupSize)
+      : buckets.map((bucket) => ({ ...bucket })),
+  }
+}
+
+function getDistanceTrendGroupSize(bucketCount: number) {
+  if (bucketCount <= DISTANCE_TREND_CUSTOM_GROUP_THRESHOLD) return 1
+
+  let bestGroupSize = 1
+  let bestColumnCount = bucketCount
+  let bestScore = Number.POSITIVE_INFINITY
+  const maxGroupSize = Math.ceil(bucketCount / DISTANCE_TREND_GROUP_MIN)
+
+  for (let groupSize = 2; groupSize <= maxGroupSize; groupSize += 1) {
+    const columnCount = Math.ceil(bucketCount / groupSize)
+    if (
+      columnCount < DISTANCE_TREND_GROUP_MIN ||
+      columnCount > DISTANCE_TREND_GROUP_MAX
+    ) {
+      continue
+    }
+
+    const score = columnCount < DISTANCE_TREND_GROUP_TARGET
+      ? (DISTANCE_TREND_GROUP_TARGET - columnCount) * 1.6
+      : columnCount - DISTANCE_TREND_GROUP_TARGET
+
+    if (
+      score < bestScore ||
+      (score === bestScore && columnCount > bestColumnCount)
+    ) {
+      bestGroupSize = groupSize
+      bestColumnCount = columnCount
+      bestScore = score
+    }
+  }
+
+  if (bestGroupSize > 1) return bestGroupSize
+
+  return Math.max(2, Math.round(bucketCount / DISTANCE_TREND_GROUP_TARGET))
+}
+
+function createGroupedDistanceTrendBuckets(
+  buckets: FootprintDistanceBucket[],
+  groupSize: number,
+): DistanceTrendDisplayBucket[] {
+  const groupedBuckets: DistanceTrendDisplayBucket[] = []
+
+  for (let index = 0; index < buckets.length; index += groupSize) {
+    const group = buckets.slice(index, index + groupSize)
+    const first = group[0]
+    const last = group[group.length - 1]
+    if (!first || !last) continue
+
+    const totalDistanceMeters = group.reduce(
+      (total, bucket) => total + Math.max(bucket.distanceMeters, 0),
+      0,
+    )
+    const averageDistanceMeters = totalDistanceMeters / group.length
+    const label = formatDistanceTrendRangeLabel(first, last)
+
+    groupedBuckets.push({
+      key: `${first.key}..${last.key}`,
+      label,
+      distanceMeters: averageDistanceMeters,
+      summaryLabel: `${label} · 日均 ${formatDistanceTrendValue(averageDistanceMeters)} · 共 ${formatDistanceTrendValue(totalDistanceMeters)}`,
+    })
+  }
+
+  return groupedBuckets
 }
 
 function getDistanceTrendAverage(
@@ -560,7 +699,7 @@ function getDistanceTrendPosition(
 }
 
 function createDistanceTrendValue(
-  bucket: FootprintDistanceBucket,
+  bucket: DistanceTrendDisplayBucket,
   index: number,
   maxScaledValue: number,
   scale: DistanceTrendScale,
@@ -572,9 +711,26 @@ function createDistanceTrendValue(
     key: bucket.key || `${bucket.label}-${index}`,
     label: bucket.label,
     formattedValue,
-    summaryLabel: `${bucket.label} · ${formattedValue}`,
+    summaryLabel: bucket.summaryLabel ?? `${bucket.label} · ${formattedValue}`,
     height: getDistanceTrendPosition(distanceMeters, maxScaledValue, scale),
   }
+}
+
+function formatDistanceTrendRangeLabel(
+  first: FootprintDistanceBucket,
+  last: FootprintDistanceBucket,
+) {
+  const startLabel = formatDistanceTrendDateLabel(first.key, first.label)
+  const endLabel = formatDistanceTrendDateLabel(last.key, last.label)
+
+  return startLabel === endLabel ? startLabel : `${startLabel}-${endLabel}`
+}
+
+function formatDistanceTrendDateLabel(key: string, fallback: string) {
+  const match = key.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (!match) return fallback
+
+  return `${Number(match[2])}月${Number(match[3])}日`
 }
 
 function formatDistanceTrendValue(value: number) {

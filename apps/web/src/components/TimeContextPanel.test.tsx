@@ -316,6 +316,86 @@ describe('TimeContextPanel', () => {
     ])
   })
 
+  it('keeps yearly distance buckets grouped by default while exposing a compact current-mode toggle', () => {
+    const { container } = render(
+      <TimeContextPanel
+        view="map"
+        selection={selectYear(2026)}
+        distanceSeries={denseYearDistanceSeries}
+        onSelectionChange={vi.fn()}
+      />,
+    )
+
+    const trend = screen.getByLabelText('当前范围距离')
+    const groupedButton = within(trend).getByRole('button', { name: '归并' })
+
+    expect(groupedButton).toHaveClass('time-context-trend__group-button')
+    expect(within(trend).getAllByRole('button', { name: '归并' })).toHaveLength(1)
+    expect(container.querySelectorAll('.time-context-trend__column')).toHaveLength(122)
+    expect(within(trend).getByText('按3日归并 · 171天')).toBeInTheDocument()
+
+    const groupedColumns = Array.from(container.querySelectorAll('.time-context-trend__column'))
+    fireEvent.pointerEnter(groupedColumns[56])
+
+    expect(within(trend).getByText('6月18日-6月20日 · 日均 400 m · 共 1.2 km')).toBeInTheDocument()
+
+    fireEvent.click(groupedButton)
+
+    expect(within(trend).getByRole('button', { name: '逐日' })).toBeInTheDocument()
+    expect(container.querySelectorAll('.time-context-trend__column')).toHaveLength(365)
+  })
+
+  it('shows the grouping toggle for custom ranges only after the range exceeds 200 days', () => {
+    const twoHundredDays: FootprintDistanceSeries = {
+      granularity: 'day',
+      unit: 'day',
+      buckets: Array.from({ length: 200 }, (_, index) => ({
+        key: createDateKeyFromOffset('2026-01-01', index),
+        label: `D${index + 1}`,
+        distanceMeters: 100,
+      })),
+    }
+    const twoHundredOneDays: FootprintDistanceSeries = {
+      granularity: 'day',
+      unit: 'day',
+      buckets: Array.from({ length: 201 }, (_, index) => ({
+        key: createDateKeyFromOffset('2026-01-01', index),
+        label: `D${index + 1}`,
+        distanceMeters: index < 2 ? 1000 : 0,
+      })),
+    }
+    const { container, rerender } = render(
+      <TimeContextPanel
+        view="map"
+        selection={setCustomDateRange('2026-01-01', '2026-07-19')}
+        distanceSeries={twoHundredDays}
+        onSelectionChange={vi.fn()}
+      />,
+    )
+
+    expect(screen.queryByRole('button', { name: '归并' })).not.toBeInTheDocument()
+    expect(container.querySelectorAll('.time-context-trend__column')).toHaveLength(200)
+
+    rerender(
+      <TimeContextPanel
+        view="map"
+        selection={setCustomDateRange('2026-01-01', '2026-07-20')}
+        distanceSeries={twoHundredOneDays}
+        onSelectionChange={vi.fn()}
+      />,
+    )
+
+    const trend = screen.getByLabelText('当前范围距离')
+
+    expect(within(trend).getByRole('button', { name: '归并' })).toBeInTheDocument()
+    expect(container.querySelectorAll('.time-context-trend__column')).toHaveLength(101)
+
+    const groupedColumns = Array.from(container.querySelectorAll('.time-context-trend__column'))
+    fireEvent.pointerEnter(groupedColumns[0])
+
+    expect(within(trend).getByText('1月1日-1月2日 · 日均 1.0 km · 共 2.0 km')).toBeInTheDocument()
+  })
+
   it('renders real distance buckets and only emphasizes the hovered or focused column', () => {
     const { container } = render(
       <TimeContextPanel
@@ -346,7 +426,7 @@ describe('TimeContextPanel', () => {
     expect(bars.filter((bar) => bar.classList.contains('is-active'))).toEqual([bars[2]])
   })
 
-  it('keeps dense year distance buckets addressable through full-height columns', () => {
+  it('keeps dense year distance buckets addressable after switching back to daily columns', () => {
     const { container } = render(
       <TimeContextPanel
         view="map"
@@ -357,6 +437,8 @@ describe('TimeContextPanel', () => {
     )
 
     const trend = screen.getByLabelText('当前范围距离')
+    fireEvent.click(within(trend).getByRole('button', { name: '归并' }))
+
     const chart = container.querySelector('.time-context-trend__chart')
     const columns = Array.from(container.querySelectorAll('.time-context-trend__column'))
     const bars = Array.from(container.querySelectorAll('.time-context-trend__bar'))
@@ -364,6 +446,7 @@ describe('TimeContextPanel', () => {
     expect(chart).toHaveClass('time-context-trend__chart--dense')
     expect(columns).toHaveLength(365)
     expect(bars).toHaveLength(365)
+    expect(within(trend).getByRole('button', { name: '逐日' })).toBeInTheDocument()
     expect(within(trend).getByText('按日汇总 · 171天')).toBeInTheDocument()
 
     fireEvent.pointerEnter(columns[170])
