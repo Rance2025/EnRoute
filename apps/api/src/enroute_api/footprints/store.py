@@ -21,7 +21,6 @@ from enroute_api.admin_regions.store import (
 )
 from enroute_api.admin_regions.tiles import initialize_admin_region_tile_schema, read_admin_region_tile
 
-from .country import country_id_for_region_match
 from .csv_loader import iter_footprint_points
 from .visual_tiles import (
     MAX_VISUAL_TILE_ZOOM,
@@ -49,6 +48,18 @@ MAX_MERCATOR_LATITUDE = 85.05112878
 OPEN_ENDED_TIMESTAMP_SECONDS = 8_640_000_000_000
 ADMIN_REGION_LOADER_VERSION = "admin-regions-v2"
 ADMIN_REGION_STATS_SIGNATURE_KEY = "adminRegionStatsSignature"
+FOOTPRINT_COLUMNS = [
+    "timestamp_seconds",
+    "longitude",
+    "latitude",
+    "accuracy",
+    "speed",
+    "distance",
+    "heading",
+    "altitude",
+    "region_id",
+]
+FOOTPRINT_COLUMNS_WITH_COUNTRY_ID = [*FOOTPRINT_COLUMNS, "country_id"]
 
 
 class FootprintImportResult(TypedDict):
@@ -323,8 +334,7 @@ def initialize_schema(connection: sqlite3.Connection) -> None:
           distance REAL NOT NULL,
           heading REAL NOT NULL,
           altitude REAL NOT NULL,
-          region_id TEXT,
-          country_id TEXT
+          region_id TEXT
         );
         CREATE INDEX IF NOT EXISTS idx_footprints_time ON footprints(timestamp_seconds);
         CREATE INDEX IF NOT EXISTS idx_footprints_lng_lat_time
@@ -373,22 +383,56 @@ def migrate_legacy_footprints_schema(connection: sqlite3.Connection) -> None:
         return
 
     columns = [column[1] for column in connection.execute("PRAGMA table_info(footprints)")]
-    if columns == [
-        "timestamp_seconds",
-        "longitude",
-        "latitude",
-        "accuracy",
-        "speed",
-        "distance",
-        "heading",
-        "altitude",
-        "region_id",
-        "country_id",
-    ]:
+    if columns == FOOTPRINT_COLUMNS:
+        return
+    if columns == FOOTPRINT_COLUMNS_WITH_COUNTRY_ID:
+        migrate_footprints_without_country_id(connection)
         return
 
     raise RuntimeError(
         "legacy footprints schema detected; run the explicit footprint rebuild script instead",
+    )
+
+
+def migrate_footprints_without_country_id(connection: sqlite3.Connection) -> None:
+    connection.executescript(
+        """
+        ALTER TABLE footprints RENAME TO footprints_with_country_id;
+        CREATE TABLE footprints (
+          timestamp_seconds INTEGER PRIMARY KEY,
+          longitude REAL NOT NULL,
+          latitude REAL NOT NULL,
+          accuracy REAL NOT NULL,
+          speed REAL NOT NULL,
+          distance REAL NOT NULL,
+          heading REAL NOT NULL,
+          altitude REAL NOT NULL,
+          region_id TEXT
+        );
+        INSERT INTO footprints (
+          timestamp_seconds,
+          longitude,
+          latitude,
+          accuracy,
+          speed,
+          distance,
+          heading,
+          altitude,
+          region_id
+        )
+        SELECT
+          timestamp_seconds,
+          longitude,
+          latitude,
+          accuracy,
+          speed,
+          distance,
+          heading,
+          altitude,
+          region_id
+        FROM footprints_with_country_id;
+        DROP TABLE footprints_with_country_id;
+        """,
     )
 
 
@@ -500,13 +544,11 @@ def insert_footprint_if_new(
     *,
     region_matcher: RegionMatcher | None = None,
 ) -> bool:
-    admin_region_match = classify_footprint_admin_region(
+    region_id = classify_footprint_admin_region(
         connection,
         point,
         region_matcher=region_matcher,
     )
-    region_id = admin_region_match["region_id"]
-    country_id = admin_region_match["country_id"]
     cursor = connection.execute(
         """
         INSERT OR IGNORE INTO footprints (
@@ -518,9 +560,8 @@ def insert_footprint_if_new(
           distance,
           heading,
           altitude,
-          region_id,
-          country_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          region_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             int(point["timestampSeconds"]),
@@ -532,11 +573,10 @@ def insert_footprint_if_new(
             float(point["heading"]),
             float(point["altitude"]),
             region_id,
-            country_id,
         ),
     )
     if cursor.rowcount == 0:
-        validate_existing_footprint_matches(connection, point, region_id, country_id)
+        validate_existing_footprint_matches(connection, point, region_id)
         return False
 
     connection.execute(
@@ -566,16 +606,12 @@ def classify_footprint_admin_region(
     point: dict[str, Any],
     *,
     region_matcher: RegionMatcher | None = None,
-) -> dict[str, str | None]:
+) -> str | None:
     matcher = region_matcher or create_region_matcher(connection)
-    region_id = matcher.find_finest_region_id(
+    return matcher.find_finest_region_id(
         longitude=float(point["longitude"]),
         latitude=float(point["latitude"]),
     )
-    return {
-        "region_id": region_id,
-        "country_id": country_id_for_region_match(region_id),
-    }
 
 
 def mark_affected_visual_tiles_dirty(connection: sqlite3.Connection, point: dict[str, Any]) -> None:
@@ -609,7 +645,6 @@ def validate_existing_footprint_matches(
     connection: sqlite3.Connection,
     point: dict[str, Any],
     region_id: str | None,
-    country_id: str | None,
 ) -> None:
     row = connection.execute(
         """
@@ -621,8 +656,7 @@ def validate_existing_footprint_matches(
           distance,
           heading,
           altitude,
-          region_id,
-          country_id
+          region_id
         FROM footprints
         WHERE timestamp_seconds = ?
         """,
@@ -640,7 +674,6 @@ def validate_existing_footprint_matches(
         "heading": float(point["heading"]),
         "altitude": float(point["altitude"]),
         "region_id": region_id,
-        "country_id": country_id,
     }
     actual = {
         "longitude": float(row["longitude"]),
@@ -651,7 +684,6 @@ def validate_existing_footprint_matches(
         "heading": float(row["heading"]),
         "altitude": float(row["altitude"]),
         "region_id": row["region_id"],
-        "country_id": row["country_id"],
     }
     if actual != expected:
         raise ValueError(
@@ -1065,8 +1097,7 @@ def query_all_points(connection: sqlite3.Connection) -> dict[str, list[dict[str,
           distance,
           heading,
           altitude,
-          region_id AS regionId,
-          country_id AS countryId
+          region_id AS regionId
         FROM footprints
         ORDER BY timestamp_seconds
         """,
@@ -1085,7 +1116,6 @@ def format_raw_point(row: sqlite3.Row) -> dict[str, Any]:
         "heading": float(row["heading"]),
         "altitude": float(row["altitude"]),
         "regionId": None if row["regionId"] is None else str(row["regionId"]),
-        "countryId": None if row["countryId"] is None else str(row["countryId"]),
     }
 
 
