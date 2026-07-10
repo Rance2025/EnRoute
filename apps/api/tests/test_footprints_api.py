@@ -355,7 +355,7 @@ def test_coordinate_system_change_does_not_clear_visual_tiles_on_request_path(tm
     assert visual_tile_count == (1,)
 
 
-def test_importing_new_footprints_marks_existing_visual_tiles_dirty(tmp_path: Path):
+def test_footprint_runtime_reads_existing_rows_when_csv_changes(tmp_path: Path):
     first_csv = CSV
     appended_csv = "\n".join(
         [
@@ -400,7 +400,9 @@ def test_importing_new_footprints_marks_existing_visual_tiles_dirty(tmp_path: Pa
             ORDER BY t_type, t
             """,
         ).fetchall()
-    assert rows == [(0, 0, STATUS_DIRTY), (3, 20260111, STATUS_DIRTY)]
+        footprint_count = connection.execute("SELECT COUNT(*) FROM footprints").fetchone()[0]
+    assert rows == [(0, 0, STATUS_READY), (3, 20260111, STATUS_READY)]
+    assert footprint_count == 1
 
 
 def test_serves_footprint_metrics_without_raw_points_for_date_range(tmp_path: Path):

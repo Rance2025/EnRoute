@@ -6,14 +6,14 @@ describe('adminRegionVectorTileSource', () => {
   it('builds a global Mapbox vector source capped at the admin cache zoom', () => {
     const source = adminRegionVectorTiles.createAdminRegionVectorTileSource({
       focusRegionId: 'world',
-      depth: 3,
+      depth: 4,
     })
 
     expect(source).toEqual({
       type: 'vector',
-      tiles: ['/api/map/tiles/admin-regions/{z}/{x}/{y}.mvt?focusRegionId=world&depth=3'],
+      tiles: ['/api/map/tiles/admin-regions/{z}/{x}/{y}.mvt?focusRegionId=world&depth=4'],
       minzoom: 0,
-      maxzoom: 8,
+      maxzoom: 9,
       promoteId: 'region_id',
     })
   })
@@ -27,6 +27,7 @@ describe('adminRegionVectorTileSource', () => {
       type: 'fill',
       source: 'admin-regions',
       'source-layer': 'admin_regions',
+      slot: 'top',
       filter: [
         'all',
         ['==', ['get', 'kind'], 'fill'],
@@ -34,8 +35,8 @@ describe('adminRegionVectorTileSource', () => {
       ],
     })
     expect(fillLayer.paint).toMatchObject({
-      'fill-color': '#3f7f74',
-      'fill-opacity': 0.06,
+      'fill-color': '#1f6f67',
+      'fill-opacity': 0.18,
     })
 
     expect(lineLayer).toMatchObject({
@@ -43,6 +44,7 @@ describe('adminRegionVectorTileSource', () => {
       type: 'line',
       source: 'admin-regions',
       'source-layer': 'admin_regions',
+      slot: 'top',
       filter: [
         'all',
         ['==', ['get', 'kind'], 'line'],
@@ -50,8 +52,23 @@ describe('adminRegionVectorTileSource', () => {
       ],
     })
     expect(lineLayer.paint).toMatchObject({
-      'line-color': '#27645c',
-      'line-opacity': 0.78,
+      'line-color': '#0b4f47',
+      'line-opacity': 0.92,
+    })
+    expect(lineLayer.paint).toMatchObject({
+      'line-width': [
+        'interpolate',
+        ['linear'],
+        ['zoom'],
+        1,
+        0.9,
+        4,
+        1.25,
+        8,
+        1.75,
+        12,
+        2.35,
+      ],
     })
   })
 })

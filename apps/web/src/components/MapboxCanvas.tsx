@@ -9,6 +9,7 @@ import {
   createAdminRegionLineLayer,
   createAdminRegionVectorTileSource,
   DEFAULT_ADMIN_REGION_TILE_URL,
+  MAX_ADMIN_REGION_TILE_ZOOM,
   type AdminRegionDepth,
 } from '../layers/adminRegionVectorTileSource'
 import {
@@ -43,6 +44,7 @@ type MapboxCanvasProps = {
   timeRange: TimeRangeSelection
   onFootprintMetricsChange?: (metrics: FootprintMetrics) => void
   adminRegionUnlockEnabled?: boolean
+  adminRegionDepth?: AdminRegionDepth
   debugPanelVisible?: boolean
   placeLabelsVisible?: boolean
   adminBoundariesVisible?: boolean
@@ -96,6 +98,12 @@ type FootprintTileDebugMetrics = {
   rawCount: number
   representativeCount: number
   renderRatio: number
+}
+
+type AdminRegionTileDebugMetrics = {
+  tileZoom: number
+  visibleTileCount: number
+  regionDepth: AdminRegionDepth
 }
 
 type FootprintTileDebugViewport = {
@@ -152,11 +160,7 @@ const DEFAULT_MAPBOX_PROJECTION: MapboxProjection = 'globe'
 const DEFAULT_FOOTPRINT_METRICS_URL = '/api/footprints/metrics'
 const DEFAULT_FOOTPRINT_TILE_DEBUG_URL = '/api/map/tiles/footprints/debug'
 const DEFAULT_ADMIN_REGION_FOCUS_ID = 'world'
-const DEFAULT_ADMIN_REGION_DEPTH: AdminRegionDepth = 2
-const ADMIN_REGION_DEPTH_OPTIONS: Array<{ value: AdminRegionDepth, label: string }> = [
-  { value: 1, label: '下一级' },
-  { value: 2, label: '下两级' },
-]
+const DEFAULT_ADMIN_REGION_DEPTH: AdminRegionDepth = 1
 const DEFAULT_MAP_CENTER: [number, number] = [104.195397, 35.86166]
 const DEFAULT_MAP_ZOOM = 2.2
 const GLOBE_WORLD_ZOOM = 1.75
@@ -166,6 +170,8 @@ const GLOBE_ROTATION_STEP_DEGREES = 1.2
 const GLOBE_ROTATION_INTERVAL_MS = 1000
 const MAP_FIT_BOUNDS_DURATION_MS = 900
 const MAP_FIT_BOUNDS_PADDING_PX = 96
+const MAP_STYLE_MUTATION_READY_RETRY_INTERVAL_MS = 80
+const MAP_STYLE_MUTATION_READY_RETRY_LIMIT = 60
 const FOOTPRINT_STYLE_STORAGE_KEY = 'enroute.footprintStyle'
 const EMPTY_FOOTPRINT_METRICS: FootprintMetrics = {
   selectedCount: 0,
@@ -191,6 +197,7 @@ function MapboxCanvasComponent({
   timeRange,
   onFootprintMetricsChange,
   adminRegionUnlockEnabled = false,
+  adminRegionDepth = DEFAULT_ADMIN_REGION_DEPTH,
   debugPanelVisible = false,
   placeLabelsVisible = true,
   adminBoundariesVisible = true,
@@ -209,9 +216,7 @@ function MapboxCanvasComponent({
   const [footprintStyle, setFootprintStyle] = useState<FootprintStyle>(readStoredFootprintStyle)
   const [cameraZoom, setCameraZoom] = useState<number | undefined>(undefined)
   const [tileDebugMetrics, setTileDebugMetrics] = useState<FootprintTileDebugMetrics | null>(null)
-  const [adminRegionDepth, setAdminRegionDepth] = useState<AdminRegionDepth>(
-    DEFAULT_ADMIN_REGION_DEPTH,
-  )
+  const [adminRegionDebugMetrics, setAdminRegionDebugMetrics] = useState<AdminRegionTileDebugMetrics | null>(null)
   const [focusedAdminRegionId, setFocusedAdminRegionId] = useState(DEFAULT_ADMIN_REGION_FOCUS_ID)
   const [styleReady, setStyleReady] = useState(false)
   const [styleMutationReady, setStyleMutationReady] = useState(false)
@@ -353,14 +358,6 @@ function MapboxCanvasComponent({
     map.addLayer(createAdminRegionFillLayer())
     map.addLayer(createAdminRegionLineLayer())
   }, [removeAdminRegionLayers])
-
-  const updateAdminRegionLineVisibility = useCallback((visible: boolean) => {
-    const map = mapRef.current
-
-    if (!map?.getLayer(ADMIN_REGION_LINE_LAYER_ID)) return
-
-    map.setLayoutProperty(ADMIN_REGION_LINE_LAYER_ID, 'visibility', visible ? 'visible' : 'none')
-  }, [])
 
   const updateBaseMapLayerVisibility = useCallback(() => {
     const map = mapRef.current
@@ -595,9 +592,22 @@ function MapboxCanvasComponent({
         window.__ENROUTE_MAPBOX__ = map
       }
 
+      const retryStyleMutationReady = (attempt = 0) => {
+        if (disposed || styleMutationReadyRef.current) return
+        if (map.isStyleLoaded()) {
+          styleMutationReadyRef.current = true
+          setStyleMutationReady(true)
+          setStyleLoadRevision((revision) => revision + 1)
+          return
+        }
+        if (attempt >= MAP_STYLE_MUTATION_READY_RETRY_LIMIT) return
+
+        window.setTimeout(() => retryStyleMutationReady(attempt + 1), MAP_STYLE_MUTATION_READY_RETRY_INTERVAL_MS)
+      }
+
       const syncStyleReady = (eventStyleReady = false) => {
         const canMutateStyle = map.isStyleLoaded()
-        if (!eventStyleReady && !canMutateStyle) {
+        if (!eventStyleReady && !canMutateStyle && !styleReadyRef.current) {
           styleReadyRef.current = false
           styleMutationReadyRef.current = false
           setStyleReady(false)
@@ -621,6 +631,8 @@ function MapboxCanvasComponent({
         if (canMutateStyle) {
           styleMutationReadyRef.current = true
           setStyleMutationReady(true)
+        } else if (eventStyleReady) {
+          retryStyleMutationReady()
         }
         setStatus('ready')
         if (!wasStyleReady && resolvedProjection === 'globe') {
@@ -656,6 +668,11 @@ function MapboxCanvasComponent({
       }
       const handleError = (event: ErrorEvent | { error?: unknown }) => {
         if (disposed) return
+
+        if (isNonFatalMapboxSourceError(event)) {
+          console.warn(event)
+          return
+        }
 
         const nextError = 'error' in event ? event.error : undefined
         setErrorMessage(nextError instanceof Error ? nextError.message : 'Mapbox 地图加载失败')
@@ -793,18 +810,6 @@ function MapboxCanvasComponent({
   ])
 
   useEffect(() => {
-    if (status !== 'ready' || !styleMutationReady || !adminRegionUnlockEnabled) return
-
-    updateAdminRegionLineVisibility(adminBoundariesVisible)
-  }, [
-    adminBoundariesVisible,
-    adminRegionUnlockEnabled,
-    status,
-    styleMutationReady,
-    updateAdminRegionLineVisibility,
-  ])
-
-  useEffect(() => {
     const map = mapRef.current
 
     if (status !== 'ready' || !styleMutationReady || !adminRegionUnlockEnabled || !map) return
@@ -817,7 +822,7 @@ function MapboxCanvasComponent({
 
       if (typeof regionId !== 'string' || !regionId) return
 
-      setFocusedAdminRegionId(regionId)
+      setFocusedAdminRegionId(DEFAULT_ADMIN_REGION_FOCUS_ID)
     }
 
     map.on('click', ADMIN_REGION_FILL_LAYER_ID, handleAdminRegionClick)
@@ -848,7 +853,7 @@ function MapboxCanvasComponent({
   ])
 
   useEffect(() => {
-    if (!debugPanelVisible || adminRegionUnlockEnabled || status !== 'ready') {
+    if (!debugPanelVisible || status !== 'ready') {
       return
     }
 
@@ -856,6 +861,29 @@ function MapboxCanvasComponent({
     if (!map) return
 
     setCameraZoom(map.getZoom())
+
+    if (adminRegionUnlockEnabled) {
+      setTileDebugMetrics(null)
+
+      const refreshAdminRegionDebugMetrics = () => {
+        setCameraZoom(map.getZoom())
+        setAdminRegionDebugMetrics(getCurrentAdminRegionTileDebugMetrics(map, adminRegionDepth))
+      }
+
+      refreshAdminRegionDebugMetrics()
+
+      map.on('moveend', refreshAdminRegionDebugMetrics)
+      map.on('zoomend', refreshAdminRegionDebugMetrics)
+      map.on('zoom', refreshAdminRegionDebugMetrics)
+
+      return () => {
+        map.off('moveend', refreshAdminRegionDebugMetrics)
+        map.off('zoomend', refreshAdminRegionDebugMetrics)
+        map.off('zoom', refreshAdminRegionDebugMetrics)
+      }
+    }
+
+    setAdminRegionDebugMetrics(null)
 
     let abortController: AbortController | null = null
 
@@ -909,7 +937,15 @@ function MapboxCanvasComponent({
       map.off('zoomend', refreshTileDebugMetrics)
       map.off('zoom', refreshCameraZoom)
     }
-  }, [adminRegionUnlockEnabled, debugPanelVisible, footprintTileRange, resolvedProjection, resolvedTileDebugUrl, status])
+  }, [
+    adminRegionDepth,
+    adminRegionUnlockEnabled,
+    debugPanelVisible,
+    footprintTileRange,
+    resolvedProjection,
+    resolvedTileDebugUrl,
+    status,
+  ])
 
   const updateFootprintStyle = useCallback((nextFootprintStyle: FootprintStyle) => {
     const normalizedFootprintStyle = normalizeFootprintStyle(nextFootprintStyle)
@@ -987,12 +1023,6 @@ function MapboxCanvasComponent({
       aria-label="在途 EnRoute 地图工作区"
     >
       <div className="amap-surface mapbox-surface" ref={mapNodeRef} />
-      {adminRegionUnlockEnabled ? (
-        <AdminRegionDepthControl
-          depth={adminRegionDepth}
-          onDepthChange={setAdminRegionDepth}
-        />
-      ) : null}
       <MapControls
         onFitFootprints={fitDisplayedFootprints}
         onLocate={locate}
@@ -1012,7 +1042,14 @@ function MapboxCanvasComponent({
         onMapProjectionChange={onMapProjectionChange}
         onMapLanguageChange={onMapLanguageChange}
       />
-        {debugPanelVisible ? (
+        {debugPanelVisible && adminRegionUnlockEnabled ? (
+          <AdminRegionDebugPanel
+            debugMetrics={status === 'ready' ? adminRegionDebugMetrics : null}
+            cameraZoom={cameraZoom}
+            focusedRegionId={focusedAdminRegionId}
+          />
+        ) : null}
+        {debugPanelVisible && !adminRegionUnlockEnabled ? (
           <FootprintDebugPanel
             debugMetrics={status === 'ready' ? tileDebugMetrics : null}
             cameraZoom={cameraZoom}
@@ -1036,29 +1073,6 @@ function MapboxCanvasComponent({
 }
 
 export const MapboxCanvas = memo(MapboxCanvasComponent)
-
-function AdminRegionDepthControl({
-  depth,
-  onDepthChange,
-}: {
-  depth: AdminRegionDepth
-  onDepthChange: (depth: AdminRegionDepth) => void
-}) {
-  return (
-    <div className="glass-panel glass-panel--solid glass-panel--pill admin-region-depth-control" role="group" aria-label="行政区划层级">
-      {ADMIN_REGION_DEPTH_OPTIONS.map((option) => (
-        <button
-          key={option.value}
-          type="button"
-          aria-pressed={option.value === depth}
-          onClick={() => onDepthChange(option.value)}
-        >
-          {option.label}
-        </button>
-      ))}
-    </div>
-  )
-}
 
 function createFootprintTileRange(timeRange: TimeRangeSelection): FootprintVectorTileRange {
   if (timeRange.isOpenEnded) {
@@ -1142,7 +1156,7 @@ function getCurrentFootprintTileDebugViewport(
 }
 
 function getVisibleFootprintTileDebugTarget(map: mapboxgl.Map) {
-  const sourceCache = getFootprintSourceCache(map)
+  const sourceCache = getMapboxSourceCache(map, FOOTPRINT_VECTOR_SOURCE_ID)
   const visibleCoordinates = sourceCache?.getVisibleCoordinates?.() ?? []
   const tileKeysByZoom = new Map<number, Set<string>>()
 
@@ -1180,14 +1194,71 @@ function getVisibleFootprintTileDebugTarget(map: mapboxgl.Map) {
   }
 }
 
-function getFootprintSourceCache(map: mapboxgl.Map): MapboxFootprintSourceCache | undefined {
+function getCurrentAdminRegionTileDebugMetrics(
+  map: mapboxgl.Map,
+  regionDepth: AdminRegionDepth,
+): AdminRegionTileDebugMetrics {
+  const visibleTileTarget = getVisibleAdminRegionTileDebugTarget(map)
+
+  return {
+    tileZoom: visibleTileTarget?.z
+      ?? Math.max(0, Math.min(MAX_ADMIN_REGION_TILE_ZOOM, Math.floor(map.getZoom()))),
+    visibleTileCount: visibleTileTarget?.tiles.length ?? 0,
+    regionDepth,
+  }
+}
+
+function getVisibleAdminRegionTileDebugTarget(map: mapboxgl.Map) {
+  const sourceCache = getMapboxSourceCache(map, ADMIN_REGION_VECTOR_SOURCE_ID)
+  const visibleCoordinates = sourceCache?.getVisibleCoordinates?.() ?? []
+  const tileKeysByZoom = new Map<number, Set<string>>()
+
+  for (const coordinate of visibleCoordinates) {
+    const z = coordinate.canonical?.z
+    const x = coordinate.canonical?.x
+    const y = coordinate.canonical?.y
+
+    if (
+      !Number.isInteger(z) ||
+      !Number.isInteger(x) ||
+      !Number.isInteger(y) ||
+      z == null ||
+      x == null ||
+      y == null ||
+      z < 0 ||
+      x < 0 ||
+      y < 0
+    ) {
+      continue
+    }
+
+    const clampedZ = Math.min(z, MAX_ADMIN_REGION_TILE_ZOOM)
+    if (!tileKeysByZoom.has(clampedZ)) {
+      tileKeysByZoom.set(clampedZ, new Set())
+    }
+    tileKeysByZoom.get(clampedZ)?.add(`${x}/${y}`)
+  }
+
+  const z = Array.from(tileKeysByZoom.keys()).sort((a, b) => b - a)[0]
+  if (z == null) return undefined
+
+  return {
+    z,
+    tiles: Array.from(tileKeysByZoom.get(z) ?? []).sort(compareTileKeys),
+  }
+}
+
+function getMapboxSourceCache(
+  map: mapboxgl.Map,
+  sourceId: string,
+): MapboxFootprintSourceCache | undefined {
   const debugMap = map as MapboxMapWithDebugSourceCache
 
   return (
-    debugMap.getStyleSourceCache?.(FOOTPRINT_VECTOR_SOURCE_ID) ??
-    debugMap.style?.getSourceCache?.(FOOTPRINT_VECTOR_SOURCE_ID) ??
-    debugMap.style?._mergedSourceCaches?.[FOOTPRINT_VECTOR_SOURCE_ID] ??
-    debugMap.style?._sourceCaches?.[FOOTPRINT_VECTOR_SOURCE_ID]
+    debugMap.getStyleSourceCache?.(sourceId) ??
+    debugMap.style?.getSourceCache?.(sourceId) ??
+    debugMap.style?._mergedSourceCaches?.[sourceId] ??
+    debugMap.style?._sourceCaches?.[sourceId]
   )
 }
 
@@ -1216,6 +1287,12 @@ function createMapboxTileUrl(tileUrl: string) {
   const normalizedTileUrl = tileUrl.startsWith('/') ? tileUrl : `/${tileUrl}`
 
   return `${window.location.origin}${normalizedTileUrl}`
+}
+
+function isNonFatalMapboxSourceError(event: ErrorEvent | { error?: unknown }) {
+  if (!('sourceId' in event)) return false
+
+  return event.sourceId === FOOTPRINT_VECTOR_SOURCE_ID || event.sourceId === ADMIN_REGION_VECTOR_SOURCE_ID
 }
 
 function collectBaseMapVisibilityRecords(map: mapboxgl.Map): BaseMapVisibilityRecord[] {
@@ -1405,6 +1482,41 @@ function FootprintDebugPanel({
       <div className="footprint-debug-panel__row">
         <span>渲染率</span>
         <strong>{debugMetrics ? formatDebugRatio(debugMetrics.renderRatio) : '--'}</strong>
+      </div>
+    </aside>
+  )
+}
+
+function AdminRegionDebugPanel({
+  debugMetrics,
+  cameraZoom,
+  focusedRegionId,
+}: {
+  debugMetrics: AdminRegionTileDebugMetrics | null
+  cameraZoom?: number
+  focusedRegionId: string
+}) {
+  return (
+    <aside className="glass-panel glass-panel--solid glass-panel--compact footprint-debug-panel" aria-label="足迹渲染调试">
+      <div className="footprint-debug-panel__row">
+        <span>相机/瓦片层级</span>
+        <strong>
+          {cameraZoom != null ? cameraZoom.toFixed(1) : '--'}
+          {' / '}
+          {debugMetrics ? formatDebugCount(debugMetrics.tileZoom) : '--'}
+        </strong>
+      </div>
+      <div className="footprint-debug-panel__row">
+        <span>区域级别</span>
+        <strong>{debugMetrics ? formatDebugCount(debugMetrics.regionDepth) : '--'}</strong>
+      </div>
+      <div className="footprint-debug-panel__row">
+        <span>可见瓦片</span>
+        <strong>{debugMetrics ? formatDebugCount(debugMetrics.visibleTileCount) : '--'}</strong>
+      </div>
+      <div className="footprint-debug-panel__row">
+        <span>当前区域</span>
+        <strong>{focusedRegionId === DEFAULT_ADMIN_REGION_FOCUS_ID ? 'world' : focusedRegionId}</strong>
       </div>
     </aside>
   )

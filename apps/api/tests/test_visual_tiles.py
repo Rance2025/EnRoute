@@ -867,7 +867,7 @@ def test_serves_footprint_tile_debug_metrics_for_explicit_tile_keys(tmp_path):
         store.close()
 
 
-def test_mvt_request_imports_changed_csv_before_reading_visual_tiles(tmp_path):
+def test_mvt_request_reads_existing_visual_tile_when_csv_changes(tmp_path):
     db_path = tmp_path / "footprints.sqlite"
     data_path = tmp_path / "backUpData-all.csv"
     data_path.write_text(
@@ -927,24 +927,17 @@ def test_mvt_request_imports_changed_csv_before_reading_visual_tiles(tmp_path):
     response = client.get("/api/map/tiles/footprints/16/54888/26764.mvt?range=all")
 
     assert response.status_code == 200
-    deadline = time.monotonic() + 5
-    row = None
-    footprint_count = 0
-    while time.monotonic() < deadline:
-        with sqlite3.connect(db_path) as connection:
-            row = connection.execute(
-                """
-                SELECT status
-                FROM visual_tiles
-                WHERE z = 16 AND x = 54888 AND y = 26764 AND t_type = 0 AND t = 0
-                """,
-            ).fetchone()
-            footprint_count = connection.execute("SELECT COUNT(*) FROM footprints").fetchone()[0]
-        if row == (STATUS_READY,):
-            break
-        time.sleep(0.05)
+    with sqlite3.connect(db_path) as connection:
+        row = connection.execute(
+            """
+            SELECT status
+            FROM visual_tiles
+            WHERE z = 16 AND x = 54888 AND y = 26764 AND t_type = 0 AND t = 0
+            """,
+        ).fetchone()
+        footprint_count = connection.execute("SELECT COUNT(*) FROM footprints").fetchone()[0]
     assert row == (STATUS_READY,)
-    assert footprint_count == 2
+    assert footprint_count == 1
 
 
 def test_dirty_mvt_request_rebuilds_visual_tile_after_serving_old_cells(tmp_path):

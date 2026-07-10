@@ -27,6 +27,7 @@ import {
 } from 'lucide-react'
 
 import type { FootprintMetrics } from './layers/footprintTypes'
+import type { AdminRegionDepth } from './layers/adminRegionVectorTileSource'
 import {
   formatAverageDistanceMeters,
   formatDistanceMeters,
@@ -110,6 +111,14 @@ type RightContextRow = {
   label: string
   value: string
 }
+
+const DEFAULT_ADMIN_REGION_DEPTH: AdminRegionDepth = 1
+const adminRegionDepthOptions: Array<{ value: AdminRegionDepth, label: string }> = [
+  { value: 1, label: '国家' },
+  { value: 2, label: '中国省级' },
+  { value: 3, label: '中国市级' },
+  { value: 4, label: '中国区县' },
+]
 
 const topNavigationItems: TopNavigationItem[] = [
   { value: 'overview', label: '在途 EnRoute', kind: 'brand' },
@@ -298,6 +307,9 @@ function App(props: AppProps) {
     useState<TopNavigationThumbMetrics | null>(null)
   const [secondaryNavSelection, setSecondaryNavSelection] = useState<SecondaryNavSelection>(
     defaultSecondaryNavSelection,
+  )
+  const [adminRegionDepth, setAdminRegionDepth] = useState<AdminRegionDepth>(
+    DEFAULT_ADMIN_REGION_DEPTH,
   )
   const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRangeSelection>(
     createTodaySelection,
@@ -688,6 +700,12 @@ function App(props: AppProps) {
                 </div>
               ))}
             </div>
+            {view === 'map' && activeSecondaryNavId === 'regions' ? (
+              <AdminRegionDepthControl
+                depth={adminRegionDepth}
+                onDepthChange={setAdminRegionDepth}
+              />
+            ) : null}
           </section>
         </div>
       </aside>
@@ -698,6 +716,7 @@ function App(props: AppProps) {
             timeRange={selectedTimeRange}
             onFootprintMetricsChange={setFootprintMetrics}
             adminRegionUnlockEnabled={activeSecondaryNavId === 'regions'}
+            adminRegionDepth={adminRegionDepth}
             debugPanelVisible={isMapDebugPanelVisible}
             placeLabelsVisible={areMapPlaceLabelsVisible}
             adminBoundariesVisible={areMapAdminBoundariesVisible}
@@ -886,6 +905,29 @@ function App(props: AppProps) {
 }
 
 export default App
+
+function AdminRegionDepthControl({
+  depth,
+  onDepthChange,
+}: {
+  depth: AdminRegionDepth
+  onDepthChange: (depth: AdminRegionDepth) => void
+}) {
+  return (
+    <div className="right-context-panel__depth-control admin-region-depth-control" role="group" aria-label="行政区划层级">
+      {adminRegionDepthOptions.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          aria-pressed={option.value === depth}
+          onClick={() => onDepthChange(option.value)}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  )
+}
 
 function timeSelectionsAreEqual(
   currentSelection: TimeRangeSelection,

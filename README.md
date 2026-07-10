@@ -100,32 +100,44 @@ absent until a builder produces non-empty ready cells.
 
 Optional administrative boundary data is read from
 `ADMIN_REGION_DATA_PATH=external/admin-regions.geojson`. Boundary files stay
-local unless their license permits committing them. The active global scope is
-EnRoute level 1-3: country, region/province/state, and city/locality. Runtime
-geometry is canonical WGS-84; the backend no longer converts administrative
-boundaries into GCJ-02 during import.
+local unless their license permits committing them. The active scope is global
+country-level coverage plus China detail through level 4: country, China
+province/municipality/autonomous region/SAR, China city/prefecture, and China
+district/county/county-level city/banner. Country-level geometry is canonical
+WGS-84. AreaCity China detail geometry is preserved as GCJ-02 for local
+matching and converted to WGS-84 only when building the Mapbox render tiles.
 
 Global boundary sources should be normalized into the local GeoJSON contract
-or Overture-style division features before import. Overture `country`,
-`region`, and `locality` subtypes map to EnRoute levels 1, 2, and 3; unsupported
-deeper divisions are skipped. OSM `admin_level` 2, 4, and 5 can also be imported
-as levels 1, 2, and 3. The legacy AreaCity converter remains available for
-China province/city data via `npm run prepare:admin-regions`, but the active
-global display intentionally stops at city level.
+or Overture-style division features before import. Overture `country` features
+map to EnRoute level 1; Overture `region` and `locality` features are skipped in
+the active default scope. OSM imports keep country-level `admin_level` 2 only.
+The legacy AreaCity converter remains available for China province/city/district
+data via `npm run prepare:admin-regions`.
 
-Run `npm run prepare:admin-region-tiles` after changing
-`external/admin-regions.geojson`. It loads the boundary GeoJSON into SQLite,
-clears stale `admin_region_tiles`, and precomputes cached Mapbox vector tiles
-for world focus depth 3 up to zoom 8 by default. Runtime map tile requests only
-read cached rows. Missing `admin_region_tiles` rows mean empty and return 204;
-they do not trigger request-time rebuilds.
+Run `npm run prepare:admin-region-tiles` after changing a single already-merged
+boundary GeoJSON. For the current split-source setup, build with a world
+country source plus the AreaCity China detail source, for example:
+
+```powershell
+python scripts/build_admin_region_tiles.py `
+  --admin-region-data-path output/admin-regions-world-l1-simplified-z5.geojson `
+  --china-admin-region-data-path external/admin-regions.geojson `
+  --database data/footprints.sqlite `
+  --max-zoom 4 `
+  --depths 1,2,3,4
+```
+
+The script loads boundary rows into SQLite, clears stale `admin_region_tiles`,
+and precomputes cached Mapbox vector tiles for world focus. Runtime map tile
+requests only read cached rows. Missing `admin_region_tiles` rows mean empty and
+return 204; they do not trigger request-time rebuilds.
 
 When boundaries exist, the import assigns each WGS-84 footprint to the finest
 matching `region_id`, updates cached unlock counts and stay/travel totals
 across the available region chain, and serves the Mapbox overlay from
-`GET /api/map/tiles/admin-regions/{z}/{x}/{y}.mvt?focusRegionId=world&depth=3`.
+`GET /api/map/tiles/admin-regions/{z}/{x}/{y}.mvt?focusRegionId=world&depth=4`.
 `GET /api/admin-regions?level=N&west=...` remains as a compatibility/debug JSON
-endpoint for levels 1-3, but it is not the active map-rendering path.
+endpoint for levels 1-4, but it is not the active map-rendering path.
 
 Check the license of the selected boundary source before packaging data. If that
 source has ODbL or similar share-alike database terms, keep attribution visible

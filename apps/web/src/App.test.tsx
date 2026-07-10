@@ -116,6 +116,10 @@ const missingAmapConfig = {
   showLabel: false,
 } as const
 
+function useAccountingFixtureDate() {
+  vi.setSystemTime(new Date('2026-06-19T10:20:30+08:00'))
+}
+
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
@@ -875,6 +879,8 @@ describe('App', () => {
   })
 
   it('switches from the map page into the rebuilt iOS accounting workspace', async () => {
+    useAccountingFixtureDate()
+
     render(
       <App
         amapConfig={{
@@ -953,6 +959,8 @@ describe('App', () => {
   })
 
   it('opens transaction and new-ledger modals from the accounting workspace', async () => {
+    useAccountingFixtureDate()
+
     render(
       <App
         amapConfig={{
@@ -997,6 +1005,8 @@ describe('App', () => {
   })
 
   it('renders analytics with charts plus category and tag tree statistics', async () => {
+    useAccountingFixtureDate()
+
     render(
       <App
         amapConfig={{

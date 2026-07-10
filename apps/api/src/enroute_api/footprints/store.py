@@ -90,6 +90,8 @@ class FootprintStore:
                 coordinate_system=self.coordinate_system,
                 admin_region_data_path=self.admin_region_data_path,
                 load_admin_region_data=False,
+                refresh_footprints=False,
+                refresh_admin_region_stats=False,
             )
 
     def import_footprints(self) -> FootprintImportResult:
@@ -200,9 +202,10 @@ class FootprintStore:
         focus_region_id: str,
         depth: int,
     ) -> bytes:
-        with self._connection_lock:
+        with sqlite3.connect(f"file:{self.db_path}?mode=ro", uri=True, timeout=5) as connection:
+            connection.row_factory = sqlite3.Row
             return read_admin_region_tile(
-                self.connection,
+                connection,
                 z=z,
                 x=x,
                 y=y,
@@ -396,6 +399,8 @@ def ensure_imported(
     coordinate_system: str,
     admin_region_data_path: Path | None = None,
     load_admin_region_data: bool = True,
+    refresh_footprints: bool = True,
+    refresh_admin_region_stats: bool = True,
 ) -> FootprintImportResult:
     return import_footprints(
         connection,
@@ -403,6 +408,8 @@ def ensure_imported(
         coordinate_system=coordinate_system,
         admin_region_data_path=admin_region_data_path,
         load_admin_region_data=load_admin_region_data,
+        refresh_footprints=refresh_footprints,
+        refresh_admin_region_stats=refresh_admin_region_stats,
     )
 
 
@@ -413,6 +420,8 @@ def import_footprints(
     coordinate_system: str,
     admin_region_data_path: Path | None = None,
     load_admin_region_data: bool = True,
+    refresh_footprints: bool = True,
+    refresh_admin_region_stats: bool = True,
 ) -> FootprintImportResult:
     region_signature = resolve_admin_region_signature(
         connection,
@@ -420,20 +429,28 @@ def import_footprints(
         load_admin_region_data=load_admin_region_data,
     )
     source_signature = create_import_signature(data_path, coordinate_system, region_signature)
-    compatibility_signature = create_import_compatibility_signature(coordinate_system)
+    compatibility_signature = create_import_compatibility_signature(
+        coordinate_system,
+        region_signature,
+    )
     stored_signature = get_meta_value(connection, "sourceSignature")
     stored_compatibility_signature = get_meta_value(connection, "importCompatibilitySignature")
     stored_stats_signature = get_meta_value(connection, ADMIN_REGION_STATS_SIGNATURE_KEY)
     stored_count = get_footprint_row_count(connection)
     stored_spatial_count = get_spatial_row_count(connection)
 
+    if not refresh_footprints and stored_count > 0 and stored_spatial_count == stored_count:
+        ensure_visual_tiles_algorithm_current(connection)
+        return get_import_result(connection, new_count=0)
+
     if stored_signature == source_signature and stored_count > 0 and stored_spatial_count == stored_count:
         ensure_visual_tiles_algorithm_current(connection)
-        ensure_admin_region_stats_current(
-            connection,
-            stored_stats_signature=stored_stats_signature,
-            expected_stats_signature=compatibility_signature,
-        )
+        if refresh_admin_region_stats:
+            ensure_admin_region_stats_current(
+                connection,
+                stored_stats_signature=stored_stats_signature,
+                expected_stats_signature=compatibility_signature,
+            )
         return get_import_result(connection, new_count=0)
     if (
         not data_path.exists()
@@ -443,18 +460,19 @@ def import_footprints(
         and stored_compatibility_signature == compatibility_signature
     ):
         ensure_visual_tiles_algorithm_current(connection)
-        ensure_admin_region_stats_current(
-            connection,
-            stored_stats_signature=stored_stats_signature,
-            expected_stats_signature=compatibility_signature,
-        )
+        if refresh_admin_region_stats:
+            ensure_admin_region_stats_current(
+                connection,
+                stored_stats_signature=stored_stats_signature,
+                expected_stats_signature=compatibility_signature,
+            )
         return get_import_result(connection, new_count=0)
 
     if not data_path.exists():
         raise FileNotFoundError(data_path)
 
     with connection:
-        if stored_count > 0:
+        if stored_count > 0 and refresh_admin_region_stats:
             rebuild_admin_region_stats_if_stale(
                 connection,
                 stored_stats_signature=stored_stats_signature,
@@ -1241,10 +1259,14 @@ def create_import_signature(
     )
 
 
-def create_import_compatibility_signature(coordinate_system: str) -> str:
+def create_import_compatibility_signature(
+    coordinate_system: str,
+    admin_region_signature: str | None = None,
+) -> str:
     return json.dumps(
         {
             "coordinateSystem": coordinate_system,
+            "adminRegions": None if admin_region_signature is None else json.loads(admin_region_signature),
         },
         separators=(",", ":"),
     )

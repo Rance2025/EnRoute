@@ -1,6 +1,6 @@
 import type { LayerSpecification } from 'mapbox-gl'
 
-export type AdminRegionDepth = 1 | 2 | 3
+export type AdminRegionDepth = 1 | 2 | 3 | 4
 
 export type AdminRegionVectorTileSourceOptions = {
   tileUrl?: string
@@ -9,7 +9,7 @@ export type AdminRegionVectorTileSourceOptions = {
 }
 
 export const DEFAULT_ADMIN_REGION_TILE_URL = '/api/map/tiles/admin-regions/{z}/{x}/{y}.mvt'
-export const MAX_ADMIN_REGION_TILE_ZOOM = 8
+export const MAX_ADMIN_REGION_TILE_ZOOM = 9
 export const ADMIN_REGION_VECTOR_SOURCE_ID = 'admin-regions'
 export const ADMIN_REGION_VECTOR_SOURCE_LAYER = 'admin_regions'
 export const ADMIN_REGION_FILL_LAYER_ID = 'admin-regions-fill'
@@ -39,14 +39,15 @@ export function createAdminRegionFillLayer(): LayerSpecification {
     type: 'fill',
     source: ADMIN_REGION_VECTOR_SOURCE_ID,
     'source-layer': ADMIN_REGION_VECTOR_SOURCE_LAYER,
+    slot: 'top',
     filter: [
       'all',
       ['==', ['get', 'kind'], 'fill'],
       ['in', ['geometry-type'], ['literal', ['Polygon', 'MultiPolygon']]],
     ],
     paint: {
-      'fill-color': '#3f7f74',
-      'fill-opacity': 0.06,
+      'fill-color': '#1f6f67',
+      'fill-opacity': 0.18,
       'fill-antialias': false,
     },
   }
@@ -58,26 +59,27 @@ export function createAdminRegionLineLayer(): LayerSpecification {
     type: 'line',
     source: ADMIN_REGION_VECTOR_SOURCE_ID,
     'source-layer': ADMIN_REGION_VECTOR_SOURCE_LAYER,
+    slot: 'top',
     filter: [
       'all',
       ['==', ['get', 'kind'], 'line'],
       ['in', ['geometry-type'], ['literal', ['LineString', 'MultiLineString']]],
     ],
     paint: {
-      'line-color': '#27645c',
-      'line-opacity': 0.78,
+      'line-color': '#0b4f47',
+      'line-opacity': 0.92,
       'line-width': [
         'interpolate',
         ['linear'],
         ['zoom'],
         1,
-        0.45,
+        0.9,
         4,
-        0.8,
+        1.25,
         8,
-        1.2,
+        1.75,
         12,
-        1.8,
+        2.35,
       ],
     },
   }

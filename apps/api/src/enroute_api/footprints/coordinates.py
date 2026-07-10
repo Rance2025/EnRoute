@@ -35,6 +35,26 @@ def transform_wgs84_to_gcj02_coordinate(
     return longitude + delta_longitude, latitude + delta_latitude
 
 
+def transform_gcj02_to_wgs84_coordinate(
+    *,
+    longitude: float,
+    latitude: float,
+) -> tuple[float, float]:
+    if is_outside_china(longitude, latitude):
+        return longitude, latitude
+
+    wgs_longitude = longitude
+    wgs_latitude = latitude
+    for _ in range(3):
+        projected_longitude, projected_latitude = transform_wgs84_to_gcj02_coordinate(
+            longitude=wgs_longitude,
+            latitude=wgs_latitude,
+        )
+        wgs_longitude -= projected_longitude - longitude
+        wgs_latitude -= projected_latitude - latitude
+    return wgs_longitude, wgs_latitude
+
+
 def is_outside_china(longitude: float, latitude: float) -> bool:
     return longitude < 72.004 or longitude > 137.8347 or latitude < 0.8293 or latitude > 55.8271
 
