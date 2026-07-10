@@ -103,9 +103,10 @@ Optional administrative boundary data is read from
 local unless their license permits committing them. The active scope is global
 country-level coverage plus China detail through level 4: country, China
 province/municipality/autonomous region/SAR, China city/prefecture, and China
-district/county/county-level city/banner. Country-level geometry is canonical
-WGS-84. AreaCity China detail geometry is preserved as GCJ-02 for local
-matching and converted to WGS-84 only when building the Mapbox render tiles.
+district/county/county-level city/banner. `admin_regions.geometry` is the
+canonical WGS-84 geometry used by matching, API output, and Mapbox render tiles.
+For AreaCity China detail, the original GCJ-02 source geometry is also preserved
+in `admin_regions.source_geometry` with `source_coordinate_system='gcj02'`.
 
 Global boundary sources should be normalized into the local GeoJSON contract
 or Overture-style division features before import. Overture `country` features

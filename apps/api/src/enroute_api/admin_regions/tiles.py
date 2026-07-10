@@ -14,7 +14,6 @@ from shapely.geometry import mapping, shape
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import clip_by_rect
 
-from enroute_api.footprints.coordinates import transform_gcj02_to_wgs84_coordinate
 from enroute_api.footprints.visual_tiles import MVT_EXTENT, tile_bounds
 from enroute_api.admin_regions.scope import is_antarctica_admin_region_properties
 
@@ -873,89 +872,8 @@ def admin_region_render_simplify_tolerance_degrees(*, z: int) -> float:
 
 
 def transform_admin_region_render_geometry(geometry: BaseGeometry, row: sqlite3.Row) -> BaseGeometry:
-    if geometry.is_empty or not should_transform_admin_region_render_coordinates(row):
-        return geometry
-    geojson_geometry = transform_geojson_geometry_coordinates(
-        mapping(geometry),
-        transform_gcj02_to_wgs84_position,
-    )
-    return shape(geojson_geometry)
-
-
-def should_transform_admin_region_render_coordinates(row: sqlite3.Row) -> bool:
-    region_id = str(row["id"])
-    level = int(row["level"])
-    return level > 1 and is_china_admin_region_id(region_id)
-
-
-def is_china_admin_region_id(region_id: str) -> bool:
-    adcode_prefix = region_id[:6]
-    if len(adcode_prefix) != 6 or not adcode_prefix.isdigit():
-        return False
-    province_code = int(adcode_prefix[:2])
-    return 11 <= province_code <= 82
-
-
-def transform_geojson_geometry_coordinates(
-    geometry: dict[str, Any],
-    transformer,
-) -> dict[str, Any]:
-    geometry_type = geometry.get("type")
-    coordinates = geometry.get("coordinates")
-    if geometry_type == "Point" and isinstance(coordinates, (list, tuple)):
-        return {"type": "Point", "coordinates": transformer(coordinates)}
-    if geometry_type in {"LineString", "MultiPoint"} and isinstance(coordinates, (list, tuple)):
-        return {
-            "type": geometry_type,
-            "coordinates": [transformer(position) for position in coordinates],
-        }
-    if geometry_type in {"Polygon", "MultiLineString"} and isinstance(coordinates, (list, tuple)):
-        return {
-            "type": geometry_type,
-            "coordinates": [
-                [transformer(position) for position in line]
-                for line in coordinates
-                if isinstance(line, (list, tuple))
-            ],
-        }
-    if geometry_type == "MultiPolygon" and isinstance(coordinates, (list, tuple)):
-        return {
-            "type": "MultiPolygon",
-            "coordinates": [
-                [
-                    [transformer(position) for position in line]
-                    for line in polygon
-                    if isinstance(line, (list, tuple))
-                ]
-                for polygon in coordinates
-                if isinstance(polygon, (list, tuple))
-            ],
-        }
-    if geometry_type == "GeometryCollection":
-        geometries = geometry.get("geometries")
-        if not isinstance(geometries, list):
-            return geometry
-        return {
-            "type": "GeometryCollection",
-            "geometries": [
-                transform_geojson_geometry_coordinates(current_geometry, transformer)
-                for current_geometry in geometries
-                if isinstance(current_geometry, dict)
-            ],
-        }
+    del row
     return geometry
-
-
-def transform_gcj02_to_wgs84_position(position: Any) -> list[float]:
-    if not isinstance(position, (list, tuple)) or len(position) < 2:
-        return [0.0, 0.0]
-    longitude, latitude = transform_gcj02_to_wgs84_coordinate(
-        longitude=float(position[0]),
-        latitude=float(position[1]),
-    )
-    if len(position) > 2:
-        return [longitude, latitude, *position[2:]]
-    return [longitude, latitude]
 
 
 def create_admin_region_fill_features(

@@ -16,9 +16,14 @@ from enroute_api.admin_regions.store import (
 )
 from enroute_api.config import Settings
 from enroute_api.main import create_app
+from enroute_api.footprints.coordinates import (
+    transform_gcj02_to_wgs84_coordinate,
+    transform_wgs84_to_gcj02_coordinate,
+)
 from enroute_api.footprints.store import (
     ADMIN_REGION_STATS_SIGNATURE_KEY,
     FootprintStore,
+    backfill_footprint_region_ids,
     classify_footprint_admin_region,
     create_import_compatibility_signature,
     create_import_signature,
@@ -204,6 +209,8 @@ def test_initializes_admin_region_tables_and_new_footprint_contract(tmp_path: Pa
         "name",
         "level",
         "geometry",
+        "source_geometry",
+        "source_coordinate_system",
         "line_geometry",
         "line_mask_geometry",
         "min_lng",
@@ -216,6 +223,158 @@ def test_initializes_admin_region_tables_and_new_footprint_contract(tmp_path: Pa
         "travel_distance_meters",
     ]
     assert tree_columns == ["parent_id", "child_id"]
+
+
+def test_areacity_import_stores_wgs84_geometry_and_preserves_source_geometry(
+    tmp_path: Path,
+):
+    wgs_ring = [
+        [116.396, 39.907],
+        [116.398, 39.907],
+        [116.398, 39.909],
+        [116.396, 39.909],
+        [116.396, 39.907],
+    ]
+    gcj_ring = [
+        list(transform_wgs84_to_gcj02_coordinate(longitude=longitude, latitude=latitude))
+        for longitude, latitude in wgs_ring
+    ]
+    collection = {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "properties": {"id": "cn", "name": "China", "level": 1},
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [[[70, 15], [135, 15], [135, 55], [70, 55], [70, 15]]],
+                },
+            },
+            {
+                "type": "Feature",
+                "properties": {
+                    "id": "110000",
+                    "adcode": "110000",
+                    "parent": "cn",
+                    "name": "Beijing",
+                    "level": "province",
+                },
+                "geometry": {"type": "Polygon", "coordinates": [gcj_ring]},
+            },
+        ],
+    }
+    connection = sqlite3.connect(tmp_path / "footprints.sqlite")
+    connection.row_factory = sqlite3.Row
+    try:
+        initialize_admin_region_schema(connection)
+        load_admin_regions(connection, collection)
+
+        row = connection.execute(
+            """
+            SELECT geometry, source_geometry, source_coordinate_system, min_lng, max_lng, min_lat, max_lat
+            FROM admin_regions
+            WHERE id = '110000'
+            """,
+        ).fetchone()
+        matcher = create_region_matcher(connection)
+        match = matcher.find_finest_region_id(longitude=116.397, latitude=39.908)
+    finally:
+        connection.close()
+
+    geometry = json.loads(str(row["geometry"]))
+    source_geometry = json.loads(str(row["source_geometry"]))
+    first_wgs_position = geometry["coordinates"][0][0]
+    first_gcj_position = source_geometry["coordinates"][0][0]
+
+    assert row["source_coordinate_system"] == "gcj02"
+    assert abs(first_wgs_position[0] - wgs_ring[0][0]) < 0.00001
+    assert abs(first_wgs_position[1] - wgs_ring[0][1]) < 0.00001
+    assert first_gcj_position == gcj_ring[0]
+    assert abs(float(row["min_lng"]) - min(point[0] for point in wgs_ring)) < 0.00001
+    assert abs(float(row["max_lng"]) - max(point[0] for point in wgs_ring)) < 0.00001
+    assert abs(float(row["min_lat"]) - min(point[1] for point in wgs_ring)) < 0.00001
+    assert abs(float(row["max_lat"]) - max(point[1] for point in wgs_ring)) < 0.00001
+    assert match == "110000"
+
+
+def test_initialize_admin_region_schema_migrates_source_geometry_columns(
+    tmp_path: Path,
+):
+    wgs_ring = [
+        [116.396, 39.907],
+        [116.398, 39.907],
+        [116.398, 39.909],
+        [116.396, 39.909],
+        [116.396, 39.907],
+    ]
+    gcj_ring = [
+        list(transform_wgs84_to_gcj02_coordinate(longitude=longitude, latitude=latitude))
+        for longitude, latitude in wgs_ring
+    ]
+    old_geometry = {"type": "Polygon", "coordinates": [gcj_ring]}
+    connection = sqlite3.connect(tmp_path / "footprints.sqlite")
+    connection.row_factory = sqlite3.Row
+    try:
+        connection.execute(
+            """
+            CREATE TABLE admin_regions (
+              id TEXT PRIMARY KEY,
+              name TEXT NOT NULL,
+              level INTEGER NOT NULL,
+              geometry TEXT NOT NULL,
+              line_geometry TEXT,
+              line_mask_geometry TEXT,
+              min_lng REAL NOT NULL,
+              max_lng REAL NOT NULL,
+              min_lat REAL NOT NULL,
+              max_lat REAL NOT NULL,
+              first_seen_timestamp INTEGER,
+              footprint_count INTEGER NOT NULL DEFAULT 0,
+              stay_duration_seconds INTEGER NOT NULL DEFAULT 0,
+              travel_distance_meters REAL NOT NULL DEFAULT 0
+            )
+            """,
+        )
+        connection.execute(
+            """
+            INSERT INTO admin_regions (
+              id, name, level, geometry, min_lng, max_lng, min_lat, max_lat
+            ) VALUES (?, 'Beijing', 2, ?, ?, ?, ?, ?)
+            """,
+            (
+                "110000",
+                json.dumps(old_geometry),
+                min(point[0] for point in gcj_ring),
+                max(point[0] for point in gcj_ring),
+                min(point[1] for point in gcj_ring),
+                max(point[1] for point in gcj_ring),
+            ),
+        )
+        connection.commit()
+
+        initialize_admin_region_schema(connection)
+
+        columns = column_names(connection, "admin_regions")
+        row = connection.execute(
+            """
+            SELECT geometry, source_geometry, source_coordinate_system, min_lng, max_lng
+            FROM admin_regions
+            WHERE id = '110000'
+            """,
+        ).fetchone()
+    finally:
+        connection.close()
+
+    geometry = json.loads(str(row["geometry"]))
+    source_geometry = json.loads(str(row["source_geometry"]))
+
+    assert "source_geometry" in columns
+    assert "source_coordinate_system" in columns
+    assert row["source_coordinate_system"] == "gcj02"
+    assert source_geometry == old_geometry
+    assert abs(geometry["coordinates"][0][0][0] - wgs_ring[0][0]) < 0.00001
+    assert abs(float(row["min_lng"]) - min(point[0] for point in wgs_ring)) < 0.00001
+    assert abs(float(row["max_lng"]) - max(point[0] for point in wgs_ring)) < 0.00001
 
 
 def test_initialize_schema_migrates_country_id_out_of_existing_footprints(tmp_path: Path):
@@ -304,7 +463,9 @@ def test_loads_regions_and_walks_chain(tmp_path: Path):
     }
 
 
-def test_normalizes_areacity_province_city_district_geojson_without_coordinate_transform(tmp_path: Path):
+def test_normalizes_areacity_province_city_district_geojson_to_wgs84_with_source_geometry(
+    tmp_path: Path,
+):
     connection = sqlite3.connect(tmp_path / "footprints.sqlite")
     connection.row_factory = sqlite3.Row
     try:
@@ -312,13 +473,22 @@ def test_normalizes_areacity_province_city_district_geojson_without_coordinate_t
         load_admin_regions(connection, AREACITY_COLLECTION)
 
         rows = connection.execute(
-            "SELECT id, name, level, geometry FROM admin_regions ORDER BY level",
+            """
+            SELECT id, name, level, geometry, source_geometry, source_coordinate_system
+            FROM admin_regions
+            ORDER BY level
+            """,
         ).fetchall()
         chain = get_region_chain(connection, "310115")
     finally:
         connection.close()
 
     stored_geometry = json.loads(rows[0]["geometry"])
+    source_geometry = json.loads(rows[0]["source_geometry"])
+    expected_lng, expected_lat = transform_gcj02_to_wgs84_coordinate(
+        longitude=120,
+        latitude=30,
+    )
 
     assert [(row["id"], row["level"]) for row in rows] == [
         ("310000", 2),
@@ -326,7 +496,10 @@ def test_normalizes_areacity_province_city_district_geojson_without_coordinate_t
         ("310115", 4),
     ]
     assert chain == ["310115", "310100", "310000"]
-    assert stored_geometry["coordinates"][0][0] == [120, 30]
+    assert rows[0]["source_coordinate_system"] == "gcj02"
+    assert source_geometry["coordinates"][0][0] == [120, 30]
+    assert abs(stored_geometry["coordinates"][0][0][0] - expected_lng) < 0.00001
+    assert abs(stored_geometry["coordinates"][0][0][1] - expected_lat) < 0.00001
 
 
 def test_normalizes_overture_country_only_for_global_default_scope_without_coordinate_transform(tmp_path: Path):
@@ -648,6 +821,76 @@ def test_classifies_new_footprint_against_finest_cached_admin_region(tmp_path: P
         connection.close()
 
     assert match == "sanlin"
+
+
+def test_backfill_footprint_region_ids_recomputes_regions_without_touching_visual_tiles(
+    tmp_path: Path,
+):
+    connection = sqlite3.connect(tmp_path / "footprints.sqlite")
+    connection.row_factory = sqlite3.Row
+    try:
+        initialize_schema(connection)
+        load_admin_regions(connection, REGION_COLLECTION)
+        with connection:
+            connection.executemany(
+                """
+                INSERT INTO footprints (
+                  timestamp_seconds,
+                  longitude,
+                  latitude,
+                  accuracy,
+                  speed,
+                  distance,
+                  heading,
+                  altitude,
+                  region_id
+                ) VALUES (?, ?, ?, 5, -1, ?, 0, 3, ?)
+                """,
+                [
+                    (100, 10, 10, 0, "cn"),
+                    (130, 45, 45, 40, None),
+                ],
+            )
+            connection.execute(
+                """
+                INSERT INTO visual_tiles (z, x, y, t_type, t, status, cells, updated_at)
+                VALUES (0, 0, 0, 0, 0, 'ready', X'00', 1234)
+                """,
+            )
+
+        result = backfill_footprint_region_ids(connection)
+
+        footprints = connection.execute(
+            "SELECT timestamp_seconds, region_id FROM footprints ORDER BY timestamp_seconds",
+        ).fetchall()
+        stats = {
+            row["id"]: dict(row)
+            for row in connection.execute(
+                """
+                SELECT id, footprint_count, stay_duration_seconds, travel_distance_meters
+                FROM admin_regions
+                ORDER BY id
+                """,
+            )
+        }
+        visual_tile_count = connection.execute("SELECT COUNT(*) FROM visual_tiles").fetchone()[0]
+    finally:
+        connection.close()
+
+    assert result == {
+        "total_count": 2,
+        "matched_count": 2,
+        "unmatched_count": 0,
+        "updated_count": 2,
+    }
+    assert [(row["timestamp_seconds"], row["region_id"]) for row in footprints] == [
+        (100, "sanlin"),
+        (130, "pudong"),
+    ]
+    assert stats["sanlin"]["footprint_count"] == 1
+    assert stats["pudong"]["footprint_count"] == 1
+    assert stats["cn"]["footprint_count"] == 2
+    assert visual_tile_count == 1
 
 
 def column_names(connection: sqlite3.Connection, table_name: str) -> list[str]:
