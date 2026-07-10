@@ -15,6 +15,8 @@ export const ADMIN_REGION_VECTOR_SOURCE_LAYER = 'admin_regions'
 export const ADMIN_REGION_FILL_LAYER_ID = 'admin-regions-fill'
 export const ADMIN_REGION_LINE_LAYER_ID = 'admin-regions-line'
 
+type AdminRegionLayerFilter = NonNullable<LayerSpecification['filter']>
+
 export function createAdminRegionVectorTileSource({
   tileUrl = DEFAULT_ADMIN_REGION_TILE_URL,
   focusRegionId,
@@ -33,18 +35,30 @@ export function createAdminRegionVectorTileSource({
   }
 }
 
-export function createAdminRegionFillLayer(): LayerSpecification {
+export function createAdminRegionFillFilter(activeRegionIds?: string[]): AdminRegionLayerFilter {
+  return createAdminRegionLayerFilter({
+    kind: 'fill',
+    geometryTypes: ['Polygon', 'MultiPolygon'],
+    activeRegionIds,
+  })
+}
+
+export function createAdminRegionLineFilter(activeRegionIds?: string[]): AdminRegionLayerFilter {
+  return createAdminRegionLayerFilter({
+    kind: 'line',
+    geometryTypes: ['LineString', 'MultiLineString'],
+    activeRegionIds,
+  })
+}
+
+export function createAdminRegionFillLayer(activeRegionIds?: string[]): LayerSpecification {
   return {
     id: ADMIN_REGION_FILL_LAYER_ID,
     type: 'fill',
     source: ADMIN_REGION_VECTOR_SOURCE_ID,
     'source-layer': ADMIN_REGION_VECTOR_SOURCE_LAYER,
     slot: 'top',
-    filter: [
-      'all',
-      ['==', ['get', 'kind'], 'fill'],
-      ['in', ['geometry-type'], ['literal', ['Polygon', 'MultiPolygon']]],
-    ],
+    filter: createAdminRegionFillFilter(activeRegionIds),
     paint: {
       'fill-color': '#1f6f67',
       'fill-opacity': 0.18,
@@ -53,18 +67,14 @@ export function createAdminRegionFillLayer(): LayerSpecification {
   }
 }
 
-export function createAdminRegionLineLayer(): LayerSpecification {
+export function createAdminRegionLineLayer(activeRegionIds?: string[]): LayerSpecification {
   return {
     id: ADMIN_REGION_LINE_LAYER_ID,
     type: 'line',
     source: ADMIN_REGION_VECTOR_SOURCE_ID,
     'source-layer': ADMIN_REGION_VECTOR_SOURCE_LAYER,
     slot: 'top',
-    filter: [
-      'all',
-      ['==', ['get', 'kind'], 'line'],
-      ['in', ['geometry-type'], ['literal', ['LineString', 'MultiLineString']]],
-    ],
+    filter: createAdminRegionLineFilter(activeRegionIds),
     paint: {
       'line-color': '#0b4f47',
       'line-opacity': 0.92,
@@ -83,4 +93,26 @@ export function createAdminRegionLineLayer(): LayerSpecification {
       ],
     },
   }
+}
+
+function createAdminRegionLayerFilter({
+  kind,
+  geometryTypes,
+  activeRegionIds,
+}: {
+  kind: 'fill' | 'line'
+  geometryTypes: string[]
+  activeRegionIds?: string[]
+}): AdminRegionLayerFilter {
+  const filter: AdminRegionLayerFilter = [
+    'all',
+    ['==', ['get', 'kind'], kind],
+    ['in', ['geometry-type'], ['literal', geometryTypes]],
+  ]
+
+  if (activeRegionIds) {
+    filter.push(['in', ['get', 'region_id'], ['literal', activeRegionIds]])
+  }
+
+  return filter
 }

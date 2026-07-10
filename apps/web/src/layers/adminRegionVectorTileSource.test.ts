@@ -71,4 +71,20 @@ describe('adminRegionVectorTileSource', () => {
       ],
     })
   })
+
+  it('builds active-region fill and line filters from region ids', () => {
+    expect(adminRegionVectorTiles.createAdminRegionFillFilter(['310115'])).toEqual([
+      'all',
+      ['==', ['get', 'kind'], 'fill'],
+      ['in', ['geometry-type'], ['literal', ['Polygon', 'MultiPolygon']]],
+      ['in', ['get', 'region_id'], ['literal', ['310115']]],
+    ])
+
+    expect(adminRegionVectorTiles.createAdminRegionLineFilter(['310101', '310115'])).toEqual([
+      'all',
+      ['==', ['get', 'kind'], 'line'],
+      ['in', ['geometry-type'], ['literal', ['LineString', 'MultiLineString']]],
+      ['in', ['get', 'region_id'], ['literal', ['310101', '310115']]],
+    ])
+  })
 })
