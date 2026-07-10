@@ -27,6 +27,8 @@ from enroute_api.admin_regions.store import (
     transform_geojson_geometry_coordinates,
 )
 from enroute_api.admin_regions.tiles import (
+    ADMIN_REGION_FILL_FEATURE_KIND,
+    ADMIN_REGION_LINE_FEATURE_KIND,
     ADMIN_REGION_LEGACY_REBUILD_TILE_BBOX_PADDING_DEGREES,
     ADMIN_REGION_TILE_ALGORITHM_SIGNATURE,
     ADMIN_REGION_TILE_LAYER_NAME,
@@ -34,6 +36,7 @@ from enroute_api.admin_regions.tiles import (
     AdminRegionTileBuildResult,
     build_admin_region_tiles,
     count_tile_features,
+    create_admin_region_tile_line_features_from_prepared_rows,
     decode_admin_region_tile,
     encode_admin_region_mvt_from_prepared_rows,
     enumerate_admin_region_tile_keys,
@@ -183,6 +186,21 @@ def main(argv: Sequence[str] | None = None) -> int:
                     f"from {result.candidate_count} candidate keys "
                     f"for depth {depth} zoom {args.min_zoom}-{args.max_zoom}",
                 )
+        if args.patch_admin_region_tile_lines:
+            for depth in depths:
+                result = patch_admin_region_tile_lines(
+                    connection,
+                    focus_region_id=ADMIN_REGION_WORLD_FOCUS_ID,
+                    depth=depth,
+                    min_zoom=args.min_zoom,
+                    max_zoom=args.max_zoom,
+                    commit_interval=args.commit_interval,
+                )
+                print(
+                    f"Patched line features in {result.built_count} existing admin region tile rows "
+                    f"from {result.candidate_count} cached rows "
+                    f"for depth {depth} zoom {args.min_zoom}-{args.max_zoom}",
+                )
         if args.patch_greenland:
             greenland_feature = load_greenland_feature(
                 source_path=greenland_source_path,
@@ -277,6 +295,11 @@ def parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
         "--rebuild-admin-region-tiles",
         action="store_true",
         help="Rebuild only selected admin_region_tiles rows from existing admin_regions/admin_region_tree.",
+    )
+    parser.add_argument(
+        "--patch-admin-region-tile-lines",
+        action="store_true",
+        help="Regenerate only line features in existing admin_region_tiles rows, preserving cached fill features.",
     )
     parser.add_argument(
         "--taiwan-county-data-path",
@@ -1726,6 +1749,121 @@ def rebuild_admin_region_overlay_tile_keys(
         built_count=built_count,
         feature_count=candidate_feature_count,
     )
+
+
+def patch_admin_region_tile_lines(
+    connection: sqlite3.Connection,
+    *,
+    focus_region_id: str,
+    depth: int,
+    min_zoom: int,
+    max_zoom: int,
+    commit_interval: int,
+) -> AdminRegionTileBuildResult:
+    existing_tile_rows = list(
+        connection.execute(
+            """
+            SELECT z, x, y, tile
+            FROM admin_region_tiles
+            WHERE focus_region_id = ?
+              AND depth = ?
+              AND z BETWEEN ? AND ?
+              AND algorithm_signature != ?
+            ORDER BY z, x, y
+            """,
+            (focus_region_id, depth, min_zoom, max_zoom, ADMIN_REGION_TILE_ALGORITHM_SIGNATURE),
+        ),
+    )
+    updated_at = int(time.time() * 1000)
+    built_count = 0
+    source_rows = resolve_focused_region_rows(
+        connection,
+        focus_region_id=focus_region_id,
+        depth=depth,
+    )
+    rows_by_tile_key = index_admin_region_tile_rows(
+        prepare_admin_region_tile_rows(source_rows),
+        min_zoom=min_zoom,
+        max_zoom=max_zoom,
+    )
+
+    for existing_tile_row in existing_tile_rows:
+        z = int(existing_tile_row["z"])
+        x = int(existing_tile_row["x"])
+        y = int(existing_tile_row["y"])
+        existing_features = get_admin_region_tile_features(bytes(existing_tile_row["tile"]))
+        fill_features = [
+            feature
+            for feature in existing_features
+            if get_admin_region_feature_kind(feature) == ADMIN_REGION_FILL_FEATURE_KIND
+        ]
+        line_features = create_admin_region_tile_line_features_from_prepared_rows(
+            rows_by_tile_key.get((z, x, y), []),
+            z=z,
+            x=x,
+            y=y,
+        )
+        tile = encode_admin_region_tile_features([*fill_features, *line_features])
+        if not tile:
+            connection.execute(
+                """
+                DELETE FROM admin_region_tiles
+                WHERE z = ?
+                  AND x = ?
+                  AND y = ?
+                  AND focus_region_id = ?
+                  AND depth = ?
+                """,
+                (z, x, y, focus_region_id, depth),
+            )
+            built_count += 1
+            continue
+        connection.execute(
+            """
+            INSERT INTO admin_region_tiles (
+              z, x, y, focus_region_id, depth, algorithm_signature, tile, feature_count, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(z, x, y, focus_region_id, depth) DO UPDATE SET
+              algorithm_signature = excluded.algorithm_signature,
+              tile = excluded.tile,
+              feature_count = excluded.feature_count,
+              updated_at = excluded.updated_at
+            """,
+            (
+                z,
+                x,
+                y,
+                focus_region_id,
+                depth,
+                ADMIN_REGION_TILE_ALGORITHM_SIGNATURE,
+                tile,
+                count_tile_features(tile),
+                updated_at,
+            ),
+        )
+        built_count += 1
+        if commit_interval > 0 and built_count % commit_interval == 0:
+            connection.commit()
+
+    connection.commit()
+    return AdminRegionTileBuildResult(
+        focus_region_id=focus_region_id,
+        depth=depth,
+        min_zoom=min_zoom,
+        max_zoom=max_zoom,
+        candidate_count=len(existing_tile_rows),
+        built_count=built_count,
+        feature_count=len(source_rows),
+    )
+
+
+def get_admin_region_feature_kind(feature: dict[str, Any]) -> str | None:
+    properties = feature.get("properties")
+    if not isinstance(properties, dict):
+        return None
+    kind = properties.get("kind")
+    return str(kind) if kind is not None else None
 
 
 def query_focused_region_rows_for_tile(

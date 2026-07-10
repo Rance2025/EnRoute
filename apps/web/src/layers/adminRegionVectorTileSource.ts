@@ -14,6 +14,7 @@ export const ADMIN_REGION_VECTOR_SOURCE_ID = 'admin-regions'
 export const ADMIN_REGION_VECTOR_SOURCE_LAYER = 'admin_regions'
 export const ADMIN_REGION_FILL_LAYER_ID = 'admin-regions-fill'
 export const ADMIN_REGION_LINE_LAYER_ID = 'admin-regions-line'
+export const ADMIN_REGION_BOUNDARY_REGION_IDS_PROPERTY = 'boundary_region_ids'
 
 type AdminRegionLayerFilter = NonNullable<LayerSpecification['filter']>
 
@@ -111,8 +112,28 @@ function createAdminRegionLayerFilter({
   ]
 
   if (activeRegionIds) {
-    filter.push(['in', ['get', 'region_id'], ['literal', activeRegionIds]])
+    if (kind === 'line') {
+      filter.push(createActiveAdminRegionLineFilter(activeRegionIds))
+    } else {
+      filter.push(['in', ['get', 'region_id'], ['literal', activeRegionIds]])
+    }
   }
 
   return filter
+}
+
+function createActiveAdminRegionLineFilter(activeRegionIds: string[]): AdminRegionLayerFilter {
+  return [
+    'any',
+    ['in', ['get', 'region_id'], ['literal', activeRegionIds]],
+    ...activeRegionIds.map((regionId) => [
+      '>=',
+      [
+        'index-of',
+        `|${regionId}|`,
+        ['coalesce', ['get', ADMIN_REGION_BOUNDARY_REGION_IDS_PROPERTY], ''],
+      ],
+      0,
+    ]),
+  ] as AdminRegionLayerFilter
 }

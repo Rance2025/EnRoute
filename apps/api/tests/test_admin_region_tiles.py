@@ -3151,6 +3151,49 @@ def test_tile_encoder_deduplicates_shared_borders_with_different_vertex_splits(t
     assert len(shared_vertical_segments) == 1
 
 
+def test_line_dedupe_records_boundary_owner_ids_only_on_overlapping_segments():
+    deduplicated = admin_region_tiles.deduplicate_admin_region_line_features(
+        [
+            {
+                "geometry": {"type": "LineString", "coordinates": [[0, 0], [20, 0]]},
+                "properties": {
+                    "kind": "line",
+                    "region_id": "west",
+                    "parent_id": "",
+                    "level": 2,
+                    "name": "West",
+                },
+            },
+            {
+                "geometry": {"type": "LineString", "coordinates": [[5, 0], [15, 0]]},
+                "properties": {
+                    "kind": "line",
+                    "region_id": "east",
+                    "parent_id": "",
+                    "level": 2,
+                    "name": "East",
+                },
+            },
+        ],
+    )
+
+    owner_ranges = sorted(
+        (
+            tuple(segment[0]),
+            tuple(segment[1]),
+            str(feature["properties"].get("boundary_region_ids")),
+        )
+        for feature in deduplicated
+        for segment in iter_tile_geometry_segments(feature["geometry"])
+    )
+
+    assert owner_ranges == [
+        ((0, 0), (5, 0), "|west|"),
+        ((5, 0), (15, 0), "|east|west|"),
+        ((15, 0), (20, 0), "|west|"),
+    ]
+
+
 def iter_tile_feature_points(features):
     for feature in features:
         yield from iter_tile_geometry_points(feature["geometry"])

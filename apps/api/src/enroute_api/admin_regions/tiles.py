@@ -21,11 +21,13 @@ ADMIN_REGION_TILE_LAYER_NAME = "admin_regions"
 ADMIN_REGION_WORLD_FOCUS_ID = "world"
 ADMIN_REGION_FILL_FEATURE_KIND = "fill"
 ADMIN_REGION_LINE_FEATURE_KIND = "line"
+ADMIN_REGION_BOUNDARY_REGION_IDS_PROPERTY = "boundary_region_ids"
 MAX_ADMIN_REGION_TILE_ZOOM = 16
 DEFAULT_ADMIN_REGION_TILE_MAX_ZOOM = 9
 MAX_MERCATOR_LATITUDE = 85.05112878
-ADMIN_REGION_TILE_ALGORITHM_SIGNATURE = "admin-region-mvt-v15-cn-worldview-country-union-render-wgs84-index-preclip-fill-derived-boundary-line-dedupe-no-antarctica"
+ADMIN_REGION_TILE_ALGORITHM_SIGNATURE = "admin-region-mvt-v16-cn-worldview-country-union-render-wgs84-index-preclip-fill-derived-boundary-line-owner-dedupe-no-antarctica"
 LEGACY_COUNTRY_ADMIN_REGION_TILE_ALGORITHM_SIGNATURES = (
+    "admin-region-mvt-v15-cn-worldview-country-union-render-wgs84-index-preclip-fill-derived-boundary-line-dedupe-no-antarctica",
     "admin-region-mvt-v14-render-wgs84-index-preclip-fill-derived-boundary-line-dedupe-no-antarctica",
     "admin-region-mvt-v13-render-wgs84-preclip-fill-derived-boundary-line-dedupe-no-antarctica",
     "admin-region-mvt-v12-render-wgs84-fill-derived-boundary-line-dedupe-no-antarctica",
@@ -38,6 +40,7 @@ LEGACY_COUNTRY_ADMIN_REGION_TILE_ALGORITHM_SIGNATURES = (
     "admin-region-mvt-v1-wgs84-global-l1-l3",
 )
 LEGACY_NON_COUNTRY_ADMIN_REGION_TILE_ALGORITHM_SIGNATURES = (
+    "admin-region-mvt-v15-cn-worldview-country-union-render-wgs84-index-preclip-fill-derived-boundary-line-dedupe-no-antarctica",
     "admin-region-mvt-v14-render-wgs84-index-preclip-fill-derived-boundary-line-dedupe-no-antarctica",
     "admin-region-mvt-v13-render-wgs84-preclip-fill-derived-boundary-line-dedupe-no-antarctica",
     "admin-region-mvt-v12-render-wgs84-fill-derived-boundary-line-dedupe-no-antarctica",
@@ -54,6 +57,7 @@ ADMIN_REGION_LEGACY_REBUILD_TILE_BBOX_PADDING_DEGREES = 0.02
 ADMIN_REGION_CACHED_LEGACY_NON_COUNTRY_MAX_ZOOM = 7
 ADMIN_REGION_DIRECT_READ_LEGACY_NON_COUNTRY_MAX_ZOOM = 4
 ADMIN_REGION_LINE_READY_ALGORITHM_SIGNATURES = (
+    "admin-region-mvt-v15-cn-worldview-country-union-render-wgs84-index-preclip-fill-derived-boundary-line-dedupe-no-antarctica",
     "admin-region-mvt-v14-render-wgs84-index-preclip-fill-derived-boundary-line-dedupe-no-antarctica",
     "admin-region-mvt-v13-render-wgs84-preclip-fill-derived-boundary-line-dedupe-no-antarctica",
     "admin-region-mvt-v12-render-wgs84-fill-derived-boundary-line-dedupe-no-antarctica",
@@ -89,6 +93,20 @@ class PreparedAdminRegionTileRow:
     boundary: BaseGeometry | None = None
     render_boundary: BaseGeometry | None = None
     line_mask_geometry: BaseGeometry | None = None
+
+
+@dataclass
+class AdminRegionLineSegmentRecord:
+    key: tuple[int, int, int]
+    lower: int
+    upper: int
+    direction_x: int
+    direction_y: int
+    norm: int
+    base_point: tuple[int, int]
+    base_position: int
+    properties: dict[str, object]
+    owner_ids: set[str]
 
 
 def initialize_admin_region_tile_schema(connection: sqlite3.Connection) -> None:
@@ -783,6 +801,63 @@ def encode_admin_region_mvt_from_prepared_rows(
     x: int,
     y: int,
 ) -> bytes:
+    features = create_admin_region_tile_features_from_prepared_rows(rows, z=z, x=x, y=y)
+    if not features:
+        return b""
+
+    return encode(
+        [
+            {
+                "name": ADMIN_REGION_TILE_LAYER_NAME,
+                "features": features,
+            },
+        ],
+        default_options={
+            "extents": MVT_EXTENT,
+            "y_coord_down": True,
+        },
+    )
+
+
+def create_admin_region_tile_line_features_from_prepared_rows(
+    rows: list[PreparedAdminRegionTileRow],
+    *,
+    z: int,
+    x: int,
+    y: int,
+) -> list[dict[str, object]]:
+    _fill_features, line_features = create_admin_region_tile_feature_parts_from_prepared_rows(
+        rows,
+        z=z,
+        x=x,
+        y=y,
+    )
+    return deduplicate_admin_region_line_features(line_features)
+
+
+def create_admin_region_tile_features_from_prepared_rows(
+    rows: list[PreparedAdminRegionTileRow],
+    *,
+    z: int,
+    x: int,
+    y: int,
+) -> list[dict[str, object]]:
+    fill_features, line_features = create_admin_region_tile_feature_parts_from_prepared_rows(
+        rows,
+        z=z,
+        x=x,
+        y=y,
+    )
+    return [*fill_features, *deduplicate_admin_region_line_features(line_features)]
+
+
+def create_admin_region_tile_feature_parts_from_prepared_rows(
+    rows: list[PreparedAdminRegionTileRow],
+    *,
+    z: int,
+    x: int,
+    y: int,
+) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
     fill_features = []
     line_features = []
     west, south, east, north = tile_bounds(z=z, x=x, y=y)
@@ -837,22 +912,7 @@ def encode_admin_region_mvt_from_prepared_rows(
         elif prepared_row.line_mask_geometry is None:
             line_features.extend(create_admin_region_line_features_from_fill_features(row_fill_features))
 
-    features = [*fill_features, *deduplicate_admin_region_line_features(line_features)]
-    if not features:
-        return b""
-
-    return encode(
-        [
-            {
-                "name": ADMIN_REGION_TILE_LAYER_NAME,
-                "features": features,
-            },
-        ],
-        default_options={
-            "extents": MVT_EXTENT,
-            "y_coord_down": True,
-        },
-    )
+    return fill_features, line_features
 
 
 def simplify_admin_region_render_geometry_for_tile(
@@ -1146,22 +1206,202 @@ def create_admin_region_tile_properties(row: sqlite3.Row) -> dict[str, object]:
 def deduplicate_admin_region_line_features(
     features: list[dict[str, object]],
 ) -> list[dict[str, object]]:
-    seen_line_intervals: dict[tuple[int, int, int], list[tuple[int, int]]] = {}
-    deduplicated_features = []
+    records_by_key: dict[tuple[int, int, int], list[AdminRegionLineSegmentRecord]] = {}
     for feature in features:
         geometry = feature.get("geometry")
         if not isinstance(geometry, dict):
             continue
-        deduplicated_geometry = deduplicate_line_geometry_segments(geometry, seen_line_intervals)
-        if deduplicated_geometry is None:
+        properties = feature.get("properties")
+        if not isinstance(properties, dict):
             continue
+        region_id = properties.get("region_id")
+        owner_id = str(region_id) if region_id is not None else None
+        for descriptor in iter_tile_line_segment_descriptors(geometry):
+            key, lower, upper, direction_x, direction_y, norm, base_point, base_position = descriptor
+            records = records_by_key.setdefault(key, [])
+            if owner_id is not None:
+                records[:] = add_owner_to_line_segment_records(
+                    records,
+                    lower,
+                    upper,
+                    owner_id,
+                )
+            covered_intervals = [(record.lower, record.upper) for record in records]
+            for interval_lower, interval_upper in subtract_line_interval(
+                lower,
+                upper,
+                covered_intervals,
+            ):
+                records.append(
+                    AdminRegionLineSegmentRecord(
+                        key=key,
+                        lower=interval_lower,
+                        upper=interval_upper,
+                        direction_x=direction_x,
+                        direction_y=direction_y,
+                        norm=norm,
+                        base_point=base_point,
+                        base_position=base_position,
+                        properties=dict(properties),
+                        owner_ids={owner_id} if owner_id is not None else set(),
+                    ),
+                )
+            records.sort(key=lambda record: (record.lower, record.upper))
+    return create_line_features_from_segment_records(records_by_key)
+
+
+def iter_tile_line_segment_descriptors(
+    geometry: dict[str, Any],
+) -> Iterable[tuple[tuple[int, int, int], int, int, int, int, int, tuple[int, int], int]]:
+    geometry_type = geometry.get("type")
+    coordinates = geometry.get("coordinates")
+    if geometry_type == "LineString" and isinstance(coordinates, (list, tuple)):
+        lines = [coordinates]
+    elif geometry_type == "MultiLineString" and isinstance(coordinates, (list, tuple)):
+        lines = coordinates
+    else:
+        return
+
+    for line in lines:
+        if not isinstance(line, (list, tuple)):
+            continue
+        points = [
+            [int(point[0]), int(point[1])]
+            for point in line
+            if isinstance(point, (list, tuple)) and len(point) >= 2
+        ]
+        for start, end in zip(points, points[1:]):
+            descriptor = create_tile_line_segment_descriptor(start, end)
+            if descriptor is not None:
+                yield descriptor
+
+
+def add_owner_to_line_segment_records(
+    records: list[AdminRegionLineSegmentRecord],
+    lower: int,
+    upper: int,
+    owner_id: str,
+) -> list[AdminRegionLineSegmentRecord]:
+    updated_records = []
+    for record in records:
+        if record.upper <= lower or record.lower >= upper:
+            updated_records.append(record)
+            continue
+
+        overlap_lower = max(record.lower, lower)
+        overlap_upper = min(record.upper, upper)
+        if record.lower < overlap_lower:
+            updated_records.append(copy_line_segment_record(record, lower=record.lower, upper=overlap_lower))
+        updated_records.append(
+            copy_line_segment_record(
+                record,
+                lower=overlap_lower,
+                upper=overlap_upper,
+                owner_ids={*record.owner_ids, owner_id},
+            ),
+        )
+        if overlap_upper < record.upper:
+            updated_records.append(copy_line_segment_record(record, lower=overlap_upper, upper=record.upper))
+    return sorted(updated_records, key=lambda record: (record.lower, record.upper))
+
+
+def copy_line_segment_record(
+    record: AdminRegionLineSegmentRecord,
+    *,
+    lower: int,
+    upper: int,
+    owner_ids: set[str] | None = None,
+) -> AdminRegionLineSegmentRecord:
+    return AdminRegionLineSegmentRecord(
+        key=record.key,
+        lower=lower,
+        upper=upper,
+        direction_x=record.direction_x,
+        direction_y=record.direction_y,
+        norm=record.norm,
+        base_point=record.base_point,
+        base_position=record.base_position,
+        properties=dict(record.properties),
+        owner_ids=set(record.owner_ids if owner_ids is None else owner_ids),
+    )
+
+
+def create_line_features_from_segment_records(
+    records_by_key: dict[tuple[int, int, int], list[AdminRegionLineSegmentRecord]],
+) -> list[dict[str, object]]:
+    grouped_segments: dict[
+        tuple[tuple[str, object], ...],
+        tuple[dict[str, object], list[list[list[int]]]],
+    ] = {}
+    for key in sorted(records_by_key):
+        for record in records_by_key[key]:
+            segment_line = create_line_segment_from_record(record)
+            if segment_line is None:
+                continue
+            properties = create_line_segment_properties(record)
+            properties_key = tuple(sorted(properties.items()))
+            grouped = grouped_segments.get(properties_key)
+            if grouped is None:
+                grouped_segments[properties_key] = (properties, [segment_line])
+                continue
+            grouped[1].append(segment_line)
+
+    deduplicated_features = []
+    for properties, segment_lines in grouped_segments.values():
+        merged_lines = merge_contiguous_tile_line_segments(segment_lines)
+        if not merged_lines:
+            continue
+        geometry: dict[str, Any]
+        if len(merged_lines) == 1:
+            geometry = {"type": "LineString", "coordinates": merged_lines[0]}
+        else:
+            geometry = {"type": "MultiLineString", "coordinates": merged_lines}
         deduplicated_features.append(
             {
-                **feature,
-                "geometry": deduplicated_geometry,
+                "geometry": geometry,
+                "properties": properties,
             },
         )
     return deduplicated_features
+
+
+def create_line_segment_from_record(record: AdminRegionLineSegmentRecord) -> list[list[int]] | None:
+    start_point = interpolate_tile_line_point(
+        record.base_point,
+        record.base_position,
+        record.lower,
+        direction_x=record.direction_x,
+        direction_y=record.direction_y,
+        norm=record.norm,
+    )
+    end_point = interpolate_tile_line_point(
+        record.base_point,
+        record.base_position,
+        record.upper,
+        direction_x=record.direction_x,
+        direction_y=record.direction_y,
+        norm=record.norm,
+    )
+    if start_point is None or end_point is None or start_point == end_point:
+        return None
+    return [start_point, end_point]
+
+
+def create_line_segment_properties(record: AdminRegionLineSegmentRecord) -> dict[str, object]:
+    properties = {
+        key: value
+        for key, value in record.properties.items()
+        if key != ADMIN_REGION_BOUNDARY_REGION_IDS_PROPERTY
+    }
+    if record.owner_ids:
+        properties[ADMIN_REGION_BOUNDARY_REGION_IDS_PROPERTY] = create_boundary_region_ids_token(
+            record.owner_ids,
+        )
+    return properties
+
+
+def create_boundary_region_ids_token(owner_ids: Iterable[str]) -> str:
+    return "|" + "|".join(sorted({str(owner_id) for owner_id in owner_ids})) + "|"
 
 
 def snap_line_visual_geometry(geometry: dict[str, Any]) -> dict[str, Any] | None:
