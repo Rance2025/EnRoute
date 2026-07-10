@@ -9,6 +9,7 @@ import time
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 
+from mapbox_vector_tile import encode
 import requests
 from shapely.geometry import GeometryCollection, MultiPolygon, Point, Polygon, mapping, shape
 from shapely.geometry.base import BaseGeometry
@@ -25,6 +26,7 @@ from enroute_api.admin_regions.store import (
     normalize_admin_region_features,
 )
 from enroute_api.admin_regions.tiles import (
+    ADMIN_REGION_LEGACY_REBUILD_TILE_BBOX_PADDING_DEGREES,
     ADMIN_REGION_TILE_ALGORITHM_SIGNATURE,
     ADMIN_REGION_TILE_LAYER_NAME,
     ADMIN_REGION_WORLD_FOCUS_ID,
@@ -38,8 +40,11 @@ from enroute_api.admin_regions.tiles import (
     initialize_admin_region_tile_schema,
     prepare_admin_region_tile_rows,
     resolve_focused_region_rows,
+    transform_geojson_geometry_coordinates,
 )
 from enroute_api.config import Settings
+from enroute_api.footprints.coordinates import transform_gcj02_to_wgs84_coordinate
+from enroute_api.footprints.visual_tiles import MVT_EXTENT, tile_bounds
 from enroute_api.footprints.store import (
     ADMIN_REGION_LOADER_VERSION,
     ADMIN_REGION_STATS_SIGNATURE_KEY,
@@ -55,6 +60,9 @@ GREENLAND_SOURCE_URL = "https://raw.githubusercontent.com/datasets/geo-countries
 TAIWAN_PROVINCE_ID = "710000"
 TAIWAN_COUNTY_ID_PREFIX = "tw-county-"
 TAIWAN_TOWN_ID_PREFIX = "tw-town-"
+MAINLAND_AUTHORITY_MIN_PROVINCE_CODE = 11
+MAINLAND_AUTHORITY_MAX_PROVINCE_CODE = 65
+TAIWAN_MAINLAND_OVERLAP_AREA_EPSILON = 1e-12
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -137,6 +145,21 @@ def main(argv: Sequence[str] | None = None) -> int:
                 f"Restored {result['county_count']} Taiwan county/city regions "
                 f"and {result['town_count']} Taiwan township/district regions "
                 f"with {tile_count} rebuilt tile rows",
+            )
+        if args.patch_taiwan_mainland_overlap:
+            result = patch_taiwan_mainland_overlaps(
+                connection,
+                depths=depths,
+                min_zoom=args.min_zoom,
+                max_zoom=args.max_zoom,
+                commit_interval=args.commit_interval,
+                rebuild_tiles=not args.skip_taiwan_mainland_tile_rebuild,
+            )
+            print(
+                f"Clipped {result['changed_region_count']} Taiwan admin regions "
+                f"({result['changed_county_count']} county/city, {result['changed_town_count']} township/district) "
+                f"against mainland authority and rebuilt {result['tile_count']} tile rows "
+                f"from {result['candidate_tile_count']} candidate tile keys",
             )
         if args.rebuild_admin_region_tiles:
             for depth in depths:
@@ -268,6 +291,16 @@ def parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
         action="store_true",
         help="With --patch-taiwan-admin-levels, restore admin region rows/tree only.",
     )
+    parser.add_argument(
+        "--patch-taiwan-mainland-overlap",
+        action="store_true",
+        help="Clip generated Taiwan level 3/4 rows by mainland-authoritative province polygons.",
+    )
+    parser.add_argument(
+        "--skip-taiwan-mainland-tile-rebuild",
+        action="store_true",
+        help="With --patch-taiwan-mainland-overlap, update admin region rows only.",
+    )
     parser.add_argument("--depth", type=int, help="Build one depth instead of --depths.")
     parser.add_argument("--depths", default="1,2,3,4", help="Comma-separated depths to build.")
     parser.add_argument("--min-zoom", type=int, default=8)
@@ -393,6 +426,331 @@ def patch_taiwan_admin_levels(
         "county_count": county_count,
         "town_count": town_count,
     }
+
+
+def patch_taiwan_mainland_overlaps(
+    connection: sqlite3.Connection,
+    *,
+    depths: Iterable[int],
+    min_zoom: int,
+    max_zoom: int,
+    commit_interval: int,
+    rebuild_tiles: bool,
+) -> dict[str, int]:
+    taiwan_rows = query_generated_taiwan_admin_rows(connection)
+    if not taiwan_rows:
+        return {
+            "changed_region_count": 0,
+            "changed_county_count": 0,
+            "changed_town_count": 0,
+            "tile_count": 0,
+            "candidate_tile_count": 0,
+        }
+
+    changes = create_taiwan_mainland_overlap_changes(connection, taiwan_rows)
+    if not changes:
+        return {
+            "changed_region_count": 0,
+            "changed_county_count": 0,
+            "changed_town_count": 0,
+            "tile_count": 0,
+            "candidate_tile_count": 0,
+        }
+
+    changed_ids = [str(change["id"]) for change in changes]
+    old_rows_by_depth = {
+        depth: [change["row"] for change in changes if int(change["row"]["level"]) == depth]
+        for depth in {3, 4}
+    }
+    old_tile_keys_by_depth = {
+        depth: enumerate_admin_region_keys_for_rows(
+            rows,
+            min_zoom=min_zoom,
+            max_zoom=max_zoom,
+        )
+        for depth, rows in old_rows_by_depth.items()
+    }
+
+    with connection:
+        for change in changes:
+            update_admin_region_geometry(
+                connection,
+                region_id=str(change["id"]),
+                geometry=change["geometry"],
+            )
+        delete_meta_value(connection, ADMIN_REGION_STATS_SIGNATURE_KEY)
+
+    new_rows = query_admin_rows_by_ids(connection, changed_ids)
+    new_rows_by_depth = {
+        depth: [row for row in new_rows if int(row["level"]) == depth]
+        for depth in {3, 4}
+    }
+    new_tile_keys_by_depth = {
+        depth: enumerate_admin_region_keys_for_rows(
+            rows,
+            min_zoom=min_zoom,
+            max_zoom=max_zoom,
+        )
+        for depth, rows in new_rows_by_depth.items()
+    }
+
+    tile_count = 0
+    candidate_tile_count = 0
+    if rebuild_tiles:
+        for depth in depths:
+            if depth not in {3, 4}:
+                continue
+            tile_keys = sorted(old_tile_keys_by_depth.get(depth, set()) | new_tile_keys_by_depth.get(depth, set()))
+            candidate_tile_count += len(tile_keys)
+            result = patch_admin_region_changed_tile_keys(
+                connection,
+                focus_region_id=ADMIN_REGION_WORLD_FOCUS_ID,
+                depth=depth,
+                tile_keys=tile_keys,
+                changed_region_ids=changed_ids,
+                changed_rows=new_rows_by_depth.get(depth, []),
+                commit_interval=commit_interval,
+            )
+            tile_count += result.built_count
+
+    return {
+        "changed_region_count": len(changes),
+        "changed_county_count": sum(1 for change in changes if int(change["row"]["level"]) == 3),
+        "changed_town_count": sum(1 for change in changes if int(change["row"]["level"]) == 4),
+        "tile_count": tile_count,
+        "candidate_tile_count": candidate_tile_count,
+    }
+
+
+def query_mainland_authority_rows_for_bounds(
+    connection: sqlite3.Connection,
+    *,
+    west: float,
+    south: float,
+    east: float,
+    north: float,
+) -> list[sqlite3.Row]:
+    padding = ADMIN_REGION_LEGACY_REBUILD_TILE_BBOX_PADDING_DEGREES
+    return list(
+        connection.execute(
+            """
+            SELECT id, geometry
+            FROM admin_regions
+            WHERE level = 2
+              AND length(id) >= 6
+              AND substr(id, 1, 6) GLOB '[0-9][0-9][0-9][0-9][0-9][0-9]'
+              AND CAST(substr(id, 1, 2) AS INTEGER) BETWEEN ? AND ?
+              AND min_lng <= ?
+              AND max_lng >= ?
+              AND min_lat <= ?
+              AND max_lat >= ?
+            ORDER BY id
+            """,
+            (
+                MAINLAND_AUTHORITY_MIN_PROVINCE_CODE,
+                MAINLAND_AUTHORITY_MAX_PROVINCE_CODE,
+                east + padding,
+                west - padding,
+                north + padding,
+                south - padding,
+            ),
+        ),
+    )
+
+
+def get_mainland_authority_geometries_for_row(
+    row: sqlite3.Row,
+    cache: dict[str, list[BaseGeometry]],
+) -> list[BaseGeometry]:
+    region_id = str(row["id"])
+    if region_id in cache:
+        return cache[region_id]
+    geometry = json.loads(str(row["geometry"]))
+    cache[region_id] = [
+        repair_polygonal_shapely_geometry(
+            shape(geometry),
+            label=f"mainland authority stored {region_id}",
+        ),
+        repair_polygonal_shapely_geometry(
+            shape(transform_gcj02_geometry_to_wgs84(geometry)),
+            label=f"mainland authority rendered {region_id}",
+        ),
+    ]
+    return cache[region_id]
+
+
+def get_mainland_authority_geometries_for_bounds(
+    connection: sqlite3.Connection,
+    *,
+    west: float,
+    south: float,
+    east: float,
+    north: float,
+    cache: dict[str, list[BaseGeometry]],
+) -> list[BaseGeometry]:
+    rows = query_mainland_authority_rows_for_bounds(
+        connection,
+        west=west,
+        south=south,
+        east=east,
+        north=north,
+    )
+    geometries: list[BaseGeometry] = []
+    for row in rows:
+        geometries.extend(get_mainland_authority_geometries_for_row(row, cache))
+    return geometries
+
+
+def query_generated_taiwan_admin_rows(connection: sqlite3.Connection) -> list[sqlite3.Row]:
+    return list(
+        connection.execute(
+            """
+            SELECT
+              r.id,
+              r.name,
+              r.level,
+              r.geometry,
+              r.line_geometry,
+              r.line_mask_geometry,
+              r.min_lng,
+              r.max_lng,
+              r.min_lat,
+              r.max_lat,
+              t.parent_id
+            FROM admin_regions r
+            LEFT JOIN admin_region_tree t ON t.child_id = r.id
+            WHERE r.id LIKE ?
+               OR r.id LIKE ?
+            ORDER BY r.level, r.id
+            """,
+            (
+                f"{TAIWAN_COUNTY_ID_PREFIX}%",
+                f"{TAIWAN_TOWN_ID_PREFIX}%",
+            ),
+        ),
+    )
+
+
+def query_admin_rows_by_ids(connection: sqlite3.Connection, region_ids: list[str]) -> list[sqlite3.Row]:
+    if not region_ids:
+        return []
+    placeholders = ",".join("?" for _ in region_ids)
+    return list(
+        connection.execute(
+            f"""
+            SELECT
+              r.id,
+              r.name,
+              r.level,
+              r.geometry,
+              r.line_geometry,
+              r.line_mask_geometry,
+              r.min_lng,
+              r.max_lng,
+              r.min_lat,
+              r.max_lat,
+              t.parent_id
+            FROM admin_regions r
+            LEFT JOIN admin_region_tree t ON t.child_id = r.id
+            WHERE r.id IN ({placeholders})
+            ORDER BY r.level, r.id
+            """,
+            region_ids,
+        ),
+    )
+
+
+def create_taiwan_mainland_overlap_changes(
+    connection: sqlite3.Connection,
+    rows: list[sqlite3.Row],
+) -> list[dict[str, Any]]:
+    changes = []
+    mainland_authority_cache: dict[str, list[BaseGeometry]] = {}
+    for row in rows:
+        geometry = repair_polygonal_shapely_geometry(
+            shape(json.loads(str(row["geometry"]))),
+            label=f"Taiwan admin region {row['id']}",
+        )
+        west, south, east, north = geometry.bounds
+        mainland_authority_geometries = get_mainland_authority_geometries_for_bounds(
+            connection,
+            west=west,
+            south=south,
+            east=east,
+            north=north,
+            cache=mainland_authority_cache,
+        )
+        if not mainland_authority_geometries:
+            continue
+
+        clipped = geometry
+        changed = False
+        for mainland_authority in mainland_authority_geometries:
+            overlap = clipped.intersection(mainland_authority)
+            if overlap.is_empty or overlap.area <= TAIWAN_MAINLAND_OVERLAP_AREA_EPSILON:
+                continue
+            clipped = repair_polygonal_shapely_geometry(
+                clipped.difference(mainland_authority),
+                label=f"Taiwan admin region {row['id']} clipped by mainland authority",
+            )
+            changed = True
+
+        if not changed:
+            continue
+        changes.append(
+            {
+                "id": str(row["id"]),
+                "row": row,
+                "geometry": clipped,
+            },
+        )
+    return changes
+
+
+def update_admin_region_geometry(
+    connection: sqlite3.Connection,
+    *,
+    region_id: str,
+    geometry: BaseGeometry,
+) -> None:
+    geojson_geometry = shapely_geometry_to_geojson(geometry)
+    bbox = calculate_geometry_bbox(geojson_geometry)
+    connection.execute(
+        """
+        UPDATE admin_regions
+        SET geometry = ?,
+            min_lng = ?,
+            max_lng = ?,
+            min_lat = ?,
+            max_lat = ?
+        WHERE id = ?
+        """,
+        (
+            json.dumps(geojson_geometry, ensure_ascii=False, separators=(",", ":")),
+            bbox["min_lng"],
+            bbox["max_lng"],
+            bbox["min_lat"],
+            bbox["max_lat"],
+            region_id,
+        ),
+    )
+
+
+def enumerate_admin_region_keys_for_rows(
+    rows: list[sqlite3.Row],
+    *,
+    min_zoom: int,
+    max_zoom: int,
+) -> set[tuple[int, int, int]]:
+    if not rows:
+        return set()
+    return set(
+        enumerate_admin_region_tile_keys(
+            prepare_admin_region_tile_rows(rows),
+            min_zoom=min_zoom,
+            max_zoom=max_zoom,
+        ),
+    )
 
 
 def delete_existing_taiwan_generated_admin_rows(connection: sqlite3.Connection) -> None:
@@ -610,6 +968,20 @@ def extract_polygonal_geometry(geometry: BaseGeometry) -> BaseGeometry | None:
 
 def shapely_geometry_to_geojson(geometry: BaseGeometry) -> dict[str, Any]:
     return json.loads(json.dumps(mapping(geometry), separators=(",", ":")))
+
+
+def transform_gcj02_geometry_to_wgs84(geometry: dict[str, Any]) -> dict[str, Any]:
+    return transform_geojson_geometry_coordinates(geometry, transform_gcj02_to_wgs84_position)
+
+
+def transform_gcj02_to_wgs84_position(position: Any) -> Any:
+    if not isinstance(position, (list, tuple)) or len(position) < 2:
+        return position
+    longitude, latitude = transform_gcj02_to_wgs84_coordinate(
+        longitude=float(position[0]),
+        latitude=float(position[1]),
+    )
+    return [longitude, latitude, *list(position[2:])]
 
 
 def export_current_level_one_features(connection: sqlite3.Connection) -> list[dict[str, Any]]:
@@ -1039,6 +1411,330 @@ def patch_admin_region_overlay_tile_keys(
         candidate_count=len(resolved_tile_keys),
         built_count=built_count,
         feature_count=len(source_rows),
+    )
+
+
+def patch_admin_region_changed_tile_keys(
+    connection: sqlite3.Connection,
+    *,
+    focus_region_id: str,
+    depth: int,
+    tile_keys: Iterable[tuple[int, int, int]],
+    changed_region_ids: Iterable[str],
+    changed_rows: list[sqlite3.Row],
+    commit_interval: int,
+) -> AdminRegionTileBuildResult:
+    resolved_tile_keys = sorted(set(tile_keys))
+    changed_region_id_set = set(changed_region_ids)
+    prepared_changed_rows = prepare_admin_region_tile_rows(changed_rows)
+    updated_at = int(time.time() * 1000)
+    built_count = 0
+    min_zoom = min((z for z, _x, _y in resolved_tile_keys), default=0)
+    max_zoom = max((z for z, _x, _y in resolved_tile_keys), default=0)
+
+    for z, x, y in resolved_tile_keys:
+        existing_tile_row = connection.execute(
+            """
+            SELECT tile
+            FROM admin_region_tiles
+            WHERE z = ?
+              AND x = ?
+              AND y = ?
+              AND focus_region_id = ?
+              AND depth = ?
+            """,
+            (z, x, y, focus_region_id, depth),
+        ).fetchone()
+        if existing_tile_row is None:
+            continue
+
+        existing_features = get_admin_region_tile_features(bytes(existing_tile_row["tile"]))
+        remaining_features = [
+            feature
+            for feature in existing_features
+            if get_admin_region_feature_region_id(feature) not in changed_region_id_set
+        ]
+        changed_tile = encode_admin_region_mvt_from_prepared_rows(
+            prepared_changed_rows,
+            z=z,
+            x=x,
+            y=y,
+        )
+        changed_features = get_admin_region_tile_features(changed_tile) if changed_tile else []
+        tile = encode_admin_region_tile_features([*remaining_features, *changed_features])
+        if not tile:
+            connection.execute(
+                """
+                DELETE FROM admin_region_tiles
+                WHERE z = ?
+                  AND x = ?
+                  AND y = ?
+                  AND focus_region_id = ?
+                  AND depth = ?
+                """,
+                (z, x, y, focus_region_id, depth),
+            )
+            continue
+        connection.execute(
+            """
+            INSERT INTO admin_region_tiles (
+              z, x, y, focus_region_id, depth, algorithm_signature, tile, feature_count, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(z, x, y, focus_region_id, depth) DO UPDATE SET
+              algorithm_signature = excluded.algorithm_signature,
+              tile = excluded.tile,
+              feature_count = excluded.feature_count,
+              updated_at = excluded.updated_at
+            """,
+            (
+                z,
+                x,
+                y,
+                focus_region_id,
+                depth,
+                ADMIN_REGION_TILE_ALGORITHM_SIGNATURE,
+                tile,
+                len(remaining_features) + len(changed_features),
+                updated_at,
+            ),
+        )
+        built_count += 1
+        if commit_interval > 0 and built_count % commit_interval == 0:
+            connection.commit()
+
+    connection.commit()
+    return AdminRegionTileBuildResult(
+        focus_region_id=focus_region_id,
+        depth=depth,
+        min_zoom=min_zoom,
+        max_zoom=max_zoom,
+        candidate_count=len(resolved_tile_keys),
+        built_count=built_count,
+        feature_count=len(prepared_changed_rows),
+    )
+
+
+def get_admin_region_feature_region_id(feature: dict[str, Any]) -> str | None:
+    properties = feature.get("properties")
+    if not isinstance(properties, dict):
+        return None
+    region_id = properties.get("region_id")
+    return str(region_id) if region_id is not None else None
+
+
+def encode_admin_region_tile_features(features: list[dict[str, Any]]) -> bytes:
+    if not features:
+        return b""
+    return encode(
+        [
+            {
+                "name": ADMIN_REGION_TILE_LAYER_NAME,
+                "features": features,
+            },
+        ],
+        default_options={
+            "extents": MVT_EXTENT,
+            "y_coord_down": True,
+        },
+    )
+
+
+def rebuild_admin_region_overlay_tile_keys(
+    connection: sqlite3.Connection,
+    *,
+    focus_region_id: str,
+    depth: int,
+    tile_keys: Iterable[tuple[int, int, int]],
+    commit_interval: int,
+) -> AdminRegionTileBuildResult:
+    resolved_tile_keys = sorted(set(tile_keys))
+    updated_at = int(time.time() * 1000)
+    built_count = 0
+    min_zoom = min((z for z, _x, _y in resolved_tile_keys), default=0)
+    max_zoom = max((z for z, _x, _y in resolved_tile_keys), default=0)
+    candidate_feature_count = 0
+
+    for z, x, y in resolved_tile_keys:
+        source_rows = query_focused_region_rows_for_tile(
+            connection,
+            focus_region_id=focus_region_id,
+            depth=depth,
+            z=z,
+            x=x,
+            y=y,
+        )
+        candidate_feature_count += len(source_rows)
+        tile = encode_admin_region_mvt_from_prepared_rows(
+            prepare_admin_region_tile_rows(source_rows),
+            z=z,
+            x=x,
+            y=y,
+        )
+        if not tile:
+            connection.execute(
+                """
+                DELETE FROM admin_region_tiles
+                WHERE z = ?
+                  AND x = ?
+                  AND y = ?
+                  AND focus_region_id = ?
+                  AND depth = ?
+                """,
+                (z, x, y, focus_region_id, depth),
+            )
+            continue
+        connection.execute(
+            """
+            INSERT INTO admin_region_tiles (
+              z, x, y, focus_region_id, depth, algorithm_signature, tile, feature_count, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(z, x, y, focus_region_id, depth) DO UPDATE SET
+              algorithm_signature = excluded.algorithm_signature,
+              tile = excluded.tile,
+              feature_count = excluded.feature_count,
+              updated_at = excluded.updated_at
+            """,
+            (
+                z,
+                x,
+                y,
+                focus_region_id,
+                depth,
+                ADMIN_REGION_TILE_ALGORITHM_SIGNATURE,
+                tile,
+                count_tile_features(tile),
+                updated_at,
+            ),
+        )
+        built_count += 1
+        if commit_interval > 0 and built_count % commit_interval == 0:
+            connection.commit()
+
+    connection.commit()
+    return AdminRegionTileBuildResult(
+        focus_region_id=focus_region_id,
+        depth=depth,
+        min_zoom=min_zoom,
+        max_zoom=max_zoom,
+        candidate_count=len(resolved_tile_keys),
+        built_count=built_count,
+        feature_count=candidate_feature_count,
+    )
+
+
+def query_focused_region_rows_for_tile(
+    connection: sqlite3.Connection,
+    *,
+    focus_region_id: str,
+    depth: int,
+    z: int,
+    x: int,
+    y: int,
+) -> list[sqlite3.Row]:
+    if focus_region_id != ADMIN_REGION_WORLD_FOCUS_ID:
+        raise ValueError("Incremental overlay tile rebuild currently supports world focus only")
+    return query_world_focus_region_rows_for_tile(
+        connection,
+        depth=depth,
+        z=z,
+        x=x,
+        y=y,
+    )
+
+
+def query_world_focus_region_rows_for_tile(
+    connection: sqlite3.Connection,
+    *,
+    depth: int,
+    z: int,
+    x: int,
+    y: int,
+) -> list[sqlite3.Row]:
+    level_limit = min(max(depth, 1), 4)
+    west, south, east, north = tile_bounds(z=z, x=x, y=y)
+    padding = ADMIN_REGION_LEGACY_REBUILD_TILE_BBOX_PADDING_DEGREES
+    bbox_parameters = (
+        east + padding,
+        west - padding,
+        north + padding,
+        south - padding,
+    )
+    if level_limit == 1:
+        return list(
+            connection.execute(
+                """
+                SELECT
+                  r.id,
+                  r.name,
+                  r.level,
+                  r.geometry,
+                  r.line_geometry,
+                  r.line_mask_geometry,
+                  r.min_lng,
+                  r.max_lng,
+                  r.min_lat,
+                  r.max_lat,
+                  t.parent_id
+                FROM admin_regions r
+                LEFT JOIN admin_region_tree t ON t.child_id = r.id
+                WHERE r.level = 1
+                  AND r.min_lng <= ?
+                  AND r.max_lng >= ?
+                  AND r.min_lat <= ?
+                  AND r.max_lat >= ?
+                  AND lower(r.name) != 'antarctica'
+                  AND lower(r.id) NOT IN ('aq', 'ata', '010', 'country:aq', 'country:ata')
+                  AND lower(r.id) NOT LIKE '%:aq'
+                  AND lower(r.id) NOT LIKE '%:ata'
+                ORDER BY r.id
+                """,
+                bbox_parameters,
+            ),
+        )
+
+    return list(
+        connection.execute(
+            """
+            WITH RECURSIVE china_descendants(id) AS (
+              SELECT id
+              FROM admin_regions
+              WHERE id IN ('cn', 'CN', 'chn', 'CHN', '156')
+                 OR (
+                   length(id) >= 6
+                   AND substr(id, 1, 6) GLOB '[0-9][0-9][0-9][0-9][0-9][0-9]'
+                   AND substr(id, 1, 2) BETWEEN '11' AND '82'
+                 )
+              UNION
+              SELECT tree.child_id
+              FROM admin_region_tree tree
+              JOIN china_descendants parent ON parent.id = tree.parent_id
+            )
+            SELECT
+              r.id,
+              r.name,
+              r.level,
+              r.geometry,
+              r.line_geometry,
+              r.line_mask_geometry,
+              r.min_lng,
+              r.max_lng,
+              r.min_lat,
+              r.max_lat,
+              t.parent_id
+            FROM admin_regions r
+            LEFT JOIN admin_region_tree t ON t.child_id = r.id
+            WHERE r.level = ?
+              AND r.min_lng <= ?
+              AND r.max_lng >= ?
+              AND r.min_lat <= ?
+              AND r.max_lat >= ?
+              AND r.id IN (SELECT id FROM china_descendants)
+            ORDER BY r.id
+            """,
+            (level_limit, *bbox_parameters),
+        ),
     )
 
 
