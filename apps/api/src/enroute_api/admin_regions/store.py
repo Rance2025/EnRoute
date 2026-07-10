@@ -4,6 +4,7 @@ import json
 import copy
 import sqlite3
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Any, Iterable
 
 from enroute_api.footprints.coordinates import transform_gcj02_to_wgs84_coordinate
@@ -628,13 +629,15 @@ def transform_geojson_geometry_coordinates(
 def transform_gcj02_to_wgs84_position(position: Any) -> list[float]:
     if not isinstance(position, (list, tuple)) or len(position) < 2:
         return [0.0, 0.0]
-    longitude, latitude = transform_gcj02_to_wgs84_coordinate(
-        longitude=float(position[0]),
-        latitude=float(position[1]),
-    )
+    longitude, latitude = transform_gcj02_to_wgs84_cached(float(position[0]), float(position[1]))
     if len(position) > 2:
         return [longitude, latitude, *position[2:]]
     return [longitude, latitude]
+
+
+@lru_cache(maxsize=1_000_000)
+def transform_gcj02_to_wgs84_cached(longitude: float, latitude: float) -> tuple[float, float]:
+    return transform_gcj02_to_wgs84_coordinate(longitude=longitude, latitude=latitude)
 
 
 def find_finest_region_id(

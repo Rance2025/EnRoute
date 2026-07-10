@@ -4,6 +4,7 @@ import json
 import math
 import sqlite3
 import time
+from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
 from threading import RLock, Thread
@@ -626,7 +627,7 @@ def backfill_footprint_region_ids(
     *,
     region_matcher: RegionMatcher | None = None,
 ) -> FootprintRegionBackfillResult:
-    matcher = region_matcher or create_region_matcher(connection)
+    spatial_index = None if region_matcher is not None else create_region_backfill_spatial_index(connection)
     rows = connection.execute(
         """
         SELECT timestamp_seconds, longitude, latitude, region_id
@@ -640,9 +641,16 @@ def backfill_footprint_region_ids(
 
     with connection:
         for row in rows:
-            region_id = matcher.find_finest_region_id(
-                longitude=float(row["longitude"]),
-                latitude=float(row["latitude"]),
+            longitude = float(row["longitude"])
+            latitude = float(row["latitude"])
+            region_id = (
+                region_matcher.find_finest_region_id(longitude=longitude, latitude=latitude)
+                if region_matcher is not None
+                else find_region_id_from_backfill_spatial_index(
+                    spatial_index,
+                    longitude=longitude,
+                    latitude=latitude,
+                )
             )
             if region_id is not None:
                 matched_count += 1
@@ -666,6 +674,71 @@ def backfill_footprint_region_ids(
         "unmatched_count": total_count - matched_count,
         "updated_count": updated_count,
     }
+
+
+@dataclass(frozen=True)
+class RegionBackfillSpatialIndex:
+    tree: Any
+    geometries: list[Any]
+    prepared_geometries: list[Any]
+    geometry_id_to_index: dict[int, int]
+    region_ids: list[str]
+    levels: list[int]
+
+
+def create_region_backfill_spatial_index(connection: sqlite3.Connection) -> RegionBackfillSpatialIndex:
+    from shapely.geometry import shape
+    from shapely.prepared import prep
+    from shapely.strtree import STRtree
+
+    rows = connection.execute(
+        """
+        SELECT id, level, geometry
+        FROM admin_regions
+        ORDER BY level DESC, id
+        """,
+    ).fetchall()
+    geometries = [shape(json.loads(str(row["geometry"]))) for row in rows]
+    return RegionBackfillSpatialIndex(
+        tree=STRtree(geometries),
+        geometries=geometries,
+        prepared_geometries=[prep(geometry) for geometry in geometries],
+        geometry_id_to_index={id(geometry): index for index, geometry in enumerate(geometries)},
+        region_ids=[str(row["id"]) for row in rows],
+        levels=[int(row["level"]) for row in rows],
+    )
+
+
+def find_region_id_from_backfill_spatial_index(
+    spatial_index: RegionBackfillSpatialIndex | None,
+    *,
+    longitude: float,
+    latitude: float,
+) -> str | None:
+    if spatial_index is None:
+        return None
+
+    from shapely.geometry import Point
+
+    point = Point(longitude, latitude)
+    best_index = None
+    for candidate in spatial_index.tree.query(point):
+        index = resolve_strtree_candidate_index(candidate, spatial_index.geometry_id_to_index)
+        if not spatial_index.prepared_geometries[index].covers(point):
+            continue
+        if best_index is None or spatial_index.levels[index] > spatial_index.levels[best_index]:
+            best_index = index
+
+    return None if best_index is None else spatial_index.region_ids[best_index]
+
+
+def resolve_strtree_candidate_index(
+    candidate: Any,
+    geometry_id_to_index: dict[int, int],
+) -> int:
+    if hasattr(candidate, "__index__") and not hasattr(candidate, "geom_type"):
+        return int(candidate)
+    return geometry_id_to_index[id(candidate)]
 
 
 def mark_affected_visual_tiles_dirty(connection: sqlite3.Connection, point: dict[str, Any]) -> None:
@@ -824,23 +897,108 @@ def rebuild_admin_region_stats_from_footprints(connection: sqlite3.Connection) -
             travel_distance_meters = 0
         """,
     )
+    parent_by_child = {
+        str(row["child_id"]): str(row["parent_id"])
+        for row in connection.execute("SELECT parent_id, child_id FROM admin_region_tree")
+    }
+    level_by_region = {
+        str(row["id"]): int(row["level"])
+        for row in connection.execute("SELECT id, level FROM admin_regions")
+    }
+    chain_cache: dict[str | None, list[str]] = {None: []}
+
+    def resolve_chain(region_id: str | None) -> list[str]:
+        if not region_id:
+            return []
+        if region_id in chain_cache:
+            return chain_cache[region_id]
+        chain = [region_id]
+        current_id = region_id
+        seen = {region_id}
+        while current_id in parent_by_child:
+            current_id = parent_by_child[current_id]
+            if current_id in seen:
+                break
+            seen.add(current_id)
+            chain.append(current_id)
+        chain_cache[region_id] = chain
+        return chain
+
+    def resolve_levels(chain: list[str]) -> dict[int, str]:
+        return {
+            level_by_region[region_id]: region_id
+            for region_id in chain
+            if region_id in level_by_region
+        }
+
+    stats: dict[str, dict[str, Any]] = {}
+
+    def ensure_stats(region_id: str) -> dict[str, Any]:
+        if region_id not in stats:
+            stats[region_id] = {
+                "first_seen_timestamp": None,
+                "footprint_count": 0,
+                "stay_duration_seconds": 0,
+                "travel_distance_meters": 0.0,
+            }
+        return stats[region_id]
+
     rows = connection.execute(
         """
         SELECT timestamp_seconds, distance, region_id
         FROM footprints
-        WHERE region_id IS NOT NULL
         ORDER BY timestamp_seconds
         """,
     ).fetchall()
+    previous_row = None
     for row in rows:
-        update_region_unlock_stats(
-            connection,
-            {
-                "timestampSeconds": int(row["timestamp_seconds"]),
-                "distance": float(row["distance"]),
-            },
-            None if row["region_id"] is None else str(row["region_id"]),
-        )
+        timestamp_seconds = int(row["timestamp_seconds"])
+        region_id = None if row["region_id"] is None else str(row["region_id"])
+        chain = resolve_chain(region_id)
+        for chain_region_id in chain:
+            region_stats = ensure_stats(chain_region_id)
+            region_stats["footprint_count"] += 1
+            first_seen_timestamp = region_stats["first_seen_timestamp"]
+            if first_seen_timestamp is None or first_seen_timestamp > timestamp_seconds:
+                region_stats["first_seen_timestamp"] = timestamp_seconds
+
+        if previous_row is not None and region_id is not None:
+            previous_region_id = (
+                None if previous_row["region_id"] is None else str(previous_row["region_id"])
+            )
+            current_by_level = resolve_levels(chain)
+            previous_by_level = resolve_levels(resolve_chain(previous_region_id))
+            delta_seconds = timestamp_seconds - int(previous_row["timestamp_seconds"])
+            distance = float(row["distance"])
+            for level, current_region_id in current_by_level.items():
+                if previous_by_level.get(level) != current_region_id:
+                    continue
+                region_stats = ensure_stats(current_region_id)
+                region_stats["stay_duration_seconds"] += delta_seconds
+                region_stats["travel_distance_meters"] += distance
+
+        previous_row = row
+
+    connection.executemany(
+        """
+        UPDATE admin_regions
+        SET first_seen_timestamp = ?,
+            footprint_count = ?,
+            stay_duration_seconds = ?,
+            travel_distance_meters = ?
+        WHERE id = ?
+        """,
+        [
+            (
+                values["first_seen_timestamp"],
+                values["footprint_count"],
+                values["stay_duration_seconds"],
+                values["travel_distance_meters"],
+                region_id,
+            )
+            for region_id, values in stats.items()
+        ],
+    )
 
 
 def get_import_result(connection: sqlite3.Connection, *, new_count: int) -> FootprintImportResult:
