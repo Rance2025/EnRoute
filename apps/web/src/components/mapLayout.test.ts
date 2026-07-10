@@ -429,7 +429,7 @@ describe('map chrome layout', () => {
     expect(scrollRule).toContain('width: calc(100% + var(--time-panel-shadow-buffer))')
     expect(scrollRule).toContain('margin-right: calc(0px - var(--time-panel-shadow-buffer))')
     expect(scrollRule).toContain(
-      'grid-template-rows: max-content minmax(0, 1fr)',
+      'grid-template-rows: max-content max-content minmax(0, 1fr)',
     )
     expect(scrollRule).not.toContain('grid-template-rows: max-content max-content minmax(174px, 1fr)')
     expect(scrollRule).not.toContain('grid-template-rows: auto minmax(0, 1fr) auto')
@@ -455,7 +455,7 @@ describe('map chrome layout', () => {
     const scrollRule = cssRule('.time-context-panel__scroll')
 
     expect(scrollRule).toContain(
-      'grid-template-rows: max-content minmax(0, 1fr)',
+      'grid-template-rows: max-content max-content minmax(0, 1fr)',
     )
     expect(scrollRule).toContain('position: relative')
     expect(scrollRule).toContain('gap: 20px')
@@ -673,14 +673,17 @@ describe('map chrome layout', () => {
       'color: rgba(21, 48, 42, 0.68)',
     )
     expect(cssRule('.time-context-panel__scroll')).toContain(
-      'grid-template-rows: max-content minmax(0, 1fr)',
+      'grid-template-rows: max-content max-content minmax(0, 1fr)',
     )
-    expect(cssRule('.time-context-trend')).toContain('height: 196px')
+    expect(cssRule('.time-context-trend')).toContain('position: relative')
+    expect(cssRule('.time-context-trend')).toContain('align-self: stretch')
+    expect(cssRule('.time-context-trend')).toContain('display: flex')
+    expect(cssRule('.time-context-trend')).toContain('flex-direction: column')
+    expect(cssRule('.time-context-trend')).toContain('padding-bottom: 5px')
+    expect(cssRule('.time-context-trend')).not.toContain('height: 196px')
     expect(cssRule('.time-context-trend')).not.toContain('height: 220px')
-    expect(cssRule('.time-context-trend')).toContain('position: absolute')
-    expect(cssRule('.time-context-trend')).toContain('right: calc(24px + var(--time-panel-shadow-buffer))')
-    expect(cssRule('.time-context-trend')).toContain('bottom: 18px')
-    expect(cssRule('.time-context-trend')).toContain('left: 24px')
+    expect(cssRule('.time-context-trend')).not.toContain('position: absolute')
+    expect(cssRule('.time-context-trend')).not.toContain('bottom: 18px')
     expect(cssRule('.time-context-trend')).not.toContain('margin-top')
     expect(cssRule('.time-context-trend')).toContain('transition:')
     expect(cssRule('.time-context-trend')).toContain('opacity 180ms ease')
@@ -700,7 +703,9 @@ describe('map chrome layout', () => {
     expect(cssRule('.time-context-trend__summary')).toContain('text-align: right')
     expect(cssRule('.time-context-trend__summary')).toContain('white-space: normal')
     expect(cssRule('.time-context-trend__summary-line')).toContain('white-space: nowrap')
-    expect(cssRule('.time-context-trend__chart')).toContain('height: 144px')
+    expect(cssRule('.time-context-trend__chart')).toContain('flex: 1 1 auto')
+    expect(cssRule('.time-context-trend__chart')).toContain('min-height: 144px')
+    expect(cssRule('.time-context-trend__chart')).not.toMatch(/\n\s*height: 144px/)
     expect(cssRule('.time-context-trend__chart')).toContain('padding: 0 1px')
     expect(cssRule('.time-context-trend__chart')).toContain('overflow: hidden')
     expect(cssRule('.time-context-trend__plot')).toContain('position: relative')
