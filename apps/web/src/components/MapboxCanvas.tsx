@@ -223,7 +223,6 @@ function MapboxCanvasComponent({
   const [cameraZoom, setCameraZoom] = useState<number | undefined>(undefined)
   const [tileDebugMetrics, setTileDebugMetrics] = useState<FootprintTileDebugMetrics | null>(null)
   const [adminRegionDebugMetrics, setAdminRegionDebugMetrics] = useState<AdminRegionTileDebugMetrics | null>(null)
-  const [activeAdminRegionIds, setActiveAdminRegionIds] = useState<string[] | null>(null)
   const [focusedAdminRegionId, setFocusedAdminRegionId] = useState(DEFAULT_ADMIN_REGION_FOCUS_ID)
   const [styleReady, setStyleReady] = useState(false)
   const [styleMutationReady, setStyleMutationReady] = useState(false)
@@ -233,6 +232,7 @@ function MapboxCanvasComponent({
   const styleMutationReadyRef = useRef(false)
   const languageRef = useRef(language)
   const appliedLanguageRef = useRef<MapboxLanguage | undefined>(undefined)
+  const activeAdminRegionIdsRef = useRef<string[] | null>(null)
   const selectedFootprintBoundsRef = useRef<FootprintLngLatBounds | null>(null)
   const baseMapVisibilityRecordsRef = useRef<BaseMapVisibilityRecord[]>([])
   const hiddenBaseMapConfigOverridesRef = useRef<Set<BaseMapConfigPropertyName>>(new Set())
@@ -842,12 +842,13 @@ function MapboxCanvasComponent({
       !adminRegionUnlockEnabled ||
       !adminRegionActiveOnly
     ) {
-      setActiveAdminRegionIds(null)
+      activeAdminRegionIdsRef.current = null
       return
     }
 
     const abortController = new AbortController()
-    setActiveAdminRegionIds([])
+    activeAdminRegionIdsRef.current = []
+    applyAdminRegionLayerFilters([])
 
     fetch(createAdminRegionActiveUrl(
       resolvedAdminRegionActiveUrl,
@@ -866,12 +867,16 @@ function MapboxCanvasComponent({
       })
       .then((payload) => {
         if (!abortController.signal.aborted) {
-          setActiveAdminRegionIds(readActiveAdminRegionIds(payload))
+          const regionIds = readActiveAdminRegionIds(payload)
+
+          activeAdminRegionIdsRef.current = regionIds
+          applyAdminRegionLayerFilters(regionIds)
         }
       })
       .catch(() => {
         if (!abortController.signal.aborted) {
-          setActiveAdminRegionIds([])
+          activeAdminRegionIdsRef.current = []
+          applyAdminRegionLayerFilters([])
         }
       })
 
@@ -882,6 +887,7 @@ function MapboxCanvasComponent({
     adminRegionActiveOnly,
     adminRegionDepth,
     adminRegionUnlockEnabled,
+    applyAdminRegionLayerFilters,
     footprintTileRange,
     resolvedAdminRegionActiveUrl,
     status,
@@ -891,9 +897,8 @@ function MapboxCanvasComponent({
   useEffect(() => {
     if (status !== 'ready' || !styleMutationReady || !adminRegionUnlockEnabled) return
 
-    applyAdminRegionLayerFilters(adminRegionActiveOnly ? activeAdminRegionIds : null)
+    applyAdminRegionLayerFilters(adminRegionActiveOnly ? activeAdminRegionIdsRef.current ?? [] : null)
   }, [
-    activeAdminRegionIds,
     adminRegionActiveOnly,
     adminRegionUnlockEnabled,
     applyAdminRegionLayerFilters,
