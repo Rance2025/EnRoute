@@ -1046,7 +1046,6 @@ function MapboxCanvasComponent({
           <AdminRegionDebugPanel
             debugMetrics={status === 'ready' ? adminRegionDebugMetrics : null}
             cameraZoom={cameraZoom}
-            focusedRegionId={focusedAdminRegionId}
           />
         ) : null}
         {debugPanelVisible && !adminRegionUnlockEnabled ? (
@@ -1490,11 +1489,9 @@ function FootprintDebugPanel({
 function AdminRegionDebugPanel({
   debugMetrics,
   cameraZoom,
-  focusedRegionId,
 }: {
   debugMetrics: AdminRegionTileDebugMetrics | null
   cameraZoom?: number
-  focusedRegionId: string
 }) {
   return (
     <aside className="glass-panel glass-panel--solid glass-panel--compact footprint-debug-panel" aria-label="足迹渲染调试">
@@ -1513,10 +1510,6 @@ function AdminRegionDebugPanel({
       <div className="footprint-debug-panel__row">
         <span>可见瓦片</span>
         <strong>{debugMetrics ? formatDebugCount(debugMetrics.visibleTileCount) : '--'}</strong>
-      </div>
-      <div className="footprint-debug-panel__row">
-        <span>当前区域</span>
-        <strong>{focusedRegionId === DEFAULT_ADMIN_REGION_FOCUS_ID ? 'world' : focusedRegionId}</strong>
       </div>
     </aside>
   )
