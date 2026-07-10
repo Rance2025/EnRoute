@@ -23,6 +23,7 @@ from enroute_api.footprints.coordinates import (
 from enroute_api.footprints.store import (
     ADMIN_REGION_STATS_SIGNATURE_KEY,
     FootprintStore,
+    backfill_footprint_region_ids,
     classify_footprint_admin_region,
     create_import_compatibility_signature,
     create_import_signature,
@@ -820,6 +821,76 @@ def test_classifies_new_footprint_against_finest_cached_admin_region(tmp_path: P
         connection.close()
 
     assert match == "sanlin"
+
+
+def test_backfill_footprint_region_ids_recomputes_regions_without_touching_visual_tiles(
+    tmp_path: Path,
+):
+    connection = sqlite3.connect(tmp_path / "footprints.sqlite")
+    connection.row_factory = sqlite3.Row
+    try:
+        initialize_schema(connection)
+        load_admin_regions(connection, REGION_COLLECTION)
+        with connection:
+            connection.executemany(
+                """
+                INSERT INTO footprints (
+                  timestamp_seconds,
+                  longitude,
+                  latitude,
+                  accuracy,
+                  speed,
+                  distance,
+                  heading,
+                  altitude,
+                  region_id
+                ) VALUES (?, ?, ?, 5, -1, ?, 0, 3, ?)
+                """,
+                [
+                    (100, 10, 10, 0, "cn"),
+                    (130, 45, 45, 40, None),
+                ],
+            )
+            connection.execute(
+                """
+                INSERT INTO visual_tiles (z, x, y, t_type, t, status, cells, updated_at)
+                VALUES (0, 0, 0, 0, 0, 'ready', X'00', 1234)
+                """,
+            )
+
+        result = backfill_footprint_region_ids(connection)
+
+        footprints = connection.execute(
+            "SELECT timestamp_seconds, region_id FROM footprints ORDER BY timestamp_seconds",
+        ).fetchall()
+        stats = {
+            row["id"]: dict(row)
+            for row in connection.execute(
+                """
+                SELECT id, footprint_count, stay_duration_seconds, travel_distance_meters
+                FROM admin_regions
+                ORDER BY id
+                """,
+            )
+        }
+        visual_tile_count = connection.execute("SELECT COUNT(*) FROM visual_tiles").fetchone()[0]
+    finally:
+        connection.close()
+
+    assert result == {
+        "total_count": 2,
+        "matched_count": 2,
+        "unmatched_count": 0,
+        "updated_count": 2,
+    }
+    assert [(row["timestamp_seconds"], row["region_id"]) for row in footprints] == [
+        (100, "sanlin"),
+        (130, "pudong"),
+    ]
+    assert stats["sanlin"]["footprint_count"] == 1
+    assert stats["pudong"]["footprint_count"] == 1
+    assert stats["cn"]["footprint_count"] == 2
+    assert visual_tile_count == 1
 
 
 def column_names(connection: sqlite3.Connection, table_name: str) -> list[str]:

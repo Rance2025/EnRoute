@@ -70,6 +70,13 @@ class FootprintImportResult(TypedDict):
     unlocked_region_count: int
 
 
+class FootprintRegionBackfillResult(TypedDict):
+    total_count: int
+    matched_count: int
+    unmatched_count: int
+    updated_count: int
+
+
 class FootprintStore:
     def __init__(
         self,
@@ -612,6 +619,53 @@ def classify_footprint_admin_region(
         longitude=float(point["longitude"]),
         latitude=float(point["latitude"]),
     )
+
+
+def backfill_footprint_region_ids(
+    connection: sqlite3.Connection,
+    *,
+    region_matcher: RegionMatcher | None = None,
+) -> FootprintRegionBackfillResult:
+    matcher = region_matcher or create_region_matcher(connection)
+    rows = connection.execute(
+        """
+        SELECT timestamp_seconds, longitude, latitude, region_id
+        FROM footprints
+        ORDER BY timestamp_seconds
+        """,
+    ).fetchall()
+    total_count = len(rows)
+    matched_count = 0
+    updated_count = 0
+
+    with connection:
+        for row in rows:
+            region_id = matcher.find_finest_region_id(
+                longitude=float(row["longitude"]),
+                latitude=float(row["latitude"]),
+            )
+            if region_id is not None:
+                matched_count += 1
+            if row["region_id"] == region_id:
+                continue
+            connection.execute(
+                """
+                UPDATE footprints
+                SET region_id = ?
+                WHERE timestamp_seconds = ?
+                """,
+                (region_id, int(row["timestamp_seconds"])),
+            )
+            updated_count += 1
+
+        rebuild_admin_region_stats_from_footprints(connection)
+
+    return {
+        "total_count": total_count,
+        "matched_count": matched_count,
+        "unmatched_count": total_count - matched_count,
+        "updated_count": updated_count,
+    }
 
 
 def mark_affected_visual_tiles_dirty(connection: sqlite3.Connection, point: dict[str, Any]) -> None:
