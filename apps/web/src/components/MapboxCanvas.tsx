@@ -5,7 +5,9 @@ import {
   ADMIN_REGION_FILL_LAYER_ID,
   ADMIN_REGION_LINE_LAYER_ID,
   ADMIN_REGION_VECTOR_SOURCE_ID,
+  createAdminRegionFillFilter,
   createAdminRegionFillLayer,
+  createAdminRegionLineFilter,
   createAdminRegionLineLayer,
   createAdminRegionVectorTileSource,
   DEFAULT_ADMIN_REGION_TILE_URL,
@@ -44,6 +46,7 @@ type MapboxCanvasProps = {
   timeRange: TimeRangeSelection
   onFootprintMetricsChange?: (metrics: FootprintMetrics) => void
   adminRegionUnlockEnabled?: boolean
+  adminRegionActiveOnly?: boolean
   adminRegionDepth?: AdminRegionDepth
   debugPanelVisible?: boolean
   placeLabelsVisible?: boolean
@@ -67,6 +70,7 @@ type MapboxCanvasEnv = {
   VITE_FOOTPRINT_METRICS_URL?: string
   VITE_FOOTPRINT_TILE_DEBUG_URL?: string
   VITE_ADMIN_REGION_TILE_URL?: string
+  VITE_ADMIN_REGION_ACTIVE_URL?: string
 }
 
 type MapboxProjection = 'globe' | 'mercator'
@@ -159,6 +163,7 @@ type BaseMapConfigPropertyName =
 const DEFAULT_MAPBOX_PROJECTION: MapboxProjection = 'globe'
 const DEFAULT_FOOTPRINT_METRICS_URL = '/api/footprints/metrics'
 const DEFAULT_FOOTPRINT_TILE_DEBUG_URL = '/api/map/tiles/footprints/debug'
+const DEFAULT_ADMIN_REGION_ACTIVE_URL = '/api/admin-regions/active'
 const DEFAULT_ADMIN_REGION_FOCUS_ID = 'world'
 const DEFAULT_ADMIN_REGION_DEPTH: AdminRegionDepth = 1
 const DEFAULT_MAP_CENTER: [number, number] = [104.195397, 35.86166]
@@ -197,6 +202,7 @@ function MapboxCanvasComponent({
   timeRange,
   onFootprintMetricsChange,
   adminRegionUnlockEnabled = false,
+  adminRegionActiveOnly = false,
   adminRegionDepth = DEFAULT_ADMIN_REGION_DEPTH,
   debugPanelVisible = false,
   placeLabelsVisible = true,
@@ -217,6 +223,7 @@ function MapboxCanvasComponent({
   const [cameraZoom, setCameraZoom] = useState<number | undefined>(undefined)
   const [tileDebugMetrics, setTileDebugMetrics] = useState<FootprintTileDebugMetrics | null>(null)
   const [adminRegionDebugMetrics, setAdminRegionDebugMetrics] = useState<AdminRegionTileDebugMetrics | null>(null)
+  const [activeAdminRegionIds, setActiveAdminRegionIds] = useState<string[] | null>(null)
   const [focusedAdminRegionId, setFocusedAdminRegionId] = useState(DEFAULT_ADMIN_REGION_FOCUS_ID)
   const [styleReady, setStyleReady] = useState(false)
   const [styleMutationReady, setStyleMutationReady] = useState(false)
@@ -271,6 +278,11 @@ function MapboxCanvasComponent({
     undefined,
     (import.meta.env as MapboxCanvasEnv).VITE_ADMIN_REGION_TILE_URL,
     DEFAULT_ADMIN_REGION_TILE_URL,
+  )
+  const resolvedAdminRegionActiveUrl = resolveConfigValue(
+    undefined,
+    (import.meta.env as MapboxCanvasEnv).VITE_ADMIN_REGION_ACTIVE_URL,
+    DEFAULT_ADMIN_REGION_ACTIVE_URL,
   )
   const footprintTileRange = useMemo(
     () => createFootprintTileRange(timeRange),
@@ -358,6 +370,20 @@ function MapboxCanvasComponent({
     map.addLayer(createAdminRegionFillLayer())
     map.addLayer(createAdminRegionLineLayer())
   }, [removeAdminRegionLayers])
+
+  const applyAdminRegionLayerFilters = useCallback((regionIds: string[] | null) => {
+    const map = mapRef.current
+
+    if (!map) return
+
+    const activeRegionIds = regionIds ?? undefined
+    if (map.getLayer(ADMIN_REGION_FILL_LAYER_ID)) {
+      map.setFilter(ADMIN_REGION_FILL_LAYER_ID, createAdminRegionFillFilter(activeRegionIds))
+    }
+    if (map.getLayer(ADMIN_REGION_LINE_LAYER_ID)) {
+      map.setFilter(ADMIN_REGION_LINE_LAYER_ID, createAdminRegionLineFilter(activeRegionIds))
+    }
+  }, [])
 
   const updateBaseMapLayerVisibility = useCallback(() => {
     const map = mapRef.current
@@ -810,6 +836,73 @@ function MapboxCanvasComponent({
   ])
 
   useEffect(() => {
+    if (
+      status !== 'ready' ||
+      !styleMutationReady ||
+      !adminRegionUnlockEnabled ||
+      !adminRegionActiveOnly
+    ) {
+      setActiveAdminRegionIds(null)
+      return
+    }
+
+    const abortController = new AbortController()
+    setActiveAdminRegionIds([])
+
+    fetch(createAdminRegionActiveUrl(
+      resolvedAdminRegionActiveUrl,
+      footprintTileRange,
+      adminRegionDepth,
+    ), {
+      method: 'GET',
+      signal: abortController.signal,
+    })
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`Active admin-region request failed: ${response.status}`)
+        }
+
+        return response.json() as Promise<unknown>
+      })
+      .then((payload) => {
+        if (!abortController.signal.aborted) {
+          setActiveAdminRegionIds(readActiveAdminRegionIds(payload))
+        }
+      })
+      .catch(() => {
+        if (!abortController.signal.aborted) {
+          setActiveAdminRegionIds([])
+        }
+      })
+
+    return () => {
+      abortController.abort()
+    }
+  }, [
+    adminRegionActiveOnly,
+    adminRegionDepth,
+    adminRegionUnlockEnabled,
+    footprintTileRange,
+    resolvedAdminRegionActiveUrl,
+    status,
+    styleMutationReady,
+  ])
+
+  useEffect(() => {
+    if (status !== 'ready' || !styleMutationReady || !adminRegionUnlockEnabled) return
+
+    applyAdminRegionLayerFilters(adminRegionActiveOnly ? activeAdminRegionIds : null)
+  }, [
+    activeAdminRegionIds,
+    adminRegionActiveOnly,
+    adminRegionUnlockEnabled,
+    applyAdminRegionLayerFilters,
+    status,
+    styleLoadRevision,
+    styleMutationReady,
+  ])
+
+  useEffect(() => {
     const map = mapRef.current
 
     if (status !== 'ready' || !styleMutationReady || !adminRegionUnlockEnabled || !map) return
@@ -1098,6 +1191,35 @@ function createFootprintMetricsUrl(
   }
 
   return `${metricsUrl}?${params.toString()}`
+}
+
+function createAdminRegionActiveUrl(
+  activeUrl: string,
+  range: FootprintVectorTileRange,
+  depth: AdminRegionDepth,
+) {
+  const params = new URLSearchParams()
+  params.set('depth', String(depth))
+
+  if (range.range === 'all') {
+    params.set('range', 'all')
+  } else {
+    params.set('start', range.start)
+    params.set('end', range.end)
+  }
+
+  return `${activeUrl}?${params.toString()}`
+}
+
+function readActiveAdminRegionIds(payload: unknown) {
+  if (!payload || typeof payload !== 'object' || !('regionIds' in payload)) return []
+
+  const regionIds = (payload as { regionIds?: unknown }).regionIds
+  if (!Array.isArray(regionIds)) return []
+
+  return [...new Set(regionIds.filter((regionId): regionId is string => (
+    typeof regionId === 'string' && regionId.trim().length > 0
+  )))]
 }
 
 function createFootprintTileDebugUrl(
