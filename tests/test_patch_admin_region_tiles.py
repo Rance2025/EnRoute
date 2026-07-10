@@ -7,11 +7,14 @@ from pathlib import Path
 from shapely.geometry import shape
 from mapbox_vector_tile import encode
 
+from scripts import patch_admin_region_tiles as patch_admin_region_tiles_module
 from scripts.patch_admin_region_tiles import (
     load_taiwan_admin_region_features,
     main,
+    patch_taiwan_mainland_overlaps,
     patch_taiwan_admin_levels,
 )
+from enroute_api.admin_regions.store import find_finest_region_id
 from enroute_api.admin_regions.tiles import (
     ADMIN_REGION_TILE_LAYER_NAME,
     ADMIN_REGION_TILE_ALGORITHM_SIGNATURE,
@@ -160,6 +163,14 @@ def insert_test_admin_region(
             resolved_geometry["coordinates"][0][2][1],
         ),
     )
+
+
+def fetch_region_geometry(connection: sqlite3.Connection, region_id: str):
+    row = connection.execute(
+        "SELECT geometry FROM admin_regions WHERE id = ?",
+        (region_id,),
+    ).fetchone()
+    return shape(json.loads(str(row["geometry"])))
 
 
 def test_loads_taiwan_official_boundaries_as_level_three_and_four(tmp_path: Path):
@@ -399,6 +410,381 @@ def test_main_patches_taiwan_admin_levels_without_rebuilding_tiles(tmp_path: Pat
         ("tw-town-63000010", "\u5927\u5b89\u5340", 4),
     ]
     assert dict(sentinel) == {"algorithm_signature": "sentinel", "updated_at": 111}
+
+
+def test_taiwan_mainland_overlap_patch_clips_generated_rows_for_future_point_matching(tmp_path: Path):
+    database_path = tmp_path / "footprints.sqlite"
+    connection = sqlite3.connect(database_path)
+    connection.row_factory = sqlite3.Row
+    try:
+        initialize_admin_region_patch_test_schema(connection)
+        connection.executescript(
+            """
+            CREATE TABLE admin_region_tiles (
+              z INTEGER NOT NULL,
+              x INTEGER NOT NULL,
+              y INTEGER NOT NULL,
+              focus_region_id TEXT NOT NULL,
+              depth INTEGER NOT NULL,
+              algorithm_signature TEXT NOT NULL DEFAULT '',
+              tile BLOB NOT NULL,
+              feature_count INTEGER NOT NULL,
+              updated_at INTEGER NOT NULL,
+              PRIMARY KEY (z, x, y, focus_region_id, depth)
+            ) WITHOUT ROWID;
+            """
+        )
+        insert_test_admin_region(
+            connection,
+            region_id="350000",
+            name="福建省",
+            level=2,
+            geometry=make_square(118, 24, 119, 25),
+        )
+        insert_test_admin_region(
+            connection,
+            region_id="710000",
+            name="台湾省",
+            level=2,
+            geometry=make_square(118, 24, 122, 26),
+        )
+        insert_test_admin_region(
+            connection,
+            region_id="tw-county-09020",
+            name="金門縣",
+            level=3,
+            geometry=make_square(118.5, 24.2, 119.5, 24.8),
+        )
+        insert_test_admin_region(
+            connection,
+            region_id="tw-town-09020010",
+            name="金城鎮",
+            level=4,
+            geometry=make_square(118.5, 24.2, 119.5, 24.8),
+        )
+        insert_test_admin_region(
+            connection,
+            region_id="tw-county-63000",
+            name="臺北市",
+            level=3,
+            geometry=make_square(121, 25, 122, 26),
+        )
+        connection.execute(
+            """
+            INSERT INTO admin_region_tree (parent_id, child_id)
+            VALUES
+              ('710000', 'tw-county-09020'),
+              ('tw-county-09020', 'tw-town-09020010'),
+              ('710000', 'tw-county-63000')
+            """,
+        )
+        connection.execute(
+            """
+            INSERT INTO visual_tiles (z, x, y, t_type, t, tile)
+            VALUES (0, 0, 0, 'all', 'all', x'01')
+            """,
+        )
+        connection.commit()
+
+        result = patch_taiwan_mainland_overlaps(
+            connection,
+            depths=[3, 4],
+            min_zoom=0,
+            max_zoom=0,
+            commit_interval=1000,
+            rebuild_tiles=False,
+        )
+
+        kinmen = fetch_region_geometry(connection, "tw-county-09020")
+        kincheng = fetch_region_geometry(connection, "tw-town-09020010")
+        taipei = fetch_region_geometry(connection, "tw-county-63000")
+        visual_tile_count = connection.execute("SELECT COUNT(*) FROM visual_tiles").fetchone()[0]
+        overlap_point_match = find_finest_region_id(
+            connection,
+            longitude=118.75,
+            latitude=24.5,
+        )
+        taiwan_only_match = find_finest_region_id(
+            connection,
+            longitude=119.25,
+            latitude=24.5,
+        )
+    finally:
+        connection.close()
+
+    assert result["changed_region_count"] == 2
+    assert result["tile_count"] == 0
+    assert kinmen.intersection(shape(make_square(118, 24, 119, 25))).area == 0
+    assert kincheng.intersection(shape(make_square(118, 24, 119, 25))).area == 0
+    assert taipei.equals(shape(make_square(121, 25, 122, 26)))
+    assert visual_tile_count == 1
+    assert overlap_point_match == "350000"
+    assert taiwan_only_match == "tw-town-09020010"
+
+
+def test_taiwan_mainland_overlap_patch_skips_far_mainland_authority_rows(
+    tmp_path: Path,
+    monkeypatch,
+):
+    database_path = tmp_path / "footprints.sqlite"
+    connection = sqlite3.connect(database_path)
+    connection.row_factory = sqlite3.Row
+    try:
+        initialize_admin_region_patch_test_schema(connection)
+        insert_test_admin_region(
+            connection,
+            region_id="350000",
+            name="福建省",
+            level=2,
+            geometry=make_square(118, 24, 119, 25),
+        )
+        insert_test_admin_region(
+            connection,
+            region_id="650000",
+            name="新疆维吾尔自治区",
+            level=2,
+            geometry=make_square(80, 40, 90, 50),
+        )
+        insert_test_admin_region(
+            connection,
+            region_id="710000",
+            name="台湾省",
+            level=2,
+            geometry=make_square(118, 24, 122, 26),
+        )
+        insert_test_admin_region(
+            connection,
+            region_id="tw-county-09020",
+            name="金門縣",
+            level=3,
+            geometry=make_square(118.5, 24.2, 119.5, 24.8),
+        )
+        insert_test_admin_region(
+            connection,
+            region_id="tw-town-09020010",
+            name="金城鎮",
+            level=4,
+            geometry=make_square(118.5, 24.2, 119.5, 24.8),
+        )
+        connection.execute(
+            """
+            INSERT INTO admin_region_tree (parent_id, child_id)
+            VALUES
+              ('710000', 'tw-county-09020'),
+              ('tw-county-09020', 'tw-town-09020010')
+            """,
+        )
+        connection.commit()
+
+        mainland_repair_labels: list[str] = []
+        original_repair = patch_admin_region_tiles_module.repair_polygonal_shapely_geometry
+
+        def record_repaired_geometry(geometry, *, label: str):
+            if label.startswith("mainland authority"):
+                mainland_repair_labels.append(label)
+            return original_repair(geometry, label=label)
+
+        monkeypatch.setattr(
+            patch_admin_region_tiles_module,
+            "repair_polygonal_shapely_geometry",
+            record_repaired_geometry,
+        )
+
+        result = patch_taiwan_mainland_overlaps(
+            connection,
+            depths=[3, 4],
+            min_zoom=0,
+            max_zoom=0,
+            commit_interval=1000,
+            rebuild_tiles=False,
+        )
+    finally:
+        connection.close()
+
+    assert result["changed_region_count"] == 2
+    assert any("350000" in label for label in mainland_repair_labels)
+    assert all("650000" not in label for label in mainland_repair_labels)
+
+
+def test_taiwan_mainland_overlap_patch_rebuilds_only_affected_depth_tiles(tmp_path: Path, monkeypatch):
+    database_path = tmp_path / "footprints.sqlite"
+    sentinel_tile = encode(
+        [
+            {
+                "name": ADMIN_REGION_TILE_LAYER_NAME,
+                "features": [
+                    {
+                        "geometry": {
+                            "type": "Polygon",
+                            "coordinates": [[[0, 0], [4096, 0], [4096, 4096], [0, 4096], [0, 0]]],
+                        },
+                        "properties": {
+                            "region_id": "sentinel",
+                            "name": "Sentinel",
+                            "level": 3,
+                            "kind": "fill",
+                        },
+                    },
+                ],
+            },
+        ],
+        default_options={"extents": 4096, "y_coord_down": True},
+    )
+    connection = sqlite3.connect(database_path)
+    connection.row_factory = sqlite3.Row
+    try:
+        initialize_admin_region_patch_test_schema(connection)
+        connection.executescript(
+            """
+            CREATE TABLE admin_region_tiles (
+              z INTEGER NOT NULL,
+              x INTEGER NOT NULL,
+              y INTEGER NOT NULL,
+              focus_region_id TEXT NOT NULL,
+              depth INTEGER NOT NULL,
+              algorithm_signature TEXT NOT NULL DEFAULT '',
+              tile BLOB NOT NULL,
+              feature_count INTEGER NOT NULL,
+              updated_at INTEGER NOT NULL,
+              PRIMARY KEY (z, x, y, focus_region_id, depth)
+            ) WITHOUT ROWID;
+            """
+        )
+        insert_test_admin_region(
+            connection,
+            region_id="350000",
+            name="福建省",
+            level=2,
+            geometry=make_square(-20, 10, -10, 20),
+        )
+        insert_test_admin_region(
+            connection,
+            region_id="710000",
+            name="台湾省",
+            level=2,
+            geometry=make_square(-20, 10, 120, 20),
+        )
+        insert_test_admin_region(
+            connection,
+            region_id="tw-county-09020",
+            name="金門縣",
+            level=3,
+            geometry=make_square(-15, 10, -5, 20),
+        )
+        insert_test_admin_region(
+            connection,
+            region_id="tw-town-09020010",
+            name="金城鎮",
+            level=4,
+            geometry=make_square(-15, 10, -5, 20),
+        )
+        insert_test_admin_region(
+            connection,
+            region_id="tw-county-63000",
+            name="臺北市",
+            level=3,
+            geometry=make_square(100, 10, 110, 20),
+        )
+        insert_test_admin_region(
+            connection,
+            region_id="tw-town-63000010",
+            name="大安區",
+            level=4,
+            geometry=make_square(100, 10, 110, 20),
+        )
+        for index in range(3):
+            insert_test_admin_region(
+                connection,
+                region_id=f"31010{index}",
+                name=f"Unrelated City {index}",
+                level=3,
+                geometry=make_square(100 + index, 30, 101 + index, 31),
+            )
+            insert_test_admin_region(
+                connection,
+                region_id=f"31010{index}01",
+                name=f"Unrelated District {index}",
+                level=4,
+                geometry=make_square(100 + index, 30, 101 + index, 31),
+            )
+        connection.execute(
+            """
+            INSERT INTO admin_region_tree (parent_id, child_id)
+            VALUES
+              ('710000', 'tw-county-09020'),
+              ('tw-county-09020', 'tw-town-09020010'),
+              ('710000', 'tw-county-63000'),
+              ('tw-county-63000', 'tw-town-63000010')
+            """,
+        )
+        connection.executemany(
+            """
+            INSERT INTO admin_region_tiles
+              (z, x, y, focus_region_id, depth, algorithm_signature, tile, feature_count, updated_at)
+            VALUES
+              (1, ?, 0, 'world', ?, ?, ?, 1, 222)
+            """,
+            [
+                (0, 3, "legacy-west-depth3", sentinel_tile),
+                (1, 3, "sentinel-east-depth3", sentinel_tile),
+                (0, 4, "legacy-west-depth4", sentinel_tile),
+                (1, 4, "sentinel-east-depth4", sentinel_tile),
+            ],
+        )
+        connection.commit()
+
+        indexed_row_counts: list[int] = []
+        original_index_admin_region_tile_rows = patch_admin_region_tiles_module.index_admin_region_tile_rows
+
+        def track_indexed_row_count(rows, *args, **kwargs):
+            indexed_row_counts.append(len(rows))
+            return original_index_admin_region_tile_rows(rows, *args, **kwargs)
+
+        monkeypatch.setattr(
+            patch_admin_region_tiles_module,
+            "index_admin_region_tile_rows",
+            track_indexed_row_count,
+        )
+
+        def reject_full_tile_query(*args, **kwargs):
+            raise AssertionError("affected-key patch must not re-query every focused row for a tile")
+
+        monkeypatch.setattr(
+            patch_admin_region_tiles_module,
+            "query_focused_region_rows_for_tile",
+            reject_full_tile_query,
+        )
+
+        result = patch_taiwan_mainland_overlaps(
+            connection,
+            depths=[3, 4],
+            min_zoom=1,
+            max_zoom=1,
+            commit_interval=1000,
+            rebuild_tiles=True,
+        )
+
+        tile_signatures = {
+            (int(row["x"]), int(row["depth"])): str(row["algorithm_signature"])
+            for row in connection.execute(
+                """
+                SELECT x, depth, algorithm_signature
+                FROM admin_region_tiles
+                WHERE z = 1 AND y = 0 AND focus_region_id = 'world'
+                ORDER BY x, depth
+                """,
+            )
+        }
+    finally:
+        connection.close()
+
+    assert result["changed_region_count"] == 2
+    assert result["tile_count"] == 2
+    assert indexed_row_counts == []
+    assert tile_signatures[(0, 3)] == ADMIN_REGION_TILE_ALGORITHM_SIGNATURE
+    assert tile_signatures[(0, 4)] == ADMIN_REGION_TILE_ALGORITHM_SIGNATURE
+    assert tile_signatures[(1, 3)] == "sentinel-east-depth3"
+    assert tile_signatures[(1, 4)] == "sentinel-east-depth4"
 
 
 def test_patch_admin_region_tiles_inserts_greenland_and_keeps_existing_tiles(tmp_path: Path):
