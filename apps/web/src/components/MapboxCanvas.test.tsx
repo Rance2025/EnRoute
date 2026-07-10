@@ -18,6 +18,7 @@ type MockMapRecord = {
   removedLayers: string[]
   removedSources: string[]
   paintProperties: Array<[string, string, unknown]>
+  setFilterCalls: Array<[string, unknown]>
   fitBoundsCalls: Array<[unknown, unknown]>
   flyToCalls: unknown[]
   easeToCalls: unknown[]
@@ -606,6 +607,71 @@ describe('MapboxCanvas footprint vector tiles', () => {
       layer.id === 'admin-regions-line'
     ))).toBe(true)
     expect(mapRecords[0].sources.footprints).toBeDefined()
+  })
+
+  it('filters admin-region layers to active region ids for the selected time range', async () => {
+    const { mapRecords } = mockMapboxRuntime()
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes('/api/admin-regions/active')) {
+        return {
+          ok: true,
+          json: async () => ({ depth: 4, regionIds: ['310115'] }),
+        }
+      }
+
+      return {
+        ok: true,
+        json: async () => ({
+          selectedCount: 0,
+          totalDistanceMeters: 0,
+          averageDistanceMetersPerDay: 0,
+          selectedBounds: null,
+        }),
+      }
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const { MapboxCanvas } = await import('./MapboxCanvas')
+
+    render(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        timeRange={selectedRange}
+        adminRegionUnlockEnabled
+        adminRegionActiveOnly
+        adminRegionDepth={4}
+        adminBoundariesVisible
+      />,
+    )
+
+    act(() => mapRecords[0].emit('load'))
+
+    await waitFor(() => expect(mapRecords[0].setFilterCalls).toContainEqual([
+      'admin-regions-fill',
+      [
+        'all',
+        ['==', ['get', 'kind'], 'fill'],
+        ['in', ['geometry-type'], ['literal', ['Polygon', 'MultiPolygon']]],
+        ['in', ['get', 'region_id'], ['literal', ['310115']]],
+      ],
+    ]))
+    expect(mapRecords[0].setFilterCalls).toContainEqual([
+      'admin-regions-line',
+      [
+        'all',
+        ['==', ['get', 'kind'], 'line'],
+        ['in', ['geometry-type'], ['literal', ['LineString', 'MultiLineString']]],
+        ['in', ['get', 'region_id'], ['literal', ['310115']]],
+      ],
+    ])
+    const activeRequestUrl = new URL(
+      String(fetchMock.mock.calls
+        .map(([calledUrl]) => calledUrl)
+        .find((calledUrl) => String(calledUrl).includes('/api/admin-regions/active'))),
+      window.location.origin,
+    )
+    expect(activeRequestUrl.searchParams.get('depth')).toBe('4')
+    expect(activeRequestUrl.searchParams.get('start')).toBe('2026-06-19')
+    expect(activeRequestUrl.searchParams.get('end')).toBe('2026-06-19')
   })
 
   it('waits for Mapbox style readiness before adding admin-region vector layers', async () => {
@@ -2141,6 +2207,7 @@ function mockMapboxRuntime(runtimeOptions: {
         removedLayers: [],
         removedSources: [],
         paintProperties: [],
+        setFilterCalls: [],
         fitBoundsCalls: [],
         flyToCalls: [],
         easeToCalls: [],
@@ -2286,6 +2353,10 @@ function mockMapboxRuntime(runtimeOptions: {
 
     setPaintProperty(layerId: string, propertyName: string, value: unknown) {
       this.record.paintProperties.push([layerId, propertyName, value])
+    }
+
+    setFilter(layerId: string, filter: unknown) {
+      this.record.setFilterCalls.push([layerId, filter])
     }
 
     setLayoutProperty(layerId: string, propertyName: string, value: unknown) {

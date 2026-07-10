@@ -179,6 +179,27 @@ class FootprintStore:
                 ],
             }
 
+    def get_active_admin_region_ids(
+        self,
+        *,
+        depth: int,
+        range_value: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> dict[str, object]:
+        with self._connection_lock:
+            self.ensure_ready()
+            return {
+                "depth": depth,
+                "regionIds": query_active_admin_region_ids(
+                    self.connection,
+                    depth=depth,
+                    range_value=range_value,
+                    start_date=start_date,
+                    end_date=end_date,
+                ),
+            }
+
     def get_footprint_mvt(
         self,
         *,
@@ -345,6 +366,8 @@ def initialize_schema(connection: sqlite3.Connection) -> None:
           region_id TEXT
         );
         CREATE INDEX IF NOT EXISTS idx_footprints_time ON footprints(timestamp_seconds);
+        CREATE INDEX IF NOT EXISTS idx_footprints_time_region
+          ON footprints(timestamp_seconds, region_id);
         CREATE INDEX IF NOT EXISTS idx_footprints_lng_lat_time
           ON footprints(longitude, latitude, timestamp_seconds);
         CREATE VIRTUAL TABLE IF NOT EXISTS footprint_spatial USING rtree(
@@ -1263,6 +1286,58 @@ def normalize_metrics_input(
             "dayCount": max((end - start).days + 1, 1),
         },
     }
+
+
+def query_active_admin_region_ids(
+    connection: sqlite3.Connection,
+    *,
+    depth: int,
+    range_value: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+) -> list[str]:
+    input_payload = normalize_metrics_input(
+        connection,
+        range_value=range_value,
+        start_date=start_date,
+        end_date=end_date,
+    )
+    time_range = input_payload["timeRange"]
+    rows = connection.execute(
+        """
+        SELECT DISTINCT region_id
+        FROM footprints
+        WHERE timestamp_seconds BETWEEN ? AND ?
+          AND region_id IS NOT NULL
+          AND region_id != ''
+        ORDER BY region_id
+        """,
+        (
+            int(time_range["startTimestampSeconds"]),
+            int(time_range["endTimestampSeconds"]),
+        ),
+    ).fetchall()
+    candidate_region_ids: set[str] = set()
+    for row in rows:
+        candidate_region_ids.update(get_region_chain(connection, str(row["region_id"])))
+
+    if not candidate_region_ids:
+        return []
+
+    placeholders = ",".join("?" for _ in candidate_region_ids)
+    return [
+        str(row["id"])
+        for row in connection.execute(
+            f"""
+            SELECT id
+            FROM admin_regions
+            WHERE level = ?
+              AND id IN ({placeholders})
+            ORDER BY id
+            """,
+            [depth, *sorted(candidate_region_ids)],
+        )
+    ]
 
 
 def normalize_all_metrics_input(connection: sqlite3.Connection) -> dict[str, Any]:

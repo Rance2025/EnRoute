@@ -34,6 +34,7 @@ vi.mock('./MapboxCanvas', async () => {
   return {
     MapboxCanvas: ({
       adminRegionUnlockEnabled = false,
+      adminRegionActiveOnly = false,
       adminRegionDepth = 4,
       adminBoundariesVisible = true,
       placeLabelsVisible = true,
@@ -47,6 +48,7 @@ vi.mock('./MapboxCanvas', async () => {
       onMapLanguageChange,
     }: {
       adminRegionUnlockEnabled?: boolean
+      adminRegionActiveOnly?: boolean
       adminRegionDepth?: number
       adminBoundariesVisible?: boolean
       placeLabelsVisible?: boolean
@@ -72,6 +74,7 @@ vi.mock('./MapboxCanvas', async () => {
         {
           className: 'map-stage',
           'data-admin-region-unlock-enabled': String(adminRegionUnlockEnabled),
+          'data-admin-region-active-only': String(adminRegionActiveOnly),
           'data-admin-region-depth': String(adminRegionDepth),
           'data-admin-boundaries-visible': String(adminBoundariesVisible),
           'data-place-labels-visible': String(placeLabelsVisible),
@@ -593,6 +596,27 @@ describe('unified shell layout', () => {
 
     expect(mapStage).toHaveAttribute('data-admin-region-depth', '4')
     expect(districtButton).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('passes the active-region-only switch state from the right context panel to the map', async () => {
+    render(<App amapConfig={configuredAmap} />)
+    await settleLazyImports()
+    const mapStage = document.querySelector('.map-stage')
+    const rail = screen.getByRole('navigation', { name: '二级导航' })
+
+    expect(mapStage).toHaveAttribute('data-admin-region-active-only', 'false')
+
+    fireEvent.click(within(rail).getByRole('button', { name: '区域' }))
+
+    const activeOnlySwitch = screen.getByRole('switch', {
+      name: '仅显示当前时间有足迹的区域',
+    })
+    expect(activeOnlySwitch).toHaveAttribute('aria-checked', 'false')
+
+    fireEvent.click(activeOnlySwitch)
+
+    expect(activeOnlySwitch).toHaveAttribute('aria-checked', 'true')
+    expect(mapStage).toHaveAttribute('data-admin-region-active-only', 'true')
   })
 
   it('rounds footprint point opacity controls to 0.01 precision through the slider', async () => {
