@@ -1728,6 +1728,8 @@ describe('MapboxCanvas footprint vector tiles', () => {
     expect(screen.getByLabelText('足迹渲染调试')).toHaveTextContent('区域级别1')
     expect(screen.getByLabelText('足迹渲染调试')).toHaveTextContent('可见瓦片2')
     expect(screen.getByLabelText('足迹渲染调试')).not.toHaveTextContent('实际点数')
+    expect(Array.from(document.querySelectorAll('.footprint-debug-panel__row'))).toHaveLength(3)
+    expect(document.querySelector('.footprint-debug-panel')).not.toHaveTextContent('world')
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/api/map/tiles/footprints/debug'))).toBe(false)
 
     rerender(
