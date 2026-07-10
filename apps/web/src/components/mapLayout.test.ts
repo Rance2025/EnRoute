@@ -675,7 +675,8 @@ describe('map chrome layout', () => {
     expect(cssRule('.time-context-panel__scroll')).toContain(
       'grid-template-rows: max-content minmax(0, 1fr)',
     )
-    expect(cssRule('.time-context-trend')).toContain('height: 220px')
+    expect(cssRule('.time-context-trend')).toContain('height: 196px')
+    expect(cssRule('.time-context-trend')).not.toContain('height: 220px')
     expect(cssRule('.time-context-trend')).toContain('position: absolute')
     expect(cssRule('.time-context-trend')).toContain('right: calc(24px + var(--time-panel-shadow-buffer))')
     expect(cssRule('.time-context-trend')).toContain('bottom: 18px')
