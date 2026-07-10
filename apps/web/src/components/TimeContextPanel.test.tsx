@@ -342,7 +342,8 @@ describe('TimeContextPanel', () => {
 
     expect(summaryLines).toHaveLength(2)
     expect(summaryLines?.[0]).toHaveTextContent('6\u670818\u65e5-6\u670820\u65e5')
-    expect(summaryLines?.[1]).toHaveTextContent('\u65e5\u5747 400 m \u00b7 \u5171 1.2 km')
+    expect(summaryLines?.[1]).toHaveTextContent('\u65e5\u5747 400 m')
+    expect(summary).not.toHaveTextContent('\u5171')
 
     fireEvent.click(groupedButton)
 
@@ -403,7 +404,8 @@ describe('TimeContextPanel', () => {
 
     expect(summaryLines).toHaveLength(2)
     expect(summaryLines?.[0]).toHaveTextContent('1\u67081\u65e5-1\u67082\u65e5')
-    expect(summaryLines?.[1]).toHaveTextContent('\u65e5\u5747 1.0 km \u00b7 \u5171 2.0 km')
+    expect(summaryLines?.[1]).toHaveTextContent('\u65e5\u5747 1.0 km')
+    expect(summary).not.toHaveTextContent('\u5171')
   })
 
   it('renders real distance buckets and only emphasizes the hovered or focused column', () => {
