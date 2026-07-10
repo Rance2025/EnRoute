@@ -2151,6 +2151,16 @@
   background: rgba(23, 35, 31, 0.045);
 }
 
+.admin-region-control-panel {
+  display: grid;
+  gap: 7px;
+  margin-top: 2px;
+}
+
+.admin-region-control-panel .right-context-panel__depth-control {
+  margin-top: 0;
+}
+
 .admin-region-depth-control button {
   min-width: 0;
   height: 30px;
@@ -4477,6 +4487,19 @@
 
 .settings-switch-row.is-active .settings-switch-row__control::after {
   transform: translateX(18px);
+}
+
+.admin-region-active-filter-switch {
+  min-height: 42px;
+  padding: 8px 10px;
+  border-radius: 14px;
+  background: rgba(23, 35, 31, 0.045);
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.admin-region-active-filter-switch > span:first-child {
+  min-width: 0;
 }
 
 @media (max-width: 720px) {

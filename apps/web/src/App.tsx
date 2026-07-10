@@ -311,6 +311,7 @@ function App(props: AppProps) {
   const [adminRegionDepth, setAdminRegionDepth] = useState<AdminRegionDepth>(
     DEFAULT_ADMIN_REGION_DEPTH,
   )
+  const [adminRegionActiveOnly, setAdminRegionActiveOnly] = useState(false)
   const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRangeSelection>(
     createTodaySelection,
   )
@@ -703,7 +704,9 @@ function App(props: AppProps) {
             {view === 'map' && activeSecondaryNavId === 'regions' ? (
               <AdminRegionDepthControl
                 depth={adminRegionDepth}
+                activeOnly={adminRegionActiveOnly}
                 onDepthChange={setAdminRegionDepth}
+                onActiveOnlyChange={setAdminRegionActiveOnly}
               />
             ) : null}
           </section>
@@ -716,6 +719,7 @@ function App(props: AppProps) {
             timeRange={selectedTimeRange}
             onFootprintMetricsChange={setFootprintMetrics}
             adminRegionUnlockEnabled={activeSecondaryNavId === 'regions'}
+            adminRegionActiveOnly={adminRegionActiveOnly}
             adminRegionDepth={adminRegionDepth}
             debugPanelVisible={isMapDebugPanelVisible}
             placeLabelsVisible={areMapPlaceLabelsVisible}
@@ -908,23 +912,43 @@ export default App
 
 function AdminRegionDepthControl({
   depth,
+  activeOnly,
   onDepthChange,
+  onActiveOnlyChange,
 }: {
   depth: AdminRegionDepth
+  activeOnly: boolean
   onDepthChange: (depth: AdminRegionDepth) => void
+  onActiveOnlyChange: (activeOnly: boolean) => void
 }) {
   return (
-    <div className="right-context-panel__depth-control admin-region-depth-control" role="group" aria-label="行政区划层级">
-      {adminRegionDepthOptions.map((option) => (
-        <button
-          key={option.value}
-          type="button"
-          aria-pressed={option.value === depth}
-          onClick={() => onDepthChange(option.value)}
-        >
-          {option.label}
-        </button>
-      ))}
+    <div className="admin-region-control-panel">
+      <div className="right-context-panel__depth-control admin-region-depth-control" role="group" aria-label="行政区划层级">
+        {adminRegionDepthOptions.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            aria-pressed={option.value === depth}
+            onClick={() => onDepthChange(option.value)}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={activeOnly}
+        className={
+          activeOnly
+            ? 'settings-switch-row admin-region-active-filter-switch is-active'
+            : 'settings-switch-row admin-region-active-filter-switch'
+        }
+        onClick={() => onActiveOnlyChange(!activeOnly)}
+      >
+        <span>仅显示当前时间有足迹的区域</span>
+        <span className="settings-switch-row__control" aria-hidden="true" />
+      </button>
     </div>
   )
 }
