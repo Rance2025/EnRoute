@@ -10,7 +10,10 @@ from pathlib import Path
 from typing import Any, Iterable, Sequence
 
 import requests
-from shapely.geometry import Point, shape
+from shapely.geometry import GeometryCollection, MultiPolygon, Point, Polygon, mapping, shape
+from shapely.geometry.base import BaseGeometry
+from shapely.ops import unary_union
+from shapely.validation import make_valid
 
 api_src_dir = Path(__file__).resolve().parents[1] / "apps" / "api" / "src"
 if str(api_src_dir) not in sys.path:
@@ -49,6 +52,9 @@ from enroute_api.footprints.store import (
 
 GREENLAND_REGION_ID = "gl"
 GREENLAND_SOURCE_URL = "https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson"
+TAIWAN_PROVINCE_ID = "710000"
+TAIWAN_COUNTY_ID_PREFIX = "tw-county-"
+TAIWAN_TOWN_ID_PREFIX = "tw-town-"
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -60,6 +66,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     china_admin_region_data_path = (
         resolve_path(args.china_admin_region_data_path)
         if args.china_admin_region_data_path is not None
+        else None
+    )
+    taiwan_county_data_path = (
+        resolve_path(args.taiwan_county_data_path)
+        if args.taiwan_county_data_path is not None
+        else None
+    )
+    taiwan_town_data_path = (
+        resolve_path(args.taiwan_town_data_path)
+        if args.taiwan_town_data_path is not None
         else None
     )
     depths = parse_depths(args.depth, args.depths)
@@ -86,6 +102,41 @@ def main(argv: Sequence[str] | None = None) -> int:
                 f"and rebuilt {result['tile_count']} tile rows "
                 f"for depths {','.join(str(depth) for depth in depths)} "
                 f"zoom {args.min_zoom}-{args.max_zoom}",
+            )
+        if args.patch_taiwan_admin_levels:
+            if taiwan_county_data_path is None or taiwan_town_data_path is None:
+                raise ValueError(
+                    "--patch-taiwan-admin-levels requires "
+                    "--taiwan-county-data-path and --taiwan-town-data-path",
+                )
+            result = patch_taiwan_admin_levels(
+                connection,
+                county_geojson_path=taiwan_county_data_path,
+                town_geojson_path=taiwan_town_data_path,
+            )
+            tile_count = 0
+            if not args.skip_taiwan_admin_tile_rebuild:
+                for depth in depths:
+                    if depth not in {3, 4}:
+                        continue
+                    build_result = rebuild_admin_region_tile_depth_range(
+                        connection,
+                        focus_region_id=ADMIN_REGION_WORLD_FOCUS_ID,
+                        depth=depth,
+                        min_zoom=args.min_zoom,
+                        max_zoom=args.max_zoom,
+                        commit_interval=args.commit_interval,
+                    )
+                    tile_count += build_result.built_count
+                    print(
+                        f"Rebuilt {build_result.built_count} admin region tile rows "
+                        f"from {build_result.candidate_count} candidate keys "
+                        f"for depth {depth} zoom {args.min_zoom}-{args.max_zoom}",
+                    )
+            print(
+                f"Restored {result['county_count']} Taiwan county/city regions "
+                f"and {result['town_count']} Taiwan township/district regions "
+                f"with {tile_count} rebuilt tile rows",
             )
         if args.rebuild_admin_region_tiles:
             for depth in depths:
@@ -197,6 +248,26 @@ def parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
         action="store_true",
         help="Rebuild only selected admin_region_tiles rows from existing admin_regions/admin_region_tree.",
     )
+    parser.add_argument(
+        "--taiwan-county-data-path",
+        type=Path,
+        help="Official Taiwan county/city GeoJSON path used by --patch-taiwan-admin-levels.",
+    )
+    parser.add_argument(
+        "--taiwan-town-data-path",
+        type=Path,
+        help="Official Taiwan township/district GeoJSON path used by --patch-taiwan-admin-levels.",
+    )
+    parser.add_argument(
+        "--patch-taiwan-admin-levels",
+        action="store_true",
+        help="Restore Taiwan level 3/4 rows under the existing Taiwan province row.",
+    )
+    parser.add_argument(
+        "--skip-taiwan-admin-tile-rebuild",
+        action="store_true",
+        help="With --patch-taiwan-admin-levels, restore admin region rows/tree only.",
+    )
     parser.add_argument("--depth", type=int, help="Build one depth instead of --depths.")
     parser.add_argument("--depths", default="1,2,3,4", help="Comma-separated depths to build.")
     parser.add_argument("--min-zoom", type=int, default=8)
@@ -274,6 +345,271 @@ def rebuild_china_admin_levels(
         "region_count": int(region_count),
         "tile_count": tile_count,
     }
+
+
+def patch_taiwan_admin_levels(
+    connection: sqlite3.Connection,
+    *,
+    county_geojson_path: Path,
+    town_geojson_path: Path,
+    taiwan_province_id: str = TAIWAN_PROVINCE_ID,
+) -> dict[str, int]:
+    features = load_taiwan_admin_region_features(
+        county_geojson_path,
+        town_geojson_path,
+        taiwan_province_id=taiwan_province_id,
+    )
+    county_count = sum(1 for feature in features if int(feature["properties"]["level"]) == 3)
+    town_count = sum(1 for feature in features if int(feature["properties"]["level"]) == 4)
+    generated_region_ids = {
+        str(feature["properties"]["id"])
+        for feature in features
+    }
+
+    with connection:
+        delete_existing_taiwan_generated_admin_rows(connection)
+        for feature in features:
+            insert_admin_region_feature(connection, feature)
+        for feature in features:
+            properties = feature["properties"]
+            connection.execute(
+                "INSERT INTO admin_region_tree (parent_id, child_id) VALUES (?, ?)",
+                (str(properties["parentId"]), str(properties["id"])),
+            )
+        delete_meta_value(connection, ADMIN_REGION_STATS_SIGNATURE_KEY)
+
+    inserted_count = connection.execute(
+        """
+        SELECT COUNT(*)
+        FROM admin_regions
+        WHERE id IN ({})
+        """.format(",".join("?" for _ in generated_region_ids)),
+        sorted(generated_region_ids),
+    ).fetchone()[0] if generated_region_ids else 0
+    if int(inserted_count) != len(generated_region_ids):
+        raise RuntimeError("Taiwan admin region patch did not insert all generated rows")
+
+    return {
+        "county_count": county_count,
+        "town_count": town_count,
+    }
+
+
+def delete_existing_taiwan_generated_admin_rows(connection: sqlite3.Connection) -> None:
+    connection.execute(
+        """
+        DELETE FROM admin_region_tree
+        WHERE child_id LIKE ?
+           OR child_id LIKE ?
+           OR parent_id LIKE ?
+           OR parent_id LIKE ?
+        """,
+        (
+            f"{TAIWAN_COUNTY_ID_PREFIX}%",
+            f"{TAIWAN_TOWN_ID_PREFIX}%",
+            f"{TAIWAN_COUNTY_ID_PREFIX}%",
+            f"{TAIWAN_TOWN_ID_PREFIX}%",
+        ),
+    )
+    connection.execute(
+        """
+        DELETE FROM admin_regions
+        WHERE id LIKE ?
+           OR id LIKE ?
+        """,
+        (
+            f"{TAIWAN_COUNTY_ID_PREFIX}%",
+            f"{TAIWAN_TOWN_ID_PREFIX}%",
+        ),
+    )
+
+
+def load_taiwan_admin_region_features(
+    county_geojson_path: Path,
+    town_geojson_path: Path,
+    *,
+    taiwan_province_id: str = TAIWAN_PROVINCE_ID,
+) -> list[dict[str, Any]]:
+    county_source = load_geojson_feature_collection(county_geojson_path, label="Taiwan county/city")
+    town_source = load_geojson_feature_collection(town_geojson_path, label="Taiwan township/district")
+    county_features = create_taiwan_county_features(
+        county_source["features"],
+        taiwan_province_id=taiwan_province_id,
+    )
+    town_features = create_taiwan_town_features(town_source["features"])
+
+    county_ids = {
+        str(feature["properties"]["id"])
+        for feature in county_features
+    }
+    orphan_town_parent_ids = sorted(
+        {
+            str(feature["properties"]["parentId"])
+            for feature in town_features
+            if str(feature["properties"]["parentId"]) not in county_ids
+        },
+    )
+    if orphan_town_parent_ids:
+        raise ValueError(
+            "Taiwan town source references county codes missing from county source: "
+            + ", ".join(orphan_town_parent_ids),
+        )
+
+    return [
+        *county_features,
+        *town_features,
+    ]
+
+
+def load_geojson_feature_collection(path: Path, *, label: str) -> dict[str, Any]:
+    source = json.loads(path.read_text(encoding="utf-8-sig"))
+    if source.get("type") != "FeatureCollection" or not isinstance(source.get("features"), list):
+        raise ValueError(f"{label} GeoJSON must be a FeatureCollection: {path}")
+    return source
+
+
+def create_taiwan_county_features(
+    source_features: list[Any],
+    *,
+    taiwan_province_id: str,
+) -> list[dict[str, Any]]:
+    features = []
+    seen_county_codes: set[str] = set()
+    for feature in source_features:
+        if not isinstance(feature, dict):
+            continue
+        properties = require_feature_properties(feature, label="Taiwan county/city")
+        county_code = require_source_property(properties, "COUNTYCODE", label="Taiwan county/city")
+        if county_code in seen_county_codes:
+            raise ValueError(f"Duplicate Taiwan county/city code: {county_code}")
+        seen_county_codes.add(county_code)
+        county_name = require_source_property(properties, "COUNTYNAME", label="Taiwan county/city")
+        geometry = repair_polygonal_geojson_geometry(
+            require_feature_geometry(feature, label=f"Taiwan county/city {county_code}"),
+            label=f"Taiwan county/city {county_code}",
+        )
+        features.append(
+            {
+                "type": "Feature",
+                "properties": {
+                    "id": f"{TAIWAN_COUNTY_ID_PREFIX}{county_code}",
+                    "name": county_name,
+                    "level": 3,
+                    "parentId": taiwan_province_id,
+                },
+                "geometry": geometry,
+            },
+        )
+    return sorted(features, key=lambda feature: str(feature["properties"]["id"]))
+
+
+def create_taiwan_town_features(source_features: list[Any]) -> list[dict[str, Any]]:
+    grouped: dict[str, dict[str, Any]] = {}
+    geometries_by_town_code: dict[str, list[BaseGeometry]] = {}
+
+    for feature in source_features:
+        if not isinstance(feature, dict):
+            continue
+        properties = require_feature_properties(feature, label="Taiwan township/district")
+        town_code = require_source_property(properties, "TOWNCODE", label="Taiwan township/district")
+        town_name = require_source_property(properties, "TOWNNAME", label=f"Taiwan township/district {town_code}")
+        county_code = require_source_property(properties, "COUNTYCODE", label=f"Taiwan township/district {town_code}")
+        geometry = repair_polygonal_shapely_geometry(
+            shape(require_feature_geometry(feature, label=f"Taiwan township/district {town_code}")),
+            label=f"Taiwan township/district {town_code}",
+        )
+
+        existing = grouped.get(town_code)
+        current_record = {
+            "town_name": town_name,
+            "county_code": county_code,
+        }
+        if existing is None:
+            grouped[town_code] = current_record
+            geometries_by_town_code[town_code] = [geometry]
+            continue
+        if existing != current_record:
+            raise ValueError(f"Conflicting Taiwan township/district duplicate for code: {town_code}")
+        geometries_by_town_code[town_code].append(geometry)
+
+    features = []
+    for town_code, record in sorted(grouped.items()):
+        merged_geometry = repair_polygonal_shapely_geometry(
+            unary_union(geometries_by_town_code[town_code]),
+            label=f"Taiwan township/district {town_code}",
+        )
+        features.append(
+            {
+                "type": "Feature",
+                "properties": {
+                    "id": f"{TAIWAN_TOWN_ID_PREFIX}{town_code}",
+                    "name": str(record["town_name"]),
+                    "level": 4,
+                    "parentId": f"{TAIWAN_COUNTY_ID_PREFIX}{record['county_code']}",
+                },
+                "geometry": shapely_geometry_to_geojson(merged_geometry),
+            },
+        )
+    return features
+
+
+def require_feature_properties(feature: dict[str, Any], *, label: str) -> dict[str, Any]:
+    properties = feature.get("properties")
+    if not isinstance(properties, dict):
+        raise ValueError(f"{label} feature is missing properties")
+    return properties
+
+
+def require_feature_geometry(feature: dict[str, Any], *, label: str) -> dict[str, Any]:
+    geometry = feature.get("geometry")
+    if not isinstance(geometry, dict):
+        raise ValueError(f"{label} feature is missing geometry")
+    return geometry
+
+
+def require_source_property(properties: dict[str, Any], key: str, *, label: str) -> str:
+    value = properties.get(key)
+    if value in {None, ""}:
+        raise ValueError(f"{label} feature is missing {key}")
+    return str(value)
+
+
+def repair_polygonal_geojson_geometry(geometry: dict[str, Any], *, label: str) -> dict[str, Any]:
+    return shapely_geometry_to_geojson(repair_polygonal_shapely_geometry(shape(geometry), label=label))
+
+
+def repair_polygonal_shapely_geometry(geometry: BaseGeometry, *, label: str) -> BaseGeometry:
+    if geometry.is_empty:
+        raise ValueError(f"{label} geometry is empty")
+    repaired = make_valid(geometry) if not geometry.is_valid else geometry
+    polygonal = extract_polygonal_geometry(repaired)
+    if polygonal is None or polygonal.is_empty:
+        raise ValueError(f"{label} geometry does not contain polygonal data")
+    if not polygonal.is_valid:
+        polygonal = make_valid(polygonal)
+    polygonal = extract_polygonal_geometry(polygonal)
+    if polygonal is None or polygonal.is_empty or not polygonal.is_valid:
+        raise ValueError(f"{label} geometry could not be repaired")
+    return polygonal
+
+
+def extract_polygonal_geometry(geometry: BaseGeometry) -> BaseGeometry | None:
+    if isinstance(geometry, (Polygon, MultiPolygon)):
+        return geometry
+    if isinstance(geometry, GeometryCollection):
+        polygons = [
+            current_geometry
+            for current_geometry in geometry.geoms
+            if isinstance(current_geometry, (Polygon, MultiPolygon)) and not current_geometry.is_empty
+        ]
+        if not polygons:
+            return None
+        return unary_union(polygons)
+    return None
+
+
+def shapely_geometry_to_geojson(geometry: BaseGeometry) -> dict[str, Any]:
+    return json.loads(json.dumps(mapping(geometry), separators=(",", ":")))
 
 
 def export_current_level_one_features(connection: sqlite3.Connection) -> list[dict[str, Any]]:
