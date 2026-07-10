@@ -24,6 +24,7 @@ from enroute_api.admin_regions.geometry import calculate_geometry_bbox
 from enroute_api.admin_regions.store import (
     insert_admin_region_feature,
     normalize_admin_region_features,
+    transform_geojson_geometry_coordinates,
 )
 from enroute_api.admin_regions.tiles import (
     ADMIN_REGION_LEGACY_REBUILD_TILE_BBOX_PADDING_DEGREES,
@@ -40,7 +41,6 @@ from enroute_api.admin_regions.tiles import (
     initialize_admin_region_tile_schema,
     prepare_admin_region_tile_rows,
     resolve_focused_region_rows,
-    transform_geojson_geometry_coordinates,
 )
 from enroute_api.config import Settings
 from enroute_api.footprints.coordinates import transform_gcj02_to_wgs84_coordinate
@@ -794,6 +794,8 @@ def update_admin_region_geometry(
         """
         UPDATE admin_regions
         SET geometry = ?,
+            source_geometry = ?,
+            source_coordinate_system = 'wgs84',
             min_lng = ?,
             max_lng = ?,
             min_lat = ?,
@@ -801,6 +803,7 @@ def update_admin_region_geometry(
         WHERE id = ?
         """,
         (
+            json.dumps(geojson_geometry, ensure_ascii=False, separators=(",", ":")),
             json.dumps(geojson_geometry, ensure_ascii=False, separators=(",", ":")),
             bbox["min_lng"],
             bbox["max_lng"],
@@ -1345,6 +1348,8 @@ def upsert_admin_region_feature(connection: sqlite3.Connection, feature: dict[st
           name,
           level,
           geometry,
+          source_geometry,
+          source_coordinate_system,
           line_geometry,
           line_mask_geometry,
           min_lng,
@@ -1355,11 +1360,13 @@ def upsert_admin_region_feature(connection: sqlite3.Connection, feature: dict[st
           footprint_count,
           stay_duration_seconds,
           travel_distance_meters
-        ) VALUES (?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, NULL, 0, 0, 0)
+        ) VALUES (?, ?, ?, ?, ?, 'wgs84', NULL, NULL, ?, ?, ?, ?, NULL, 0, 0, 0)
         ON CONFLICT(id) DO UPDATE SET
           name = excluded.name,
           level = excluded.level,
           geometry = excluded.geometry,
+          source_geometry = excluded.source_geometry,
+          source_coordinate_system = excluded.source_coordinate_system,
           line_geometry = excluded.line_geometry,
           line_mask_geometry = excluded.line_mask_geometry,
           min_lng = excluded.min_lng,
@@ -1371,6 +1378,7 @@ def upsert_admin_region_feature(connection: sqlite3.Connection, feature: dict[st
             region_id,
             str(properties["name"]),
             int(properties["level"]),
+            json.dumps(geometry, ensure_ascii=False, separators=(",", ":")),
             json.dumps(geometry, ensure_ascii=False, separators=(",", ":")),
             bbox["min_lng"],
             bbox["max_lng"],

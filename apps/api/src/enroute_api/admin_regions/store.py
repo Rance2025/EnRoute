@@ -6,6 +6,8 @@ import sqlite3
 from dataclasses import dataclass
 from typing import Any, Iterable
 
+from enroute_api.footprints.coordinates import transform_gcj02_to_wgs84_coordinate
+
 from .geometry import BoundingBox, calculate_geometry_bbox, geometry_contains_point
 from .scope import is_antarctica_admin_region_properties
 
@@ -21,6 +23,8 @@ OVERTURE_SUBTYPE_TO_ENROUTE_LEVEL = {
     "country": 1,
 }
 CHINA_REGION_IDS = {"cn", "CN", "chn", "CHN", "156"}
+SOURCE_COORDINATE_SYSTEM_WGS84 = "wgs84"
+SOURCE_COORDINATE_SYSTEM_GCJ02 = "gcj02"
 
 
 def initialize_admin_region_schema(connection: sqlite3.Connection) -> None:
@@ -31,6 +35,8 @@ def initialize_admin_region_schema(connection: sqlite3.Connection) -> None:
           name TEXT NOT NULL,
           level INTEGER NOT NULL,
           geometry TEXT NOT NULL,
+          source_geometry TEXT,
+          source_coordinate_system TEXT,
           line_geometry TEXT,
           line_mask_geometry TEXT,
           min_lng REAL NOT NULL,
@@ -58,6 +64,7 @@ def initialize_admin_region_schema(connection: sqlite3.Connection) -> None:
     )
     migrate_admin_region_line_geometry(connection)
     migrate_admin_region_line_mask_geometry(connection)
+    migrate_admin_region_source_geometry(connection)
     connection.commit()
 
 
@@ -71,6 +78,63 @@ def migrate_admin_region_line_mask_geometry(connection: sqlite3.Connection) -> N
     columns = [column[1] for column in connection.execute("PRAGMA table_info(admin_regions)")]
     if "line_mask_geometry" not in columns:
         connection.execute("ALTER TABLE admin_regions ADD COLUMN line_mask_geometry TEXT")
+
+
+def migrate_admin_region_source_geometry(connection: sqlite3.Connection) -> None:
+    columns = [column[1] for column in connection.execute("PRAGMA table_info(admin_regions)")]
+    if "source_geometry" not in columns:
+        connection.execute("ALTER TABLE admin_regions ADD COLUMN source_geometry TEXT")
+    if "source_coordinate_system" not in columns:
+        connection.execute("ALTER TABLE admin_regions ADD COLUMN source_coordinate_system TEXT")
+
+    rows = connection.execute(
+        """
+        SELECT id, level, geometry, source_geometry, source_coordinate_system
+        FROM admin_regions
+        WHERE source_geometry IS NULL
+           OR source_coordinate_system IS NULL
+        """,
+    ).fetchall()
+    for row in rows:
+        source_geometry = (
+            str(row["geometry"]) if row["source_geometry"] is None else str(row["source_geometry"])
+        )
+        source_coordinate_system = normalize_source_coordinate_system(
+            row["source_coordinate_system"],
+        )
+        if row["source_coordinate_system"] is None:
+            source_coordinate_system = infer_legacy_source_coordinate_system(
+                region_id=str(row["id"]),
+                level=int(row["level"]),
+            )
+        canonical_geometry = convert_geometry_to_wgs84(
+            json.loads(source_geometry),
+            source_coordinate_system=source_coordinate_system,
+        )
+        bbox = calculate_geometry_bbox(canonical_geometry)
+        connection.execute(
+            """
+            UPDATE admin_regions
+            SET geometry = ?,
+                source_geometry = ?,
+                source_coordinate_system = ?,
+                min_lng = ?,
+                max_lng = ?,
+                min_lat = ?,
+                max_lat = ?
+            WHERE id = ?
+            """,
+            (
+                json.dumps(canonical_geometry, ensure_ascii=False, separators=(",", ":")),
+                source_geometry,
+                source_coordinate_system,
+                bbox["min_lng"],
+                bbox["max_lng"],
+                bbox["min_lat"],
+                bbox["max_lat"],
+                str(row["id"]),
+            ),
+        )
 
 
 def load_admin_regions(connection: sqlite3.Connection, feature_collection: dict[str, Any]) -> None:
@@ -349,6 +413,7 @@ def normalize_areacity_admin_region_feature(
         "id": str(explicit_id or adcode),
         "name": str(name),
         "level": enroute_level,
+        "sourceCoordinateSystem": SOURCE_COORDINATE_SYSTEM_GCJ02,
     }
     parent_id = (
         properties.get("parent")
@@ -415,7 +480,13 @@ def insert_admin_region_feature(connection: sqlite3.Connection, feature: dict[st
     if not region_id or not name or level is None or not isinstance(geometry, dict):
         raise ValueError("Admin region feature requires id, name, level, and geometry")
 
-    bbox = calculate_geometry_bbox(geometry)
+    source_geometry = copy.deepcopy(geometry)
+    source_coordinate_system = get_feature_source_coordinate_system(properties)
+    canonical_geometry = convert_geometry_to_wgs84(
+        source_geometry,
+        source_coordinate_system=source_coordinate_system,
+    )
+    bbox = calculate_geometry_bbox(canonical_geometry)
     line_geometry = get_feature_line_geometry(feature)
     line_mask_geometry = get_feature_line_mask_geometry(feature)
     connection.execute(
@@ -425,6 +496,8 @@ def insert_admin_region_feature(connection: sqlite3.Connection, feature: dict[st
           name,
           level,
           geometry,
+          source_geometry,
+          source_coordinate_system,
           line_geometry,
           line_mask_geometry,
           min_lng,
@@ -435,13 +508,15 @@ def insert_admin_region_feature(connection: sqlite3.Connection, feature: dict[st
           footprint_count,
           stay_duration_seconds,
           travel_distance_meters
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, 0, 0)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, 0, 0)
         """,
         (
             str(region_id),
             str(name),
             int(level),
-            json.dumps(geometry, ensure_ascii=False, separators=(",", ":")),
+            json.dumps(canonical_geometry, ensure_ascii=False, separators=(",", ":")),
+            json.dumps(source_geometry, ensure_ascii=False, separators=(",", ":")),
+            source_coordinate_system,
             None
             if line_geometry is None
             else json.dumps(line_geometry, ensure_ascii=False, separators=(",", ":")),
@@ -454,6 +529,112 @@ def insert_admin_region_feature(connection: sqlite3.Connection, feature: dict[st
             bbox["max_lat"],
         ),
     )
+
+
+def get_feature_source_coordinate_system(properties: dict[str, Any]) -> str:
+    value = (
+        properties.get("sourceCoordinateSystem")
+        or properties.get("source_coordinate_system")
+        or properties.get("coordinateSystem")
+        or properties.get("coordinate_system")
+    )
+    return normalize_source_coordinate_system(value)
+
+
+def normalize_source_coordinate_system(value: object) -> str:
+    normalized = str(value or SOURCE_COORDINATE_SYSTEM_WGS84).strip().lower()
+    if normalized == SOURCE_COORDINATE_SYSTEM_GCJ02:
+        return SOURCE_COORDINATE_SYSTEM_GCJ02
+    return SOURCE_COORDINATE_SYSTEM_WGS84
+
+
+def infer_legacy_source_coordinate_system(*, region_id: str, level: int) -> str:
+    if level > 1 and is_mainland_china_region_id(region_id):
+        return SOURCE_COORDINATE_SYSTEM_GCJ02
+    return SOURCE_COORDINATE_SYSTEM_WGS84
+
+
+def is_mainland_china_region_id(region_id: str) -> bool:
+    adcode_prefix = region_id[:6]
+    if len(adcode_prefix) != 6 or not adcode_prefix.isdigit():
+        return False
+    province_code = int(adcode_prefix[:2])
+    return 11 <= province_code <= 65
+
+
+def convert_geometry_to_wgs84(
+    geometry: dict[str, Any],
+    *,
+    source_coordinate_system: str,
+) -> dict[str, Any]:
+    if source_coordinate_system != SOURCE_COORDINATE_SYSTEM_GCJ02:
+        return copy.deepcopy(geometry)
+    return transform_geojson_geometry_coordinates(
+        geometry,
+        transform_gcj02_to_wgs84_position,
+    )
+
+
+def transform_geojson_geometry_coordinates(
+    geometry: dict[str, Any],
+    transformer,
+) -> dict[str, Any]:
+    geometry_type = geometry.get("type")
+    coordinates = geometry.get("coordinates")
+    if geometry_type == "Point" and isinstance(coordinates, (list, tuple)):
+        return {"type": "Point", "coordinates": transformer(coordinates)}
+    if geometry_type in {"LineString", "MultiPoint"} and isinstance(coordinates, (list, tuple)):
+        return {
+            "type": geometry_type,
+            "coordinates": [transformer(position) for position in coordinates],
+        }
+    if geometry_type in {"Polygon", "MultiLineString"} and isinstance(coordinates, (list, tuple)):
+        return {
+            "type": geometry_type,
+            "coordinates": [
+                [transformer(position) for position in line]
+                for line in coordinates
+                if isinstance(line, (list, tuple))
+            ],
+        }
+    if geometry_type == "MultiPolygon" and isinstance(coordinates, (list, tuple)):
+        return {
+            "type": "MultiPolygon",
+            "coordinates": [
+                [
+                    [transformer(position) for position in line]
+                    for line in polygon
+                    if isinstance(line, (list, tuple))
+                ]
+                for polygon in coordinates
+                if isinstance(polygon, (list, tuple))
+            ],
+        }
+    if geometry_type == "GeometryCollection":
+        geometries = geometry.get("geometries")
+        if not isinstance(geometries, list):
+            return copy.deepcopy(geometry)
+        return {
+            "type": "GeometryCollection",
+            "geometries": [
+                transform_geojson_geometry_coordinates(current_geometry, transformer)
+                for current_geometry in geometries
+                if isinstance(current_geometry, dict)
+            ],
+        }
+    return copy.deepcopy(geometry)
+
+
+def transform_gcj02_to_wgs84_position(position: Any) -> list[float]:
+    if not isinstance(position, (list, tuple)) or len(position) < 2:
+        return [0.0, 0.0]
+    longitude, latitude = transform_gcj02_to_wgs84_coordinate(
+        longitude=float(position[0]),
+        latitude=float(position[1]),
+    )
+    if len(position) > 2:
+        return [longitude, latitude, *position[2:]]
+    return [longitude, latitude]
 
 
 def find_finest_region_id(

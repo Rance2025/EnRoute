@@ -1951,7 +1951,13 @@ def test_tile_encoder_clips_china_areacity_fill_after_wgs84_render_transform(tmp
             },
             {
                 "type": "Feature",
-                "properties": {"id": "110101", "name": "Dongcheng", "level": 4, "parentId": "110100"},
+                "properties": {
+                    "id": "110101",
+                    "name": "Dongcheng",
+                    "level": 4,
+                    "parentId": "110100",
+                    "sourceCoordinateSystem": "gcj02",
+                },
                 "geometry": {
                     "type": "Polygon",
                     "coordinates": [gcj_ring],
@@ -2050,7 +2056,13 @@ def test_tile_encoder_keeps_china_areacity_fill_when_raw_gcj_bbox_misses_tile(tm
             },
             {
                 "type": "Feature",
-                "properties": {"id": "110101", "name": "Dongcheng", "level": 4, "parentId": "110100"},
+                "properties": {
+                    "id": "110101",
+                    "name": "Dongcheng",
+                    "level": 4,
+                    "parentId": "110100",
+                    "sourceCoordinateSystem": "gcj02",
+                },
                 "geometry": {
                     "type": "Polygon",
                     "coordinates": [gcj_ring],
@@ -2149,7 +2161,13 @@ def test_tile_range_builder_indexes_china_areacity_by_wgs84_render_bbox(tmp_path
             },
             {
                 "type": "Feature",
-                "properties": {"id": "110101", "name": "Dongcheng", "level": 4, "parentId": "110100"},
+                "properties": {
+                    "id": "110101",
+                    "name": "Dongcheng",
+                    "level": 4,
+                    "parentId": "110100",
+                    "sourceCoordinateSystem": "gcj02",
+                },
                 "geometry": {
                     "type": "Polygon",
                     "coordinates": [gcj_ring],
@@ -2192,9 +2210,8 @@ def test_tile_range_builder_indexes_china_areacity_by_wgs84_render_bbox(tmp_path
     assert fill_features
 
 
-def test_tile_range_builder_reuses_china_areacity_wgs84_render_geometry(
+def test_tile_range_builder_uses_canonical_wgs84_geometry_without_render_coordinate_transform(
     tmp_path: Path,
-    monkeypatch,
 ):
     connection = sqlite3.connect(tmp_path / "footprints.sqlite")
     connection.row_factory = sqlite3.Row
@@ -2219,21 +2236,16 @@ def test_tile_range_builder_reuses_china_areacity_wgs84_render_geometry(
             },
         ],
     }
-    transform_calls = 0
-
-    def counted_transform(*, longitude: float, latitude: float):
-        nonlocal transform_calls
-        transform_calls += 1
-        return longitude, latitude
-
-    monkeypatch.setattr(
-        admin_region_tiles,
-        "transform_gcj02_to_wgs84_coordinate",
-        counted_transform,
-    )
     try:
         initialize_schema(connection)
         load_admin_regions(connection, collection)
+        stored_region = connection.execute(
+            """
+            SELECT source_coordinate_system, min_lng, min_lat
+            FROM admin_regions
+            WHERE id = '310000'
+            """,
+        ).fetchone()
 
         result = build_admin_region_tiles(
             connection,
@@ -2247,7 +2259,9 @@ def test_tile_range_builder_reuses_china_areacity_wgs84_render_geometry(
         connection.close()
 
     assert result.built_count > 0
-    assert transform_calls == 5
+    assert stored_region["source_coordinate_system"] == "wgs84"
+    assert float(stored_region["min_lng"]) == 120
+    assert float(stored_region["min_lat"]) == 30
 
 
 def test_low_zoom_admin_region_tiles_simplify_dense_china_boundaries(tmp_path: Path):
@@ -2403,7 +2417,13 @@ def test_reading_legacy_china_areacity_tile_rebuilds_fill_from_current_rows(tmp_
             },
             {
                 "type": "Feature",
-                "properties": {"id": "110101", "name": "Dongcheng", "level": 4, "parentId": "110100"},
+                "properties": {
+                    "id": "110101",
+                    "name": "Dongcheng",
+                    "level": 4,
+                    "parentId": "110100",
+                    "sourceCoordinateSystem": "gcj02",
+                },
                 "geometry": {
                     "type": "Polygon",
                     "coordinates": [gcj_ring],
