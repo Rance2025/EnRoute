@@ -252,8 +252,8 @@ describe('TimeContextPanel', () => {
       unit: 'day',
       buckets: [
         { key: '2026-06-18', label: '6月18日', distanceMeters: 0 },
-        { key: '2026-06-19', label: '6月19日', distanceMeters: 1000 },
-        { key: '2026-06-20', label: '6月20日', distanceMeters: 100000 },
+        { key: '2026-06-19', label: '6月19日', distanceMeters: 50000 },
+        { key: '2026-06-20', label: '6月20日', distanceMeters: 500000 },
       ],
     }
     const { container } = render(
@@ -276,11 +276,11 @@ describe('TimeContextPanel', () => {
     expect(container.querySelector('.time-context-trend__title')).toBeInTheDocument()
     expect(bars.map((bar) => bar.style.getPropertyValue('--trend-height'))).toEqual([
       '0%',
-      '1%',
+      '10%',
       '100%',
     ])
     expect(chart?.style.getPropertyValue('--trend-average-position')).toBe(
-      '33.666666666666664%',
+      '36.66666666666667%',
     )
 
     fireEvent.click(scaleButton)
@@ -290,17 +290,17 @@ describe('TimeContextPanel', () => {
     ).toBeInTheDocument()
     expect(bars[0]?.style.getPropertyValue('--trend-height')).toBe('0%')
     expect(parseFloat(bars[1]?.style.getPropertyValue('--trend-height') ?? '')).toBeCloseTo(
-      15.019,
+      45.571,
       3,
     )
     expect(bars[2]?.style.getPropertyValue('--trend-height')).toBe('100%')
     expect(
       parseFloat(chart?.style.getPropertyValue('--trend-average-position') ?? ''),
-    ).toBeCloseTo(76.83, 2)
+    ).toBeCloseTo(75.33, 2)
 
     fireEvent.pointerEnter(container.querySelectorAll('.time-context-trend__column')[1])
 
-    expect(screen.getByText('6月19日 · 1.0 km')).toBeInTheDocument()
+    expect(screen.getByText('6月19日 · 50 km')).toBeInTheDocument()
 
     fireEvent.click(
       screen.getByRole('button', { name: '距离图表尺度：对数，点击切换到线性' }),
@@ -311,7 +311,7 @@ describe('TimeContextPanel', () => {
     ).toBeInTheDocument()
     expect(bars.map((bar) => bar.style.getPropertyValue('--trend-height'))).toEqual([
       '0%',
-      '1%',
+      '10%',
       '100%',
     ])
   })
