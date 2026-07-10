@@ -470,7 +470,7 @@
   width: calc(100% + var(--time-panel-shadow-buffer));
   margin-right: calc(0px - var(--time-panel-shadow-buffer));
   display: grid;
-  grid-template-rows: max-content minmax(0, 1fr);
+  grid-template-rows: max-content max-content minmax(0, 1fr);
   gap: 20px;
   padding: 24px calc(24px + var(--time-panel-shadow-buffer)) 18px 24px;
   overflow: visible;
@@ -730,13 +730,13 @@
 }
 
 .time-context-trend {
-  position: absolute;
-  right: calc(24px + var(--time-panel-shadow-buffer));
-  bottom: 18px;
-  left: 24px;
-  height: 196px;
+  position: relative;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
   min-height: 0;
   padding-top: 14px;
+  padding-bottom: 5px;
   border-top: 1px solid rgba(18, 63, 53, 0.08);
   opacity: 1;
   visibility: visible;
@@ -834,7 +834,8 @@
 
 .time-context-trend__chart {
   position: relative;
-  height: 144px;
+  flex: 1 1 auto;
+  min-height: 144px;
   padding: 0 1px;
   overflow: hidden;
 }
