@@ -101,6 +101,8 @@ def initialize_admin_region_patch_test_schema(connection: sqlite3.Connection) ->
           name TEXT NOT NULL,
           level INTEGER NOT NULL,
           geometry TEXT NOT NULL,
+          source_geometry TEXT,
+          source_coordinate_system TEXT NOT NULL DEFAULT 'wgs84',
           line_geometry TEXT,
           line_mask_geometry TEXT,
           min_lng REAL NOT NULL,
@@ -151,6 +153,8 @@ def insert_test_admin_region(
           name,
           level,
           geometry,
+          source_geometry,
+          source_coordinate_system,
           line_geometry,
           line_mask_geometry,
           min_lng,
@@ -161,12 +165,13 @@ def insert_test_admin_region(
           footprint_count,
           stay_duration_seconds,
           travel_distance_meters
-        ) VALUES (?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, NULL, 0, 0, 0)
+        ) VALUES (?, ?, ?, ?, ?, 'wgs84', NULL, NULL, ?, ?, ?, ?, NULL, 0, 0, 0)
         """,
         (
             region_id,
             name,
             level,
+            json.dumps(resolved_geometry, separators=(",", ":")),
             json.dumps(resolved_geometry, separators=(",", ":")),
             min_lng,
             max_lng,
@@ -1799,3 +1804,155 @@ def test_patch_admin_region_tiles_rebuilds_existing_admin_tile_range_without_rel
     assert dict(country_sentinel) == {"algorithm_signature": "sentinel-country-signature", "updated_at": 222}
     assert rebuilt_depth_tile["algorithm_signature"] == ADMIN_REGION_TILE_ALGORITHM_SIGNATURE
     assert region_ids == {"310000"}
+
+
+def test_patch_admin_region_tile_lines_preserves_cached_fill_features(tmp_path: Path, monkeypatch):
+    database_path = tmp_path / "footprints.sqlite"
+    existing_tile = encode(
+        [
+            {
+                "name": ADMIN_REGION_TILE_LAYER_NAME,
+                "features": [
+                    {
+                        "geometry": {
+                            "type": "Polygon",
+                            "coordinates": [[[100, 100], [900, 100], [900, 900], [100, 900], [100, 100]]],
+                        },
+                        "properties": {
+                            "region_id": "370000",
+                            "name": "Cached Shandong",
+                            "level": 2,
+                            "kind": "fill",
+                            "fill_sentinel": "keep-me",
+                        },
+                    },
+                    {
+                        "geometry": {
+                            "type": "LineString",
+                            "coordinates": [[100, 100], [900, 100]],
+                        },
+                        "properties": {
+                            "region_id": "stale-line",
+                            "name": "Stale Line",
+                            "level": 2,
+                            "kind": "line",
+                        },
+                    },
+                ],
+            },
+        ],
+        default_options={"extents": 4096, "y_coord_down": True},
+    )
+    connection = sqlite3.connect(database_path)
+    connection.row_factory = sqlite3.Row
+    try:
+        initialize_admin_region_patch_test_schema(connection)
+        connection.executescript(
+            """
+            CREATE TABLE admin_region_tiles (
+              z INTEGER NOT NULL,
+              x INTEGER NOT NULL,
+              y INTEGER NOT NULL,
+              focus_region_id TEXT NOT NULL,
+              depth INTEGER NOT NULL,
+              algorithm_signature TEXT NOT NULL DEFAULT '',
+              tile BLOB NOT NULL,
+              feature_count INTEGER NOT NULL,
+              updated_at INTEGER NOT NULL,
+              PRIMARY KEY (z, x, y, focus_region_id, depth)
+            ) WITHOUT ROWID;
+            """
+        )
+        insert_test_admin_region(
+            connection,
+            region_id="cn",
+            name="China",
+            level=1,
+            geometry=make_square(0, 0, 20, 10),
+        )
+        insert_test_admin_region(
+            connection,
+            region_id="370000",
+            name="Shandong",
+            level=2,
+            geometry=make_square(0, 0, 10, 10),
+        )
+        insert_test_admin_region(
+            connection,
+            region_id="130000",
+            name="Hebei",
+            level=2,
+            geometry=make_square(10, 0, 20, 10),
+        )
+        connection.execute("INSERT INTO admin_region_tree (parent_id, child_id) VALUES ('cn', '370000')")
+        connection.execute("INSERT INTO admin_region_tree (parent_id, child_id) VALUES ('cn', '130000')")
+        connection.execute(
+            """
+            INSERT INTO admin_region_tiles
+              (z, x, y, focus_region_id, depth, algorithm_signature, tile, feature_count, updated_at)
+            VALUES (0, 0, 0, 'world', 2, 'legacy-lines', ?, 2, 111)
+            """,
+            (existing_tile,),
+        )
+        before_features = decode_admin_region_tile(existing_tile)[ADMIN_REGION_TILE_LAYER_NAME]["features"]
+        before_fill_features = [
+            feature for feature in before_features if feature["properties"].get("kind") == "fill"
+        ]
+
+        def reject_tile_query(*args, **kwargs):
+            raise AssertionError("line-only patch should pre-index focused rows instead of querying per tile")
+
+        monkeypatch.setattr(
+            patch_admin_region_tiles_module,
+            "query_focused_region_rows_for_tile",
+            reject_tile_query,
+        )
+
+        def reject_full_tile_encode(*args, **kwargs):
+            raise AssertionError("line-only patch should not encode full replacement tiles just to extract lines")
+
+        monkeypatch.setattr(
+            patch_admin_region_tiles_module,
+            "encode_admin_region_mvt_from_prepared_rows",
+            reject_full_tile_encode,
+        )
+
+        result = patch_admin_region_tiles_module.patch_admin_region_tile_lines(
+            connection,
+            focus_region_id="world",
+            depth=2,
+            min_zoom=0,
+            max_zoom=0,
+            commit_interval=1,
+        )
+        updated_tile_row = connection.execute(
+            """
+            SELECT algorithm_signature, tile, feature_count, updated_at
+            FROM admin_region_tiles
+            WHERE z = 0 AND x = 0 AND y = 0 AND focus_region_id = 'world' AND depth = 2
+            """,
+        ).fetchone()
+    finally:
+        connection.close()
+
+    after_features = decode_admin_region_tile(bytes(updated_tile_row["tile"]))[
+        ADMIN_REGION_TILE_LAYER_NAME
+    ]["features"]
+    after_fill_features = [
+        feature for feature in after_features if feature["properties"].get("kind") == "fill"
+    ]
+    after_line_features = [
+        feature for feature in after_features if feature["properties"].get("kind") == "line"
+    ]
+    boundary_owner_ids = {
+        str(feature["properties"].get("boundary_region_ids"))
+        for feature in after_line_features
+    }
+
+    assert result.built_count == 1
+    assert after_fill_features == before_fill_features
+    assert all(feature["properties"].get("region_id") != "stale-line" for feature in after_line_features)
+    assert "|130000|370000|" in boundary_owner_ids
+    assert updated_tile_row["algorithm_signature"] == ADMIN_REGION_TILE_ALGORITHM_SIGNATURE
+    assert updated_tile_row["feature_count"] == len(after_features)
+    assert updated_tile_row["updated_at"] != 111

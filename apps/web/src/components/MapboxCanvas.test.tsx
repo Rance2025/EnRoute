@@ -660,7 +660,11 @@ describe('MapboxCanvas footprint vector tiles', () => {
         'all',
         ['==', ['get', 'kind'], 'line'],
         ['in', ['geometry-type'], ['literal', ['LineString', 'MultiLineString']]],
-        ['in', ['get', 'region_id'], ['literal', ['310115']]],
+        [
+          'any',
+          ['in', ['get', 'region_id'], ['literal', ['310115']]],
+          ['>=', ['index-of', '|310115|', ['coalesce', ['get', 'boundary_region_ids'], '']], 0],
+        ],
       ],
     ])
     const activeRequestUrl = new URL(
