@@ -63,6 +63,13 @@ TAIWAN_TOWN_ID_PREFIX = "tw-town-"
 MAINLAND_AUTHORITY_MIN_PROVINCE_CODE = 11
 MAINLAND_AUTHORITY_MAX_PROVINCE_CODE = 65
 TAIWAN_MAINLAND_OVERLAP_AREA_EPSILON = 1e-12
+TAIWAN_MAINLAND_AUTHORITY_REGION_PREFIXES = (
+    f"{TAIWAN_COUNTY_ID_PREFIX}09007",
+    f"{TAIWAN_COUNTY_ID_PREFIX}09020",
+    f"{TAIWAN_TOWN_ID_PREFIX}09007",
+    f"{TAIWAN_TOWN_ID_PREFIX}09020",
+)
+TAIWAN_PROVINCE_MASK_BBOX_TOLERANCE_DEGREES = 0.5
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -443,6 +450,7 @@ def patch_taiwan_mainland_overlaps(
             "changed_region_count": 0,
             "changed_county_count": 0,
             "changed_town_count": 0,
+            "deleted_region_count": 0,
             "tile_count": 0,
             "candidate_tile_count": 0,
         }
@@ -453,11 +461,14 @@ def patch_taiwan_mainland_overlaps(
             "changed_region_count": 0,
             "changed_county_count": 0,
             "changed_town_count": 0,
+            "deleted_region_count": 0,
             "tile_count": 0,
             "candidate_tile_count": 0,
         }
 
     changed_ids = [str(change["id"]) for change in changes]
+    deleted_ids = [str(change["id"]) for change in changes if change["geometry"] is None]
+    updated_ids = [str(change["id"]) for change in changes if change["geometry"] is not None]
     old_rows_by_depth = {
         depth: [change["row"] for change in changes if int(change["row"]["level"]) == depth]
         for depth in {3, 4}
@@ -473,14 +484,18 @@ def patch_taiwan_mainland_overlaps(
 
     with connection:
         for change in changes:
+            geometry = change["geometry"]
+            if geometry is None:
+                continue
             update_admin_region_geometry(
                 connection,
                 region_id=str(change["id"]),
-                geometry=change["geometry"],
+                geometry=geometry,
             )
+        delete_admin_region_rows_by_ids(connection, deleted_ids)
         delete_meta_value(connection, ADMIN_REGION_STATS_SIGNATURE_KEY)
 
-    new_rows = query_admin_rows_by_ids(connection, changed_ids)
+    new_rows = query_admin_rows_by_ids(connection, updated_ids)
     new_rows_by_depth = {
         depth: [row for row in new_rows if int(row["level"]) == depth]
         for depth in {3, 4}
@@ -517,9 +532,27 @@ def patch_taiwan_mainland_overlaps(
         "changed_region_count": len(changes),
         "changed_county_count": sum(1 for change in changes if int(change["row"]["level"]) == 3),
         "changed_town_count": sum(1 for change in changes if int(change["row"]["level"]) == 4),
+        "deleted_region_count": len(deleted_ids),
         "tile_count": tile_count,
         "candidate_tile_count": candidate_tile_count,
     }
+
+
+def load_taiwan_province_authority_geometry(connection: sqlite3.Connection) -> BaseGeometry | None:
+    row = connection.execute(
+        """
+        SELECT geometry
+        FROM admin_regions
+        WHERE id = ?
+        """,
+        (TAIWAN_PROVINCE_ID,),
+    ).fetchone()
+    if row is None:
+        return None
+    return repair_polygonal_shapely_geometry(
+        shape(json.loads(str(row["geometry"]))),
+        label=f"Taiwan province authority {TAIWAN_PROVINCE_ID}",
+    )
 
 
 def query_mainland_authority_rows_for_bounds(
@@ -666,6 +699,7 @@ def create_taiwan_mainland_overlap_changes(
 ) -> list[dict[str, Any]]:
     changes = []
     mainland_authority_cache: dict[str, list[BaseGeometry]] = {}
+    taiwan_province_authority = load_taiwan_province_authority_geometry(connection)
     for row in rows:
         geometry = repair_polygonal_shapely_geometry(
             shape(json.loads(str(row["geometry"]))),
@@ -680,8 +714,6 @@ def create_taiwan_mainland_overlap_changes(
             north=north,
             cache=mainland_authority_cache,
         )
-        if not mainland_authority_geometries:
-            continue
 
         clipped = geometry
         changed = False
@@ -689,11 +721,34 @@ def create_taiwan_mainland_overlap_changes(
             overlap = clipped.intersection(mainland_authority)
             if overlap.is_empty or overlap.area <= TAIWAN_MAINLAND_OVERLAP_AREA_EPSILON:
                 continue
+            clipped = clipped.difference(mainland_authority)
+            changed = True
+            if clipped.is_empty:
+                break
             clipped = repair_polygonal_shapely_geometry(
-                clipped.difference(mainland_authority),
+                clipped,
                 label=f"Taiwan admin region {row['id']} clipped by mainland authority",
             )
-            changed = True
+
+        if (
+            not clipped.is_empty
+            and taiwan_province_authority is not None
+            and should_apply_taiwan_province_authority_mask(
+                region_id=str(row["id"]),
+                geometry=clipped,
+                taiwan_province_authority=taiwan_province_authority,
+            )
+        ):
+            province_masked = clipped.intersection(taiwan_province_authority)
+            if province_masked.is_empty:
+                clipped = province_masked
+                changed = True
+            elif province_masked.area < clipped.area - TAIWAN_MAINLAND_OVERLAP_AREA_EPSILON:
+                clipped = repair_polygonal_shapely_geometry(
+                    province_masked,
+                    label=f"Taiwan admin region {row['id']} clipped by Taiwan province authority",
+                )
+                changed = True
 
         if not changed:
             continue
@@ -701,10 +756,30 @@ def create_taiwan_mainland_overlap_changes(
             {
                 "id": str(row["id"]),
                 "row": row,
-                "geometry": clipped,
+                "geometry": None if clipped.is_empty else clipped,
             },
         )
     return changes
+
+
+def should_apply_taiwan_province_authority_mask(
+    *,
+    region_id: str,
+    geometry: BaseGeometry,
+    taiwan_province_authority: BaseGeometry,
+) -> bool:
+    if region_id.startswith(TAIWAN_MAINLAND_AUTHORITY_REGION_PREFIXES):
+        return True
+
+    min_lng, min_lat, max_lng, max_lat = geometry.bounds
+    province_min_lng, province_min_lat, province_max_lng, province_max_lat = taiwan_province_authority.bounds
+    tolerance = TAIWAN_PROVINCE_MASK_BBOX_TOLERANCE_DEGREES
+    return (
+        min_lng < province_min_lng - tolerance
+        or max_lng > province_max_lng + tolerance
+        or min_lat < province_min_lat - tolerance
+        or max_lat > province_max_lat + tolerance
+    )
 
 
 def update_admin_region_geometry(
@@ -733,6 +808,27 @@ def update_admin_region_geometry(
             bbox["max_lat"],
             region_id,
         ),
+    )
+
+
+def delete_admin_region_rows_by_ids(connection: sqlite3.Connection, region_ids: list[str]) -> None:
+    if not region_ids:
+        return
+    placeholders = ",".join("?" for _ in region_ids)
+    connection.execute(
+        f"""
+        DELETE FROM admin_region_tree
+        WHERE parent_id IN ({placeholders})
+           OR child_id IN ({placeholders})
+        """,
+        [*region_ids, *region_ids],
+    )
+    connection.execute(
+        f"""
+        DELETE FROM admin_regions
+        WHERE id IN ({placeholders})
+        """,
+        region_ids,
     )
 
 
