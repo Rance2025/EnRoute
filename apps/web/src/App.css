@@ -757,8 +757,10 @@
 
 .time-context-trend__head {
   display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
   gap: 6px;
+  min-height: 24px;
   margin-bottom: 8px;
 }
 
@@ -804,10 +806,14 @@
 
 .time-context-trend__summary {
   display: grid;
-  gap: 2px;
+  gap: 0;
+  justify-self: end;
+  justify-items: end;
   min-width: 0;
+  max-width: min(158px, 46%);
   min-height: 24px;
   align-content: start;
+  text-align: right;
   color: rgba(21, 48, 42, 0.46);
   font-size: 10px;
   font-weight: 760;

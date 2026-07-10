@@ -612,7 +612,7 @@ function createGroupedDistanceTrendBuckets(
       distanceMeters: averageDistanceMeters,
       summaryLabel: {
         primary: label,
-        secondary: `日均 ${formatDistanceTrendValue(averageDistanceMeters)} · 共 ${formatDistanceTrendValue(totalDistanceMeters)}`,
+        secondary: `日均 ${formatDistanceTrendValue(averageDistanceMeters)}`,
       },
     })
   }
