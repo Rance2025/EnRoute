@@ -442,7 +442,11 @@ describe('map chrome layout', () => {
     expect(scrollRule).not.toContain('overflow-y: auto')
     expect(scrollRule).not.toContain('scrollbar-width')
     expect(cssRule('.time-panel-content')).toContain('overflow: visible')
-    expect(cssRule('.time-panel-content')).toContain('min-height: max-content')
+    expect(cssRule('.time-panel-content')).toContain('height: var(--time-panel-stage-height, auto)')
+    expect(cssRule('.time-panel-content')).toContain(
+      'height 260ms cubic-bezier(0.22, 1, 0.36, 1)',
+    )
+    expect(cssRule('.time-panel-content')).not.toContain('min-height: max-content')
     expect(cssRule('.time-panel-content')).not.toContain('overflow: auto')
     expect(cssRule('.time-panel-content::-webkit-scrollbar')).toBe('')
     expect(scrollRule).toContain('pointer-events: none')
@@ -676,6 +680,7 @@ describe('map chrome layout', () => {
       'grid-template-rows: max-content max-content minmax(0, 1fr)',
     )
     expect(cssRule('.time-context-trend')).toContain('position: relative')
+    expect(cssRule('.time-context-trend')).toContain('z-index: 1')
     expect(cssRule('.time-context-trend')).toContain('align-self: stretch')
     expect(cssRule('.time-context-trend')).toContain('display: flex')
     expect(cssRule('.time-context-trend')).toContain('flex-direction: column')
@@ -861,8 +866,10 @@ describe('map chrome layout', () => {
     const headRule = cssRule('.time-calendar-head')
     const switchRule = cssRule('.time-calendar-switch')
     const bodyRule = cssRule('.time-calendar-body')
+    const bodySlotRule = cssRule('.time-calendar-body-slot')
     const weekBodyRule = cssRule('.time-calendar-body--week')
     const monthBodyRule = cssRule('.time-calendar-body--month')
+    const expandingMonthBodyRule = cssRule('.time-calendar-body--expanding-month')
     const collapsingWeekBodyRule = cssRule('.time-calendar-body--collapsing-week')
     const weekdaysRule = cssRule('.time-calendar-weekdays')
     const gridWindowRule = cssRule('.time-calendar-grid-window')
@@ -872,21 +879,49 @@ describe('map chrome layout', () => {
     expect(shellRule).toContain('--time-calendar-day-height: 28px')
     expect(shellRule).toContain('--time-calendar-weekday-height: 17px')
     expect(shellRule).toContain('--time-calendar-grid-gap: 4px')
+    expect(shellRule).toContain('overflow: clip')
     expect(headRule).toContain('grid-template-columns: minmax(0, 1fr) auto')
     expect(headRule).toContain('margin-bottom: 10px')
     expect(switchRule).toContain('grid-template-columns: repeat(2, auto)')
+    expect(bodySlotRule).toContain('position: relative')
+    expect(bodySlotRule).not.toContain('height: calc(')
+    expect(bodySlotRule).not.toContain('var(--time-calendar-day-height)')
+    expect(bodyRule).toContain('display: flow-root')
+    expect(bodyRule).toContain('overflow: clip')
+    expect(bodyRule).toContain('overflow-clip-margin: var(--time-picker-shadow-buffer, 12px)')
+    expect(bodyRule).toContain('var(--time-calendar-body-bottom-buffer, 0px)')
     expect(bodyRule).not.toContain('overflow: hidden')
     expect(bodyRule).toContain(
       'height 260ms cubic-bezier(0.22, 1, 0.36, 1)',
     )
     expect(weekBodyRule).toContain('--time-calendar-visible-rows: 1')
     expect(weekBodyRule).toContain(
+      '--time-calendar-body-bottom-buffer: var(--time-picker-shadow-buffer, 12px)',
+    )
+    expect(weekBodyRule).toContain('position: relative')
+    expect(weekBodyRule).toContain(
       '--time-calendar-grid-offset: calc(var(--time-calendar-active-week-index) * -1)',
     )
     expect(monthBodyRule).toContain('--time-calendar-grid-offset: 0')
+    expect(monthBodyRule).toContain(
+      '--time-calendar-body-bottom-buffer: var(--time-picker-shadow-buffer, 12px)',
+    )
+    expect(monthBodyRule).not.toContain('position: absolute')
+    expect(monthBodyRule).not.toContain('top: 0')
+    expect(monthBodyRule).not.toContain('box-shadow')
+    expect(expandingMonthBodyRule).toContain('--time-calendar-grid-offset: 0')
+    expect(expandingMonthBodyRule).toContain(
+      '--time-calendar-body-bottom-buffer: var(--time-picker-shadow-buffer, 12px)',
+    )
     expect(collapsingWeekBodyRule).toContain(
       '--time-calendar-grid-offset: calc(var(--time-calendar-active-week-index) * -1)',
     )
+    expect(collapsingWeekBodyRule).toContain(
+      '--time-calendar-body-bottom-buffer: var(--time-picker-shadow-buffer, 12px)',
+    )
+    expect(collapsingWeekBodyRule).not.toContain('position: absolute')
+    expect(collapsingWeekBodyRule).not.toContain('top: 0')
+    expect(collapsingWeekBodyRule).not.toContain('box-shadow')
     expect(weekdaysRule).toContain('grid-template-columns: repeat(7, minmax(0, 1fr))')
     expect(weekdaysRule).toContain('margin-top: var(--time-calendar-grid-top-gap)')
     expect(gridWindowRule).toContain('height: calc(')
@@ -901,7 +936,16 @@ describe('map chrome layout', () => {
     expect(cssRule('.time-calendar-body--week .time-calendar-grid')).toContain(
       'transition: none',
     )
+    expect(cssRule('.time-calendar-body--week .time-calendar-grid button:not(.is-visible-week)')).toContain(
+      'visibility: hidden',
+    )
+    expect(cssRule('.time-calendar-body--expanding-month .time-calendar-grid button:not(.is-visible-week)')).toContain(
+      'animation: timeCalendarMonthRowsReveal 180ms ease 80ms forwards',
+    )
     expect(cssRule('.time-calendar-body--collapsing-week .time-calendar-grid')).toBe('')
+    expect(cssRule('.time-calendar-body--collapsing-week .time-calendar-grid button:not(.is-visible-week)')).toContain(
+      'visibility: hidden',
+    )
     expect(buttonRule).toContain('height: var(--time-calendar-day-height)')
     expect(buttonRule).toContain('min-height: var(--time-calendar-day-height)')
   })
@@ -1023,11 +1067,19 @@ describe('map chrome layout', () => {
     const dayMotionRule = cssRule('.time-calendar-grid-motion')
     const pickerWindowRule = cssRule('.time-picker-grid-window')
     const pickerMotionRule = cssRule('.time-picker-grid-motion')
+    const customDateSlotRule = cssRule('.time-date-picker-slot')
+    const customDateSlotOpenRule = cssRule('.time-date-picker-slot--open')
+    const customDateSlotClosedRule = cssRule('.time-date-picker-slot--closed')
+    const customDateSlotInnerRule = cssRule('.time-date-picker-slot__inner')
     const customDateWindowRule = cssRule('.time-date-picker__grid-window')
     const customDateMotionRule = cssRule('.time-date-picker__grid-motion')
     const previousRule = cssRule('.time-range-grid-motion--previous')
     const nextRule = cssRule('.time-range-grid-motion--next')
 
+    expect(timeContextPanelSource).toContain('useMeasuredStageHeight')
+    expect(timeContextPanelSource).toContain('style={panelContentStyle}')
+    expect(stageRule).toContain('position: relative')
+    expect(stageRule).toContain('z-index: 2')
     expect(stageRule).not.toContain('animation:')
     expect(stageRule).not.toContain('transform')
     expect(dayWindowRule).toContain('--time-picker-shadow-buffer')
@@ -1043,8 +1095,27 @@ describe('map chrome layout', () => {
     expect(pickerWindowRule).toContain('calc(var(--time-picker-shadow-buffer) * -1)')
     expect(pickerWindowRule).toContain('overflow: visible')
     expect(pickerMotionRule).toContain('width: 100%')
+    expect(customDateSlotRule).toContain('display: grid')
+    expect(customDateSlotRule).toContain('grid-template-rows: 0fr')
+    expect(customDateSlotRule).toContain(
+      'grid-template-rows 260ms cubic-bezier(0.22, 1, 0.36, 1)',
+    )
+    expect(customDateSlotRule).toContain('opacity 180ms ease')
+    expect(customDateSlotRule).toContain('transform 260ms cubic-bezier(0.22, 1, 0.36, 1)')
+    expect(customDateSlotOpenRule).toContain('grid-template-rows: 1fr')
+    expect(customDateSlotOpenRule).toContain('opacity: 1')
+    expect(customDateSlotOpenRule).toContain('transform: translateY(0)')
+    expect(customDateSlotClosedRule).toContain('pointer-events: none')
+    expect(customDateSlotInnerRule).toContain('min-height: 0')
+    expect(customDateSlotInnerRule).toContain('overflow: hidden')
+    expect(cssRule('.time-date-picker-slot--open .time-date-picker-slot__inner')).toContain(
+      'overflow: visible',
+    )
     expect(customDateWindowRule).toContain('overflow: visible')
     expect(customDateMotionRule).toContain('width: 100%')
+    expect(cssRule('.time-custom-shell .time-date-picker')).not.toContain('position: absolute')
+    expect(cssRule('.time-custom-shell .time-date-picker')).not.toContain('top:')
+    expect(cssRule('.time-custom-shell .time-date-picker')).not.toContain('right:')
     expect(previousRule).toContain('--time-range-enter-x: -')
     expect(previousRule).toContain('animation:')
     expect(previousRule).toContain('timeRangeGridIn')
