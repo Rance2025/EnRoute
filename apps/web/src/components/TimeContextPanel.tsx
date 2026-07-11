@@ -1,4 +1,13 @@
-import { useEffect, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
+  type TransitionEvent as ReactTransitionEvent,
+} from 'react'
 import {
   CalendarDays,
   ChevronLeft,
@@ -109,6 +118,46 @@ function TimeArrowIcon({ direction }: { direction: -1 | 1 }) {
   return <Icon size={18} strokeWidth={3} aria-hidden="true" />
 }
 
+function useMeasuredStageHeight(isLayoutFrozen: boolean) {
+  const stageRef = useRef<HTMLDivElement>(null)
+  const [stageHeight, setStageHeight] = useState<number | null>(null)
+
+  const measureStageHeight = useCallback(() => {
+    if (isLayoutFrozen) return
+
+    const stage = stageRef.current
+    if (!stage) return
+
+    const nextHeight = Math.ceil(stage.getBoundingClientRect().height)
+    if (nextHeight <= 0) return
+
+    setStageHeight((current) => (current === nextHeight ? current : nextHeight))
+  }, [isLayoutFrozen])
+
+  useLayoutEffect(() => {
+    measureStageHeight()
+  })
+
+  useLayoutEffect(() => {
+    const stage = stageRef.current
+    if (!stage || typeof ResizeObserver === 'undefined') return undefined
+
+    const observer = new ResizeObserver(measureStageHeight)
+    observer.observe(stage)
+
+    return () => observer.disconnect()
+  }, [measureStageHeight])
+
+  return {
+    stageRef,
+    panelContentStyle: stageHeight === null
+      ? undefined
+      : ({
+          '--time-panel-stage-height': `${stageHeight}px`,
+        } as CSSProperties),
+  }
+}
+
 export function TimeContextPanel({
   metricItems,
   distanceSeries,
@@ -119,12 +168,14 @@ export function TimeContextPanel({
 }: TimeContextPanelProps) {
   const [calendarMode, setCalendarMode] = useState<CalendarDisplayMode>('week')
   const [isDayCalendarCollapsingWeek, setIsDayCalendarCollapsingWeek] = useState(false)
+  const [isDayCalendarExpandingMonth, setIsDayCalendarExpandingMonth] = useState(false)
   const [isCustomDatePickerOpen, setIsCustomDatePickerOpen] = useState(false)
   const [activeTrendIndex, setActiveTrendIndex] = useState<number | null>(null)
   const [distanceTrendScale, setDistanceTrendScale] = useState<DistanceTrendScale>('linear')
   const [distanceTrendGroupingMode, setDistanceTrendGroupingMode] =
     useState<DistanceTrendGroupingMode>('grouped')
   const [dayCalendarCollapseSequence, setDayCalendarCollapseSequence] = useState(0)
+  const [dayCalendarExpandSequence, setDayCalendarExpandSequence] = useState(0)
   const [navigationState, setNavigationState] = useState<TimeNavigationState>({
     direction: null,
     sequence: 0,
@@ -135,8 +186,10 @@ export function TimeContextPanel({
   const summaryItems = metricItems ?? (view === 'accounting'
     ? getAccountingSummary(selection)
     : [])
+  const compatibleDistanceSeries = getCompatibleDistanceSeriesForSelection(distanceSeries, selection)
+  const hasStaleDistanceSeries = Boolean(distanceSeries && !compatibleDistanceSeries)
   const distanceTrend = getDistanceTrendModel(
-    distanceSeries,
+    compatibleDistanceSeries,
     distanceTrendScale,
     selection.mode,
     distanceTrendGroupingMode,
@@ -144,15 +197,16 @@ export function TimeContextPanel({
   const activeTrendBucket = activeTrendIndex === null
     ? null
     : distanceTrend.values[activeTrendIndex] ?? null
-  const isDistanceTrendHidden = (
+  const shouldRenderDistanceTrend = view === 'map'
+  const isEditorOverlayOpen = shouldRenderDistanceTrend && ((
     selection.mode === 'day' &&
-    calendarMode === 'month'
+    (calendarMode === 'month' || isDayCalendarCollapsingWeek)
   ) || (
     selection.mode === 'custom' &&
     isCustomDatePickerOpen
-  )
-  const shouldRenderDistanceTrend = view === 'map'
-
+  ))
+  const isDistanceTrendHidden = isEditorOverlayOpen || hasStaleDistanceSeries
+  const { stageRef, panelContentStyle } = useMeasuredStageHeight(isEditorOverlayOpen)
   useEffect(() => {
     if (!isDayCalendarCollapsingWeek) return undefined
 
@@ -164,6 +218,18 @@ export function TimeContextPanel({
       window.clearTimeout(timer)
     }
   }, [dayCalendarCollapseSequence, isDayCalendarCollapsingWeek])
+
+  useEffect(() => {
+    if (!isDayCalendarExpandingMonth) return undefined
+
+    const timer = window.setTimeout(() => {
+      setIsDayCalendarExpandingMonth(false)
+    }, DAY_CALENDAR_TRANSITION_MS)
+
+    return () => {
+      window.clearTimeout(timer)
+    }
+  }, [dayCalendarExpandSequence, isDayCalendarExpandingMonth])
 
   function handleSelectionChange(
     nextSelection: TimeRangeSelection,
@@ -185,13 +251,28 @@ export function TimeContextPanel({
 
     if (calendarMode === 'month' && mode === 'week') {
       setIsDayCalendarCollapsingWeek(true)
+      setIsDayCalendarExpandingMonth(false)
       setDayCalendarCollapseSequence((current) => current + 1)
-    } else {
-      setIsDayCalendarCollapsingWeek(false)
+      setCalendarMode(mode)
+      return
     }
 
+    if (calendarMode === 'week' && mode === 'month') {
+      setIsDayCalendarCollapsingWeek(false)
+      setIsDayCalendarExpandingMonth(true)
+      setDayCalendarExpandSequence((current) => current + 1)
+      setCalendarMode(mode)
+      return
+    }
+
+    setIsDayCalendarCollapsingWeek(false)
+    setIsDayCalendarExpandingMonth(false)
     setCalendarMode(mode)
   }
+
+  const handleCustomDatePickerOpenChange = useCallback((isOpen: boolean) => {
+    setIsCustomDatePickerOpen(isOpen)
+  }, [])
 
   function handleTrendPointerMove(event: ReactPointerEvent<HTMLDivElement>) {
     const bucketCount = distanceTrend.values.length
@@ -234,6 +315,7 @@ export function TimeContextPanel({
     if (range === selection.mode) return
 
     setIsDayCalendarCollapsingWeek(false)
+    setIsDayCalendarExpandingMonth(false)
     setIsCustomDatePickerOpen(false)
     setActiveTrendIndex(null)
     handleSelectionChange(createCurrentSelectionForView(range, view))
@@ -318,8 +400,11 @@ export function TimeContextPanel({
           className="time-panel-content"
           role="region"
           aria-label="时间编辑器"
+          style={panelContentStyle}
+          data-time-panel-overlay={isEditorOverlayOpen ? 'true' : undefined}
         >
           <div
+            ref={stageRef}
             className="time-panel-content__stage"
             aria-label="时间范围内容"
           >
@@ -327,12 +412,13 @@ export function TimeContextPanel({
               selection,
               calendarMode,
               isDayCalendarCollapsingWeek,
+              isDayCalendarExpandingMonth,
               navigationState,
               handleCalendarModeChange,
               handleSelectionChange,
               handleSelectionChange,
               handlePeriodNavigate,
-              setIsCustomDatePickerOpen,
+              handleCustomDatePickerOpenChange,
               view,
             )}
           </div>
@@ -429,7 +515,6 @@ export function TimeContextPanel({
             </div>
           </section>
         ) : null}
-
       </div>
     </aside>
   )
@@ -477,6 +562,38 @@ function DistanceTrendSummary({ summary }: { summary: DistanceTrendSummaryLabel 
       </span>
     </small>
   )
+}
+
+function getCompatibleDistanceSeriesForSelection(
+  distanceSeries: FootprintDistanceSeries | undefined,
+  selection: TimeRangeSelection,
+) {
+  if (!distanceSeries) return undefined
+  if (distanceSeries.buckets.length === 0) return distanceSeries
+
+  const firstBucket = distanceSeries.buckets[0]
+  const lastBucket = distanceSeries.buckets[distanceSeries.buckets.length - 1]
+  if (!firstBucket || !lastBucket) return distanceSeries
+
+  const firstDate = getDistanceBucketDateKey(firstBucket.key)
+  const lastDate = getDistanceBucketDateKey(lastBucket.key)
+
+  if (distanceSeries.granularity === 'hour') {
+    if (selection.mode !== 'day') return undefined
+
+    return firstDate === selection.start && lastDate === selection.end
+      ? distanceSeries
+      : undefined
+  }
+
+  if (selection.mode === 'day') return undefined
+  if (firstDate < selection.start || lastDate > selection.end) return undefined
+
+  return distanceSeries
+}
+
+function getDistanceBucketDateKey(bucketKey: string) {
+  return bucketKey.slice(0, 10)
 }
 
 function getDistanceTrendModel(
@@ -855,6 +972,7 @@ function renderModeContent(
   selection: TimeRangeSelection,
   calendarMode: CalendarDisplayMode,
   isDayCalendarCollapsingWeek: boolean,
+  isDayCalendarExpandingMonth: boolean,
   navigationState: TimeNavigationState,
   onCalendarModeChange: (mode: CalendarDisplayMode) => void,
   onSelectionEdit: (selection: TimeRangeSelection) => void,
@@ -872,6 +990,7 @@ function renderModeContent(
         selection={selection}
         calendarMode={calendarMode}
         isCollapsingWeek={isDayCalendarCollapsingWeek}
+        isExpandingMonth={isDayCalendarExpandingMonth}
         navigationState={navigationState}
         onCalendarModeChange={onCalendarModeChange}
         onSelectionChange={onSelectionChange}
@@ -930,6 +1049,7 @@ function CustomRangeSection({
   onPickerOpenChange: (isOpen: boolean) => void
 }) {
   const [activeBoundary, setActiveBoundary] = useState<'start' | 'end' | null>(null)
+  const [renderedBoundary, setRenderedBoundary] = useState<'start' | 'end' | null>(null)
   const [pickerAnchorDate, setPickerAnchorDate] = useState(selection.anchorDate)
 
   useEffect(() => {
@@ -939,11 +1059,19 @@ function CustomRangeSection({
   }, [onPickerOpenChange])
 
   function openPicker(boundary: 'start' | 'end') {
-    const nextBoundary = activeBoundary === boundary ? null : boundary
+    const nextBoundary = activeBoundary === boundary
+      ? null
+      : boundary
 
+    if (nextBoundary === null) {
+      setActiveBoundary(null)
+      return
+    }
+
+    setPickerAnchorDate(selection[nextBoundary])
+    setRenderedBoundary(nextBoundary)
     setActiveBoundary(nextBoundary)
-    setPickerAnchorDate(selection[boundary])
-    onPickerOpenChange(nextBoundary !== null)
+    onPickerOpenChange(true)
   }
 
   function handleBoundaryInput(boundary: 'start' | 'end', value: string) {
@@ -957,10 +1085,17 @@ function CustomRangeSection({
     onSelectionChange(updateCustomDateBoundary(selection, activeBoundary, date))
     setPickerAnchorDate(date)
     setActiveBoundary(null)
+  }
+
+  function handlePickerSlotTransitionEnd(event: ReactTransitionEvent<HTMLDivElement>) {
+    if (event.target !== event.currentTarget || activeBoundary !== null) return
+
+    setRenderedBoundary(null)
     onPickerOpenChange(false)
   }
 
-  const activeValue = activeBoundary ? selection[activeBoundary] : selection.end
+  const pickerBoundary = activeBoundary ?? renderedBoundary
+  const activeValue = pickerBoundary ? selection[pickerBoundary] : selection.end
 
   return (
     <section className="time-custom-shell" aria-label="自定义时间范围">
@@ -975,6 +1110,7 @@ function CustomRangeSection({
             className={selection.label === preset.label ? 'is-active' : undefined}
             onClick={() => {
               setActiveBoundary(null)
+              setRenderedBoundary(null)
               onPickerOpenChange(false)
               onSelectionChange(selectPresetRangeForView(preset.value, view))
             }}
@@ -1002,15 +1138,25 @@ function CustomRangeSection({
           onOpen={() => openPicker('end')}
         />
       </div>
-      {activeBoundary ? (
-        <CustomDatePicker
-          anchorDate={pickerAnchorDate}
-          boundary={activeBoundary}
-          selectedDate={activeValue}
-          onAnchorDateChange={setPickerAnchorDate}
-          onSelect={handleDatePick}
-        />
-      ) : null}
+      <div
+        className={[
+          'time-date-picker-slot',
+          activeBoundary ? 'time-date-picker-slot--open' : 'time-date-picker-slot--closed',
+        ].join(' ')}
+        onTransitionEnd={handlePickerSlotTransitionEnd}
+      >
+        <div className="time-date-picker-slot__inner">
+          {pickerBoundary ? (
+            <CustomDatePicker
+              anchorDate={pickerAnchorDate}
+              boundary={pickerBoundary}
+              selectedDate={activeValue}
+              onAnchorDateChange={setPickerAnchorDate}
+              onSelect={handleDatePick}
+            />
+          ) : null}
+        </div>
+      </div>
     </section>
   )
 }
@@ -1292,6 +1438,7 @@ function DayCalendarSection({
   selection,
   calendarMode,
   isCollapsingWeek,
+  isExpandingMonth,
   navigationState,
   onCalendarModeChange,
   onSelectionChange,
@@ -1300,6 +1447,7 @@ function DayCalendarSection({
   selection: TimeRangeSelection
   calendarMode: CalendarDisplayMode
   isCollapsingWeek: boolean
+  isExpandingMonth: boolean
   navigationState: TimeNavigationState
   onCalendarModeChange: (mode: CalendarDisplayMode) => void
   onSelectionChange: (selection: TimeRangeSelection) => void
@@ -1426,13 +1574,16 @@ function DayCalendarSection({
           </div>
         </div>
       ) : (
-        <AnimatedDayCalendar
-          calendarMode={calendarMode}
-          isCollapsingWeek={isCollapsingWeek}
-          navigationState={navigationState}
-          selection={selection}
-          onSelectionChange={onSelectionChange}
-        />
+        <div className="time-calendar-body-slot">
+          <AnimatedDayCalendar
+            calendarMode={calendarMode}
+            isCollapsingWeek={isCollapsingWeek}
+            isExpandingMonth={isExpandingMonth}
+            navigationState={navigationState}
+            selection={selection}
+            onSelectionChange={onSelectionChange}
+          />
+        </div>
       )}
     </section>
   )
@@ -1441,12 +1592,14 @@ function DayCalendarSection({
 function AnimatedDayCalendar({
   calendarMode,
   isCollapsingWeek,
+  isExpandingMonth,
   navigationState,
   selection,
   onSelectionChange,
 }: {
   calendarMode: CalendarDisplayMode
   isCollapsingWeek: boolean
+  isExpandingMonth: boolean
   navigationState: TimeNavigationState
   selection: TimeRangeSelection
   onSelectionChange: (selection: TimeRangeSelection) => void
@@ -1455,7 +1608,11 @@ function AnimatedDayCalendar({
   const renderedRows = days.length / 7
   const visibleRows = calendarMode === 'week' ? 1 : renderedRows
   const activeWeekIndex = getVisibleMonthWeekIndex(selection.anchorDate)
-  const calendarBodyMode = isCollapsingWeek ? 'collapsing-week' : calendarMode
+  const calendarBodyMode = isCollapsingWeek
+    ? 'collapsing-week'
+    : isExpandingMonth
+      ? 'expanding-month'
+      : calendarMode
 
   return (
     <div
@@ -1494,7 +1651,6 @@ function AnimatedDayCalendar({
                 className={[
                   selection.start === day.date ? 'is-active' : null,
                   day.inCurrentMonth ? null : 'is-outside-month',
-                  calendarBodyMode === 'week' &&
                   Math.floor(index / 7) === activeWeekIndex
                     ? 'is-visible-week'
                     : null,

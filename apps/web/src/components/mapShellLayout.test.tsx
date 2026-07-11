@@ -1138,12 +1138,18 @@ describe('unified shell layout', () => {
 
     expect(monthBody).toBe(weekBody)
     expect(monthGrid).toBe(weekGrid)
-    expect(monthBody).toHaveClass('time-calendar-body--month')
+    expect(monthBody).toHaveClass('time-calendar-body--expanding-month')
     expect(monthBody).toHaveStyle({ '--time-calendar-visible-rows': '5' })
     expect(monthBody).toHaveStyle({ '--time-calendar-active-week-index': '2' })
     expect(monthButtons).toHaveLength(35)
     expect(monthButtons[14]).toBe(weekButtons[14])
     expect(monthButtons[20]).toBe(weekButtons[20])
+
+    act(() => {
+      vi.advanceTimersByTime(260)
+    })
+
+    expect(monthBody).toHaveClass('time-calendar-body--month')
 
     fireEvent.click(screen.getByRole('button', { name: '周历' }))
 
@@ -1162,8 +1168,14 @@ describe('unified shell layout', () => {
     const weekBody = screen.getByLabelText('日历日期').closest('.time-calendar-body')
 
     fireEvent.click(screen.getByRole('button', { name: '月历' }))
-    expect(weekBody).toHaveClass('time-calendar-body--month')
+    expect(weekBody).toHaveClass('time-calendar-body--expanding-month')
     expect(weekBody).toHaveStyle({ '--time-calendar-visible-rows': '5' })
+
+    act(() => {
+      vi.advanceTimersByTime(260)
+    })
+
+    expect(weekBody).toHaveClass('time-calendar-body--month')
 
     fireEvent.click(screen.getByRole('button', { name: '周历' }))
 
@@ -1191,6 +1203,14 @@ describe('unified shell layout', () => {
 
     expectPersistentTimeEditor()
     fireEvent.click(screen.getByRole('button', { name: '月历' }))
+
+    expect(screen.getByLabelText('日历日期').closest('.time-calendar-body')).toHaveClass(
+      'time-calendar-body--expanding-month',
+    )
+
+    act(() => {
+      vi.advanceTimersByTime(260)
+    })
 
     expect(screen.getByLabelText('日历日期').closest('.time-calendar-body')).toHaveClass(
       'time-calendar-body--month',

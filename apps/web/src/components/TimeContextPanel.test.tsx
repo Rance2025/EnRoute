@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest'
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -88,6 +88,11 @@ function createDateKeyFromOffset(startDateKey: string, offsetDays: number) {
     String(date.getMonth() + 1).padStart(2, '0'),
     String(date.getDate()).padStart(2, '0'),
   ].join('-')
+}
+
+function getActiveWeekButtonLabels(container: HTMLElement) {
+  return Array.from(container.querySelectorAll('.time-calendar-grid button.is-visible-week'))
+    .map((button) => button.textContent ?? '')
 }
 
 describe('TimeContextPanel', () => {
@@ -467,6 +472,35 @@ describe('TimeContextPanel', () => {
     expect(bars.filter((bar) => bar.classList.contains('is-active'))).toEqual([bars[170]])
   })
 
+  it('does not redraw stale grouped year buckets as daily month columns while new metrics load', () => {
+    const { container, rerender } = render(
+      <TimeContextPanel
+        view="map"
+        selection={selectYear(2026)}
+        distanceSeries={denseYearDistanceSeries}
+        onSelectionChange={vi.fn()}
+      />,
+    )
+
+    const trend = container.querySelector('.time-context-trend') as HTMLElement
+
+    expect(trend).not.toHaveClass('is-hidden')
+    expect(container.querySelectorAll('.time-context-trend__column')).toHaveLength(122)
+
+    rerender(
+      <TimeContextPanel
+        view="map"
+        selection={selectMonth(2026, 6)}
+        distanceSeries={denseYearDistanceSeries}
+        onSelectionChange={vi.fn()}
+      />,
+    )
+
+    expect(trend).toHaveClass('is-hidden')
+    expect(container.querySelectorAll('.time-context-trend__column')).toHaveLength(0)
+    expect(within(trend).queryByRole('button', { name: '\u9010\u65e5' })).not.toBeInTheDocument()
+  })
+
   it('maps pointer movement anywhere in the chart area to the bucket under the same x position', () => {
     const { container } = render(
       <TimeContextPanel
@@ -500,7 +534,7 @@ describe('TimeContextPanel', () => {
   })
 
   it('keeps the map distance chart in place and fades it while day mode shows the month calendar', () => {
-    render(
+    const { container } = render(
       <StatefulMapTimeContextPanel
         initialSelection={selectDay('2026-06-19')}
         distanceSeries={hourlyDistanceSeries}
@@ -508,34 +542,90 @@ describe('TimeContextPanel', () => {
       />,
     )
 
+    const editor = container.querySelector('#time-range-editor')
+
+    expect(editor).not.toHaveAttribute('data-time-panel-overlay')
     expect(screen.getByLabelText('当前范围距离')).toBeInTheDocument()
+    expect(container.querySelector('.time-calendar-body')).toHaveClass(
+      'time-calendar-body--week',
+    )
+    const activeWeekButtonLabels = getActiveWeekButtonLabels(container)
+
+    expect(activeWeekButtonLabels).toHaveLength(7)
 
     fireEvent.click(screen.getByRole('button', { name: '月历' }))
 
     expect(screen.getByLabelText('当前范围距离')).toHaveClass('is-hidden')
+    expect(editor).toHaveAttribute('data-time-panel-overlay', 'true')
+    expect(container.querySelector('.time-calendar-body')).toHaveClass(
+      'time-calendar-body--expanding-month',
+    )
+    expect(getActiveWeekButtonLabels(container)).toEqual(activeWeekButtonLabels)
+
+    act(() => {
+      vi.advanceTimersByTime(260)
+    })
+
+    expect(container.querySelector('.time-calendar-body')).toHaveClass(
+      'time-calendar-body--month',
+    )
+    expect(getActiveWeekButtonLabels(container)).toEqual(activeWeekButtonLabels)
 
     fireEvent.click(screen.getByRole('button', { name: '周历' }))
 
+    expect(editor).toHaveAttribute('data-time-panel-overlay', 'true')
+    expect(screen.getByLabelText('当前范围距离')).toHaveClass('is-hidden')
+    expect(container.querySelector('.time-calendar-body')).toHaveClass(
+      'time-calendar-body--collapsing-week',
+    )
+    expect(getActiveWeekButtonLabels(container)).toEqual(activeWeekButtonLabels)
+
+    act(() => {
+      vi.advanceTimersByTime(260)
+    })
+
+    expect(editor).not.toHaveAttribute('data-time-panel-overlay')
     expect(screen.getByLabelText('当前范围距离')).not.toHaveClass('is-hidden')
+    expect(container.querySelector('.time-calendar-body')).toHaveClass(
+      'time-calendar-body--week',
+    )
+    expect(getActiveWeekButtonLabels(container)).toEqual(activeWeekButtonLabels)
   })
 
   it('keeps the map distance chart in place and fades it while a custom date picker is expanded', () => {
-    render(
+    const { container } = render(
       <StatefulMapTimeContextPanel
-        initialSelection={setCustomDateRange('2026-06-10', '2026-06-12')}
+        initialSelection={setCustomDateRange('2026-06-18', '2026-06-20')}
         distanceSeries={dailyDistanceSeries}
         onSelectionChange={vi.fn()}
       />,
     )
 
+    const editor = container.querySelector('#time-range-editor')
+    const pickerSlot = container.querySelector('.time-date-picker-slot')
+
+    expect(editor).not.toHaveAttribute('data-time-panel-overlay')
     expect(screen.getByLabelText('当前范围距离')).toBeInTheDocument()
+    expect(pickerSlot).toHaveClass('time-date-picker-slot--closed')
+    expect(container.querySelector('.time-date-picker')).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: /打开开始日期选择器/ }))
 
     expect(screen.getByLabelText('当前范围距离')).toHaveClass('is-hidden')
+    expect(editor).toHaveAttribute('data-time-panel-overlay', 'true')
+    expect(pickerSlot).toHaveClass('time-date-picker-slot--open')
+    expect(container.querySelector('.time-date-picker')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: /打开开始日期选择器/ }))
 
+    expect(editor).toHaveAttribute('data-time-panel-overlay', 'true')
+    expect(pickerSlot).toHaveClass('time-date-picker-slot--closed')
+    expect(container.querySelector('.time-date-picker')).toBeInTheDocument()
+
+    fireEvent.transitionEnd(pickerSlot as Element)
+
+    expect(editor).not.toHaveAttribute('data-time-panel-overlay')
+    expect(container.querySelector('.time-date-picker')).not.toBeInTheDocument()
     expect(screen.getByLabelText('当前范围距离')).not.toHaveClass('is-hidden')
   })
 
