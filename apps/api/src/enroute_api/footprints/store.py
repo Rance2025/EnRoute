@@ -47,6 +47,8 @@ from enroute_api.map_tiles.mvt import encode_footprint_mvt
 TILE_SIZE = 256
 MAX_MERCATOR_LATITUDE = 85.05112878
 OPEN_ENDED_TIMESTAMP_SECONDS = 8_640_000_000_000
+QUARTER_HOUR_SECONDS = 15 * 60
+QUARTER_HOURS_PER_DAY = 24 * 4
 ADMIN_REGION_LOADER_VERSION = "admin-regions-v2"
 ADMIN_REGION_STATS_SIGNATURE_KEY = "adminRegionStatsSignature"
 FOOTPRINT_COLUMNS = [
@@ -1163,12 +1165,12 @@ def query_distance_series(
     day_count = max(int(time_range["dayCount"]), 1)
 
     if day_count == 1:
-        return query_hourly_distance_series(connection, time_range)
+        return query_quarter_hour_distance_series(connection, time_range)
 
     return query_daily_distance_series(connection, time_range)
 
 
-def query_hourly_distance_series(
+def query_quarter_hour_distance_series(
     connection: sqlite3.Connection,
     time_range: dict[str, int],
 ) -> dict[str, object]:
@@ -1178,37 +1180,42 @@ def query_hourly_distance_series(
         start_date.month,
         start_date.day,
     )
-    distance_by_hour = {
-        int(row["bucketHour"]): float(row["distanceMeters"])
+    distance_by_bucket = {
+        int(row["bucketIndex"]): float(row["distanceMeters"])
         for row in connection.execute(
             """
             SELECT
-              CAST((timestamp_seconds - ?) / 3600 AS INTEGER) AS bucketHour,
+              CAST((timestamp_seconds - ?) / ? AS INTEGER) AS bucketIndex,
               COALESCE(SUM(CASE WHEN distance > 0 THEN distance ELSE 0 END), 0) AS distanceMeters
             FROM footprints
             WHERE timestamp_seconds >= ?
               AND timestamp_seconds <= ?
-            GROUP BY bucketHour
+            GROUP BY bucketIndex
             """,
             (
                 day_start_timestamp,
+                QUARTER_HOUR_SECONDS,
                 time_range["startTimestampSeconds"],
                 time_range["endTimestampSeconds"],
             ),
         )
     }
+    buckets: list[dict[str, object]] = []
+    for bucket_index in range(QUARTER_HOURS_PER_DAY):
+        hour, quarter = divmod(bucket_index, 4)
+        label = f"{hour:02d}:{quarter * 15:02d}"
+        buckets.append(
+            {
+                "key": f"{start_date.isoformat()}T{label}",
+                "label": label,
+                "distanceMeters": distance_by_bucket.get(bucket_index, 0),
+            },
+        )
 
     return {
-        "granularity": "hour",
-        "unit": "hour",
-        "buckets": [
-            {
-                "key": f"{start_date.isoformat()}T{hour:02d}",
-                "label": f"{hour:02d}:00",
-                "distanceMeters": distance_by_hour.get(hour, 0),
-            }
-            for hour in range(24)
-        ],
+        "granularity": "quarter-hour",
+        "unit": "quarter-hour",
+        "buckets": buckets,
     }
 
 
