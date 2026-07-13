@@ -12,6 +12,7 @@ const mapboxCanvasSource = readFileSync('src/components/MapboxCanvas.tsx', 'utf8
 const mapControlsSource = readFileSync('src/components/MapControls.tsx', 'utf8')
 const segmentedControlSource = readFileSync('src/components/SegmentedControl.tsx', 'utf8')
 const timeContextPanelSource = readFileSync('src/components/TimeContextPanel.tsx', 'utf8')
+const adminRegionContextPanelSource = readFileSync('src/components/AdminRegionContextPanel.tsx', 'utf8')
 
 function cssRule(selector: string) {
   const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -133,7 +134,9 @@ describe('map chrome layout', () => {
     )
     expect(appSource).toContain('className="glass-panel glass-panel--solid glass-panel--card right-context-panel__glass right-context-panel__summary"')
     expect(appSource).toContain('className="glass-panel glass-panel--solid glass-panel--card right-context-panel__glass right-context-panel__legend"')
-    expect(appSource).toContain('className="right-context-panel__depth-control admin-region-depth-control"')
+    expect(adminRegionContextPanelSource).toContain(
+      'className="glass-panel glass-panel--solid glass-panel--card right-context-panel__glass admin-region-atlas-card"',
+    )
     expect(appSource).toContain('className="glass-panel glass-panel--solid glass-panel--compact settings-dialog__panel"')
     expect(mapControlsSource).toContain('className="glass-panel glass-panel--solid glass-panel--pill map-toolbar"')
     expect(mapControlsSource).toContain('className="glass-panel glass-panel--solid glass-panel--card footprint-style-popover"')
@@ -1940,12 +1943,13 @@ describe('map chrome layout', () => {
   })
 
   it('places administrative region depth controls inside the right context panel', () => {
-    const depthRule = cssRule('.right-context-panel__depth-control')
+    const depthRule = cssRule('.admin-region-atlas-card__depth-control')
 
-    expect(appSource).toContain('function AdminRegionDepthControl')
-    expect(mapboxCanvasSource).not.toContain('<AdminRegionDepthControl')
+    expect(appSource).toContain('<AdminRegionContextPanel')
+    expect(adminRegionContextPanelSource).toContain('aria-label="行政区层级"')
+    expect(mapboxCanvasSource).not.toContain('<AdminRegionContextPanel')
     expect(depthRule).toContain('display: grid')
-    expect(depthRule).toContain('grid-template-columns: repeat(2, minmax(0, 1fr))')
+    expect(depthRule).toContain('grid-template-columns: repeat(4, minmax(0, 1fr))')
   })
 
   it('places legacy AMap administrative region unlock controls as a separate map overlay above the toolbar', () => {
