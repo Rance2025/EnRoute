@@ -37,8 +37,10 @@ def query_admin_region_statistics(
             AND (
               :depth != 1
               OR (
-                LOWER(TRIM(name)) != 'antarctica'
-                AND LOWER(TRIM(id)) NOT IN ('aq', 'ata', '010', 'country:aq', 'country:ata')
+                LOWER(TRIM(name)) NOT IN ('antarctica', '南极洲')
+                AND LOWER(TRIM(id)) NOT IN (
+                  'aq', 'ata', '010', 'country:aq', 'country:ata', 'country:010'
+                )
                 AND LOWER(TRIM(id)) NOT LIKE '%:aq'
                 AND LOWER(TRIM(id)) NOT LIKE '%:ata'
               )
@@ -98,6 +100,7 @@ def query_admin_region_statistics(
 
     ranking_rows = [row for row in rows if row["region_id"] is not None]
     return {
+        "depth": depth,
         "totalCount": int(rows[0]["total_count"]),
         "visitedCount": len(ranking_rows),
         "visitedRegionIds": sorted(str(row["region_id"]) for row in ranking_rows),

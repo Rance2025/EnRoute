@@ -33,6 +33,7 @@ def test_aggregates_finest_regions_to_requested_depth(connection: sqlite3.Connec
     )
 
     assert result == {
+        "depth": 3,
         "totalCount": 2,
         "visitedCount": 2,
         "visitedRegionIds": ["310100", "330100"],
@@ -74,6 +75,7 @@ def test_filters_the_ranking_by_date_and_depth(connection: sqlite3.Connection):
     )
 
     assert result == {
+        "depth": 4,
         "totalCount": 2,
         "visitedCount": 1,
         "visitedRegionIds": ["330106"],
@@ -127,7 +129,9 @@ def test_excludes_antarctica_from_depth_one_total(connection: sqlite3.Connection
         """,
         [
             ("antarctica-by-name", "Antarctica"),
+            ("antarctica-by-chinese-name", "南极洲"),
             ("aq", "Southern region"),
+            ("country:010", "Southern country code"),
             ("overture:division:country:ata", "Southern division"),
         ],
     )
@@ -141,6 +145,46 @@ def test_excludes_antarctica_from_depth_one_total(connection: sqlite3.Connection
 
     assert result["totalCount"] == 1
     assert result["visitedRegionIds"] == ["cn"]
+
+
+def test_query_is_read_only_and_only_accesses_summary_tables(connection: sqlite3.Connection):
+    allowed_actions = {
+        sqlite3.SQLITE_SELECT,
+        sqlite3.SQLITE_READ,
+        sqlite3.SQLITE_FUNCTION,
+        sqlite3.SQLITE_RECURSIVE,
+    }
+    attempted_non_read_actions: list[tuple[int, str | None]] = []
+    accessed_tables: set[str] = set()
+
+    def authorize(
+        action_code: int,
+        table_name: str | None,
+        _column_name: str | None,
+        _database_name: str | None,
+        _trigger_name: str | None,
+    ) -> int:
+        if action_code == sqlite3.SQLITE_READ and table_name is not None:
+            accessed_tables.add(table_name)
+        if action_code not in allowed_actions:
+            attempted_non_read_actions.append((action_code, table_name))
+            return sqlite3.SQLITE_DENY
+        return sqlite3.SQLITE_OK
+
+    connection.set_authorizer(authorize)
+    try:
+        result = query_admin_region_statistics(
+            connection,
+            depth=3,
+            start_timestamp_seconds=FIRST_DAY_START,
+            end_timestamp_seconds=SECOND_DAY_START - 1,
+        )
+    finally:
+        connection.set_authorizer(None)
+
+    assert result["visitedCount"] == 2
+    assert attempted_non_read_actions == []
+    assert accessed_tables == {"footprints", "admin_region_tree", "admin_regions"}
 
 
 @pytest.mark.parametrize("depth", [0, 5])
