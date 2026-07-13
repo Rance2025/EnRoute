@@ -96,6 +96,78 @@ def test_filters_the_ranking_by_date_and_depth(connection: sqlite3.Connection):
     }
 
 
+def test_stops_recursive_ancestry_at_a_repeated_region(connection: sqlite3.Connection):
+    connection.executemany(
+        """
+        INSERT INTO admin_regions (
+          id, name, level, geometry, min_lng, max_lng, min_lat, max_lat
+        ) VALUES (?, ?, ?, '{}', ?, ?, ?, ?)
+        """,
+        [
+            ("cycle-parent", "Cycle parent", 3, 100.0, 101.0, 20.0, 21.0),
+            ("cycle-child", "Cycle child", 4, 100.2, 100.8, 20.2, 20.8),
+        ],
+    )
+    connection.executemany(
+        "INSERT INTO admin_region_tree (parent_id, child_id) VALUES (?, ?)",
+        [
+            ("cycle-parent", "cycle-child"),
+            ("cycle-child", "cycle-parent"),
+        ],
+    )
+    footprint_timestamp = SECOND_DAY_START + 100
+    connection.execute(
+        """
+        INSERT INTO footprints (
+          timestamp_seconds, longitude, latitude, accuracy, speed,
+          distance, heading, altitude, region_id
+        ) VALUES (?, 100.5, 20.5, 5, 0, 0, 0, 0, 'cycle-child')
+        """,
+        (footprint_timestamp,),
+    )
+    connection.commit()
+
+    progress_calls = 0
+
+    def interrupt_runaway_query() -> int:
+        nonlocal progress_calls
+        progress_calls += 1
+        return int(progress_calls >= 100)
+
+    connection.set_progress_handler(interrupt_runaway_query, 1_000)
+    try:
+        result = query_admin_region_statistics(
+            connection,
+            depth=3,
+            start_timestamp_seconds=footprint_timestamp,
+            end_timestamp_seconds=footprint_timestamp,
+        )
+    finally:
+        connection.set_progress_handler(None, 0)
+
+    assert progress_calls < 100
+    assert result == {
+        "depth": 3,
+        "totalCount": 3,
+        "visitedCount": 1,
+        "visitedRegionIds": ["cycle-parent"],
+        "rankings": [
+            {
+                "rank": 1,
+                "regionId": "cycle-parent",
+                "name": "Cycle parent",
+                "footprintCount": 1,
+                "bounds": {
+                    "west": 100.0,
+                    "south": 20.0,
+                    "east": 101.0,
+                    "north": 21.0,
+                },
+            },
+        ],
+    }
+
+
 def test_orders_ties_by_name_then_region_id(connection: sqlite3.Connection):
     result = query_admin_region_statistics(
         connection,

@@ -24,7 +24,7 @@ def query_admin_region_statistics(
             AND region_id IS NOT NULL
             AND TRIM(region_id) != ''
 
-          UNION ALL
+          UNION
 
           SELECT ancestry.footprint_timestamp_seconds, tree.parent_id
           FROM ancestry
