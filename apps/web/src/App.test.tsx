@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest'
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('./components/MapboxCanvas', async () => {
@@ -7,13 +7,21 @@ vi.mock('./components/MapboxCanvas', async () => {
 
   return {
     MapboxCanvas: ({
+      adminRegionVisibleIds,
       adminBoundariesVisible,
+      adminRegionLinesVisible,
+      footprintsVisible,
+      selectedAdminRegion,
       placeLabelsVisible,
       projection,
       onFootprintMetricsChange,
       onMapProjectionChange,
     }: {
+      adminRegionVisibleIds?: string[] | null
       adminBoundariesVisible?: boolean
+      adminRegionLinesVisible?: boolean
+      footprintsVisible?: boolean
+      selectedAdminRegion?: { regionId: string } | null
       placeLabelsVisible?: boolean
       projection?: string
       onFootprintMetricsChange?: (metrics: {
@@ -54,7 +62,15 @@ vi.mock('./components/MapboxCanvas', async () => {
         {
           className: 'map-stage',
           'data-testid': 'mapbox-canvas',
+          'data-admin-region-visible-ids': adminRegionVisibleIds === undefined
+            ? 'legacy'
+            : adminRegionVisibleIds === null
+              ? 'all'
+              : adminRegionVisibleIds.join(','),
           'data-admin-boundaries-visible': String(adminBoundariesVisible),
+          'data-admin-region-lines-visible': String(adminRegionLinesVisible),
+          'data-footprints-visible': String(footprintsVisible),
+          'data-selected-admin-region-id': selectedAdminRegion?.regionId,
           'data-place-labels-visible': String(placeLabelsVisible),
           'data-projection': projection,
           'aria-label': '在途 EnRoute 地图工作区',
@@ -86,7 +102,33 @@ vi.mock('./components/MapboxCanvas', async () => {
   }
 })
 
+const adminRegionSummaryFixture = {
+  depth: 1 as const,
+  visitedRegionIds: ['CN'],
+  visitedCount: 1,
+  totalCount: 200,
+  thumbnail: { viewBox: '0 0 320 150', basePath: 'M0 0Z', visitedPath: 'M1 1Z' },
+  rankings: [{
+    rank: 1,
+    regionId: 'CN',
+    name: '中国',
+    footprintCount: 120,
+    bounds: { west: 73, south: 18, east: 135, north: 54 },
+  }],
+}
+
+vi.mock('./layers/adminRegionSummaryDataSource', async () => {
+  const actual = await vi.importActual<typeof import('./layers/adminRegionSummaryDataSource')>(
+    './layers/adminRegionSummaryDataSource',
+  )
+  return {
+    ...actual,
+    loadAdminRegionSummary: vi.fn(async () => adminRegionSummaryFixture),
+  }
+})
+
 import App from './App'
+import { loadAdminRegionSummary } from './layers/adminRegionSummaryDataSource'
 import {
   SECONDARY_NAV_RAIL_WIDTH,
   calculateAvailableMapShellWidth,
@@ -377,6 +419,55 @@ describe('App', () => {
     expect(shell.querySelector(':scope > .app-nav')).toBeNull()
     expect(shell.querySelector(':scope > .time-context-panel')).toBeNull()
     expect(shell.querySelector(':scope > .right-context-panel')).toBeNull()
+  })
+
+  it('shows the region cards and uses visited ids by default in region mode', async () => {
+    render(<App amapConfig={missingAmapConfig} />)
+    await settleLazyImports()
+
+    fireEvent.click(within(screen.getByRole('navigation', { name: '二级导航' }))
+      .getByRole('button', { name: '区域' }))
+
+    expect(await screen.findByRole('heading', { name: '足迹版图' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '国家足迹排行' })).toBeInTheDocument()
+    expect(screen.queryByRole('switch', { name: '仅显示当前时间有足迹的区域' }))
+      .not.toBeInTheDocument()
+    await waitFor(() => expect(screen.getByTestId('mapbox-canvas')).toHaveAttribute(
+      'data-admin-region-visible-ids',
+      adminRegionSummaryFixture.visitedRegionIds.join(','),
+    ))
+    expect(screen.getByTestId('mapbox-canvas')).toHaveAttribute('data-footprints-visible', 'false')
+    expect(loadAdminRegionSummary).toHaveBeenCalledWith(expect.objectContaining({ depth: 1 }))
+  })
+
+  it('moves region range and footprint switches into map settings', async () => {
+    render(<App amapConfig={missingAmapConfig} />)
+    await settleLazyImports()
+
+    fireEvent.click(within(screen.getByRole('navigation', { name: '二级导航' }))
+      .getByRole('button', { name: '区域' }))
+    await screen.findByRole('heading', { name: '足迹版图' })
+
+    fireEvent.click(screen.getByRole('button', { name: '打开设置' }))
+    const dialog = screen.getByRole('dialog', { name: '设置' })
+    fireEvent.click(within(dialog).getByRole('button', { name: '地图' }))
+
+    const showAll = within(dialog).getByRole('switch', { name: '显示全部行政区' })
+    const showPoints = within(dialog).getByRole('switch', { name: '在区域页显示足迹点' })
+
+    expect(showAll).toHaveAttribute('aria-checked', 'false')
+    expect(showPoints).toHaveAttribute('aria-checked', 'false')
+
+    fireEvent.click(showAll)
+    fireEvent.click(showPoints)
+
+    expect(screen.getByTestId('mapbox-canvas')).toHaveAttribute(
+      'data-admin-region-visible-ids',
+      'all',
+    )
+    expect(screen.getByTestId('mapbox-canvas')).toHaveAttribute('data-footprints-visible', 'true')
+    expect(window.localStorage.getItem('enroute:show-all-admin-regions')).toBe('true')
+    expect(window.localStorage.getItem('enroute:show-footprints-in-region-mode')).toBe('true')
   })
 
   it('shows a setup message when Mapbox credentials are missing', async () => {

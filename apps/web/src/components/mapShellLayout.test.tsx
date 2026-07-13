@@ -35,6 +35,7 @@ vi.mock('./MapboxCanvas', async () => {
     MapboxCanvas: ({
       adminRegionUnlockEnabled = false,
       adminRegionActiveOnly = false,
+      adminRegionVisibleIds,
       adminRegionDepth = 4,
       adminBoundariesVisible = true,
       adminRegionLinesVisible = true,
@@ -51,6 +52,7 @@ vi.mock('./MapboxCanvas', async () => {
     }: {
       adminRegionUnlockEnabled?: boolean
       adminRegionActiveOnly?: boolean
+      adminRegionVisibleIds?: string[] | null
       adminRegionDepth?: number
       adminBoundariesVisible?: boolean
       adminRegionLinesVisible?: boolean
@@ -79,6 +81,11 @@ vi.mock('./MapboxCanvas', async () => {
           className: 'map-stage',
           'data-admin-region-unlock-enabled': String(adminRegionUnlockEnabled),
           'data-admin-region-active-only': String(adminRegionActiveOnly),
+          'data-admin-region-visible-ids': adminRegionVisibleIds === undefined
+            ? 'legacy'
+            : adminRegionVisibleIds === null
+              ? 'all'
+              : adminRegionVisibleIds.join(','),
           'data-admin-region-depth': String(adminRegionDepth),
           'data-admin-boundaries-visible': String(adminBoundariesVisible),
           'data-admin-region-lines-visible': String(adminRegionLinesVisible),
@@ -615,7 +622,7 @@ describe('unified shell layout', () => {
     expect(screen.queryByText('行政区划图层迁移中')).not.toBeInTheDocument()
   })
 
-  it('moves administrative region depth controls into the right context panel', async () => {
+  it('moves administrative region depth controls into the atlas card', async () => {
     render(<App amapConfig={configuredAmap} />)
     await settleLazyImports()
     const mapStage = document.querySelector('.map-stage')
@@ -627,37 +634,37 @@ describe('unified shell layout', () => {
 
     fireEvent.click(within(rail).getByRole('button', { name: '区域' }))
 
-    const depthControl = rightPanel?.querySelector('.right-context-panel__depth-control')
+    const depthControl = rightPanel?.querySelector('.admin-region-atlas-card__depth-control')
     expect(depthControl).toBeInstanceOf(HTMLElement)
     expect(document.querySelector('.map-stage > .admin-region-depth-control')).toBeNull()
     expect(mapStage).toHaveAttribute('data-admin-region-depth', '1')
 
-    const districtButton = within(depthControl as HTMLElement).getByRole('button', { name: '中国区县' })
+    const districtButton = within(depthControl as HTMLElement).getByRole('button', { name: '区' })
     fireEvent.click(districtButton)
 
     expect(mapStage).toHaveAttribute('data-admin-region-depth', '4')
     expect(districtButton).toHaveAttribute('aria-pressed', 'true')
   })
 
-  it('passes the active-region-only switch state from the right context panel to the map', async () => {
+  it('passes the show-all-admin-regions setting state to the map', async () => {
     render(<App amapConfig={configuredAmap} />)
     await settleLazyImports()
     const mapStage = document.querySelector('.map-stage')
     const rail = screen.getByRole('navigation', { name: '二级导航' })
 
-    expect(mapStage).toHaveAttribute('data-admin-region-active-only', 'false')
-
     fireEvent.click(within(rail).getByRole('button', { name: '区域' }))
+    expect(mapStage).toHaveAttribute('data-admin-region-visible-ids', '')
 
-    const activeOnlySwitch = screen.getByRole('switch', {
-      name: '仅显示当前时间有足迹的区域',
-    })
-    expect(activeOnlySwitch).toHaveAttribute('aria-checked', 'false')
+    fireEvent.click(screen.getByRole('button', { name: '打开设置' }))
+    const dialog = screen.getByRole('dialog', { name: '设置' })
+    fireEvent.click(within(dialog).getByRole('button', { name: '地图' }))
+    const showAllSwitch = within(dialog).getByRole('switch', { name: '显示全部行政区' })
+    expect(showAllSwitch).toHaveAttribute('aria-checked', 'false')
 
-    fireEvent.click(activeOnlySwitch)
+    fireEvent.click(showAllSwitch)
 
-    expect(activeOnlySwitch).toHaveAttribute('aria-checked', 'true')
-    expect(mapStage).toHaveAttribute('data-admin-region-active-only', 'true')
+    expect(showAllSwitch).toHaveAttribute('aria-checked', 'true')
+    expect(mapStage).toHaveAttribute('data-admin-region-visible-ids', 'all')
   })
 
   it('rounds footprint point opacity controls to 0.01 precision through the slider', async () => {
