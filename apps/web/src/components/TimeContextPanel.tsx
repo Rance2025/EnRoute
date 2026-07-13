@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
   type TransitionEvent as ReactTransitionEvent,
 } from 'react'
@@ -111,6 +112,16 @@ const DISTANCE_TREND_GROUP_TARGET = 120
 const DISTANCE_TREND_GROUP_MIN = 100
 const DISTANCE_TREND_GROUP_MAX = 160
 const DISTANCE_TREND_CUSTOM_GROUP_THRESHOLD = 200
+const SHANGHAI_DATE_TIME_FORMATTER = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Asia/Shanghai',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hourCycle: 'h23',
+})
 
 function TimeArrowIcon({ direction }: { direction: -1 | 1 }) {
   const Icon = direction === -1 ? ChevronLeft : ChevronRight
@@ -197,6 +208,7 @@ export function TimeContextPanel({
   const activeTrendBucket = activeTrendIndex === null
     ? null
     : distanceTrend.values[activeTrendIndex] ?? null
+  const rovingTrendIndex = activeTrendBucket ? activeTrendIndex : 0
   const shouldRenderDistanceTrend = view === 'map'
   const isEditorOverlayOpen = shouldRenderDistanceTrend && ((
     selection.mode === 'day' &&
@@ -291,6 +303,28 @@ export function TimeContextPanel({
     )
 
     setActiveTrendIndex((current) => (current === nextIndex ? current : nextIndex))
+  }
+
+  function handleTrendOptionKeyDown(
+    event: ReactKeyboardEvent<HTMLSpanElement>,
+    currentIndex: number,
+  ) {
+    const lastIndex = distanceTrend.values.length - 1
+    if (lastIndex < 0) return
+
+    let nextIndex: number | null = null
+
+    if (event.key === 'ArrowLeft') nextIndex = Math.max(currentIndex - 1, 0)
+    if (event.key === 'ArrowRight') nextIndex = Math.min(currentIndex + 1, lastIndex)
+    if (event.key === 'Home') nextIndex = 0
+    if (event.key === 'End') nextIndex = lastIndex
+    if (nextIndex === null) return
+
+    event.preventDefault()
+    setActiveTrendIndex(nextIndex)
+    const options = event.currentTarget.parentElement
+      ?.querySelectorAll<HTMLElement>('.time-context-trend__column')
+    options?.[nextIndex]?.focus()
   }
 
   function handleTrendGroupingToggle() {
@@ -465,14 +499,18 @@ export function TimeContextPanel({
               ]
                 .filter(Boolean)
                 .join(' ')}
-              role="img"
+              role="listbox"
+              aria-orientation="horizontal"
               aria-label={`${distanceTrend.title}，${distanceTrend.averageLabel}`}
               style={{
                 '--trend-average-position': distanceTrend.averagePosition,
                 '--trend-column-count': distanceTrend.values.length,
               } as CSSProperties}
               onPointerMove={handleTrendPointerMove}
-              onPointerLeave={() => setActiveTrendIndex(null)}
+              onPointerLeave={(event) => {
+                if (event.currentTarget.contains(document.activeElement)) return
+                setActiveTrendIndex(null)
+              }}
             >
               <div className="time-context-trend__plot">
                 <div className="time-context-trend__average-line" />
@@ -482,8 +520,9 @@ export function TimeContextPanel({
                 {distanceTrend.values.map((item, index) => (
                   <span
                     key={item.key}
-                    role="button"
-                    tabIndex={0}
+                    role="option"
+                    tabIndex={rovingTrendIndex === index ? 0 : -1}
+                    aria-selected={activeTrendIndex === index}
                     aria-label={`${item.label}，${item.formattedValue}`}
                     className={[
                       'time-context-trend__column',
@@ -492,13 +531,17 @@ export function TimeContextPanel({
                       .filter(Boolean)
                       .join(' ')}
                     onPointerEnter={() => setActiveTrendIndex(index)}
-                    onPointerLeave={() => setActiveTrendIndex((current) => (
-                      current === index ? null : current
-                    ))}
+                    onPointerLeave={(event) => {
+                      if (event.currentTarget === document.activeElement) return
+                      setActiveTrendIndex((current) => (
+                        current === index ? null : current
+                      ))
+                    }}
                     onFocus={() => setActiveTrendIndex(index)}
                     onBlur={() => setActiveTrendIndex((current) => (
                       current === index ? null : current
                     ))}
+                    onKeyDown={(event) => handleTrendOptionKeyDown(event, index)}
                   >
                     <span
                       className={[
@@ -750,8 +793,7 @@ function getDistanceTrendAverage(
 
   if (granularity === 'quarter-hour') return getQuarterHourDistanceTrendAverage(buckets)
 
-  const now = new Date()
-  const todayKey = formatLocalDateKey(now)
+  const { dateKey: todayKey } = getShanghaiDateTime(new Date())
   const elapsedBuckets = buckets.filter((bucket) => {
     const dayKey = bucket.key.slice(0, 10)
 
@@ -775,8 +817,8 @@ function getDistanceTrendAverage(
 }
 
 function getQuarterHourDistanceTrendAverage(buckets: FootprintDistanceBucket[]) {
-  const now = new Date()
-  const todayKey = formatLocalDateKey(now)
+  const shanghaiNow = getShanghaiDateTime(new Date())
+  const todayKey = shanghaiNow.dateKey
   const bucketDateKey = buckets[0]?.key.slice(0, 10) ?? ''
 
   if (bucketDateKey > todayKey) {
@@ -796,15 +838,14 @@ function getQuarterHourDistanceTrendAverage(buckets: FootprintDistanceBucket[]) 
     }
   }
 
-  const selectedDayStart = new Date(`${bucketDateKey}T00:00:00`)
   const elapsedQuarterHours = Math.min(
-    Math.max((now.getTime() - selectedDayStart.getTime()) / (15 * 60 * 1000), 0),
+    Math.max(shanghaiNow.secondsSinceStartOfDay / (15 * 60), 0),
     96,
   )
   const elapsedDistanceMeters = buckets.reduce((total, bucket) => {
-    const bucketStart = new Date(`${bucket.key}:00`)
+    const bucketStartSeconds = getQuarterHourBucketStartSeconds(bucket.key)
 
-    if (bucketStart >= now) return total
+    if (bucketStartSeconds > shanghaiNow.secondsSinceStartOfDay) return total
 
     return total + Math.max(bucket.distanceMeters, 0)
   }, 0)
@@ -815,12 +856,28 @@ function getQuarterHourDistanceTrendAverage(buckets: FootprintDistanceBucket[]) 
   }
 }
 
-function formatLocalDateKey(date: Date) {
-  const year = date.getFullYear()
-  const month = `${date.getMonth() + 1}`.padStart(2, '0')
-  const day = `${date.getDate()}`.padStart(2, '0')
+function getShanghaiDateTime(date: Date) {
+  const parts = SHANGHAI_DATE_TIME_FORMATTER.formatToParts(date)
+  const getPart = (type: 'year' | 'month' | 'day' | 'hour' | 'minute' | 'second') => (
+    parts.find((part) => part.type === type)?.value ?? '0'
+  )
+  const year = getPart('year')
+  const month = getPart('month')
+  const day = getPart('day')
+  const hour = Number(getPart('hour'))
+  const minute = Number(getPart('minute'))
+  const second = Number(getPart('second'))
 
-  return `${year}-${month}-${day}`
+  return {
+    dateKey: `${year}-${month}-${day}`,
+    secondsSinceStartOfDay: hour * 60 * 60 + minute * 60 + second,
+  }
+}
+
+function getQuarterHourBucketStartSeconds(bucketKey: string) {
+  const [hour = 0, minute = 0] = bucketKey.slice(11, 16).split(':').map(Number)
+
+  return hour * 60 * 60 + minute * 60
 }
 
 function getDistanceTrendScaledValue(value: number, scale: DistanceTrendScale) {

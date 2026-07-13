@@ -208,6 +208,38 @@ describe('TimeContextPanel', () => {
     )
   })
 
+  it('includes the current quarter-hour bucket at its exact start boundary', () => {
+    vi.setSystemTime(new Date('2026-06-20T10:15:00+08:00'))
+
+    const boundarySeries: FootprintDistanceSeries = {
+      granularity: 'quarter-hour',
+      unit: 'quarter-hour',
+      buckets: Array.from({ length: 96 }, (_, bucketIndex) => {
+        const hour = Math.floor(bucketIndex / 4)
+        const minute = (bucketIndex % 4) * 15
+        const label = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
+
+        return {
+          key: `2026-06-20T${label}`,
+          label,
+          distanceMeters: { 0: 40, 41: 60 }[bucketIndex] ?? 0,
+        }
+      }),
+    }
+    const { container } = render(
+      <TimeContextPanel
+        view="map"
+        selection={selectDay('2026-06-20')}
+        distanceSeries={boundarySeries}
+        onSelectionChange={vi.fn()}
+      />,
+    )
+
+    expect(
+      container.querySelector('.time-context-trend__average-label')?.textContent,
+    ).toContain('2 m/15分钟')
+  })
+
   it('uses a zero quarter-hour average and elapsed range for a future day', () => {
     const futureDaySeries: FootprintDistanceSeries = {
       ...quarterHourDistanceSeries,
@@ -504,6 +536,55 @@ describe('TimeContextPanel', () => {
 
     expect(within(trend).getByText('6月20日 · 1.2 km')).toBeInTheDocument()
     expect(bars.filter((bar) => bar.classList.contains('is-active'))).toEqual([bars[2]])
+  })
+
+  it('exposes the quarter-hour chart as a horizontal listbox with one tab stop', () => {
+    render(
+      <TimeContextPanel
+        view="map"
+        selection={selectDay('2026-06-19')}
+        distanceSeries={quarterHourDistanceSeries}
+        onSelectionChange={vi.fn()}
+      />,
+    )
+
+    const chart = screen.getByRole('listbox', { name: /当前范围距离/ })
+    const options = within(chart).getAllByRole('option')
+
+    expect(chart).toHaveAttribute('aria-orientation', 'horizontal')
+    expect(options).toHaveLength(96)
+    expect(options.filter((option) => option.tabIndex === 0)).toEqual([options[0]])
+    expect(options.filter((option) => option.tabIndex === -1)).toHaveLength(95)
+  })
+
+  it('moves the active distance option with ArrowRight and End', () => {
+    render(
+      <TimeContextPanel
+        view="map"
+        selection={selectDay('2026-06-19')}
+        distanceSeries={quarterHourDistanceSeries}
+        onSelectionChange={vi.fn()}
+      />,
+    )
+
+    const trend = screen.getByLabelText('当前范围距离')
+    const chart = screen.getByRole('listbox', { name: /当前范围距离/ })
+    const options = within(chart).getAllByRole('option')
+
+    options[0].focus()
+    fireEvent.keyDown(options[0], { key: 'ArrowRight' })
+
+    expect(options[1]).toHaveFocus()
+    expect(options[1]).toHaveAttribute('aria-selected', 'true')
+    expect(options.filter((option) => option.tabIndex === 0)).toEqual([options[1]])
+    expect(within(trend).getByText('00:15 · 0 m')).toBeInTheDocument()
+
+    fireEvent.keyDown(options[1], { key: 'End' })
+
+    expect(options[95]).toHaveFocus()
+    expect(options[95]).toHaveAttribute('aria-selected', 'true')
+    expect(options.filter((option) => option.tabIndex === 0)).toEqual([options[95]])
+    expect(within(trend).getByText('23:45 · 0 m')).toBeInTheDocument()
   })
 
   it('keeps dense year distance buckets addressable after switching back to daily columns', () => {
