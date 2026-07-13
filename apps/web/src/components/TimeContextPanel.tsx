@@ -578,7 +578,7 @@ function getCompatibleDistanceSeriesForSelection(
   const firstDate = getDistanceBucketDateKey(firstBucket.key)
   const lastDate = getDistanceBucketDateKey(lastBucket.key)
 
-  if (distanceSeries.granularity === 'hour') {
+  if (distanceSeries.granularity === 'quarter-hour') {
     if (selection.mode !== 'day') return undefined
 
     return firstDate === selection.start && lastDate === selection.end
@@ -615,10 +615,10 @@ function getDistanceTrendModel(
   const average = getDistanceTrendAverage(sourceBuckets, distanceSeries?.granularity)
   const averageValue = average.value
   const averagePosition = getDistanceTrendPosition(averageValue, maxScaledValue, scale)
-  const denominatorLabel = distanceSeries?.unit === 'hour' ? '小时' : '日'
+  const denominatorLabel = distanceSeries?.unit === 'quarter-hour' ? '15分钟' : '日'
   const aggregationLabel = grouping.isGrouped
     ? `按${grouping.groupSize}日归并`
-    : distanceSeries?.granularity === 'hour' ? '按小时汇总' : '按日汇总'
+    : distanceSeries?.granularity === 'quarter-hour' ? '按15分钟汇总' : '按日汇总'
   const nextScale: DistanceTrendScale = scale === 'linear' ? 'log' : 'linear'
 
   return {
@@ -744,11 +744,11 @@ function getDistanceTrendAverage(
   if (buckets.length === 0) {
     return {
       value: 0,
-      rangeLabel: granularity === 'hour' ? '0小时' : '0天',
+      rangeLabel: granularity === 'quarter-hour' ? '0.0小时' : '0天',
     }
   }
 
-  if (granularity === 'hour') return getHourlyDistanceTrendAverage(buckets)
+  if (granularity === 'quarter-hour') return getQuarterHourDistanceTrendAverage(buckets)
 
   const now = new Date()
   const todayKey = formatLocalDateKey(now)
@@ -774,7 +774,7 @@ function getDistanceTrendAverage(
   }
 }
 
-function getHourlyDistanceTrendAverage(buckets: FootprintDistanceBucket[]) {
+function getQuarterHourDistanceTrendAverage(buckets: FootprintDistanceBucket[]) {
   const now = new Date()
   const todayKey = formatLocalDateKey(now)
   const bucketDateKey = buckets[0]?.key.slice(0, 10) ?? ''
@@ -792,26 +792,26 @@ function getHourlyDistanceTrendAverage(buckets: FootprintDistanceBucket[]) {
         buckets.reduce((total, bucket) => total + Math.max(bucket.distanceMeters, 0), 0) /
         buckets.length
       ),
-      rangeLabel: `${buckets.length}小时`,
+      rangeLabel: `${buckets.length / 4}小时`,
     }
   }
 
   const selectedDayStart = new Date(`${bucketDateKey}T00:00:00`)
-  const elapsedHours = Math.min(
-    Math.max((now.getTime() - selectedDayStart.getTime()) / (60 * 60 * 1000), 0),
-    24,
+  const elapsedQuarterHours = Math.min(
+    Math.max((now.getTime() - selectedDayStart.getTime()) / (15 * 60 * 1000), 0),
+    96,
   )
   const elapsedDistanceMeters = buckets.reduce((total, bucket) => {
-    const bucketHourStart = new Date(`${bucket.key.slice(0, 13)}:00:00`)
+    const bucketStart = new Date(`${bucket.key}:00`)
 
-    if (bucketHourStart >= now) return total
+    if (bucketStart >= now) return total
 
     return total + Math.max(bucket.distanceMeters, 0)
   }, 0)
 
   return {
-    value: elapsedHours === 0 ? 0 : elapsedDistanceMeters / elapsedHours,
-    rangeLabel: `${elapsedHours.toFixed(1)}小时`,
+    value: elapsedQuarterHours === 0 ? 0 : elapsedDistanceMeters / elapsedQuarterHours,
+    rangeLabel: `${(elapsedQuarterHours / 4).toFixed(1)}小时`,
   }
 }
 

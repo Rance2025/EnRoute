@@ -160,13 +160,19 @@ describe('aggregateFootprintPoints', () => {
       totalDistanceMeters: 400,
       averageDistanceMetersPerDay: 400,
       distanceSeries: {
-        granularity: 'hour',
-        unit: 'hour',
-        buckets: Array.from({ length: 24 }, (_, hour) => ({
-          key: `2026-06-19T${hour.toString().padStart(2, '0')}`,
-          label: `${hour.toString().padStart(2, '0')}:00`,
-          distanceMeters: { 0: 100, 11: 300 }[hour] ?? 0,
-        })),
+        granularity: 'quarter-hour',
+        unit: 'quarter-hour',
+        buckets: Array.from({ length: 96 }, (_, bucketIndex) => {
+          const hour = Math.floor(bucketIndex / 4)
+          const minute = (bucketIndex % 4) * 15
+          const label = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
+
+          return {
+            key: `2026-06-19T${label}`,
+            label,
+            distanceMeters: { 0: 100, 46: 300 }[bucketIndex] ?? 0,
+          }
+        }),
       },
     })
     expect(snapshot.selectedBounds).toEqual({

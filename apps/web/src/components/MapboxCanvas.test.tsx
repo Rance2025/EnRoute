@@ -1068,7 +1068,7 @@ describe('MapboxCanvas footprint vector tiles', () => {
       selectedCount: 3,
       totalDistanceMeters: 400,
       averageDistanceMetersPerDay: 400,
-      distanceSeries: createTestDistanceSeries('hour'),
+      distanceSeries: createTestDistanceSeries('quarter-hour'),
     })
     const onFootprintMetricsChange = vi.fn()
     const { MapboxCanvas } = await import('./MapboxCanvas')
@@ -1093,7 +1093,7 @@ describe('MapboxCanvas footprint vector tiles', () => {
       selectedCount: 3,
       totalDistanceMeters: 400,
       averageDistanceMetersPerDay: 400,
-      distanceSeries: createTestDistanceSeries('hour'),
+      distanceSeries: createTestDistanceSeries('quarter-hour'),
     })
     expect(footprintDataSourceImported()).toBe(false)
   })
@@ -1104,7 +1104,7 @@ describe('MapboxCanvas footprint vector tiles', () => {
       selectedCount: 3,
       totalDistanceMeters: 400,
       averageDistanceMetersPerDay: 400,
-      distanceSeries: createTestDistanceSeries('hour'),
+      distanceSeries: createTestDistanceSeries('quarter-hour'),
       selectedBounds: {
         southWest: [118, 30],
         northEast: [121.5, 31.3],
@@ -1829,7 +1829,7 @@ describe('MapboxCanvas footprint vector tiles', () => {
         selectedCount: 3,
         totalDistanceMeters: 400,
         averageDistanceMetersPerDay: 400,
-        distanceSeries: createTestDistanceSeries('hour'),
+        distanceSeries: createTestDistanceSeries('quarter-hour'),
       },
     )
     const onFootprintMetricsChange = vi.fn()
@@ -1876,7 +1876,7 @@ describe('MapboxCanvas footprint vector tiles', () => {
       selectedCount: 3,
       totalDistanceMeters: 400,
       averageDistanceMetersPerDay: 400,
-      distanceSeries: createTestDistanceSeries('hour'),
+      distanceSeries: createTestDistanceSeries('quarter-hour'),
     })
   })
 
@@ -2570,8 +2570,8 @@ function mockMetricsFetch(...metricsResponses: Array<{
   totalDistanceMeters: number
   averageDistanceMetersPerDay: number
   distanceSeries?: {
-    granularity: 'hour' | 'day'
-    unit: 'hour' | 'day'
+    granularity: 'quarter-hour' | 'day'
+    unit: 'quarter-hour' | 'day'
     buckets: Array<{
       key: string
       label: string
@@ -2598,16 +2598,22 @@ function mockMetricsFetch(...metricsResponses: Array<{
   return fetchMock
 }
 
-function createTestDistanceSeries(granularity: 'hour' | 'day') {
-  if (granularity === 'hour') {
+function createTestDistanceSeries(granularity: 'quarter-hour' | 'day') {
+  if (granularity === 'quarter-hour') {
     return {
-      granularity: 'hour' as const,
-      unit: 'hour' as const,
-      buckets: Array.from({ length: 24 }, (_, hour) => ({
-        key: `2026-06-19T${hour.toString().padStart(2, '0')}`,
-        label: `${hour.toString().padStart(2, '0')}:00`,
-        distanceMeters: hour === 11 ? 400 : 0,
-      })),
+      granularity: 'quarter-hour' as const,
+      unit: 'quarter-hour' as const,
+      buckets: Array.from({ length: 96 }, (_, bucketIndex) => {
+        const hour = Math.floor(bucketIndex / 4)
+        const minute = (bucketIndex % 4) * 15
+        const label = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
+
+        return {
+          key: `2026-06-19T${label}`,
+          label,
+          distanceMeters: bucketIndex === 46 ? 400 : 0,
+        }
+      }),
     }
   }
 

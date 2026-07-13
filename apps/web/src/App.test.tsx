@@ -21,8 +21,8 @@ vi.mock('./components/MapboxCanvas', async () => {
         totalDistanceMeters: number
         averageDistanceMetersPerDay: number
         distanceSeries: {
-          granularity: 'hour' | 'day'
-          unit: 'hour' | 'day'
+          granularity: 'quarter-hour' | 'day'
+          unit: 'quarter-hour' | 'day'
           buckets: Array<{
             key: string
             label: string
@@ -38,13 +38,19 @@ vi.mock('./components/MapboxCanvas', async () => {
           totalDistanceMeters: 18732000,
           averageDistanceMetersPerDay: 624400,
           distanceSeries: {
-            granularity: 'hour',
-            unit: 'hour',
-            buckets: Array.from({ length: 24 }, (_, hour) => ({
-              key: `2026-06-19T${hour.toString().padStart(2, '0')}`,
-              label: `${hour.toString().padStart(2, '0')}:00`,
-              distanceMeters: hour === 10 ? 18732000 : 0,
-            })),
+            granularity: 'quarter-hour',
+            unit: 'quarter-hour',
+            buckets: Array.from({ length: 96 }, (_, bucketIndex) => {
+              const hour = Math.floor(bucketIndex / 4)
+              const minute = (bucketIndex % 4) * 15
+              const label = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
+
+              return {
+                key: `2026-06-19T${label}`,
+                label,
+                distanceMeters: bucketIndex === 40 ? 18732000 : 0,
+              }
+            }),
           },
         })
       }, [onFootprintMetricsChange])

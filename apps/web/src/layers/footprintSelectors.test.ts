@@ -40,6 +40,22 @@ function point(
   }
 }
 
+function expectedQuarterHourBuckets(
+  dateKey: string,
+  distanceByBucket: Record<number, number>,
+) {
+  return Array.from({ length: 96 }, (_, bucketIndex) => {
+    const hour = Math.floor(bucketIndex / 4)
+    const minute = (bucketIndex % 4) * 15
+    const label = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
+    return {
+      key: `${dateKey}T${label}`,
+      label,
+      distanceMeters: distanceByBucket[bucketIndex] ?? 0,
+    }
+  })
+}
+
 describe('footprint selectors', () => {
   it('filters footprint points by inclusive selected time range timestamps', () => {
     const points = [
@@ -131,13 +147,9 @@ describe('footprint selectors', () => {
       totalDistanceMeters: 300.5,
       averageDistanceMetersPerDay: 300.5,
       distanceSeries: {
-        granularity: 'hour',
-        unit: 'hour',
-        buckets: Array.from({ length: 24 }, (_, hour) => ({
-          key: `2026-06-19T${hour.toString().padStart(2, '0')}`,
-          label: `${hour.toString().padStart(2, '0')}:00`,
-          distanceMeters: { 0: 100, 11: 200.5 }[hour] ?? 0,
-        })),
+        granularity: 'quarter-hour',
+        unit: 'quarter-hour',
+        buckets: expectedQuarterHourBuckets('2026-06-19', { 0: 100, 46: 200.5 }),
       },
     })
 
@@ -154,5 +166,24 @@ describe('footprint selectors', () => {
         ],
       },
     })
+  })
+
+  it('places exact 15-minute boundaries in adjacent distance buckets', () => {
+    const metrics = calculateFootprintMetrics(
+      [
+        point('before-boundary', 1781799299, 121, 31, 10),
+        point('at-boundary', 1781799300, 121, 31, 20),
+      ],
+      selectDay('2026-06-19'),
+    )
+
+    expect(metrics.distanceSeries).toMatchObject({
+      granularity: 'quarter-hour',
+      unit: 'quarter-hour',
+    })
+    expect(metrics.distanceSeries?.buckets).toHaveLength(96)
+    expect(metrics.distanceSeries?.buckets.slice(0, 2)).toEqual(
+      expectedQuarterHourBuckets('2026-06-19', { 0: 10, 1: 20 }).slice(0, 2),
+    )
   })
 })
