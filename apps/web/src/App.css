@@ -2274,6 +2274,228 @@
   background: #123f35;
 }
 
+.admin-region-context-panel {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.admin-region-atlas-card,
+.admin-region-ranking-card {
+  display: grid;
+  gap: 13px;
+  padding: 18px;
+  border-radius: 20px;
+}
+
+.admin-region-atlas-card__head,
+.admin-region-ranking-card__head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+  min-width: 0;
+}
+
+.admin-region-atlas-card__title,
+.admin-region-ranking-card__head > div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.admin-region-atlas-card h2,
+.admin-region-ranking-card h2 {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: #17231f;
+  font-size: 17px;
+  font-weight: 880;
+  line-height: 1.05;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-region-atlas-card__count {
+  justify-self: end;
+  max-width: 132px;
+  overflow: hidden;
+  color: #123f35;
+  font-size: 12px;
+  font-weight: 860;
+  line-height: 1.05;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-region-atlas-card__depth-control {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  padding: 6px;
+  border-radius: 14px;
+  background: rgba(23, 35, 31, 0.045);
+}
+
+.admin-region-atlas-card__depth-control button {
+  min-width: 0;
+  height: 28px;
+  padding: 0 8px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 999px;
+  color: rgba(23, 35, 31, 0.66);
+  background: rgba(23, 35, 31, 0.06);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 780;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.admin-region-atlas-card__depth-control button[aria-pressed='true'] {
+  color: #f8fbfa;
+  background: #123f35;
+  box-shadow: 0 7px 16px rgba(18, 63, 53, 0.16);
+}
+
+.admin-region-atlas-card__thumbnail {
+  display: block;
+  width: 100%;
+  aspect-ratio: 32 / 15;
+  overflow: visible;
+}
+
+.admin-region-atlas-card__base {
+  fill: rgba(23, 35, 31, 0.13);
+}
+
+.admin-region-atlas-card__visited {
+  fill: #2c8572;
+}
+
+.admin-region-context-panel__status,
+.admin-region-ranking-card__message {
+  margin: 0;
+  color: rgba(23, 35, 31, 0.54);
+  font-size: 12px;
+  font-weight: 720;
+  line-height: 1.4;
+}
+
+.admin-region-ranking-card {
+  --admin-region-rank-row-height: 49px;
+
+  min-height: 0;
+}
+
+.admin-region-ranking-card__retry {
+  min-width: 0;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid rgba(15, 106, 92, 0.18);
+  border-radius: 999px;
+  color: #0f6a5c;
+  background: rgba(255, 255, 255, 0.62);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 820;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.admin-region-ranking-card__list {
+  display: grid;
+  gap: 0;
+  max-height: calc(var(--admin-region-rank-row-height) * 5);
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(23, 62, 53, 0.2) transparent;
+  list-style: none;
+}
+
+.admin-region-ranking-card__item {
+  min-width: 0;
+}
+
+.admin-region-ranking-card__row {
+  width: 100%;
+  min-width: 0;
+  min-height: var(--admin-region-rank-row-height);
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 2px;
+  border: 0;
+  border-bottom: 1px solid rgba(23, 35, 31, 0.08);
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.admin-region-ranking-card__row:hover,
+.admin-region-ranking-card__row:focus-visible {
+  background: rgba(23, 35, 31, 0.035);
+  outline: none;
+}
+
+.admin-region-ranking-card__rank {
+  color: rgba(23, 35, 31, 0.42);
+  font-size: 12px;
+  font-weight: 860;
+  text-align: center;
+}
+
+.admin-region-ranking-card__main {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.admin-region-ranking-card__name {
+  min-width: 0;
+  overflow: hidden;
+  color: #17231f;
+  font-size: 12px;
+  font-weight: 820;
+  line-height: 1.05;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-region-ranking-card__bar {
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(23, 35, 31, 0.07);
+}
+
+.admin-region-ranking-card__bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #2c8572;
+  transform-origin: left center;
+}
+
+.admin-region-ranking-card__row strong {
+  color: #123f35;
+  font-size: 12px;
+  font-weight: 860;
+  white-space: nowrap;
+}
+
 .footprint-style-popover {
   position: absolute;
   z-index: 3;
