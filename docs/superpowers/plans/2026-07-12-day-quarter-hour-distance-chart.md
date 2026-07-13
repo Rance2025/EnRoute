@@ -404,7 +404,7 @@ it('shows a zero quarter-hour average for a future day', () => {
 Run:
 
 ```powershell
-npm run test:web -- apps/web/src/layers/footprintSelectors.test.ts apps/web/src/components/TimeContextPanel.test.tsx
+npm run test:web -- src/layers/footprintSelectors.test.ts src/components/TimeContextPanel.test.tsx
 ```
 
 Expected: FAIL，现有代码仍生成 24 个 `hour` 桶，并显示“按小时汇总”和 `/小时`。
@@ -578,7 +578,7 @@ const label = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(
 Run:
 
 ```powershell
-npm run test:web -- apps/web/src/layers/footprintSelectors.test.ts apps/web/src/layers/footprintAggregation.test.ts apps/web/src/components/TimeContextPanel.test.tsx apps/web/src/App.test.tsx apps/web/src/components/MapboxCanvas.test.tsx
+npm run test:web -- src/layers/footprintSelectors.test.ts src/layers/footprintAggregation.test.ts src/components/TimeContextPanel.test.tsx src/App.test.tsx src/components/MapboxCanvas.test.tsx
 ```
 
 Expected: 5 test files passed，0 failed。
