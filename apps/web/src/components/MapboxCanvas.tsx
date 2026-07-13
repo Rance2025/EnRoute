@@ -65,6 +65,7 @@ type MapboxCanvasProps = {
   mapLanguage?: MapboxLanguagePreference
   onPlaceLabelsVisibleChange?: (visible: boolean) => void
   onAdminBoundariesVisibleChange?: (visible: boolean) => void
+  onAdminRegionLinesVisibleChange?: (visible: boolean) => void
   onMapStyleChange?: (style: MapStylePreference) => void
   onMapProjectionChange?: (projection: MapboxProjection) => void
   onMapLanguageChange?: (language: MapboxLanguagePreference) => void
@@ -227,6 +228,7 @@ function MapboxCanvasComponent({
   mapLanguage = 'auto',
   onPlaceLabelsVisibleChange,
   onAdminBoundariesVisibleChange,
+  onAdminRegionLinesVisibleChange,
   onMapStyleChange,
   onMapProjectionChange,
   onMapLanguageChange,
@@ -1224,11 +1226,13 @@ function MapboxCanvasComponent({
         onFootprintStyleChange={updateFootprintStyle}
         placeLabelsVisible={placeLabelsVisible}
         adminBoundariesVisible={adminBoundariesVisible}
+        adminRegionLinesVisible={adminRegionLinesVisible}
         mapStyle={mapStyle}
         mapProjection={resolvedProjection}
         mapLanguage={mapLanguage}
         onPlaceLabelsVisibleChange={onPlaceLabelsVisibleChange}
         onAdminBoundariesVisibleChange={onAdminBoundariesVisibleChange}
+        onAdminRegionLinesVisibleChange={onAdminRegionLinesVisibleChange}
         onMapStyleChange={onMapStyleChange}
         onMapProjectionChange={onMapProjectionChange}
         onMapLanguageChange={onMapLanguageChange}

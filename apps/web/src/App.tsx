@@ -42,6 +42,7 @@ import {
 import type { AmapConfig } from './config/amap'
 import {
   readMapAdminBoundariesVisible,
+  readAdminRegionLinesVisible,
   readMapLanguage,
   readMapProjection,
   readMapDebugPanelVisible,
@@ -53,6 +54,7 @@ import {
   writeAppTheme,
   writeGlassPanelOpacity,
   writeMapAdminBoundariesVisible,
+  writeAdminRegionLinesVisible,
   writeMapLanguage,
   writeMapProjection,
   writeMapDebugPanelVisible,
@@ -292,6 +294,9 @@ function App(props: AppProps) {
   const [areMapAdminBoundariesVisible, setAreMapAdminBoundariesVisible] = useState(
     readMapAdminBoundariesVisible,
   )
+  const [areAdminRegionLinesVisible, setAreAdminRegionLinesVisible] = useState(
+    readAdminRegionLinesVisible,
+  )
   const [mapProjection, setMapProjection] = useState<MapProjectionPreference>(
     readMapProjection,
   )
@@ -365,6 +370,10 @@ function App(props: AppProps) {
   const handleMapAdminBoundariesVisibleChange = useCallback((nextVisible: boolean) => {
     setAreMapAdminBoundariesVisible(nextVisible)
     writeMapAdminBoundariesVisible(nextVisible)
+  }, [])
+  const handleAdminRegionLinesVisibleChange = useCallback((nextVisible: boolean) => {
+    setAreAdminRegionLinesVisible(nextVisible)
+    writeAdminRegionLinesVisible(nextVisible)
   }, [])
   const handleMapProjectionChange = useCallback((nextProjection: MapProjectionPreference) => {
     setMapProjection(nextProjection)
@@ -724,8 +733,10 @@ function App(props: AppProps) {
             debugPanelVisible={isMapDebugPanelVisible}
             placeLabelsVisible={areMapPlaceLabelsVisible}
             adminBoundariesVisible={areMapAdminBoundariesVisible}
+            adminRegionLinesVisible={areAdminRegionLinesVisible}
             onPlaceLabelsVisibleChange={handleMapPlaceLabelsVisibleChange}
             onAdminBoundariesVisibleChange={handleMapAdminBoundariesVisibleChange}
+            onAdminRegionLinesVisibleChange={handleAdminRegionLinesVisibleChange}
             projection={mapProjection}
             styleUrl={selectedMapStyle.url}
             language={mapLanguage === 'auto' ? undefined : mapLanguage}

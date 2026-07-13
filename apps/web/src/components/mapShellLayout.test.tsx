@@ -37,11 +37,13 @@ vi.mock('./MapboxCanvas', async () => {
       adminRegionActiveOnly = false,
       adminRegionDepth = 4,
       adminBoundariesVisible = true,
+      adminRegionLinesVisible = true,
       placeLabelsVisible = true,
       projection,
       styleUrl,
       language,
       onAdminBoundariesVisibleChange,
+      onAdminRegionLinesVisibleChange,
       onPlaceLabelsVisibleChange,
       onMapStyleChange,
       onMapProjectionChange,
@@ -51,11 +53,13 @@ vi.mock('./MapboxCanvas', async () => {
       adminRegionActiveOnly?: boolean
       adminRegionDepth?: number
       adminBoundariesVisible?: boolean
+      adminRegionLinesVisible?: boolean
       placeLabelsVisible?: boolean
       projection?: string
       styleUrl?: string
       language?: string
       onAdminBoundariesVisibleChange?: (visible: boolean) => void
+      onAdminRegionLinesVisibleChange?: (visible: boolean) => void
       onPlaceLabelsVisibleChange?: (visible: boolean) => void
       onMapStyleChange?: (styleId: string) => void
       onMapProjectionChange?: (projection: string) => void
@@ -77,6 +81,7 @@ vi.mock('./MapboxCanvas', async () => {
           'data-admin-region-active-only': String(adminRegionActiveOnly),
           'data-admin-region-depth': String(adminRegionDepth),
           'data-admin-boundaries-visible': String(adminBoundariesVisible),
+          'data-admin-region-lines-visible': String(adminRegionLinesVisible),
           'data-place-labels-visible': String(placeLabelsVisible),
           'data-projection': projection,
           'data-style-url': styleUrl,
@@ -93,8 +98,10 @@ vi.mock('./MapboxCanvas', async () => {
           footprintStyle,
           onFootprintStyleChange: updateFootprintStyle,
           adminBoundariesVisible,
+          adminRegionLinesVisible,
           placeLabelsVisible,
           onAdminBoundariesVisibleChange,
+          onAdminRegionLinesVisibleChange,
           onPlaceLabelsVisibleChange,
           mapStyle: styleUrl?.includes('cmqvb5b20001e01s72ia82lz5') ? 'alternate' : 'primary',
           mapProjection: projection === 'mercator' ? 'mercator' : 'globe',
@@ -120,6 +127,7 @@ const FOOTPRINT_COLOR_LABEL = '\u8db3\u8ff9\u70b9\u989c\u8272'
 const FOOTPRINT_COLOR_SWATCHES_LABEL = '\u8db3\u8ff9\u70b9\u989c\u8272\u9884\u8bbe'
 const PLACE_LABELS_LABEL = '\u663e\u793a\u5730\u540d'
 const ADMIN_BOUNDARIES_LABEL = '\u663e\u793a\u884c\u653f\u8fb9\u754c'
+const ADMIN_REGION_LINES_LABEL = '\u663e\u793a\u533a\u57df\u8fb9\u754c\u7ebf'
 
 const localStorageMock = createLocalStorageMock()
 Object.defineProperty(window, 'localStorage', {
@@ -343,6 +351,7 @@ describe('unified shell layout', () => {
       MAP_LANGUAGE_LABEL,
       PLACE_LABELS_LABEL,
       ADMIN_BOUNDARIES_LABEL,
+      ADMIN_REGION_LINES_LABEL,
     ])
   })
 
@@ -390,6 +399,38 @@ describe('unified shell layout', () => {
     )
     expect(window.localStorage.getItem('enroute:map-place-labels-visible')).toBe('true')
     expect(window.localStorage.getItem('enroute:map-admin-boundaries-visible')).toBe('true')
+  })
+
+  it('toggles region boundary lines separately from base-map administrative boundaries', async () => {
+    render(<App amapConfig={configuredAmap} />)
+    await settleLazyImports()
+
+    fireEvent.click(screen.getByRole('button', { name: FOOTPRINT_SETTINGS_LABEL }))
+
+    const popover = screen.getByRole('dialog', { name: FOOTPRINT_SETTINGS_LABEL })
+    const baseBoundariesSwitch = within(popover).getByRole('switch', {
+      name: ADMIN_BOUNDARIES_LABEL,
+    })
+    const regionLinesSwitch = within(popover).getByRole('switch', {
+      name: ADMIN_REGION_LINES_LABEL,
+    })
+
+    expect(baseBoundariesSwitch).toHaveAttribute('aria-checked', 'true')
+    expect(regionLinesSwitch).toHaveAttribute('aria-checked', 'true')
+
+    fireEvent.click(regionLinesSwitch)
+
+    expect(baseBoundariesSwitch).toHaveAttribute('aria-checked', 'true')
+    expect(regionLinesSwitch).toHaveAttribute('aria-checked', 'false')
+    expect(screen.getByLabelText('\u5728\u9014 EnRoute \u5730\u56fe\u5de5\u4f5c\u533a')).toHaveAttribute(
+      'data-admin-boundaries-visible',
+      'true',
+    )
+    expect(screen.getByLabelText('\u5728\u9014 EnRoute \u5730\u56fe\u5de5\u4f5c\u533a')).toHaveAttribute(
+      'data-admin-region-lines-visible',
+      'false',
+    )
+    expect(window.localStorage.getItem('enroute:admin-region-lines-visible')).toBe('false')
   })
 
   it('uses visible map defaults and preserves stored user display preferences on reload', async () => {
