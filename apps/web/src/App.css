@@ -4662,7 +4662,7 @@
     height: 100%;
     min-height: 0;
     margin-right: 0;
-    grid-template-rows: minmax(144px, 1fr) max-content max-content;
+    grid-template-rows: max-content minmax(0, 1fr);
     gap: 12px;
     padding: 14px;
     overflow-x: hidden;
@@ -4673,6 +4673,10 @@
   .time-context-trend {
     grid-row: 1;
     min-height: 144px;
+  }
+
+  .time-context-panel__scroll:has(.time-context-trend) {
+    grid-template-rows: minmax(144px, 1fr) max-content max-content;
   }
 
   .main-workspace {
@@ -4728,7 +4732,7 @@
     grid-template-columns: minmax(0, 1fr);
     gap: 8px;
     height: 100%;
-    padding: 92px 10px 12px;
+    padding: 10px 10px 12px;
     overflow: hidden;
   }
 

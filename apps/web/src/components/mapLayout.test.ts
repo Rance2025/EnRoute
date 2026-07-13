@@ -387,7 +387,7 @@ describe('map chrome layout', () => {
     expect(accountingPageRule).not.toContain('#f2f5f2')
     expect(cssRule('.accounting-page::before')).toBe('')
     expect(cssRule('.app-shell--accounting .time-context-panel::after')).toBe('')
-    expect(cssRuleIn(mobileMedia, '.accounting-page')).toContain('padding: 92px 10px 12px')
+    expect(cssRuleIn(mobileMedia, '.accounting-page')).toContain('padding: 10px 10px 12px')
     expect(cssRuleIn(mobileMedia, '.accounting-page::before')).toBe('')
     expect(cssRuleIn(mobileMedia, '.app-shell--accounting .time-context-panel::after')).toBe('')
     expect(cssRuleIn(mobileMedia, '.right-context-panel')).toContain('display: none')
@@ -488,6 +488,10 @@ describe('map chrome layout', () => {
       '.app-shell:not(.has-data-panel) .time-context-panel',
     )
     const scrollRule = cssRuleIn(mobileMedia, '.time-context-panel__scroll')
+    const scrollWithTrendRule = cssRuleIn(
+      mobileMedia,
+      '.time-context-panel__scroll:has(.time-context-trend)',
+    )
     const trendRule = cssRuleIn(mobileMedia, '.time-context-trend')
     const workspaceRule = cssRuleIn(mobileMedia, '.main-workspace')
 
@@ -512,13 +516,17 @@ describe('map chrome layout', () => {
     expect(scrollRule).toContain('min-height: 0')
     expect(scrollRule).toContain('margin-right: 0')
     expect(scrollRule).toContain(
-      'grid-template-rows: minmax(144px, 1fr) max-content max-content',
+      'grid-template-rows: max-content minmax(0, 1fr)',
     )
     expect(scrollRule).toContain('gap: 12px')
     expect(scrollRule).toContain('padding: 14px')
     expect(scrollRule).toContain('overflow-x: hidden')
     expect(scrollRule).toContain('overflow-y: auto')
     expect(scrollRule).toContain('overscroll-behavior: contain')
+
+    expect(scrollWithTrendRule).toContain(
+      'grid-template-rows: minmax(144px, 1fr) max-content max-content',
+    )
 
     expect(trendRule).toContain('grid-row: 1')
     expect(trendRule).toContain('min-height: 144px')
