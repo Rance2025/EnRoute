@@ -5,7 +5,7 @@ from fastapi.responses import JSONResponse, Response
 
 from .admin_regions.preview import get_shanghai_preview_regions
 from .config import Settings
-from .footprints.store import FootprintStore
+from .footprints.store import AdminRegionSummaryInputError, FootprintStore
 
 
 def create_app(*, settings: Settings | None = None) -> FastAPI:
@@ -172,7 +172,7 @@ def create_app(*, settings: Settings | None = None) -> FastAPI:
                 start_date=start,
                 end_date=end,
             )
-        except ValueError as error:
+        except AdminRegionSummaryInputError as error:
             raise HTTPException(status_code=400, detail=str(error)) from error
 
     @app.get("/api/admin-regions/preview/shanghai")

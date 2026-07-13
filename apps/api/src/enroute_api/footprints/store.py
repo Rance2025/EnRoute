@@ -21,7 +21,10 @@ from enroute_api.admin_regions.store import (
     query_admin_regions,
 )
 from enroute_api.admin_regions.summary import query_admin_region_statistics
-from enroute_api.admin_regions.thumbnail import create_admin_region_thumbnail
+from enroute_api.admin_regions.thumbnail import (
+    create_admin_region_thumbnail_from_source,
+    read_admin_region_thumbnail_source,
+)
 from enroute_api.admin_regions.tiles import initialize_admin_region_tile_schema, read_admin_region_tile
 
 from .csv_loader import iter_footprint_points
@@ -78,6 +81,10 @@ class FootprintRegionBackfillResult(TypedDict):
     matched_count: int
     unmatched_count: int
     updated_count: int
+
+
+class AdminRegionSummaryInputError(ValueError):
+    pass
 
 
 class FootprintStore:
@@ -212,12 +219,15 @@ class FootprintStore:
     ) -> dict[str, object]:
         with self._connection_lock:
             self.ensure_ready()
-            normalized = normalize_metrics_input(
-                self.connection,
-                range_value=range_value,
-                start_date=start_date,
-                end_date=end_date,
-            )
+            try:
+                normalized = normalize_metrics_input(
+                    self.connection,
+                    range_value=range_value,
+                    start_date=start_date,
+                    end_date=end_date,
+                )
+            except ValueError as error:
+                raise AdminRegionSummaryInputError(str(error)) from error
             time_range = normalized["timeRange"]
             summary = query_admin_region_statistics(
                 self.connection,
@@ -225,14 +235,17 @@ class FootprintStore:
                 start_timestamp_seconds=int(time_range["startTimestampSeconds"]),
                 end_timestamp_seconds=int(time_range["endTimestampSeconds"]),
             )
-            return {
-                **summary,
-                "thumbnail": create_admin_region_thumbnail(
-                    self.connection,
-                    depth=depth,
-                    visited_region_ids=set(summary["visitedRegionIds"]),
-                ),
-            }
+            thumbnail_source = read_admin_region_thumbnail_source(
+                self.connection,
+                depth=depth,
+            )
+        return {
+            **summary,
+            "thumbnail": create_admin_region_thumbnail_from_source(
+                thumbnail_source,
+                visited_region_ids=set(summary["visitedRegionIds"]),
+            ),
+        }
 
     def get_footprint_mvt(
         self,

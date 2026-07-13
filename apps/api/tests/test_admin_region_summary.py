@@ -8,7 +8,9 @@ from unittest.mock import ANY
 
 import pytest
 from fastapi.testclient import TestClient
+from mapbox_vector_tile import encode
 
+from enroute_api.admin_regions import thumbnail as thumbnail_module
 from enroute_api.admin_regions.summary import query_admin_region_statistics
 from enroute_api.admin_regions.thumbnail import create_admin_region_thumbnail
 from enroute_api.config import Settings
@@ -347,6 +349,82 @@ def test_thumbnail_visited_path_only_contains_requested_regions(
     assert none["visitedPath"] == ""
 
 
+def test_thumbnail_reuses_compact_precomputed_paths_without_reading_raw_geometry(
+    connection: sqlite3.Connection,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    connection.execute(
+        "UPDATE admin_regions SET geometry = ? WHERE id = '310100'",
+        (dense_rectangle_geometry(120.85, 30.65, 122.15, 31.9),),
+    )
+    insert_thumbnail_tile(connection, depth=3)
+    traced_statements: list[str] = []
+    connection.set_trace_callback(traced_statements.append)
+    shape_calls = 0
+    real_shape = thumbnail_module.shape
+
+    def count_shape_calls(geometry):
+        nonlocal shape_calls
+        shape_calls += 1
+        return real_shape(geometry)
+
+    monkeypatch.setattr(thumbnail_module, "shape", count_shape_calls)
+    try:
+        shanghai = create_admin_region_thumbnail(
+            connection,
+            depth=3,
+            visited_region_ids={"310100"},
+        )
+        first_shape_call_count = shape_calls
+        hangzhou = create_admin_region_thumbnail(
+            connection,
+            depth=3,
+            visited_region_ids={"330100"},
+        )
+    finally:
+        connection.set_trace_callback(None)
+
+    normalized_statements = [" ".join(statement.lower().split()) for statement in traced_statements]
+    assert not any("from admin_regions" in statement for statement in normalized_statements)
+    assert sum("select tile" in statement for statement in normalized_statements) == 1
+    assert first_shape_call_count > 0
+    assert shape_calls == first_shape_call_count
+    assert shanghai["basePath"] == hangzhou["basePath"]
+    assert shanghai["visitedPath"] != hangzhou["visitedPath"]
+    assert len(shanghai["basePath"]) < 10_000
+    assert len(shanghai["visitedPath"]) < 10_000
+
+
+def test_thumbnail_ignores_z_coordinates(connection: sqlite3.Connection):
+    geometry_3d = json.dumps(
+        {
+            "type": "Polygon",
+            "coordinates": [
+                [
+                    [120.85, 30.65, 80.0],
+                    [122.15, 30.65, 90.0],
+                    [122.15, 31.9, 100.0],
+                    [120.85, 31.9, 110.0],
+                    [120.85, 30.65, 80.0],
+                ],
+            ],
+        },
+    )
+    connection.execute(
+        "UPDATE admin_regions SET geometry = ? WHERE id = '310100'",
+        (geometry_3d,),
+    )
+
+    thumbnail = create_admin_region_thumbnail(
+        connection,
+        depth=3,
+        visited_region_ids={"310100"},
+    )
+
+    assert thumbnail["visitedPath"].startswith("M243.0 96.1")
+    assert "80.0" not in thumbnail["visitedPath"]
+
+
 def test_admin_region_summary_api_returns_thumbnail_and_rankings_without_writes(
     tmp_path: Path,
 ):
@@ -425,6 +503,26 @@ def test_admin_region_summary_api_maps_invalid_dates_to_bad_request(tmp_path: Pa
 
     assert response.status_code == 400
     assert "detail" in response.json()
+
+
+def test_admin_region_summary_api_does_not_report_geometry_errors_as_bad_requests(
+    tmp_path: Path,
+):
+    client, db_path = create_test_client_with_summary_fixture(tmp_path)
+    client = TestClient(client.app, raise_server_exceptions=False)
+    with sqlite3.connect(db_path) as connection:
+        connection.execute(
+            "UPDATE admin_regions SET geometry = 'not-json' WHERE id = '310100'",
+        )
+        connection.commit()
+
+    response = client.get(
+        "/api/admin-regions/summary",
+        params={"depth": 3, "start": "2026-06-16", "end": "2026-06-16"},
+    )
+
+    assert response.status_code == 500
+    assert "error" in response.json()
 
 
 def test_admin_region_summary_api_returns_base_for_empty_range(tmp_path: Path):
@@ -605,6 +703,76 @@ def rectangle_geometry(
             ],
         },
     )
+
+
+def dense_rectangle_geometry(
+    west: float,
+    south: float,
+    east: float,
+    north: float,
+) -> str:
+    tooth_count = 3_000
+    top_edge = [
+        [
+            west + (east - west) * index / tooth_count,
+            north - (0.3 if index % 2 else 0.0),
+        ]
+        for index in range(tooth_count + 1)
+    ]
+    return json.dumps(
+        {
+            "type": "Polygon",
+            "coordinates": [
+                [
+                    [west, south],
+                    [east, south],
+                    *reversed(top_edge),
+                    [west, south],
+                ],
+            ],
+        },
+    )
+
+
+def insert_thumbnail_tile(connection: sqlite3.Connection, *, depth: int) -> None:
+    tile = encode(
+        [
+            {
+                "name": "admin_regions",
+                "features": [
+                    {
+                        "geometry": {
+                            "type": "Polygon",
+                            "coordinates": [
+                                [[3400, 1600], [3430, 1600], [3430, 1640], [3400, 1640], [3400, 1600]],
+                            ],
+                        },
+                        "properties": {"region_id": "310100", "level": depth, "kind": "fill"},
+                    },
+                    {
+                        "geometry": {
+                            "type": "Polygon",
+                            "coordinates": [
+                                [[3370, 1640], [3400, 1640], [3400, 1680], [3370, 1680], [3370, 1640]],
+                            ],
+                        },
+                        "properties": {"region_id": "330100", "level": depth, "kind": "fill"},
+                    },
+                ],
+            },
+        ],
+        default_options={"extents": 4096, "y_coord_down": True},
+    )
+    connection.execute(
+        """
+        INSERT INTO admin_region_tiles (
+          z, x, y, focus_region_id, depth, algorithm_signature,
+          tile, feature_count, updated_at
+        ) VALUES (0, 0, 0, 'world', ?, 'thumbnail-test-v1', ?, 2, 1)
+        """,
+        (depth, tile),
+    )
+    connection.commit()
 
 
 def multipolygon_geometry(*bounds: tuple[float, float, float, float]) -> str:
