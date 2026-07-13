@@ -10,6 +10,10 @@ export const NAVIGATION_STYLE_STORAGE_KEY = 'enroute:navigation-style'
 export const MAP_DEBUG_PANEL_VISIBLE_STORAGE_KEY = 'enroute:map-debug-panel-visible'
 export const MAP_PLACE_LABELS_VISIBLE_STORAGE_KEY = 'enroute:map-place-labels-visible'
 export const MAP_ADMIN_BOUNDARIES_VISIBLE_STORAGE_KEY = 'enroute:map-admin-boundaries-visible'
+export const SHOW_ALL_ADMIN_REGIONS_STORAGE_KEY = 'enroute:show-all-admin-regions'
+export const SHOW_FOOTPRINTS_IN_REGION_MODE_STORAGE_KEY =
+  'enroute:show-footprints-in-region-mode'
+export const ADMIN_REGION_LINES_VISIBLE_STORAGE_KEY = 'enroute:admin-region-lines-visible'
 export const APP_THEME_STORAGE_KEY = 'enroute:app-theme'
 export const MAP_PROJECTION_STORAGE_KEY = 'enroute:map-projection'
 export const MAP_STYLE_STORAGE_KEY = 'enroute:map-style'
@@ -70,11 +74,7 @@ export function writeAppTheme(
 export function readMapDebugPanelVisible(
   storage: Pick<Storage, 'getItem'> | undefined = getBrowserStorage(),
 ) {
-  try {
-    return storage?.getItem(MAP_DEBUG_PANEL_VISIBLE_STORAGE_KEY) === 'true'
-  } catch {
-    return false
-  }
+  return readHiddenByDefaultPreference(MAP_DEBUG_PANEL_VISIBLE_STORAGE_KEY, storage)
 }
 
 export function writeMapDebugPanelVisible(
@@ -162,6 +162,45 @@ export function writeMapAdminBoundariesVisible(
   writeBooleanPreference(MAP_ADMIN_BOUNDARIES_VISIBLE_STORAGE_KEY, visible, storage)
 }
 
+export function readShowAllAdminRegions(
+  storage: Pick<Storage, 'getItem'> | undefined = getBrowserStorage(),
+) {
+  return readHiddenByDefaultPreference(SHOW_ALL_ADMIN_REGIONS_STORAGE_KEY, storage)
+}
+
+export function writeShowAllAdminRegions(
+  visible: boolean,
+  storage: Pick<Storage, 'setItem'> | undefined = getBrowserStorage(),
+) {
+  writeBooleanPreference(SHOW_ALL_ADMIN_REGIONS_STORAGE_KEY, visible, storage)
+}
+
+export function readShowFootprintsInRegionMode(
+  storage: Pick<Storage, 'getItem'> | undefined = getBrowserStorage(),
+) {
+  return readHiddenByDefaultPreference(SHOW_FOOTPRINTS_IN_REGION_MODE_STORAGE_KEY, storage)
+}
+
+export function writeShowFootprintsInRegionMode(
+  visible: boolean,
+  storage: Pick<Storage, 'setItem'> | undefined = getBrowserStorage(),
+) {
+  writeBooleanPreference(SHOW_FOOTPRINTS_IN_REGION_MODE_STORAGE_KEY, visible, storage)
+}
+
+export function readAdminRegionLinesVisible(
+  storage: Pick<Storage, 'getItem'> | undefined = getBrowserStorage(),
+) {
+  return readVisibleByDefaultPreference(ADMIN_REGION_LINES_VISIBLE_STORAGE_KEY, storage)
+}
+
+export function writeAdminRegionLinesVisible(
+  visible: boolean,
+  storage: Pick<Storage, 'setItem'> | undefined = getBrowserStorage(),
+) {
+  writeBooleanPreference(ADMIN_REGION_LINES_VISIBLE_STORAGE_KEY, visible, storage)
+}
+
 export function readMapProjection(
   storage: Pick<Storage, 'getItem'> | undefined = getBrowserStorage(),
 ): MapProjectionPreference {
@@ -239,6 +278,17 @@ function readVisibleByDefaultPreference(
     return storage?.getItem(key) !== 'false'
   } catch {
     return true
+  }
+}
+
+function readHiddenByDefaultPreference(
+  key: string,
+  storage: Pick<Storage, 'getItem'> | undefined,
+) {
+  try {
+    return storage?.getItem(key) === 'true'
+  } catch {
+    return false
   }
 }
 
