@@ -17,6 +17,7 @@ from shapely.ops import transform
 
 VIEWBOX_WIDTH = 320.0
 VIEWBOX_HEIGHT = 150.0
+VIEWBOX_PADDING = 6.0
 VIEWBOX = "0 0 320 150"
 WORLD_BOUNDS = (-180.0, -58.0, 180.0, 85.0)
 CHINA_BOUNDS = (73.0, 17.0, 136.0, 55.0)
@@ -545,14 +546,34 @@ def safe_union(
         return union_all(repaired, grid_size=grid_size)
 
 
-def project_geographic_geometry(geometry: BaseGeometry, *, depth: int) -> BaseGeometry:
+def project_geographic_position(
+    longitude: float,
+    latitude: float,
+    *,
+    depth: int,
+) -> tuple[float, float]:
     west, south, east, north = WORLD_BOUNDS if depth == 1 else CHINA_BOUNDS
+    available_width = VIEWBOX_WIDTH - VIEWBOX_PADDING * 2
+    available_height = VIEWBOX_HEIGHT - VIEWBOX_PADDING * 2
+    scale = min(
+        available_width / (east - west),
+        available_height / (north - south),
+    )
+    content_width = (east - west) * scale
+    content_height = (north - south) * scale
+    offset_x = (VIEWBOX_WIDTH - content_width) / 2
+    offset_y = (VIEWBOX_HEIGHT - content_height) / 2
+    return (
+        offset_x + (longitude - west) * scale,
+        offset_y + (north - latitude) * scale,
+    )
+
+
+def project_geographic_geometry(geometry: BaseGeometry, *, depth: int) -> BaseGeometry:
 
     def project(x, y, z=None):
         del z
-        projected_x = (x - west) / (east - west) * VIEWBOX_WIDTH
-        projected_y = (north - y) / (north - south) * VIEWBOX_HEIGHT
-        return projected_x, projected_y
+        return project_geographic_position(float(x), float(y), depth=depth)
 
     return transform(project, force_2d(geometry)).simplify(0.6, preserve_topology=True)
 
@@ -577,13 +598,10 @@ def project_tile_bounds(
 
 
 def project_tile_position(x: float, y: float, *, depth: int) -> tuple[float, float]:
-    west, south, east, north = WORLD_BOUNDS if depth == 1 else CHINA_BOUNDS
     longitude = x / MVT_EXTENT * 360.0 - 180.0
     mercator_y = math.pi - 2.0 * math.pi * y / MVT_EXTENT
     latitude = math.degrees(math.atan(math.sinh(mercator_y)))
-    projected_x = (longitude - west) / (east - west) * VIEWBOX_WIDTH
-    projected_y = (north - latitude) / (north - south) * VIEWBOX_HEIGHT
-    return projected_x, projected_y
+    return project_geographic_position(longitude, latitude, depth=depth)
 
 
 def project_geographic_bounds(
@@ -594,14 +612,9 @@ def project_geographic_bounds(
     *,
     depth: int,
 ) -> tuple[float, float, float, float]:
-    frame_west, frame_south, frame_east, frame_north = (
-        WORLD_BOUNDS if depth == 1 else CHINA_BOUNDS
-    )
-    min_x = (west - frame_west) / (frame_east - frame_west) * VIEWBOX_WIDTH
-    max_x = (east - frame_west) / (frame_east - frame_west) * VIEWBOX_WIDTH
-    min_y = (frame_north - north) / (frame_north - frame_south) * VIEWBOX_HEIGHT
-    max_y = (frame_north - south) / (frame_north - frame_south) * VIEWBOX_HEIGHT
-    return normalize_bounds((min_x, min_y, max_x, max_y))
+    north_west = project_geographic_position(west, north, depth=depth)
+    south_east = project_geographic_position(east, south, depth=depth)
+    return normalize_bounds((*north_west, *south_east))
 
 
 def bounded_geometry_path(geometry: BaseGeometry) -> str:

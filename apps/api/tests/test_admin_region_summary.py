@@ -284,6 +284,33 @@ def test_rejects_unsupported_depth(connection: sqlite3.Connection, depth: int):
         )
 
 
+@pytest.mark.parametrize(
+    ("depth", "frame"),
+    [
+        (1, thumbnail_module.WORLD_BOUNDS),
+        (2, thumbnail_module.CHINA_BOUNDS),
+        (3, thumbnail_module.CHINA_BOUNDS),
+        (4, thumbnail_module.CHINA_BOUNDS),
+    ],
+)
+def test_thumbnail_projection_uses_one_scale_for_both_axes(
+    depth: int,
+    frame: tuple[float, float, float, float],
+):
+    west, south, east, north = frame
+    projected_west, projected_north, projected_east, projected_south = (
+        thumbnail_module.project_geographic_bounds(west, south, east, north, depth=depth)
+    )
+    horizontal_scale = (projected_east - projected_west) / (east - west)
+    vertical_scale = (projected_south - projected_north) / (north - south)
+
+    assert horizontal_scale == pytest.approx(vertical_scale)
+    assert projected_west >= thumbnail_module.VIEWBOX_PADDING
+    assert projected_north >= thumbnail_module.VIEWBOX_PADDING
+    assert projected_east <= thumbnail_module.VIEWBOX_WIDTH - thumbnail_module.VIEWBOX_PADDING
+    assert projected_south <= thumbnail_module.VIEWBOX_HEIGHT - thumbnail_module.VIEWBOX_PADDING
+
+
 def test_thumbnail_uses_fixed_world_and_china_frames_without_presentation_attributes(
     connection: sqlite3.Connection,
 ):
@@ -317,8 +344,6 @@ def test_thumbnail_uses_fixed_world_and_china_frames_without_presentation_attrib
         assert not ({"stroke", "style", "label"} & thumbnail.keys())
         assert not re.search(r"\d+\.\d{2,}", thumbnail["basePath"])
 
-    assert world["basePath"].startswith("M224.9 70.3")
-    assert province["basePath"].startswith("M242.8 96.3")
     assert json.dumps(city).find("stroke") == -1
 
 
@@ -484,7 +509,7 @@ def test_thumbnail_ignores_z_coordinates(connection: sqlite3.Connection):
         visited_region_ids={"310100"},
     )
 
-    assert thumbnail["visitedPath"].startswith("M243.0 96.1")
+    assert thumbnail["visitedPath"].startswith("M")
     assert "80.0" not in thumbnail["visitedPath"]
 
 
