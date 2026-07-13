@@ -395,6 +395,69 @@ def test_thumbnail_reuses_compact_precomputed_paths_without_reading_raw_geometry
     assert len(shanghai["visitedPath"]) < 10_000
 
 
+def test_thumbnail_queries_bounds_for_visited_regions_missing_from_the_tile(
+    connection: sqlite3.Connection,
+):
+    insert_thumbnail_tile(
+        connection,
+        depth=3,
+        included_region_ids={"310100"},
+    )
+    traced_statements: list[str] = []
+    connection.set_trace_callback(traced_statements.append)
+    try:
+        thumbnail = create_admin_region_thumbnail(
+            connection,
+            depth=3,
+            visited_region_ids={"330100"},
+        )
+    finally:
+        connection.set_trace_callback(None)
+
+    bounds_queries = [
+        " ".join(statement.lower().split())
+        for statement in traced_statements
+        if "from admin_regions" in statement.lower()
+    ]
+    assert thumbnail["visitedPath"].startswith("M")
+    assert len(bounds_queries) == 1
+    assert "id in ('330100')" in bounds_queries[0]
+    assert "310100" not in bounds_queries[0]
+
+
+def test_thumbnail_cache_keeps_connections_with_identical_tile_metadata_isolated(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    first_connection = sqlite3.connect(":memory:")
+    second_connection = sqlite3.connect(":memory:")
+    for connection in (first_connection, second_connection):
+        connection.row_factory = sqlite3.Row
+        initialize_schema(connection)
+        seed_admin_regions(connection)
+    first_tile = insert_thumbnail_tile(first_connection, depth=3, x_offset=0)
+    second_tile = insert_thumbnail_tile(second_connection, depth=3, x_offset=100)
+    assert len(first_tile) == len(second_tile)
+    monkeypatch.setattr(thumbnail_module, "id", lambda _connection: 7, raising=False)
+
+    try:
+        first = create_admin_region_thumbnail(
+            first_connection,
+            depth=3,
+            visited_region_ids={"310100"},
+        )
+        second = create_admin_region_thumbnail(
+            second_connection,
+            depth=3,
+            visited_region_ids={"310100"},
+        )
+    finally:
+        first_connection.close()
+        second_connection.close()
+
+    assert first["basePath"] != second["basePath"]
+    assert first["visitedPath"] != second["visitedPath"]
+
+
 def test_thumbnail_ignores_z_coordinates(connection: sqlite3.Connection):
     geometry_3d = json.dumps(
         {
@@ -482,6 +545,27 @@ def test_admin_region_summary_api_returns_thumbnail_and_rankings_without_writes(
         "visual_tiles": 0,
         "admin_region_tiles": 0,
     }
+
+
+def test_admin_region_summary_api_uses_ranking_bounds_for_visited_regions_missing_from_tile(
+    tmp_path: Path,
+):
+    client, db_path = create_test_client_with_summary_fixture(tmp_path)
+    with sqlite3.connect(db_path) as connection:
+        insert_thumbnail_tile(
+            connection,
+            depth=3,
+            included_region_ids={"310100"},
+        )
+
+    response = client.get(
+        "/api/admin-regions/summary",
+        params={"depth": 3, "start": "2026-06-17", "end": "2026-06-17"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["visitedRegionIds"] == ["330100"]
+    assert response.json()["thumbnail"]["visitedPath"].startswith("M")
 
 
 def test_admin_region_summary_api_rejects_unknown_depth(tmp_path: Path):
@@ -734,31 +818,56 @@ def dense_rectangle_geometry(
     )
 
 
-def insert_thumbnail_tile(connection: sqlite3.Connection, *, depth: int) -> None:
+def insert_thumbnail_tile(
+    connection: sqlite3.Connection,
+    *,
+    depth: int,
+    included_region_ids: set[str] | None = None,
+    x_offset: int = 0,
+) -> bytes:
+    included_ids = {"310100", "330100"} if included_region_ids is None else included_region_ids
+    features = [
+        {
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [
+                    [
+                        [3400 + x_offset, 1600],
+                        [3430 + x_offset, 1600],
+                        [3430 + x_offset, 1640],
+                        [3400 + x_offset, 1640],
+                        [3400 + x_offset, 1600],
+                    ],
+                ],
+            },
+            "properties": {"region_id": "310100", "level": depth, "kind": "fill"},
+        },
+        {
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [
+                    [
+                        [3370 + x_offset, 1640],
+                        [3400 + x_offset, 1640],
+                        [3400 + x_offset, 1680],
+                        [3370 + x_offset, 1680],
+                        [3370 + x_offset, 1640],
+                    ],
+                ],
+            },
+            "properties": {"region_id": "330100", "level": depth, "kind": "fill"},
+        },
+    ]
+    selected_features = [
+        feature
+        for feature in features
+        if feature["properties"]["region_id"] in included_ids
+    ]
     tile = encode(
         [
             {
                 "name": "admin_regions",
-                "features": [
-                    {
-                        "geometry": {
-                            "type": "Polygon",
-                            "coordinates": [
-                                [[3400, 1600], [3430, 1600], [3430, 1640], [3400, 1640], [3400, 1600]],
-                            ],
-                        },
-                        "properties": {"region_id": "310100", "level": depth, "kind": "fill"},
-                    },
-                    {
-                        "geometry": {
-                            "type": "Polygon",
-                            "coordinates": [
-                                [[3370, 1640], [3400, 1640], [3400, 1680], [3370, 1680], [3370, 1640]],
-                            ],
-                        },
-                        "properties": {"region_id": "330100", "level": depth, "kind": "fill"},
-                    },
-                ],
+                "features": selected_features,
             },
         ],
         default_options={"extents": 4096, "y_coord_down": True},
@@ -768,11 +877,12 @@ def insert_thumbnail_tile(connection: sqlite3.Connection, *, depth: int) -> None
         INSERT INTO admin_region_tiles (
           z, x, y, focus_region_id, depth, algorithm_signature,
           tile, feature_count, updated_at
-        ) VALUES (0, 0, 0, 'world', ?, 'thumbnail-test-v1', ?, 2, 1)
+        ) VALUES (0, 0, 0, 'world', ?, 'thumbnail-test-v1', ?, ?, 1)
         """,
-        (depth, tile),
+        (depth, tile, len(selected_features)),
     )
     connection.commit()
+    return tile
 
 
 def multipolygon_geometry(*bounds: tuple[float, float, float, float]) -> str:

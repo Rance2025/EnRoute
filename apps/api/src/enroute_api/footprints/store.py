@@ -244,6 +244,15 @@ class FootprintStore:
             "thumbnail": create_admin_region_thumbnail_from_source(
                 thumbnail_source,
                 visited_region_ids=set(summary["visitedRegionIds"]),
+                visited_region_bounds={
+                    str(ranking["regionId"]): (
+                        float(ranking["bounds"]["west"]),
+                        float(ranking["bounds"]["south"]),
+                        float(ranking["bounds"]["east"]),
+                        float(ranking["bounds"]["north"]),
+                    )
+                    for ranking in summary["rankings"]
+                },
             ),
         }
 

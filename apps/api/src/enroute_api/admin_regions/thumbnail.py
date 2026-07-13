@@ -73,9 +73,18 @@ def create_admin_region_thumbnail(
     visited_region_ids: set[str],
 ) -> dict[str, str]:
     source = read_admin_region_thumbnail_source(connection, depth=depth)
-    return create_admin_region_thumbnail_from_source(
-        source,
+    paths = source.cached_paths or get_or_build_thumbnail_paths(source)
+    cached_region_ids = {region_path.region_id for region_path in paths.region_paths}
+    missing_visited_ids = {str(region_id) for region_id in visited_region_ids} - cached_region_ids
+    return create_admin_region_thumbnail_response(
+        paths,
+        depth=depth,
         visited_region_ids=visited_region_ids,
+        visited_region_bounds=query_region_bounds_by_ids(
+            connection,
+            depth=depth,
+            region_ids=missing_visited_ids,
+        ),
     )
 
 
@@ -85,7 +94,7 @@ def read_admin_region_thumbnail_source(
     depth: int,
 ) -> AdminRegionThumbnailSource:
     validate_thumbnail_depth(depth)
-    connection_scope = id(connection)
+    connection_scope = connection
     tile_row = connection.execute(
         """
         SELECT algorithm_signature, updated_at, feature_count, LENGTH(tile) AS tile_length
@@ -147,7 +156,7 @@ def read_admin_region_thumbnail_source(
 def read_raw_admin_region_thumbnail_source(
     connection: sqlite3.Connection,
     *,
-    connection_scope: int,
+    connection_scope: sqlite3.Connection,
     depth: int,
 ) -> AdminRegionThumbnailSource:
     country_filter = COUNTRY_SCOPE_FILTER if depth == 1 else ""
@@ -221,14 +230,45 @@ def create_admin_region_thumbnail_from_source(
     source: AdminRegionThumbnailSource,
     *,
     visited_region_ids: set[str],
+    visited_region_bounds: dict[str, tuple[float, float, float, float]] | None = None,
 ) -> dict[str, str]:
     paths = source.cached_paths or get_or_build_thumbnail_paths(source)
+    return create_admin_region_thumbnail_response(
+        paths,
+        depth=source.depth,
+        visited_region_ids=visited_region_ids,
+        visited_region_bounds=visited_region_bounds,
+    )
+
+
+def create_admin_region_thumbnail_response(
+    paths: AdminRegionThumbnailPaths,
+    *,
+    depth: int,
+    visited_region_ids: set[str],
+    visited_region_bounds: dict[str, tuple[float, float, float, float]] | None,
+) -> dict[str, str]:
     visited_ids = {str(region_id) for region_id in visited_region_ids}
-    selected_paths = [
-        region_path
-        for region_path in paths.region_paths
-        if region_path.region_id in visited_ids
-    ]
+    paths_by_id = {region_path.region_id: region_path for region_path in paths.region_paths}
+    resolved_bounds = visited_region_bounds or {}
+    selected_paths = []
+    for region_id in sorted(visited_ids):
+        region_path = paths_by_id.get(region_id)
+        if region_path is None and region_id in resolved_bounds:
+            viewbox_bounds = project_geographic_bounds(
+                *resolved_bounds[region_id],
+                depth=depth,
+            )
+            coarse_path = bounds_to_svg_path(viewbox_bounds)
+            if coarse_path:
+                region_path = AdminRegionThumbnailPath(
+                    region_id=region_id,
+                    path=coarse_path,
+                    coarse_path=coarse_path,
+                    bounds=viewbox_bounds,
+                )
+        if region_path is not None:
+            selected_paths.append(region_path)
     return {
         "viewBox": VIEWBOX,
         "basePath": paths.base_path,
@@ -439,6 +479,37 @@ def query_region_bounds(
         )
         for row in rows
     )
+
+
+def query_region_bounds_by_ids(
+    connection: sqlite3.Connection,
+    *,
+    depth: int,
+    region_ids: set[str],
+) -> dict[str, tuple[float, float, float, float]]:
+    ids = sorted({str(region_id) for region_id in region_ids})
+    if not ids:
+        return {}
+    placeholders = ",".join("?" for _ in ids)
+    rows = connection.execute(
+        f"""
+        SELECT id, min_lng, min_lat, max_lng, max_lat
+        FROM admin_regions
+        WHERE level = ?
+          AND id IN ({placeholders})
+        ORDER BY id
+        """,
+        (depth, *ids),
+    ).fetchall()
+    return {
+        str(row_value(row, "id", 0)): (
+            float(row_value(row, "min_lng", 1)),
+            float(row_value(row, "min_lat", 2)),
+            float(row_value(row, "max_lng", 3)),
+            float(row_value(row, "max_lat", 4)),
+        )
+        for row in rows
+    }
 
 
 def create_coarse_paths(
