@@ -34,6 +34,24 @@ SNAPSHOT_CSV = "\n".join(
 )
 
 
+def expected_quarter_hour_buckets(
+    date_key: str,
+    distance_by_bucket: dict[int, float],
+) -> list[dict[str, object]]:
+    buckets: list[dict[str, object]] = []
+    for bucket_index in range(96):
+        hour, quarter = divmod(bucket_index, 4)
+        label = f"{hour:02d}:{quarter * 15:02d}"
+        buckets.append(
+            {
+                "key": f"{date_key}T{label}",
+                "label": label,
+                "distanceMeters": distance_by_bucket.get(bucket_index, 0),
+            },
+        )
+    return buckets
+
+
 def test_defaults_to_data_directory_for_footprint_database():
     settings = Settings()
 
@@ -417,16 +435,12 @@ def test_serves_footprint_metrics_without_raw_points_for_date_range(tmp_path: Pa
         "totalDistanceMeters": 400,
         "averageDistanceMetersPerDay": 400,
         "distanceSeries": {
-            "granularity": "hour",
-            "unit": "hour",
-            "buckets": [
-                {
-                    "key": f"2026-06-19T{hour:02d}",
-                    "label": f"{hour:02d}:00",
-                    "distanceMeters": {0: 100, 11: 300}.get(hour, 0),
-                }
-                for hour in range(24)
-            ],
+            "granularity": "quarter-hour",
+            "unit": "quarter-hour",
+            "buckets": expected_quarter_hour_buckets(
+                "2026-06-19",
+                {0: 100, 46: 300},
+            ),
         },
         "selectedBounds": {
             "southWest": [118.0, 30.0],
@@ -435,6 +449,33 @@ def test_serves_footprint_metrics_without_raw_points_for_date_range(tmp_path: Pa
     }
     assert "points" not in payload
     assert "debug" not in payload
+
+
+def test_assigns_exact_quarter_hour_boundary_to_the_next_bucket(tmp_path: Path):
+    boundary_csv = "\n".join(
+        [
+            "dataTime,locType,longitude,latitude,heading,accuracy,speed,distance,isBackForeground,stepType,altitude",
+            "1781799299,1,121.5,31.2,0,5,0,10,1,0,0",
+            "1781799300,1,121.5,31.2,0,5,0,20,1,0,0",
+        ],
+    )
+    data_path = write_csv(tmp_path, boundary_csv)
+    client = create_test_client(data_path=data_path, db_path=tmp_path / "footprints.sqlite")
+
+    response = client.get("/api/footprints/metrics?start=2026-06-19&end=2026-06-19")
+
+    assert response.status_code == 200
+    series = response.json()["distanceSeries"]
+    assert len(series["buckets"]) == 96
+    assert series["buckets"][:2] == [
+        {"key": "2026-06-19T00:00", "label": "00:00", "distanceMeters": 10},
+        {"key": "2026-06-19T00:15", "label": "00:15", "distanceMeters": 20},
+    ]
+    assert series["buckets"][-1] == {
+        "key": "2026-06-19T23:45",
+        "label": "23:45",
+        "distanceMeters": 0,
+    }
 
 
 def test_serves_daily_distance_series_for_multi_day_metrics(tmp_path: Path):
@@ -560,16 +601,12 @@ def test_serves_snapshot_from_database_backed_viewport_query(tmp_path: Path):
             "totalDistanceMeters": 400,
             "averageDistanceMetersPerDay": 400,
             "distanceSeries": {
-                "granularity": "hour",
-                "unit": "hour",
-                "buckets": [
-                    {
-                        "key": f"2026-06-19T{hour:02d}",
-                        "label": f"{hour:02d}:00",
-                        "distanceMeters": {0: 100, 11: 300}.get(hour, 0),
-                    }
-                    for hour in range(24)
-                ],
+                "granularity": "quarter-hour",
+                "unit": "quarter-hour",
+                "buckets": expected_quarter_hour_buckets(
+                    "2026-06-19",
+                    {0: 100, 46: 300},
+                ),
             },
         },
         "selectedBounds": {

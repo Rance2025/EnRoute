@@ -387,7 +387,7 @@ describe('map chrome layout', () => {
     expect(accountingPageRule).not.toContain('#f2f5f2')
     expect(cssRule('.accounting-page::before')).toBe('')
     expect(cssRule('.app-shell--accounting .time-context-panel::after')).toBe('')
-    expect(cssRuleIn(mobileMedia, '.accounting-page')).toContain('padding: 92px 10px 12px')
+    expect(cssRuleIn(mobileMedia, '.accounting-page')).toContain('padding: 10px 10px 12px')
     expect(cssRuleIn(mobileMedia, '.accounting-page::before')).toBe('')
     expect(cssRuleIn(mobileMedia, '.app-shell--accounting .time-context-panel::after')).toBe('')
     expect(cssRuleIn(mobileMedia, '.right-context-panel')).toContain('display: none')
@@ -477,6 +477,69 @@ describe('map chrome layout', () => {
     expect(cssRule('.app-shell--map .time-context-panel__scroll')).toBe('')
     expect(cssRule('.app-shell--accounting .time-context-panel__scroll')).toBe('')
     expect(cssRule('.app-shell--schedule .time-context-panel__scroll')).toBe('')
+  })
+
+  it('partitions the shared time panel above every mobile workspace', () => {
+    const mobileMedia = mediaBlock('@media (max-width: 720px)')
+    const shellRule = cssRuleIn(mobileMedia, '.app-shell')
+    const panelRule = cssRuleIn(mobileMedia, '.time-context-panel')
+    const visibleWithoutDesktopWidthRule = cssRuleIn(
+      mobileMedia,
+      '.app-shell:not(.has-data-panel) .time-context-panel',
+    )
+    const scrollRule = cssRuleIn(mobileMedia, '.time-context-panel__scroll')
+    const scrollWithTrendRule = cssRuleIn(
+      mobileMedia,
+      '.time-context-panel__scroll:has(.time-context-trend)',
+    )
+    const trendRule = cssRuleIn(mobileMedia, '.time-context-trend')
+    const workspaceRule = cssRuleIn(mobileMedia, '.main-workspace')
+
+    expect(shellRule).toContain('--mobile-time-panel-height: min(48svh, 400px)')
+
+    expect(panelRule).not.toContain('display: none')
+    expect(panelRule).toContain('inset:')
+    expect(panelRule).toContain('var(--shell-board-top-reserve)')
+    expect(panelRule).toContain('var(--shell-board-inset-x)')
+    expect(panelRule).toContain('auto')
+    expect(panelRule).toContain('width: auto')
+    expect(panelRule).toContain('height: var(--mobile-time-panel-height)')
+    expect(panelRule).toContain('min-height: 0')
+    expect(panelRule).toContain('overflow: hidden')
+    expect(panelRule).toContain('z-index: 4')
+    expect(visibleWithoutDesktopWidthRule).toContain('display: block')
+
+    expect(scrollRule).toContain('--time-panel-shadow-buffer: 0px')
+    expect(scrollRule).toContain('box-sizing: border-box')
+    expect(scrollRule).toContain('width: 100%')
+    expect(scrollRule).toContain('height: 100%')
+    expect(scrollRule).toContain('min-height: 0')
+    expect(scrollRule).toContain('margin-right: 0')
+    expect(scrollRule).toContain(
+      'grid-template-rows: max-content minmax(0, 1fr)',
+    )
+    expect(scrollRule).toContain('gap: 12px')
+    expect(scrollRule).toContain('padding: 14px')
+    expect(scrollRule).toContain('overflow-x: hidden')
+    expect(scrollRule).toContain('overflow-y: auto')
+    expect(scrollRule).toContain('overscroll-behavior: contain')
+
+    expect(scrollWithTrendRule).toContain(
+      'grid-template-rows: minmax(144px, 1fr) max-content max-content',
+    )
+
+    expect(trendRule).toContain('grid-row: 1')
+    expect(trendRule).toContain('min-height: 144px')
+
+    expect(workspaceRule).toContain(
+      'calc(var(--shell-board-top-reserve) + var(--mobile-time-panel-height) + 10px)',
+    )
+
+    for (const view of ['map', 'accounting', 'schedule']) {
+      expect(cssRuleIn(mobileMedia, `.app-shell--${view} .time-context-panel`)).toBe('')
+      expect(cssRuleIn(mobileMedia, `.app-shell--${view} .time-context-panel__scroll`)).toBe('')
+      expect(cssRuleIn(mobileMedia, `.app-shell--${view} .main-workspace`)).toBe('')
+    }
   })
 
   it('places the icon-only settings entry at the far right of the right rail header', () => {

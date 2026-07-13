@@ -1,6 +1,9 @@
 import { createTimeRangeTimestamps, type TimeRangeSelection } from '../time/timeRange'
 import type { FootprintDistanceSeries, FootprintPoint } from './footprintTypes'
 
+const QUARTER_HOUR_SECONDS = 15 * 60
+const QUARTER_HOURS_PER_DAY = 24 * 4
+
 export type FootprintMetricSnapshot = {
   selectedCount: number
   totalDistanceMeters: number
@@ -93,13 +96,13 @@ function calculateDistanceSeries(
   },
 ): FootprintDistanceSeries {
   if (Math.max(timeRange.dayCount, 1) === 1) {
-    return calculateHourlyDistanceSeries(points, timeRange)
+    return calculateQuarterHourDistanceSeries(points, timeRange)
   }
 
   return calculateDailyDistanceSeries(points, timeRange)
 }
 
-function calculateHourlyDistanceSeries(
+function calculateQuarterHourDistanceSeries(
   points: FootprintPoint[],
   timeRange: {
     startTimestampSeconds: number
@@ -108,26 +111,37 @@ function calculateHourlyDistanceSeries(
 ): FootprintDistanceSeries {
   const startDate = shanghaiDateFromTimestampSeconds(timeRange.startTimestampSeconds)
   const dayStartTimestampSeconds = shanghaiDateStartTimestampSeconds(startDate)
-  const distanceByHour = new Map<number, number>()
+  const distanceByBucket = new Map<number, number>()
 
   for (const point of points) {
     if (!isPointInTimestampRange(point, timeRange)) continue
     if (!Number.isFinite(point.distance) || point.distance <= 0) continue
 
-    const hour = Math.floor((point.timestampSeconds - dayStartTimestampSeconds) / 3600)
-    distanceByHour.set(hour, (distanceByHour.get(hour) ?? 0) + point.distance)
+    const bucketIndex = Math.floor(
+      (point.timestampSeconds - dayStartTimestampSeconds) / QUARTER_HOUR_SECONDS,
+    )
+    distanceByBucket.set(
+      bucketIndex,
+      (distanceByBucket.get(bucketIndex) ?? 0) + point.distance,
+    )
   }
 
   const dateKey = formatDateKey(startDate)
 
   return {
-    granularity: 'hour',
-    unit: 'hour',
-    buckets: Array.from({ length: 24 }, (_, hour) => ({
-      key: `${dateKey}T${hour.toString().padStart(2, '0')}`,
-      label: `${hour.toString().padStart(2, '0')}:00`,
-      distanceMeters: distanceByHour.get(hour) ?? 0,
-    })),
+    granularity: 'quarter-hour',
+    unit: 'quarter-hour',
+    buckets: Array.from({ length: QUARTER_HOURS_PER_DAY }, (_, bucketIndex) => {
+      const hour = Math.floor(bucketIndex / 4)
+      const minute = (bucketIndex % 4) * 15
+      const label = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
+
+      return {
+        key: `${dateKey}T${label}`,
+        label,
+        distanceMeters: distanceByBucket.get(bucketIndex) ?? 0,
+      }
+    }),
   }
 }
 

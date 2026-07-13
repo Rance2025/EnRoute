@@ -32,8 +32,8 @@ export type FootprintMetrics = {
 }
 
 export type FootprintDistanceSeries = {
-  granularity: 'hour' | 'day'
-  unit: 'hour' | 'day'
+  granularity: 'quarter-hour' | 'day'
+  unit: 'quarter-hour' | 'day'
   buckets: FootprintDistanceBucket[]
 }
 
