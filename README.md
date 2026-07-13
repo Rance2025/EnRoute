@@ -140,6 +140,12 @@ across the available region chain, and serves the Mapbox overlay from
 `GET /api/admin-regions?level=N&west=...` remains as a compatibility/debug JSON
 endpoint for levels 1-4, but it is not the active map-rendering path.
 
+The region sidebar reads
+`GET /api/admin-regions/summary?depth=...&start=...&end=...` for the current
+time-range visit count, compact thumbnail paths, ranking rows, and map-focus
+bounds. This endpoint is read-only: it does not rebuild or mutate
+`admin_region_tiles`, `visual_tiles`, or raw footprint rows.
+
 Check the license of the selected boundary source before packaging data. If that
 source has ODbL or similar share-alike database terms, keep attribution visible
 in the product and treat redistributed derived databases, GeoJSON, or tile packs
