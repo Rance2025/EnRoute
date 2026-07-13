@@ -20,6 +20,8 @@ from enroute_api.admin_regions.store import (
     load_admin_regions,
     query_admin_regions,
 )
+from enroute_api.admin_regions.summary import query_admin_region_statistics
+from enroute_api.admin_regions.thumbnail import create_admin_region_thumbnail
 from enroute_api.admin_regions.tiles import initialize_admin_region_tile_schema, read_admin_region_tile
 
 from .csv_loader import iter_footprint_points
@@ -197,6 +199,38 @@ class FootprintStore:
                     range_value=range_value,
                     start_date=start_date,
                     end_date=end_date,
+                ),
+            }
+
+    def get_admin_region_summary(
+        self,
+        *,
+        depth: int,
+        range_value: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> dict[str, object]:
+        with self._connection_lock:
+            self.ensure_ready()
+            normalized = normalize_metrics_input(
+                self.connection,
+                range_value=range_value,
+                start_date=start_date,
+                end_date=end_date,
+            )
+            time_range = normalized["timeRange"]
+            summary = query_admin_region_statistics(
+                self.connection,
+                depth=depth,
+                start_timestamp_seconds=int(time_range["startTimestampSeconds"]),
+                end_timestamp_seconds=int(time_range["endTimestampSeconds"]),
+            )
+            return {
+                **summary,
+                "thumbnail": create_admin_region_thumbnail(
+                    self.connection,
+                    depth=depth,
+                    visited_region_ids=set(summary["visitedRegionIds"]),
                 ),
             }
 
