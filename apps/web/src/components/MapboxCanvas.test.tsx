@@ -678,6 +678,150 @@ describe('MapboxCanvas footprint vector tiles', () => {
     expect(activeRequestUrl.searchParams.get('end')).toBe('2026-06-19')
   })
 
+  it('uses externally supplied region ids without requesting the legacy active endpoint', async () => {
+    const { mapRecords } = mockMapboxRuntime()
+    const fetchMock = mockMetricsFetch({
+      selectedCount: 0,
+      totalDistanceMeters: 0,
+      averageDistanceMetersPerDay: 0,
+      selectedBounds: null,
+    })
+    const { MapboxCanvas } = await import('./MapboxCanvas')
+
+    render(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        timeRange={selectedRange}
+        adminRegionUnlockEnabled
+        adminRegionActiveOnly
+        adminRegionVisibleIds={['310115']}
+        adminRegionDepth={4}
+      />,
+    )
+    act(() => mapRecords[0].emit('load'))
+
+    expect(mapRecords[0].setFilterCalls).toContainEqual([
+      'admin-regions-fill',
+      [
+        'all',
+        ['==', ['get', 'kind'], 'fill'],
+        ['in', ['geometry-type'], ['literal', ['Polygon', 'MultiPolygon']]],
+        ['in', ['get', 'region_id'], ['literal', ['310115']]],
+      ],
+    ])
+    expect(mapRecords[0].layers.some((layer) => (
+      typeof layer === 'object' &&
+      layer !== null &&
+      'id' in layer &&
+      layer.id === 'admin-regions-selection-fill'
+    ))).toBe(true)
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).not.toContain(
+      expect.stringContaining('/api/admin-regions/active'),
+    )
+  })
+
+  it('treats a null external region list as all regions without requesting the legacy active endpoint', async () => {
+    const { mapRecords } = mockMapboxRuntime()
+    const fetchMock = mockMetricsFetch({
+      selectedCount: 0,
+      totalDistanceMeters: 0,
+      averageDistanceMetersPerDay: 0,
+      selectedBounds: null,
+    })
+    const { MapboxCanvas } = await import('./MapboxCanvas')
+
+    render(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        timeRange={selectedRange}
+        adminRegionUnlockEnabled
+        adminRegionActiveOnly
+        adminRegionVisibleIds={null}
+      />,
+    )
+    act(() => mapRecords[0].emit('load'))
+
+    expect(mapRecords[0].setFilterCalls).toContainEqual([
+      'admin-regions-fill',
+      [
+        'all',
+        ['==', ['get', 'kind'], 'fill'],
+        ['in', ['geometry-type'], ['literal', ['Polygon', 'MultiPolygon']]],
+      ],
+    ])
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).not.toContain(
+      expect.stringContaining('/api/admin-regions/active'),
+    )
+  })
+
+  it('hides custom region lines and footprint points and restores both after a style reload', async () => {
+    const { mapRecords } = mockMapboxRuntime()
+    const { MapboxCanvas } = await import('./MapboxCanvas')
+
+    const { rerender } = render(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        styleUrl="mapbox://styles/enroute/day"
+        timeRange={selectedRange}
+        adminRegionUnlockEnabled
+        adminRegionLinesVisible={false}
+        footprintsVisible={false}
+      />,
+    )
+    act(() => mapRecords[0].emit('load'))
+
+    expect(getMockLayerVisibility(mapRecords[0], 'admin-regions-line')).toBe('none')
+    expect(getMockLayerVisibility(mapRecords[0], 'footprints-circle')).toBe('none')
+
+    rerender(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        styleUrl="mapbox://styles/enroute/night"
+        timeRange={selectedRange}
+        adminRegionUnlockEnabled
+        adminRegionLinesVisible={false}
+        footprintsVisible={false}
+      />,
+    )
+    act(() => mapRecords[0].emit('style.load'))
+    act(() => mapRecords[0].emit('idle'))
+
+    expect(getMockLayerVisibility(mapRecords[0], 'admin-regions-line')).toBe('none')
+    expect(getMockLayerVisibility(mapRecords[0], 'footprints-circle')).toBe('none')
+  })
+
+  it('highlights the selected admin region and fits its bounds', async () => {
+    const { mapRecords } = mockMapboxRuntime()
+    const { MapboxCanvas } = await import('./MapboxCanvas')
+
+    render(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        timeRange={selectedRange}
+        adminRegionUnlockEnabled
+        selectedAdminRegion={{
+          regionId: '310115',
+          bounds: { west: 121.4, south: 31.1, east: 121.8, north: 31.4 },
+        }}
+      />,
+    )
+    act(() => mapRecords[0].emit('load'))
+
+    expect(mapRecords[0].setFilterCalls).toContainEqual([
+      'admin-regions-selection-fill',
+      [
+        'all',
+        ['==', ['get', 'kind'], 'fill'],
+        ['in', ['geometry-type'], ['literal', ['Polygon', 'MultiPolygon']]],
+        ['==', ['get', 'region_id'], '310115'],
+      ],
+    ])
+    expect(mapRecords[0].fitBoundsCalls).toContainEqual([
+      [[121.4, 31.1], [121.8, 31.4]],
+      { padding: 72, duration: 600 },
+    ])
+  })
+
   it('waits for Mapbox style readiness before adding admin-region vector layers', async () => {
     const { mapRecords } = mockMapboxRuntime({ styleReadyAfterStyleLoad: true })
     const { MapboxCanvas } = await import('./MapboxCanvas')
@@ -851,7 +995,11 @@ describe('MapboxCanvas footprint vector tiles', () => {
     )
 
     expect(mapRecords).toHaveLength(1)
-    expect(mapRecords[0].removedLayers).toEqual(['admin-regions-line', 'admin-regions-fill'])
+    expect(mapRecords[0].removedLayers).toEqual([
+      'admin-regions-selection-fill',
+      'admin-regions-line',
+      'admin-regions-fill',
+    ])
     expect(mapRecords[0].removedSources).toEqual(['admin-regions'])
     expect(mapRecords[0].sources['admin-regions']).toMatchObject({
       tiles: [

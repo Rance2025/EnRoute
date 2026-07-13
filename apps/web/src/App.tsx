@@ -29,6 +29,12 @@ import {
 import type { FootprintMetrics } from './layers/footprintTypes'
 import type { AdminRegionDepth } from './layers/adminRegionVectorTileSource'
 import {
+  loadAdminRegionSummary,
+  type AdminRegionRanking,
+  type AdminRegionSummary,
+} from './layers/adminRegionSummaryDataSource'
+import { AdminRegionContextPanel } from './components/AdminRegionContextPanel'
+import {
   formatAverageDistanceMeters,
   formatDistanceMeters,
   formatMetricCount,
@@ -42,6 +48,9 @@ import {
 import type { AmapConfig } from './config/amap'
 import {
   readMapAdminBoundariesVisible,
+  readAdminRegionLinesVisible,
+  readShowAllAdminRegions,
+  readShowFootprintsInRegionMode,
   readMapLanguage,
   readMapProjection,
   readMapDebugPanelVisible,
@@ -53,6 +62,9 @@ import {
   writeAppTheme,
   writeGlassPanelOpacity,
   writeMapAdminBoundariesVisible,
+  writeAdminRegionLinesVisible,
+  writeShowAllAdminRegions,
+  writeShowFootprintsInRegionMode,
   writeMapLanguage,
   writeMapProjection,
   writeMapDebugPanelVisible,
@@ -113,12 +125,6 @@ type RightContextRow = {
 }
 
 const DEFAULT_ADMIN_REGION_DEPTH: AdminRegionDepth = 1
-const adminRegionDepthOptions: Array<{ value: AdminRegionDepth, label: string }> = [
-  { value: 1, label: '国家' },
-  { value: 2, label: '中国省级' },
-  { value: 3, label: '中国市级' },
-  { value: 4, label: '中国区县' },
-]
 
 const topNavigationItems: TopNavigationItem[] = [
   { value: 'overview', label: '在途 EnRoute', kind: 'brand' },
@@ -292,6 +298,13 @@ function App(props: AppProps) {
   const [areMapAdminBoundariesVisible, setAreMapAdminBoundariesVisible] = useState(
     readMapAdminBoundariesVisible,
   )
+  const [areAdminRegionLinesVisible, setAreAdminRegionLinesVisible] = useState(
+    readAdminRegionLinesVisible,
+  )
+  const [showAllAdminRegions, setShowAllAdminRegions] = useState(readShowAllAdminRegions)
+  const [showFootprintsInRegionMode, setShowFootprintsInRegionMode] = useState(
+    readShowFootprintsInRegionMode,
+  )
   const [mapProjection, setMapProjection] = useState<MapProjectionPreference>(
     readMapProjection,
   )
@@ -311,7 +324,12 @@ function App(props: AppProps) {
   const [adminRegionDepth, setAdminRegionDepth] = useState<AdminRegionDepth>(
     DEFAULT_ADMIN_REGION_DEPTH,
   )
-  const [adminRegionActiveOnly, setAdminRegionActiveOnly] = useState(false)
+  const [adminRegionSummary, setAdminRegionSummary] = useState<AdminRegionSummary | null>(null)
+  const [adminRegionSummaryStatus, setAdminRegionSummaryStatus] = useState<
+    'idle' | 'loading' | 'ready' | 'error'
+  >('idle')
+  const [selectedAdminRegion, setSelectedAdminRegion] = useState<AdminRegionRanking | null>(null)
+  const [adminRegionSummaryRevision, setAdminRegionSummaryRevision] = useState(0)
   const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRangeSelection>(
     createTodaySelection,
   )
@@ -365,6 +383,22 @@ function App(props: AppProps) {
   const handleMapAdminBoundariesVisibleChange = useCallback((nextVisible: boolean) => {
     setAreMapAdminBoundariesVisible(nextVisible)
     writeMapAdminBoundariesVisible(nextVisible)
+  }, [])
+  const handleAdminRegionLinesVisibleChange = useCallback((nextVisible: boolean) => {
+    setAreAdminRegionLinesVisible(nextVisible)
+    writeAdminRegionLinesVisible(nextVisible)
+  }, [])
+  const handleShowAllAdminRegionsChange = useCallback((nextVisible: boolean) => {
+    setShowAllAdminRegions(nextVisible)
+    writeShowAllAdminRegions(nextVisible)
+  }, [])
+  const handleShowFootprintsInRegionModeChange = useCallback((nextVisible: boolean) => {
+    setShowFootprintsInRegionMode(nextVisible)
+    writeShowFootprintsInRegionMode(nextVisible)
+  }, [])
+  const handleAdminRegionDepthChange = useCallback((nextDepth: AdminRegionDepth) => {
+    setSelectedAdminRegion(null)
+    setAdminRegionDepth(nextDepth)
   }, [])
   const handleMapProjectionChange = useCallback((nextProjection: MapProjectionPreference) => {
     setMapProjection(nextProjection)
@@ -550,6 +584,48 @@ function App(props: AppProps) {
     selectedTimeRange,
   ])
   const selectedMapStyle = useMemo(() => resolveMapStyleOption(mapStyle), [mapStyle])
+  const isRegionMode = view === 'map' && activeSecondaryNavId === 'regions'
+  const adminRegionVisibleIds = showAllAdminRegions
+    ? null
+    : adminRegionSummary?.visitedRegionIds ?? []
+  const mapAdminRegionVisibleIds = isRegionMode ? adminRegionVisibleIds : undefined
+  const footprintsVisible = !isRegionMode || showFootprintsInRegionMode
+
+  useEffect(() => {
+    if (!isRegionMode) {
+      return undefined
+    }
+
+    const abortController = new AbortController()
+
+    loadAdminRegionSummary({
+      depth: adminRegionDepth,
+      timeRange: selectedTimeRange,
+      signal: abortController.signal,
+    }).then((summary) => {
+      if (abortController.signal.aborted) return
+
+      setSelectedAdminRegion(null)
+      setAdminRegionSummary(summary)
+      setAdminRegionSummaryStatus('ready')
+    }).catch((error: unknown) => {
+      if (
+        abortController.signal.aborted ||
+        (error instanceof DOMException && error.name === 'AbortError')
+      ) {
+        return
+      }
+
+      setAdminRegionSummaryStatus('error')
+    })
+
+    return () => abortController.abort()
+  }, [
+    adminRegionDepth,
+    adminRegionSummaryRevision,
+    isRegionMode,
+    selectedTimeRange,
+  ])
 
   return (
     <main
@@ -684,32 +760,23 @@ function App(props: AppProps) {
           </div>
         </nav>
         <div className="right-context-panel__stack" aria-label="右侧信息面板">
-          <section className="glass-panel glass-panel--solid glass-panel--card right-context-panel__glass right-context-panel__summary" aria-label="当前分区摘要">
-            <span className="right-context-panel__eyebrow">当前分区</span>
-            <strong>{activeSecondaryNavItem?.label ?? '概览'}</strong>
-            <p>{getRightContextSummary(view, activeSecondaryNavId)}</p>
-          </section>
-          <section className="glass-panel glass-panel--solid glass-panel--card right-context-panel__glass right-context-panel__legend" aria-label="图层与状态">
-            <span className="right-context-panel__eyebrow">
-              {view === 'map' ? '图层与状态' : '工作区状态'}
-            </span>
-            <div className="right-context-panel__rows">
-              {getRightContextRows(view, activeSecondaryNavId, footprintMetrics).map((row) => (
-                <div className="right-context-panel__row" key={row.label}>
-                  <span>{row.label}</span>
-                  <strong>{row.value}</strong>
-                </div>
-              ))}
-            </div>
-            {view === 'map' && activeSecondaryNavId === 'regions' ? (
-              <AdminRegionDepthControl
-                depth={adminRegionDepth}
-                activeOnly={adminRegionActiveOnly}
-                onDepthChange={setAdminRegionDepth}
-                onActiveOnlyChange={setAdminRegionActiveOnly}
-              />
-            ) : null}
-          </section>
+          {isRegionMode ? (
+            <AdminRegionContextPanel
+              depth={adminRegionDepth}
+              summary={adminRegionSummary}
+              status={adminRegionSummaryStatus}
+              onDepthChange={handleAdminRegionDepthChange}
+              onRegionSelect={setSelectedAdminRegion}
+              onRetry={() => setAdminRegionSummaryRevision((current) => current + 1)}
+            />
+          ) : (
+            <DefaultRightContextCards
+              view={view}
+              activeSecondaryNavId={activeSecondaryNavId}
+              activeSecondaryNavLabel={activeSecondaryNavItem?.label ?? '概览'}
+              footprintMetrics={footprintMetrics}
+            />
+          )}
         </div>
       </aside>
 
@@ -719,13 +786,17 @@ function App(props: AppProps) {
             timeRange={selectedTimeRange}
             onFootprintMetricsChange={setFootprintMetrics}
             adminRegionUnlockEnabled={activeSecondaryNavId === 'regions'}
-            adminRegionActiveOnly={adminRegionActiveOnly}
+            adminRegionVisibleIds={mapAdminRegionVisibleIds}
+            footprintsVisible={footprintsVisible}
+            selectedAdminRegion={selectedAdminRegion}
             adminRegionDepth={adminRegionDepth}
             debugPanelVisible={isMapDebugPanelVisible}
             placeLabelsVisible={areMapPlaceLabelsVisible}
             adminBoundariesVisible={areMapAdminBoundariesVisible}
+            adminRegionLinesVisible={areAdminRegionLinesVisible}
             onPlaceLabelsVisibleChange={handleMapPlaceLabelsVisibleChange}
             onAdminBoundariesVisibleChange={handleMapAdminBoundariesVisibleChange}
+            onAdminRegionLinesVisibleChange={handleAdminRegionLinesVisibleChange}
             projection={mapProjection}
             styleUrl={selectedMapStyle.url}
             language={mapLanguage === 'auto' ? undefined : mapLanguage}
@@ -872,6 +943,38 @@ function App(props: AppProps) {
                     <button
                       type="button"
                       role="switch"
+                      aria-checked={showAllAdminRegions}
+                      className={
+                        showAllAdminRegions
+                          ? 'settings-switch-row is-active'
+                          : 'settings-switch-row'
+                      }
+                      onClick={() =>
+                        handleShowAllAdminRegionsChange(!showAllAdminRegions)
+                      }
+                    >
+                      <span>显示全部行政区</span>
+                      <span className="settings-switch-row__control" aria-hidden="true" />
+                    </button>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={showFootprintsInRegionMode}
+                      className={
+                        showFootprintsInRegionMode
+                          ? 'settings-switch-row is-active'
+                          : 'settings-switch-row'
+                      }
+                      onClick={() =>
+                        handleShowFootprintsInRegionModeChange(!showFootprintsInRegionMode)
+                      }
+                    >
+                      <span>在区域页显示足迹点</span>
+                      <span className="settings-switch-row__control" aria-hidden="true" />
+                    </button>
+                    <button
+                      type="button"
+                      role="switch"
                       aria-checked={isMapDebugPanelVisible}
                       className={
                         isMapDebugPanelVisible
@@ -910,46 +1013,44 @@ function App(props: AppProps) {
 
 export default App
 
-function AdminRegionDepthControl({
-  depth,
-  activeOnly,
-  onDepthChange,
-  onActiveOnlyChange,
+function DefaultRightContextCards({
+  view,
+  activeSecondaryNavId,
+  activeSecondaryNavLabel,
+  footprintMetrics,
 }: {
-  depth: AdminRegionDepth
-  activeOnly: boolean
-  onDepthChange: (depth: AdminRegionDepth) => void
-  onActiveOnlyChange: (activeOnly: boolean) => void
+  view: AppView
+  activeSecondaryNavId: SecondaryNavId
+  activeSecondaryNavLabel: string
+  footprintMetrics: FootprintMetrics
 }) {
   return (
-    <div className="admin-region-control-panel">
-      <div className="right-context-panel__depth-control admin-region-depth-control" role="group" aria-label="行政区划层级">
-        {adminRegionDepthOptions.map((option) => (
-          <button
-            key={option.value}
-            type="button"
-            aria-pressed={option.value === depth}
-            onClick={() => onDepthChange(option.value)}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={activeOnly}
-        className={
-          activeOnly
-            ? 'settings-switch-row admin-region-active-filter-switch is-active'
-            : 'settings-switch-row admin-region-active-filter-switch'
-        }
-        onClick={() => onActiveOnlyChange(!activeOnly)}
+    <>
+      <section
+        className="glass-panel glass-panel--solid glass-panel--card right-context-panel__glass right-context-panel__summary"
+        aria-label="当前分区摘要"
       >
-        <span>仅显示当前时间有足迹的区域</span>
-        <span className="settings-switch-row__control" aria-hidden="true" />
-      </button>
-    </div>
+        <span className="right-context-panel__eyebrow">当前分区</span>
+        <strong>{activeSecondaryNavLabel}</strong>
+        <p>{getRightContextSummary(view, activeSecondaryNavId)}</p>
+      </section>
+      <section
+        className="glass-panel glass-panel--solid glass-panel--card right-context-panel__glass right-context-panel__legend"
+        aria-label="图层与状态"
+      >
+        <span className="right-context-panel__eyebrow">
+          {view === 'map' ? '图层与状态' : '工作区状态'}
+        </span>
+        <div className="right-context-panel__rows">
+          {getRightContextRows(view, activeSecondaryNavId, footprintMetrics).map((row) => (
+            <div className="right-context-panel__row" key={row.label}>
+              <span>{row.label}</span>
+              <strong>{row.value}</strong>
+            </div>
+          ))}
+        </div>
+      </section>
+    </>
   )
 }
 

@@ -14,6 +14,7 @@ export const ADMIN_REGION_VECTOR_SOURCE_ID = 'admin-regions'
 export const ADMIN_REGION_VECTOR_SOURCE_LAYER = 'admin_regions'
 export const ADMIN_REGION_FILL_LAYER_ID = 'admin-regions-fill'
 export const ADMIN_REGION_LINE_LAYER_ID = 'admin-regions-line'
+export const ADMIN_REGION_SELECTION_FILL_LAYER_ID = 'admin-regions-selection-fill'
 export const ADMIN_REGION_BOUNDARY_REGION_IDS_PROPERTY = 'boundary_region_ids'
 
 type AdminRegionLayerFilter = NonNullable<LayerSpecification['filter']>
@@ -50,6 +51,15 @@ export function createAdminRegionLineFilter(activeRegionIds?: string[]): AdminRe
     geometryTypes: ['LineString', 'MultiLineString'],
     activeRegionIds,
   })
+}
+
+export function createAdminRegionSelectionFillFilter(regionId?: string): AdminRegionLayerFilter {
+  return [
+    'all',
+    ['==', ['get', 'kind'], 'fill'],
+    ['in', ['geometry-type'], ['literal', ['Polygon', 'MultiPolygon']]],
+    ['==', ['get', 'region_id'], regionId ?? ''],
+  ]
 }
 
 export function createAdminRegionFillLayer(activeRegionIds?: string[]): LayerSpecification {
@@ -92,6 +102,22 @@ export function createAdminRegionLineLayer(activeRegionIds?: string[]): LayerSpe
         12,
         2.35,
       ],
+    },
+  }
+}
+
+export function createAdminRegionSelectionFillLayer(regionId?: string): LayerSpecification {
+  return {
+    id: ADMIN_REGION_SELECTION_FILL_LAYER_ID,
+    type: 'fill',
+    source: ADMIN_REGION_VECTOR_SOURCE_ID,
+    'source-layer': ADMIN_REGION_VECTOR_SOURCE_LAYER,
+    slot: 'top',
+    filter: createAdminRegionSelectionFillFilter(regionId),
+    paint: {
+      'fill-color': '#0b4f47',
+      'fill-opacity': 0.36,
+      'fill-antialias': false,
     },
   }
 }

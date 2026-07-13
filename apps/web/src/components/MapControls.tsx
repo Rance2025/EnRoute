@@ -30,11 +30,13 @@ type MapControlsProps = {
   onFootprintStyleChange: (style: FootprintStyle) => void
   placeLabelsVisible?: boolean
   adminBoundariesVisible?: boolean
+  adminRegionLinesVisible?: boolean
   mapStyle?: MapStylePreference
   mapProjection?: MapProjectionPreference
   mapLanguage?: MapLanguagePreference
   onPlaceLabelsVisibleChange?: (visible: boolean) => void
   onAdminBoundariesVisibleChange?: (visible: boolean) => void
+  onAdminRegionLinesVisibleChange?: (visible: boolean) => void
   onMapStyleChange?: (style: MapStylePreference) => void
   onMapProjectionChange?: (projection: MapProjectionPreference) => void
   onMapLanguageChange?: (language: MapLanguagePreference) => void
@@ -45,11 +47,13 @@ type FootprintStylePopoverProps = {
   onFootprintStyleChange: (style: FootprintStyle) => void
   placeLabelsVisible?: boolean
   adminBoundariesVisible?: boolean
+  adminRegionLinesVisible?: boolean
   mapStyle?: MapStylePreference
   mapProjection?: MapProjectionPreference
   mapLanguage?: MapLanguagePreference
   onPlaceLabelsVisibleChange?: (visible: boolean) => void
   onAdminBoundariesVisibleChange?: (visible: boolean) => void
+  onAdminRegionLinesVisibleChange?: (visible: boolean) => void
   onMapStyleChange?: (style: MapStylePreference) => void
   onMapProjectionChange?: (projection: MapProjectionPreference) => void
   onMapLanguageChange?: (language: MapLanguagePreference) => void
@@ -60,6 +64,7 @@ const FOOTPRINT_STYLE_COMMIT_DELAY_MS = 180
 const MAP_STYLE_LABEL = '\u5730\u56fe\u6837\u5f0f'
 const MAP_PROJECTION_LABEL = '\u5730\u56fe\u5f62\u6001'
 const MAP_LANGUAGE_LABEL = '\u5730\u56fe\u8bed\u8a00'
+const ADMIN_REGION_LINES_LABEL = '\u663e\u793a\u533a\u57df\u8fb9\u754c\u7ebf'
 const MAP_PROJECTION_OPTIONS: Array<{ value: MapProjectionPreference; label: string }> = [
   { value: 'globe', label: '\u7403\u5f62' },
   { value: 'mercator', label: '\u5e73\u9762' },
@@ -80,11 +85,13 @@ export function MapControls({
   onFootprintStyleChange,
   placeLabelsVisible = true,
   adminBoundariesVisible = true,
+  adminRegionLinesVisible = true,
   mapStyle = 'primary',
   mapProjection = 'globe',
   mapLanguage = 'auto',
   onPlaceLabelsVisibleChange,
   onAdminBoundariesVisibleChange,
+  onAdminRegionLinesVisibleChange,
   onMapStyleChange,
   onMapProjectionChange,
   onMapLanguageChange,
@@ -178,11 +185,13 @@ export function MapControls({
           onFootprintStyleChange={onFootprintStyleChange}
           placeLabelsVisible={placeLabelsVisible}
           adminBoundariesVisible={adminBoundariesVisible}
+          adminRegionLinesVisible={adminRegionLinesVisible}
           mapStyle={mapStyle}
           mapProjection={mapProjection}
           mapLanguage={mapLanguage}
           onPlaceLabelsVisibleChange={onPlaceLabelsVisibleChange}
           onAdminBoundariesVisibleChange={onAdminBoundariesVisibleChange}
+          onAdminRegionLinesVisibleChange={onAdminRegionLinesVisibleChange}
           onMapStyleChange={onMapStyleChange}
           onMapProjectionChange={onMapProjectionChange}
           onMapLanguageChange={onMapLanguageChange}
@@ -197,11 +206,13 @@ const FootprintStylePopover = forwardRef<HTMLDivElement, FootprintStylePopoverPr
   onFootprintStyleChange,
   placeLabelsVisible = true,
   adminBoundariesVisible = true,
+  adminRegionLinesVisible = true,
   mapStyle = 'primary',
   mapProjection = 'globe',
   mapLanguage = 'auto',
   onPlaceLabelsVisibleChange,
   onAdminBoundariesVisibleChange,
+  onAdminRegionLinesVisibleChange,
   onMapStyleChange,
   onMapProjectionChange,
   onMapLanguageChange,
@@ -390,6 +401,22 @@ const FootprintStylePopover = forwardRef<HTMLDivElement, FootprintStylePopoverPr
           onClick={() => onAdminBoundariesVisibleChange(!adminBoundariesVisible)}
         >
           <span className="footprint-style-popover__label">显示行政边界</span>
+          <span className="footprint-style-popover__switch-control" aria-hidden="true" />
+        </button>
+      ) : null}
+      {onAdminRegionLinesVisibleChange ? (
+        <button
+          type="button"
+          role="switch"
+          aria-checked={adminRegionLinesVisible}
+          className={
+            adminRegionLinesVisible
+              ? 'footprint-style-popover__switch is-active'
+              : 'footprint-style-popover__switch'
+          }
+          onClick={() => onAdminRegionLinesVisibleChange(!adminRegionLinesVisible)}
+        >
+          <span className="footprint-style-popover__label">{ADMIN_REGION_LINES_LABEL}</span>
           <span className="footprint-style-popover__switch-control" aria-hidden="true" />
         </button>
       ) : null}

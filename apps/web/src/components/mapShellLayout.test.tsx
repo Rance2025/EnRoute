@@ -35,13 +35,16 @@ vi.mock('./MapboxCanvas', async () => {
     MapboxCanvas: ({
       adminRegionUnlockEnabled = false,
       adminRegionActiveOnly = false,
+      adminRegionVisibleIds,
       adminRegionDepth = 4,
       adminBoundariesVisible = true,
+      adminRegionLinesVisible = true,
       placeLabelsVisible = true,
       projection,
       styleUrl,
       language,
       onAdminBoundariesVisibleChange,
+      onAdminRegionLinesVisibleChange,
       onPlaceLabelsVisibleChange,
       onMapStyleChange,
       onMapProjectionChange,
@@ -49,13 +52,16 @@ vi.mock('./MapboxCanvas', async () => {
     }: {
       adminRegionUnlockEnabled?: boolean
       adminRegionActiveOnly?: boolean
+      adminRegionVisibleIds?: string[] | null
       adminRegionDepth?: number
       adminBoundariesVisible?: boolean
+      adminRegionLinesVisible?: boolean
       placeLabelsVisible?: boolean
       projection?: string
       styleUrl?: string
       language?: string
       onAdminBoundariesVisibleChange?: (visible: boolean) => void
+      onAdminRegionLinesVisibleChange?: (visible: boolean) => void
       onPlaceLabelsVisibleChange?: (visible: boolean) => void
       onMapStyleChange?: (styleId: string) => void
       onMapProjectionChange?: (projection: string) => void
@@ -75,8 +81,14 @@ vi.mock('./MapboxCanvas', async () => {
           className: 'map-stage',
           'data-admin-region-unlock-enabled': String(adminRegionUnlockEnabled),
           'data-admin-region-active-only': String(adminRegionActiveOnly),
+          'data-admin-region-visible-ids': adminRegionVisibleIds === undefined
+            ? 'legacy'
+            : adminRegionVisibleIds === null
+              ? 'all'
+              : adminRegionVisibleIds.join(','),
           'data-admin-region-depth': String(adminRegionDepth),
           'data-admin-boundaries-visible': String(adminBoundariesVisible),
+          'data-admin-region-lines-visible': String(adminRegionLinesVisible),
           'data-place-labels-visible': String(placeLabelsVisible),
           'data-projection': projection,
           'data-style-url': styleUrl,
@@ -93,8 +105,10 @@ vi.mock('./MapboxCanvas', async () => {
           footprintStyle,
           onFootprintStyleChange: updateFootprintStyle,
           adminBoundariesVisible,
+          adminRegionLinesVisible,
           placeLabelsVisible,
           onAdminBoundariesVisibleChange,
+          onAdminRegionLinesVisibleChange,
           onPlaceLabelsVisibleChange,
           mapStyle: styleUrl?.includes('cmqvb5b20001e01s72ia82lz5') ? 'alternate' : 'primary',
           mapProjection: projection === 'mercator' ? 'mercator' : 'globe',
@@ -120,6 +134,7 @@ const FOOTPRINT_COLOR_LABEL = '\u8db3\u8ff9\u70b9\u989c\u8272'
 const FOOTPRINT_COLOR_SWATCHES_LABEL = '\u8db3\u8ff9\u70b9\u989c\u8272\u9884\u8bbe'
 const PLACE_LABELS_LABEL = '\u663e\u793a\u5730\u540d'
 const ADMIN_BOUNDARIES_LABEL = '\u663e\u793a\u884c\u653f\u8fb9\u754c'
+const ADMIN_REGION_LINES_LABEL = '\u663e\u793a\u533a\u57df\u8fb9\u754c\u7ebf'
 
 const localStorageMock = createLocalStorageMock()
 Object.defineProperty(window, 'localStorage', {
@@ -343,6 +358,7 @@ describe('unified shell layout', () => {
       MAP_LANGUAGE_LABEL,
       PLACE_LABELS_LABEL,
       ADMIN_BOUNDARIES_LABEL,
+      ADMIN_REGION_LINES_LABEL,
     ])
   })
 
@@ -390,6 +406,38 @@ describe('unified shell layout', () => {
     )
     expect(window.localStorage.getItem('enroute:map-place-labels-visible')).toBe('true')
     expect(window.localStorage.getItem('enroute:map-admin-boundaries-visible')).toBe('true')
+  })
+
+  it('toggles region boundary lines separately from base-map administrative boundaries', async () => {
+    render(<App amapConfig={configuredAmap} />)
+    await settleLazyImports()
+
+    fireEvent.click(screen.getByRole('button', { name: FOOTPRINT_SETTINGS_LABEL }))
+
+    const popover = screen.getByRole('dialog', { name: FOOTPRINT_SETTINGS_LABEL })
+    const baseBoundariesSwitch = within(popover).getByRole('switch', {
+      name: ADMIN_BOUNDARIES_LABEL,
+    })
+    const regionLinesSwitch = within(popover).getByRole('switch', {
+      name: ADMIN_REGION_LINES_LABEL,
+    })
+
+    expect(baseBoundariesSwitch).toHaveAttribute('aria-checked', 'true')
+    expect(regionLinesSwitch).toHaveAttribute('aria-checked', 'true')
+
+    fireEvent.click(regionLinesSwitch)
+
+    expect(baseBoundariesSwitch).toHaveAttribute('aria-checked', 'true')
+    expect(regionLinesSwitch).toHaveAttribute('aria-checked', 'false')
+    expect(screen.getByLabelText('\u5728\u9014 EnRoute \u5730\u56fe\u5de5\u4f5c\u533a')).toHaveAttribute(
+      'data-admin-boundaries-visible',
+      'true',
+    )
+    expect(screen.getByLabelText('\u5728\u9014 EnRoute \u5730\u56fe\u5de5\u4f5c\u533a')).toHaveAttribute(
+      'data-admin-region-lines-visible',
+      'false',
+    )
+    expect(window.localStorage.getItem('enroute:admin-region-lines-visible')).toBe('false')
   })
 
   it('uses visible map defaults and preserves stored user display preferences on reload', async () => {
@@ -574,7 +622,7 @@ describe('unified shell layout', () => {
     expect(screen.queryByText('行政区划图层迁移中')).not.toBeInTheDocument()
   })
 
-  it('moves administrative region depth controls into the right context panel', async () => {
+  it('moves administrative region depth controls into the atlas card', async () => {
     render(<App amapConfig={configuredAmap} />)
     await settleLazyImports()
     const mapStage = document.querySelector('.map-stage')
@@ -586,37 +634,37 @@ describe('unified shell layout', () => {
 
     fireEvent.click(within(rail).getByRole('button', { name: '区域' }))
 
-    const depthControl = rightPanel?.querySelector('.right-context-panel__depth-control')
+    const depthControl = rightPanel?.querySelector('.admin-region-atlas-card__depth-control')
     expect(depthControl).toBeInstanceOf(HTMLElement)
     expect(document.querySelector('.map-stage > .admin-region-depth-control')).toBeNull()
     expect(mapStage).toHaveAttribute('data-admin-region-depth', '1')
 
-    const districtButton = within(depthControl as HTMLElement).getByRole('button', { name: '中国区县' })
+    const districtButton = within(depthControl as HTMLElement).getByRole('button', { name: '区' })
     fireEvent.click(districtButton)
 
     expect(mapStage).toHaveAttribute('data-admin-region-depth', '4')
     expect(districtButton).toHaveAttribute('aria-pressed', 'true')
   })
 
-  it('passes the active-region-only switch state from the right context panel to the map', async () => {
+  it('passes the show-all-admin-regions setting state to the map', async () => {
     render(<App amapConfig={configuredAmap} />)
     await settleLazyImports()
     const mapStage = document.querySelector('.map-stage')
     const rail = screen.getByRole('navigation', { name: '二级导航' })
 
-    expect(mapStage).toHaveAttribute('data-admin-region-active-only', 'false')
-
     fireEvent.click(within(rail).getByRole('button', { name: '区域' }))
+    expect(mapStage).toHaveAttribute('data-admin-region-visible-ids', '')
 
-    const activeOnlySwitch = screen.getByRole('switch', {
-      name: '仅显示当前时间有足迹的区域',
-    })
-    expect(activeOnlySwitch).toHaveAttribute('aria-checked', 'false')
+    fireEvent.click(screen.getByRole('button', { name: '打开设置' }))
+    const dialog = screen.getByRole('dialog', { name: '设置' })
+    fireEvent.click(within(dialog).getByRole('button', { name: '地图' }))
+    const showAllSwitch = within(dialog).getByRole('switch', { name: '显示全部行政区' })
+    expect(showAllSwitch).toHaveAttribute('aria-checked', 'false')
 
-    fireEvent.click(activeOnlySwitch)
+    fireEvent.click(showAllSwitch)
 
-    expect(activeOnlySwitch).toHaveAttribute('aria-checked', 'true')
-    expect(mapStage).toHaveAttribute('data-admin-region-active-only', 'true')
+    expect(showAllSwitch).toHaveAttribute('aria-checked', 'true')
+    expect(mapStage).toHaveAttribute('data-admin-region-visible-ids', 'all')
   })
 
   it('rounds footprint point opacity controls to 0.01 precision through the slider', async () => {

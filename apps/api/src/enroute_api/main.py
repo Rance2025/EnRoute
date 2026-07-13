@@ -5,7 +5,7 @@ from fastapi.responses import JSONResponse, Response
 
 from .admin_regions.preview import get_shanghai_preview_regions
 from .config import Settings
-from .footprints.store import FootprintStore
+from .footprints.store import AdminRegionSummaryInputError, FootprintStore
 
 
 def create_app(*, settings: Settings | None = None) -> FastAPI:
@@ -154,6 +154,25 @@ def create_app(*, settings: Settings | None = None) -> FastAPI:
                 end_date=end,
             )
         except ValueError as error:
+            raise HTTPException(status_code=400, detail=str(error)) from error
+
+    @app.get("/api/admin-regions/summary")
+    def get_admin_region_summary(
+        depth: int,
+        range: str | None = None,
+        start: str | None = None,
+        end: str | None = None,
+    ) -> dict[str, object]:
+        if depth not in {1, 2, 3, 4}:
+            raise HTTPException(status_code=400, detail="depth must be one of 1, 2, 3, or 4")
+        try:
+            return store.get_admin_region_summary(
+                depth=depth,
+                range_value=range,
+                start_date=start,
+                end_date=end,
+            )
+        except AdminRegionSummaryInputError as error:
             raise HTTPException(status_code=400, detail=str(error)) from error
 
     @app.get("/api/admin-regions/preview/shanghai")

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import {
+  ADMIN_REGION_LINES_VISIBLE_STORAGE_KEY,
   GLASS_PANEL_OPACITY_STORAGE_KEY,
   MAP_ADMIN_BOUNDARIES_VISIBLE_STORAGE_KEY,
   MAP_PROJECTION_STORAGE_KEY,
@@ -9,6 +10,9 @@ import {
   MAP_PLACE_LABELS_VISIBLE_STORAGE_KEY,
   MAP_STYLE_STORAGE_KEY,
   NAVIGATION_STYLE_STORAGE_KEY,
+  SHOW_ALL_ADMIN_REGIONS_STORAGE_KEY,
+  SHOW_FOOTPRINTS_IN_REGION_MODE_STORAGE_KEY,
+  readAdminRegionLinesVisible,
   readGlassPanelOpacity,
   readMapAdminBoundariesVisible,
   readMapLanguage,
@@ -17,6 +21,9 @@ import {
   readMapPlaceLabelsVisible,
   readMapStyle,
   readNavigationStyle,
+  readShowAllAdminRegions,
+  readShowFootprintsInRegionMode,
+  writeAdminRegionLinesVisible,
   writeMapAdminBoundariesVisible,
   writeMapLanguage,
   writeMapProjection,
@@ -25,6 +32,8 @@ import {
   writeMapStyle,
   writeNavigationStyle,
   writeGlassPanelOpacity,
+  writeShowAllAdminRegions,
+  writeShowFootprintsInRegionMode,
 } from './navigationPreferences'
 
 function createStorage(initialValue?: string, key = NAVIGATION_STYLE_STORAGE_KEY) {
@@ -237,5 +246,118 @@ describe('navigationPreferences', () => {
     writeMapAdminBoundariesVisible(true, storage)
 
     expect(storage.setItem).toHaveBeenCalledWith(MAP_ADMIN_BOUNDARIES_VISIBLE_STORAGE_KEY, 'true')
+  })
+
+  it('uses the intended defaults for region page display preferences', () => {
+    const storage = createStorage()
+
+    expect(readShowAllAdminRegions(storage)).toBe(false)
+    expect(readShowFootprintsInRegionMode(storage)).toBe(false)
+    expect(readAdminRegionLinesVisible(storage)).toBe(true)
+  })
+
+  it('reads stored region page display preferences', () => {
+    expect(readShowAllAdminRegions(
+      createStorage('true', SHOW_ALL_ADMIN_REGIONS_STORAGE_KEY),
+    )).toBe(true)
+    expect(readShowAllAdminRegions(
+      createStorage('false', SHOW_ALL_ADMIN_REGIONS_STORAGE_KEY),
+    )).toBe(false)
+    expect(readShowFootprintsInRegionMode(
+      createStorage('true', SHOW_FOOTPRINTS_IN_REGION_MODE_STORAGE_KEY),
+    )).toBe(true)
+    expect(readShowFootprintsInRegionMode(
+      createStorage('false', SHOW_FOOTPRINTS_IN_REGION_MODE_STORAGE_KEY),
+    )).toBe(false)
+    expect(readAdminRegionLinesVisible(
+      createStorage('true', ADMIN_REGION_LINES_VISIBLE_STORAGE_KEY),
+    )).toBe(true)
+    expect(readAdminRegionLinesVisible(
+      createStorage('false', ADMIN_REGION_LINES_VISIBLE_STORAGE_KEY),
+    )).toBe(false)
+  })
+
+  it('writes region page display preferences to independent storage keys', () => {
+    const storage = createStorage()
+
+    writeShowAllAdminRegions(true, storage)
+    writeShowFootprintsInRegionMode(false, storage)
+    writeAdminRegionLinesVisible(true, storage)
+
+    expect(storage.setItem).toHaveBeenNthCalledWith(
+      1,
+      SHOW_ALL_ADMIN_REGIONS_STORAGE_KEY,
+      'true',
+    )
+    expect(storage.setItem).toHaveBeenNthCalledWith(
+      2,
+      SHOW_FOOTPRINTS_IN_REGION_MODE_STORAGE_KEY,
+      'false',
+    )
+    expect(storage.setItem).toHaveBeenNthCalledWith(
+      3,
+      ADMIN_REGION_LINES_VISIBLE_STORAGE_KEY,
+      'true',
+    )
+
+    writeShowAllAdminRegions(false, storage)
+    writeShowFootprintsInRegionMode(true, storage)
+    writeAdminRegionLinesVisible(false, storage)
+
+    expect(readShowAllAdminRegions(storage)).toBe(false)
+    expect(readShowFootprintsInRegionMode(storage)).toBe(true)
+    expect(readAdminRegionLinesVisible(storage)).toBe(false)
+  })
+
+  it('uses region page display defaults when browser storage is unavailable', () => {
+    vi.stubGlobal('window', undefined)
+
+    try {
+      expect(readShowAllAdminRegions()).toBe(false)
+      expect(readShowFootprintsInRegionMode()).toBe(false)
+      expect(readAdminRegionLinesVisible()).toBe(true)
+      expect(() => writeShowAllAdminRegions(true)).not.toThrow()
+      expect(() => writeShowFootprintsInRegionMode(true)).not.toThrow()
+      expect(() => writeAdminRegionLinesVisible(false)).not.toThrow()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('falls back when the browser localStorage getter throws', () => {
+    vi.stubGlobal('window', {
+      get localStorage() {
+        throw new Error('blocked')
+      },
+    })
+
+    try {
+      expect(readShowAllAdminRegions()).toBe(false)
+      expect(readShowFootprintsInRegionMode()).toBe(false)
+      expect(readAdminRegionLinesVisible()).toBe(true)
+      expect(() => writeShowAllAdminRegions(true)).not.toThrow()
+      expect(() => writeShowFootprintsInRegionMode(true)).not.toThrow()
+      expect(() => writeAdminRegionLinesVisible(false)).not.toThrow()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('falls back without throwing when region page display storage throws', () => {
+    const storage = {
+      getItem: vi.fn(() => {
+        throw new Error('blocked')
+      }),
+      setItem: vi.fn(() => {
+        throw new Error('blocked')
+      }),
+    } as Pick<Storage, 'getItem' | 'setItem'>
+
+    expect(readShowAllAdminRegions(storage)).toBe(false)
+    expect(readShowFootprintsInRegionMode(storage)).toBe(false)
+    expect(readAdminRegionLinesVisible(storage)).toBe(true)
+    expect(() => writeShowAllAdminRegions(true, storage)).not.toThrow()
+    expect(() => writeShowFootprintsInRegionMode(true, storage)).not.toThrow()
+    expect(() => writeAdminRegionLinesVisible(false, storage)).not.toThrow()
   })
 })
