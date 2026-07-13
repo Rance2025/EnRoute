@@ -305,5 +305,9 @@ function writeBooleanPreference(
 }
 
 function getBrowserStorage() {
-  return typeof window === 'undefined' ? undefined : window.localStorage
+  try {
+    return typeof window === 'undefined' ? undefined : window.localStorage
+  } catch {
+    return undefined
+  }
 }

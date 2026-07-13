@@ -324,6 +324,25 @@ describe('navigationPreferences', () => {
     }
   })
 
+  it('falls back when the browser localStorage getter throws', () => {
+    vi.stubGlobal('window', {
+      get localStorage() {
+        throw new Error('blocked')
+      },
+    })
+
+    try {
+      expect(readShowAllAdminRegions()).toBe(false)
+      expect(readShowFootprintsInRegionMode()).toBe(false)
+      expect(readAdminRegionLinesVisible()).toBe(true)
+      expect(() => writeShowAllAdminRegions(true)).not.toThrow()
+      expect(() => writeShowFootprintsInRegionMode(true)).not.toThrow()
+      expect(() => writeAdminRegionLinesVisible(false)).not.toThrow()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('falls back without throwing when region page display storage throws', () => {
     const storage = {
       getItem: vi.fn(() => {
