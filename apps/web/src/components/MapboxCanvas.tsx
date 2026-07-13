@@ -4,11 +4,14 @@ import mapboxgl, { type LayerSpecification } from 'mapbox-gl'
 import {
   ADMIN_REGION_FILL_LAYER_ID,
   ADMIN_REGION_LINE_LAYER_ID,
+  ADMIN_REGION_SELECTION_FILL_LAYER_ID,
   ADMIN_REGION_VECTOR_SOURCE_ID,
   createAdminRegionFillFilter,
   createAdminRegionFillLayer,
   createAdminRegionLineFilter,
   createAdminRegionLineLayer,
+  createAdminRegionSelectionFillFilter,
+  createAdminRegionSelectionFillLayer,
   createAdminRegionVectorTileSource,
   DEFAULT_ADMIN_REGION_TILE_URL,
   MAX_ADMIN_REGION_TILE_ZOOM,
@@ -47,6 +50,13 @@ type MapboxCanvasProps = {
   onFootprintMetricsChange?: (metrics: FootprintMetrics) => void
   adminRegionUnlockEnabled?: boolean
   adminRegionActiveOnly?: boolean
+  adminRegionVisibleIds?: string[] | null
+  adminRegionLinesVisible?: boolean
+  footprintsVisible?: boolean
+  selectedAdminRegion?: {
+    regionId: string
+    bounds: { west: number, south: number, east: number, north: number }
+  } | null
   adminRegionDepth?: AdminRegionDepth
   debugPanelVisible?: boolean
   placeLabelsVisible?: boolean
@@ -175,6 +185,8 @@ const GLOBE_ROTATION_STEP_DEGREES = 1.2
 const GLOBE_ROTATION_INTERVAL_MS = 1000
 const MAP_FIT_BOUNDS_DURATION_MS = 900
 const MAP_FIT_BOUNDS_PADDING_PX = 96
+const ADMIN_REGION_SELECTION_FIT_BOUNDS_DURATION_MS = 600
+const ADMIN_REGION_SELECTION_FIT_BOUNDS_PADDING_PX = 72
 const MAP_STYLE_MUTATION_READY_RETRY_INTERVAL_MS = 80
 const MAP_STYLE_MUTATION_READY_RETRY_LIMIT = 60
 const FOOTPRINT_STYLE_STORAGE_KEY = 'enroute.footprintStyle'
@@ -203,6 +215,10 @@ function MapboxCanvasComponent({
   onFootprintMetricsChange,
   adminRegionUnlockEnabled = false,
   adminRegionActiveOnly = false,
+  adminRegionVisibleIds,
+  adminRegionLinesVisible = true,
+  footprintsVisible = true,
+  selectedAdminRegion = null,
   adminRegionDepth = DEFAULT_ADMIN_REGION_DEPTH,
   debugPanelVisible = false,
   placeLabelsVisible = true,
@@ -233,6 +249,11 @@ function MapboxCanvasComponent({
   const languageRef = useRef(language)
   const appliedLanguageRef = useRef<MapboxLanguage | undefined>(undefined)
   const activeAdminRegionIdsRef = useRef<string[] | null>(null)
+  const appliedLayerVisibilityRef = useRef({
+    styleLoadRevision: -1,
+    adminRegionLinesVisible: true,
+    footprintsVisible: true,
+  })
   const selectedFootprintBoundsRef = useRef<FootprintLngLatBounds | null>(null)
   const baseMapVisibilityRecordsRef = useRef<BaseMapVisibilityRecord[]>([])
   const hiddenBaseMapConfigOverridesRef = useRef<Set<BaseMapConfigPropertyName>>(new Set())
@@ -338,6 +359,9 @@ function MapboxCanvasComponent({
 
     if (!map) return
 
+    if (map.getLayer(ADMIN_REGION_SELECTION_FILL_LAYER_ID)) {
+      map.removeLayer(ADMIN_REGION_SELECTION_FILL_LAYER_ID)
+    }
     if (map.getLayer(ADMIN_REGION_LINE_LAYER_ID)) {
       map.removeLayer(ADMIN_REGION_LINE_LAYER_ID)
     }
@@ -369,6 +393,7 @@ function MapboxCanvasComponent({
     )
     map.addLayer(createAdminRegionFillLayer())
     map.addLayer(createAdminRegionLineLayer())
+    map.addLayer(createAdminRegionSelectionFillLayer())
   }, [removeAdminRegionLayers])
 
   const applyAdminRegionLayerFilters = useCallback((regionIds: string[] | null) => {
@@ -840,7 +865,8 @@ function MapboxCanvasComponent({
       status !== 'ready' ||
       !styleMutationReady ||
       !adminRegionUnlockEnabled ||
-      !adminRegionActiveOnly
+      !adminRegionActiveOnly ||
+      adminRegionVisibleIds !== undefined
     ) {
       activeAdminRegionIdsRef.current = null
       return
@@ -887,6 +913,7 @@ function MapboxCanvasComponent({
     adminRegionActiveOnly,
     adminRegionDepth,
     adminRegionUnlockEnabled,
+    adminRegionVisibleIds,
     applyAdminRegionLayerFilters,
     footprintTileRange,
     resolvedAdminRegionActiveUrl,
@@ -897,15 +924,81 @@ function MapboxCanvasComponent({
   useEffect(() => {
     if (status !== 'ready' || !styleMutationReady || !adminRegionUnlockEnabled) return
 
-    applyAdminRegionLayerFilters(adminRegionActiveOnly ? activeAdminRegionIdsRef.current ?? [] : null)
+    applyAdminRegionLayerFilters(
+      adminRegionVisibleIds === undefined
+        ? adminRegionActiveOnly ? activeAdminRegionIdsRef.current ?? [] : null
+        : adminRegionVisibleIds,
+    )
   }, [
     adminRegionActiveOnly,
     adminRegionUnlockEnabled,
+    adminRegionVisibleIds,
     applyAdminRegionLayerFilters,
     status,
     styleLoadRevision,
     styleMutationReady,
   ])
+
+  useEffect(() => {
+    const map = mapRef.current
+
+    if (status !== 'ready' || !styleMutationReady || !map) return
+
+    const applied = appliedLayerVisibilityRef.current
+    const isStyleReload = applied.styleLoadRevision !== styleLoadRevision
+
+    if (
+      map.getLayer(FOOTPRINT_CIRCLE_LAYER_ID) &&
+      (footprintsVisible !== applied.footprintsVisible || (isStyleReload && !footprintsVisible))
+    ) {
+      map.setLayoutProperty(
+        FOOTPRINT_CIRCLE_LAYER_ID,
+        'visibility',
+        footprintsVisible ? 'visible' : 'none',
+      )
+    }
+    if (
+      map.getLayer(ADMIN_REGION_LINE_LAYER_ID) &&
+      (adminRegionLinesVisible !== applied.adminRegionLinesVisible || (isStyleReload && !adminRegionLinesVisible))
+    ) {
+      map.setLayoutProperty(
+        ADMIN_REGION_LINE_LAYER_ID,
+        'visibility',
+        adminRegionLinesVisible ? 'visible' : 'none',
+      )
+    }
+    appliedLayerVisibilityRef.current = {
+      styleLoadRevision,
+      adminRegionLinesVisible,
+      footprintsVisible,
+    }
+  }, [
+    adminRegionLinesVisible,
+    footprintsVisible,
+    status,
+    styleLoadRevision,
+    styleMutationReady,
+  ])
+
+  useEffect(() => {
+    const map = mapRef.current
+
+    if (status !== 'ready' || !styleMutationReady || !map) return
+
+    if (map.getLayer(ADMIN_REGION_SELECTION_FILL_LAYER_ID)) {
+      map.setFilter(
+        ADMIN_REGION_SELECTION_FILL_LAYER_ID,
+        createAdminRegionSelectionFillFilter(selectedAdminRegion?.regionId),
+      )
+    }
+    if (selectedAdminRegion) {
+      const { west, south, east, north } = selectedAdminRegion.bounds
+      map.fitBounds([[west, south], [east, north]], {
+        padding: ADMIN_REGION_SELECTION_FIT_BOUNDS_PADDING_PX,
+        duration: ADMIN_REGION_SELECTION_FIT_BOUNDS_DURATION_MS,
+      })
+    }
+  }, [selectedAdminRegion, status, styleLoadRevision, styleMutationReady])
 
   useEffect(() => {
     const map = mapRef.current

@@ -92,4 +92,32 @@ describe('adminRegionVectorTileSource', () => {
       ],
     ])
   })
+
+  it('builds a dedicated selection fill layer and hides it without a selected region', () => {
+    expect(adminRegionVectorTiles.ADMIN_REGION_SELECTION_FILL_LAYER_ID).toBe('admin-regions-selection-fill')
+    expect(adminRegionVectorTiles.createAdminRegionSelectionFillFilter()).toEqual([
+      'all',
+      ['==', ['get', 'kind'], 'fill'],
+      ['in', ['geometry-type'], ['literal', ['Polygon', 'MultiPolygon']]],
+      ['==', ['get', 'region_id'], ''],
+    ])
+    expect(adminRegionVectorTiles.createAdminRegionSelectionFillLayer('310115')).toMatchObject({
+      id: 'admin-regions-selection-fill',
+      type: 'fill',
+      source: 'admin-regions',
+      'source-layer': 'admin_regions',
+      slot: 'top',
+      filter: [
+        'all',
+        ['==', ['get', 'kind'], 'fill'],
+        ['in', ['geometry-type'], ['literal', ['Polygon', 'MultiPolygon']]],
+        ['==', ['get', 'region_id'], '310115'],
+      ],
+      paint: {
+        'fill-color': '#0b4f47',
+        'fill-opacity': 0.36,
+        'fill-antialias': false,
+      },
+    })
+  })
 })
