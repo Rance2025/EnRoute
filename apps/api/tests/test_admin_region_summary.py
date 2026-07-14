@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 import sqlite3
 from pathlib import Path
@@ -9,6 +10,7 @@ from unittest.mock import ANY
 import pytest
 from fastapi.testclient import TestClient
 from mapbox_vector_tile import encode
+from shapely.geometry import MultiPolygon, Polygon
 
 from enroute_api.admin_regions import tiles as admin_region_tiles_module
 from enroute_api.admin_regions import thumbnail as thumbnail_module
@@ -32,7 +34,7 @@ def assert_svg_path_within_viewbox(path: str) -> None:
     assert coordinates
     assert len(coordinates) % 2 == 0
     assert all(0 <= x <= 320 for x in coordinates[::2])
-    assert all(0 <= y <= 150 for y in coordinates[1::2])
+    assert all(0 <= y <= 180 for y in coordinates[1::2])
 
 
 @pytest.fixture
@@ -302,7 +304,7 @@ def test_rejects_unsupported_depth(connection: sqlite3.Connection, depth: int):
         (4, thumbnail_module.CHINA_BOUNDS),
     ],
 )
-def test_thumbnail_projection_uses_one_scale_for_both_axes(
+def test_thumbnail_projection_uses_equidistant_cylindrical_scale(
     depth: int,
     frame: tuple[float, float, float, float],
 ):
@@ -313,7 +315,9 @@ def test_thumbnail_projection_uses_one_scale_for_both_axes(
     horizontal_scale = (projected_east - projected_west) / (east - west)
     vertical_scale = (projected_south - projected_north) / (north - south)
 
-    assert horizontal_scale == pytest.approx(vertical_scale)
+    assert horizontal_scale / vertical_scale == pytest.approx(
+        math.cos(math.radians(35.0)),
+    )
     assert projected_west >= thumbnail_module.VIEWBOX_PADDING
     assert projected_north >= thumbnail_module.VIEWBOX_PADDING
     assert projected_east <= thumbnail_module.VIEWBOX_WIDTH - thumbnail_module.VIEWBOX_PADDING
@@ -323,6 +327,10 @@ def test_thumbnail_projection_uses_one_scale_for_both_axes(
 def test_thumbnail_uses_fixed_world_and_china_frames_without_presentation_attributes(
     connection: sqlite3.Connection,
 ):
+    assert thumbnail_module.VIEWBOX == "0 0 320 180"
+    assert thumbnail_module.WORLD_BOUNDS == (-180.0, -58.0, 180.0, 85.0)
+    assert thumbnail_module.CHINA_BOUNDS == (73.0, 4.0, 136.0, 55.0)
+
     world = create_admin_region_thumbnail(
         connection,
         depth=1,
@@ -347,13 +355,105 @@ def test_thumbnail_uses_fixed_world_and_china_frames_without_presentation_attrib
     for thumbnail in (world, province, city, district):
         assert thumbnail.keys() == {"viewBox", "basePath", "visitedPath"}
         assert all(isinstance(value, str) for value in thumbnail.values())
-        assert thumbnail["viewBox"] == "0 0 320 150"
+        assert thumbnail["viewBox"] == "0 0 320 180"
         assert thumbnail["basePath"].startswith("M")
         assert thumbnail["visitedPath"].startswith("M")
+        assert_svg_path_within_viewbox(thumbnail["basePath"])
+        assert_svg_path_within_viewbox(thumbnail["visitedPath"])
         assert not ({"stroke", "style", "label"} & thumbnail.keys())
         assert not re.search(r"\d+\.\d{2,}", thumbnail["basePath"])
 
     assert json.dumps(city).find("stroke") == -1
+
+
+@pytest.mark.parametrize(
+    ("tile", "local_position"),
+    [
+        (thumbnail_module.AdminRegionThumbnailTile(0, 0, 0, b""), (2048.0, 2048.0)),
+        (thumbnail_module.AdminRegionThumbnailTile(1, 1, 0, b""), (0.0, 4096.0)),
+    ],
+)
+def test_thumbnail_restores_global_mercator_position_before_frame_projection(
+    tile: thumbnail_module.AdminRegionThumbnailTile,
+    local_position: tuple[float, float],
+):
+    for depth in (1, 2, 3, 4):
+        assert thumbnail_module.project_tile_position(
+            *local_position,
+            depth=depth,
+            tile=tile,
+        ) == pytest.approx(
+            thumbnail_module.project_geographic_position(0.0, 0.0, depth=depth),
+        )
+
+
+def test_china_z1_base_preserves_disconnected_south_china_sea_components(
+    connection: sqlite3.Connection,
+):
+    components = (
+        ("mainland", ((80.0, 20.0, 119.0, 45.0), (95.0, 28.0, 100.0, 34.0))),
+        ("hainan", ((108.0, 18.0, 111.0, 19.8),)),
+        ("taiwan", ((120.5, 22.0, 122.5, 25.0),)),
+        ("south-sea-west", ((111.5, 13.5, 112.5, 14.5),)),
+        ("south-sea-east", ((115.0, 6.5, 116.0, 7.5),)),
+    )
+    tile = insert_geographic_thumbnail_tile(connection, depth=2, components=components)
+    decoded_mainland = thumbnail_module.decode_fill_geometries(tile)["mainland"]
+    assert sum(
+        len(polygon.interiors)
+        for geometry in decoded_mainland
+        for polygon in thumbnail_module.iter_polygons(geometry)
+    ) == 1
+
+    thumbnail = create_admin_region_thumbnail(
+        connection,
+        depth=2,
+        visited_region_ids=set(),
+    )
+
+    base_path = thumbnail["basePath"]
+    assert base_path.count("M") == len(components)
+    assert base_path != thumbnail_module.bounds_to_svg_path(
+        thumbnail_module.project_geographic_bounds(
+            80.0,
+            6.5,
+            122.5,
+            45.0,
+            depth=2,
+        ),
+    )
+    assert len(base_path) <= thumbnail_module.MAX_THUMBNAIL_PATH_LENGTH
+    assert_svg_path_within_viewbox(base_path)
+
+
+def test_bounded_path_simplification_preserves_disconnected_components(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    dense_shell = [(0.0, 0.0), (40.0, 0.0), (40.0, 20.0)]
+    dense_shell.extend(
+        (index / 2, 20.0 + (0.6 if index % 2 else 0.0))
+        for index in range(80, -1, -1)
+    )
+    dense_shell.append((0.0, 0.0))
+    geometry = MultiPolygon(
+        [
+            Polygon(dense_shell),
+            Polygon([(60.0, 0.0), (60.2, 0.0), (60.2, 0.2), (60.0, 0.2)]),
+        ],
+    )
+    topology_preserving_path = thumbnail_module.geometry_to_svg_path(
+        geometry.simplify(1.2, preserve_topology=True),
+    )
+    monkeypatch.setattr(
+        thumbnail_module,
+        "MAX_THUMBNAIL_PATH_LENGTH",
+        len(topology_preserving_path),
+    )
+
+    path = thumbnail_module.bounded_geometry_path(geometry)
+
+    assert len(path) <= thumbnail_module.MAX_THUMBNAIL_PATH_LENGTH
+    assert path.count("M") == 2
 
 
 @pytest.mark.parametrize("depth", [2, 3, 4])
@@ -374,7 +474,7 @@ def test_china_thumbnail_prefers_current_depth_z1_tile_with_coordinate_context(
         visited_region_ids={"310100"},
     )
 
-    assert thumbnail["viewBox"] == "0 0 320 150"
+    assert thumbnail["viewBox"] == "0 0 320 180"
     assert thumbnail["basePath"].startswith("M")
     assert thumbnail["visitedPath"].startswith("M")
     assert_svg_path_within_viewbox(thumbnail["basePath"])
@@ -696,8 +796,8 @@ def test_thumbnail_reuses_compact_precomputed_paths_without_reading_raw_geometry
     assert shape_calls == first_shape_call_count
     assert shanghai["basePath"] == hangzhou["basePath"]
     assert shanghai["visitedPath"] != hangzhou["visitedPath"]
-    assert len(shanghai["basePath"]) < 10_000
-    assert len(shanghai["visitedPath"]) < 10_000
+    assert len(shanghai["basePath"]) <= thumbnail_module.MAX_THUMBNAIL_PATH_LENGTH
+    assert len(shanghai["visitedPath"]) <= thumbnail_module.MAX_THUMBNAIL_PATH_LENGTH
 
 
 def test_thumbnail_queries_bounds_for_visited_regions_missing_from_the_tile(
@@ -848,7 +948,7 @@ def test_admin_region_summary_api_returns_thumbnail_and_rankings_without_writes(
             },
         ],
         "thumbnail": {
-            "viewBox": "0 0 320 150",
+            "viewBox": "0 0 320 180",
             "basePath": ANY,
             "visitedPath": ANY,
         },
@@ -1214,6 +1314,56 @@ def insert_thumbnail_tile(
         ) VALUES (?, ?, ?, 'world', ?, 'thumbnail-test-v1', ?, ?, 1)
         """,
         (z, x, y, depth, tile, len(selected_features)),
+    )
+    connection.commit()
+    return tile
+
+
+def insert_geographic_thumbnail_tile(
+    connection: sqlite3.Connection,
+    *,
+    depth: int,
+    components: tuple[
+        tuple[str, tuple[tuple[float, float, float, float], ...]],
+        ...,
+    ],
+) -> bytes:
+    z, x, y = 1, 1, 0
+    world_extent = 4096 * 2**z
+
+    def tile_position(longitude: float, latitude: float) -> list[int]:
+        global_x = (longitude + 180.0) / 360.0 * world_extent
+        global_y = (
+            0.5
+            - math.asinh(math.tan(math.radians(latitude))) / (2.0 * math.pi)
+        ) * world_extent
+        return [round(global_x - x * 4096), round(global_y - y * 4096)]
+
+    features = [
+        {
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [
+                    [tile_position(*position) for position in rectangle_ring(*bounds)]
+                    for bounds in rings
+                ],
+            },
+            "properties": {"region_id": region_id, "level": depth, "kind": "fill"},
+        }
+        for region_id, rings in components
+    ]
+    tile = encode(
+        [{"name": "admin_regions", "features": features}],
+        default_options={"extents": 4096, "y_coord_down": True},
+    )
+    connection.execute(
+        """
+        INSERT INTO admin_region_tiles (
+          z, x, y, focus_region_id, depth, algorithm_signature,
+          tile, feature_count, updated_at
+        ) VALUES (?, ?, ?, 'world', ?, 'thumbnail-geographic-test-v1', ?, ?, 1)
+        """,
+        (z, x, y, depth, tile, len(features)),
     )
     connection.commit()
     return tile

@@ -16,11 +16,13 @@ from shapely.geometry.base import BaseGeometry
 from shapely.ops import transform
 
 VIEWBOX_WIDTH = 320.0
-VIEWBOX_HEIGHT = 150.0
+VIEWBOX_HEIGHT = 180.0
 VIEWBOX_PADDING = 6.0
-VIEWBOX = "0 0 320 150"
+VIEWBOX = "0 0 320 180"
 WORLD_BOUNDS = (-180.0, -58.0, 180.0, 85.0)
-CHINA_BOUNDS = (73.0, 17.0, 136.0, 55.0)
+CHINA_BOUNDS = (73.0, 4.0, 136.0, 55.0)
+STANDARD_PARALLEL_DEGREES = 35.0
+LONGITUDE_SCALE = math.cos(math.radians(STANDARD_PARALLEL_DEGREES))
 MVT_EXTENT = 4096.0
 TILE_SIMPLIFY_UNITS = 8.0
 TILE_UNION_GRID_UNITS = 4.0
@@ -452,7 +454,7 @@ def decode_fill_geometries(tile: bytes) -> dict[str, list[BaseGeometry]]:
         region_id = properties.get("region_id", properties.get("id"))
         if region_id in {None, ""}:
             continue
-        geometry = force_2d(shape(geometry_mapping))
+        geometry = repair_polygonal_geometry(shape(geometry_mapping))
         if not geometry.is_empty:
             grouped_geometries[str(region_id)].append(geometry)
     return dict(grouped_geometries)
@@ -467,12 +469,16 @@ def build_tile_base_path(
     base_geometries: list[BaseGeometry] = []
     for geometries in grouped_geometries.values():
         for geometry in geometries:
-            simplified = geometry.simplify(
-                TILE_SIMPLIFY_UNITS,
-                preserve_topology=False,
-            )
-            if not simplified.is_empty:
-                base_geometries.append(simplified)
+            repaired = repair_polygonal_geometry(geometry)
+            if repaired.is_empty:
+                continue
+            if depth == 1:
+                repaired = repaired.simplify(
+                    TILE_SIMPLIFY_UNITS,
+                    preserve_topology=False,
+                )
+            if not repaired.is_empty:
+                base_geometries.append(repaired)
     if not base_geometries:
         return ""
 
@@ -607,7 +613,7 @@ def build_raw_thumbnail_paths(
         projected_geometry: BaseGeometry | None = None
         geometry_json = geometry_by_id.get(region_id)
         if geometry_json is not None:
-            geometry = force_2d(shape(json.loads(geometry_json)))
+            geometry = repair_polygonal_geometry(shape(json.loads(geometry_json)))
             projected = clip_thumbnail_geometry(
                 project_geographic_geometry(
                     geometry,
@@ -756,14 +762,38 @@ def safe_union(
     *,
     grid_size: float,
 ) -> BaseGeometry:
-    non_empty = [geometry for geometry in geometries if not geometry.is_empty]
+    non_empty = [
+        repaired
+        for geometry in geometries
+        if not geometry.is_empty
+        for repaired in (repair_polygonal_geometry(geometry),)
+        if not repaired.is_empty
+    ]
     if not non_empty:
         return GeometryCollection()
     try:
-        return union_all(non_empty, grid_size=grid_size)
+        unioned = union_all(non_empty, grid_size=grid_size)
     except GEOSException:
-        repaired = [geometry if geometry.is_valid else geometry.buffer(0) for geometry in non_empty]
-        return union_all(repaired, grid_size=grid_size)
+        unioned = union_all(
+            [repair_polygonal_geometry(geometry.buffer(0)) for geometry in non_empty],
+            grid_size=grid_size,
+        )
+    return repair_polygonal_geometry(unioned)
+
+
+def repair_polygonal_geometry(geometry: BaseGeometry) -> BaseGeometry:
+    resolved = force_2d(geometry)
+    if not resolved.is_valid:
+        resolved = make_valid(resolved)
+    polygons = list(iter_polygons(resolved))
+    if not polygons:
+        return GeometryCollection()
+    if len(polygons) == 1:
+        return polygons[0]
+    try:
+        return union_all(polygons, grid_size=0.0)
+    except GEOSException:
+        return union_all([polygon.buffer(0) for polygon in polygons], grid_size=0.0)
 
 
 def clip_thumbnail_geometry(geometry: BaseGeometry) -> BaseGeometry:
@@ -774,20 +804,13 @@ def clip_thumbnail_geometry(geometry: BaseGeometry) -> BaseGeometry:
         VIEWBOX_HEIGHT - VIEWBOX_PADDING,
     )
 
-    def repair_polygonal(value: BaseGeometry) -> BaseGeometry:
-        resolved = force_2d(value)
-        if not resolved.is_valid:
-            resolved = make_valid(resolved)
-        polygons = list(iter_polygons(resolved))
-        return safe_union(polygons, grid_size=0.0) if polygons else GeometryCollection()
-
-    resolved = repair_polygonal(geometry)
+    resolved = repair_polygonal_geometry(geometry)
     try:
         clipped = resolved.intersection(frame)
     except GEOSException:
-        resolved = repair_polygonal(make_valid(resolved))
+        resolved = repair_polygonal_geometry(make_valid(resolved))
         clipped = resolved.intersection(frame)
-    return repair_polygonal(clipped)
+    return repair_polygonal_geometry(clipped)
 
 
 def remove_polygon_holes(geometry: BaseGeometry) -> BaseGeometry:
@@ -804,16 +827,18 @@ def project_geographic_position(
     west, south, east, north = WORLD_BOUNDS if depth == 1 else CHINA_BOUNDS
     available_width = VIEWBOX_WIDTH - VIEWBOX_PADDING * 2
     available_height = VIEWBOX_HEIGHT - VIEWBOX_PADDING * 2
+    projected_width = (east - west) * LONGITUDE_SCALE
+    projected_height = north - south
     scale = min(
-        available_width / (east - west),
-        available_height / (north - south),
+        available_width / projected_width,
+        available_height / projected_height,
     )
-    content_width = (east - west) * scale
-    content_height = (north - south) * scale
+    content_width = projected_width * scale
+    content_height = projected_height * scale
     offset_x = (VIEWBOX_WIDTH - content_width) / 2
     offset_y = (VIEWBOX_HEIGHT - content_height) / 2
     return (
-        offset_x + (longitude - west) * scale,
+        offset_x + (longitude - west) * LONGITUDE_SCALE * scale,
         offset_y + (north - latitude) * scale,
     )
 
@@ -895,7 +920,7 @@ def bounded_geometry_path(geometry: BaseGeometry) -> str:
     if len(path) <= MAX_THUMBNAIL_PATH_LENGTH:
         return path
     for tolerance in (1.2, 2.4, 4.8, 9.6):
-        simplified = geometry.simplify(tolerance, preserve_topology=False)
+        simplified = geometry.simplify(tolerance, preserve_topology=True)
         path = geometry_to_svg_path(simplified)
         if len(path) <= MAX_THUMBNAIL_PATH_LENGTH:
             return path
