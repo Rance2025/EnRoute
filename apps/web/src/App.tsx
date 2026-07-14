@@ -123,6 +123,23 @@ type RightContextRow = {
   label: string
   value: string
 }
+type AdminRegionSummaryRequestContext = {
+  depth: AdminRegionDepth
+  timeRange: TimeRangeSelection
+  revision: number
+  regionSession: number
+}
+type AdminRegionSummaryResult =
+  | {
+    context: AdminRegionSummaryRequestContext
+    status: 'ready'
+    summary: AdminRegionSummary
+  }
+  | {
+    context: AdminRegionSummaryRequestContext
+    status: 'error'
+    summary: null
+  }
 
 const DEFAULT_ADMIN_REGION_DEPTH: AdminRegionDepth = 1
 
@@ -272,6 +289,18 @@ function getTopNavigationDragPosition(
   }
 }
 
+function adminRegionSummaryRequestContextsAreEqual(
+  left: AdminRegionSummaryRequestContext,
+  right: AdminRegionSummaryRequestContext,
+) {
+  return (
+    left.depth === right.depth &&
+    left.timeRange === right.timeRange &&
+    left.revision === right.revision &&
+    left.regionSession === right.regionSession
+  )
+}
+
 function App(props: AppProps) {
   void props.amapConfig
 
@@ -324,12 +353,11 @@ function App(props: AppProps) {
   const [adminRegionDepth, setAdminRegionDepth] = useState<AdminRegionDepth>(
     DEFAULT_ADMIN_REGION_DEPTH,
   )
-  const [adminRegionSummary, setAdminRegionSummary] = useState<AdminRegionSummary | null>(null)
-  const [adminRegionSummaryStatus, setAdminRegionSummaryStatus] = useState<
-    'idle' | 'loading' | 'ready' | 'error'
-  >('idle')
+  const [adminRegionSummaryResult, setAdminRegionSummaryResult] =
+    useState<AdminRegionSummaryResult | null>(null)
   const [selectedAdminRegion, setSelectedAdminRegion] = useState<AdminRegionRanking | null>(null)
   const [adminRegionSummaryRevision, setAdminRegionSummaryRevision] = useState(0)
+  const [adminRegionSession, setAdminRegionSession] = useState(0)
   const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRangeSelection>(
     createTodaySelection,
   )
@@ -345,6 +373,15 @@ function App(props: AppProps) {
   })
   const [viewportSize, setViewportSize] = useState(getViewportSize)
   const handleViewChange = useCallback((nextView: AppView) => {
+    if (
+      nextView === 'map' &&
+      view !== 'map' &&
+      secondaryNavSelection.map === 'regions'
+    ) {
+      setSelectedAdminRegion(null)
+      setAdminRegionSession((current) => current + 1)
+    }
+
     setView(nextView)
 
     if (
@@ -357,7 +394,7 @@ function App(props: AppProps) {
         anchorDate: createTodaySelection().anchorDate,
       })
     }
-  }, [selectedTimeRange, view])
+  }, [secondaryNavSelection.map, selectedTimeRange, view])
   const handleNavigationStyleChange = useCallback((nextStyle: NavigationStyle) => {
     setNavigationStyle(nextStyle)
     writeNavigationStyle(nextStyle)
@@ -396,11 +433,26 @@ function App(props: AppProps) {
     setShowFootprintsInRegionMode(nextVisible)
     writeShowFootprintsInRegionMode(nextVisible)
   }, [])
+  const handleSecondaryNavSelect = useCallback((nextId: SecondaryNavId) => {
+    if (
+      view === 'map' &&
+      secondaryNavSelection.map !== 'regions' &&
+      nextId === 'regions'
+    ) {
+      setSelectedAdminRegion(null)
+      setAdminRegionSession((current) => current + 1)
+    }
+
+    setSecondaryNavSelection((current) => ({
+      ...current,
+      [view]: nextId,
+    }))
+  }, [secondaryNavSelection.map, view])
   const handleAdminRegionDepthChange = useCallback((nextDepth: AdminRegionDepth) => {
     if (nextDepth === adminRegionDepth) return
 
     setSelectedAdminRegion(null)
-    setAdminRegionSummaryStatus('loading')
+    setAdminRegionSummaryResult(null)
     setAdminRegionDepth(nextDepth)
   }, [adminRegionDepth])
   const handleMapProjectionChange = useCallback((nextProjection: MapProjectionPreference) => {
@@ -588,9 +640,25 @@ function App(props: AppProps) {
   ])
   const selectedMapStyle = useMemo(() => resolveMapStyleOption(mapStyle), [mapStyle])
   const isRegionMode = view === 'map' && activeSecondaryNavId === 'regions'
-  const currentAdminRegionSummary = adminRegionSummary?.depth === adminRegionDepth
-    ? adminRegionSummary
+  const adminRegionSummaryRequestContext: AdminRegionSummaryRequestContext = {
+    depth: adminRegionDepth,
+    timeRange: selectedTimeRange,
+    revision: adminRegionSummaryRevision,
+    regionSession: adminRegionSession,
+  }
+  const hasCurrentAdminRegionSummaryResult = adminRegionSummaryResult !== null &&
+    adminRegionSummaryRequestContextsAreEqual(
+      adminRegionSummaryResult.context,
+      adminRegionSummaryRequestContext,
+    )
+  const currentAdminRegionSummary = hasCurrentAdminRegionSummaryResult &&
+    adminRegionSummaryResult.status === 'ready' &&
+    adminRegionSummaryResult.summary.depth === adminRegionDepth
+    ? adminRegionSummaryResult.summary
     : null
+  const currentAdminRegionSummaryStatus = hasCurrentAdminRegionSummaryResult
+    ? adminRegionSummaryResult.status
+    : 'loading'
   const adminRegionVisibleIds = showAllAdminRegions
     ? null
     : currentAdminRegionSummary?.visitedRegionIds ?? []
@@ -603,12 +671,12 @@ function App(props: AppProps) {
     }
 
     const abortController = new AbortController()
-    queueMicrotask(() => {
-      if (abortController.signal.aborted) return
-
-      setAdminRegionSummary(null)
-      setAdminRegionSummaryStatus('loading')
-    })
+    const requestContext: AdminRegionSummaryRequestContext = {
+      depth: adminRegionDepth,
+      timeRange: selectedTimeRange,
+      revision: adminRegionSummaryRevision,
+      regionSession: adminRegionSession,
+    }
 
     loadAdminRegionSummary({
       depth: adminRegionDepth,
@@ -618,8 +686,11 @@ function App(props: AppProps) {
       if (abortController.signal.aborted) return
 
       setSelectedAdminRegion(null)
-      setAdminRegionSummary(summary)
-      setAdminRegionSummaryStatus('ready')
+      setAdminRegionSummaryResult({
+        context: requestContext,
+        status: 'ready',
+        summary,
+      })
     }).catch((error: unknown) => {
       if (
         abortController.signal.aborted ||
@@ -628,14 +699,18 @@ function App(props: AppProps) {
         return
       }
 
-      setAdminRegionSummary(null)
-      setAdminRegionSummaryStatus('error')
+      setAdminRegionSummaryResult({
+        context: requestContext,
+        status: 'error',
+        summary: null,
+      })
     })
 
     return () => abortController.abort()
   }, [
     adminRegionDepth,
     adminRegionSummaryRevision,
+    adminRegionSession,
     isRegionMode,
     selectedTimeRange,
   ])
@@ -746,12 +821,7 @@ function App(props: AppProps) {
                   className={isActive ? 'secondary-nav-rail__button is-active' : 'secondary-nav-rail__button'}
                   aria-pressed={isActive}
                   title={item.label}
-                  onClick={() =>
-                    setSecondaryNavSelection((current) => ({
-                      ...current,
-                      [view]: item.id,
-                    }))
-                  }
+                  onClick={() => handleSecondaryNavSelect(item.id)}
                 >
                   <Icon size={16} strokeWidth={1.9} aria-hidden="true" />
                   <span>{item.label}</span>
@@ -777,7 +847,7 @@ function App(props: AppProps) {
             <AdminRegionContextPanel
               depth={adminRegionDepth}
               summary={currentAdminRegionSummary}
-              status={adminRegionSummaryStatus}
+              status={currentAdminRegionSummaryStatus}
               onDepthChange={handleAdminRegionDepthChange}
               onRegionSelect={setSelectedAdminRegion}
               onRetry={() => setAdminRegionSummaryRevision((current) => current + 1)}
