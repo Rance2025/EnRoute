@@ -430,6 +430,54 @@ def test_thumbnail_unions_adjacent_visited_regions_before_writing_path(
     assert thumbnail["visitedPath"].count("M") == 1
 
 
+def test_thumbnail_repairs_invalid_tile_polygon_before_clipping(
+    connection: sqlite3.Connection,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    insert_thumbnail_tile(connection, depth=4, included_region_ids={"310100"})
+
+    def decode_invalid_tile(tile: bytes, *, default_options: dict[str, bool]):
+        del tile
+        assert default_options == {"y_coord_down": True}
+        return {
+            "admin_regions": {
+                "features": [
+                    {
+                        "geometry": {
+                            "type": "Polygon",
+                            "coordinates": [
+                                [
+                                    [3400, 1600],
+                                    [3430, 1640],
+                                    [3400, 1640],
+                                    [3430, 1600],
+                                    [3400, 1600],
+                                ],
+                            ],
+                        },
+                        "properties": {
+                            "region_id": "310115",
+                            "level": 4,
+                            "kind": "fill",
+                        },
+                    },
+                ],
+            },
+        }
+
+    # The encoder normalizes self-intersections, so inject its decoded shape instead.
+    monkeypatch.setattr(thumbnail_module, "decode", decode_invalid_tile)
+
+    thumbnail = create_admin_region_thumbnail(
+        connection,
+        depth=4,
+        visited_region_ids={"310115"},
+    )
+
+    assert thumbnail["basePath"].startswith("M")
+    assert thumbnail["visitedPath"].startswith("M")
+
+
 def test_thumbnail_visited_path_only_contains_requested_regions(
     connection: sqlite3.Connection,
 ):

@@ -9,7 +9,7 @@ from threading import Lock
 from typing import Iterable
 
 from mapbox_vector_tile import decode
-from shapely import force_2d, union_all
+from shapely import force_2d, make_valid, union_all
 from shapely.errors import GEOSException
 from shapely.geometry import GeometryCollection, MultiPolygon, Polygon, box, shape
 from shapely.geometry.base import BaseGeometry
@@ -694,7 +694,21 @@ def clip_thumbnail_geometry(geometry: BaseGeometry) -> BaseGeometry:
         VIEWBOX_WIDTH - VIEWBOX_PADDING,
         VIEWBOX_HEIGHT - VIEWBOX_PADDING,
     )
-    return force_2d(geometry).intersection(frame)
+
+    def repair_polygonal(value: BaseGeometry) -> BaseGeometry:
+        resolved = force_2d(value)
+        if not resolved.is_valid:
+            resolved = make_valid(resolved)
+        polygons = list(iter_polygons(resolved))
+        return safe_union(polygons, grid_size=0.0) if polygons else GeometryCollection()
+
+    resolved = repair_polygonal(geometry)
+    try:
+        clipped = resolved.intersection(frame)
+    except GEOSException:
+        resolved = repair_polygonal(make_valid(resolved))
+        clipped = resolved.intersection(frame)
+    return repair_polygonal(clipped)
 
 
 def remove_polygon_holes(geometry: BaseGeometry) -> BaseGeometry:
