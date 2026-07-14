@@ -362,6 +362,61 @@ def test_province_city_and_district_share_one_gapless_china_base(
     assert province["basePath"].count("M") == 1
 
 
+@pytest.mark.parametrize(
+    ("depth", "visited_region_id", "force_bounds"),
+    [
+        (3, "310100", False),
+        (4, "310115", True),
+    ],
+)
+def test_missing_current_tile_keeps_province_base_with_raw_or_bounds_regions(
+    connection: sqlite3.Connection,
+    monkeypatch: pytest.MonkeyPatch,
+    depth: int,
+    visited_region_id: str,
+    force_bounds: bool,
+):
+    insert_thumbnail_tile(connection, depth=2, adjacent=True)
+    province = create_admin_region_thumbnail(connection, depth=2, visited_region_ids=set())
+    if force_bounds:
+        monkeypatch.setattr(thumbnail_module, "RAW_FALLBACK_MAX_GEOMETRY_BYTES", -1)
+
+    traced_statements: list[str] = []
+    shape_calls = 0
+    real_shape = thumbnail_module.shape
+
+    def count_shape_calls(geometry):
+        nonlocal shape_calls
+        shape_calls += 1
+        return real_shape(geometry)
+
+    monkeypatch.setattr(thumbnail_module, "shape", count_shape_calls)
+    connection.set_trace_callback(traced_statements.append)
+    try:
+        first = create_admin_region_thumbnail(
+            connection,
+            depth=depth,
+            visited_region_ids={visited_region_id},
+        )
+        first_shape_call_count = shape_calls
+        second = create_admin_region_thumbnail(
+            connection,
+            depth=depth,
+            visited_region_ids={visited_region_id},
+        )
+    finally:
+        connection.set_trace_callback(None)
+
+    normalized_statements = [" ".join(statement.lower().split()) for statement in traced_statements]
+    assert first["basePath"] == second["basePath"] == province["basePath"]
+    assert first["basePath"].count("M") == 1
+    assert first["visitedPath"].startswith("M")
+    assert first_shape_call_count > 0
+    assert shape_calls == first_shape_call_count
+    assert sum("length(tile)" in statement for statement in normalized_statements) == 2
+    assert sum("select tile" in statement for statement in normalized_statements) == 1
+
+
 def test_thumbnail_unions_adjacent_visited_regions_before_writing_path(
     connection: sqlite3.Connection,
 ):

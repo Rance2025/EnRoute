@@ -123,11 +123,11 @@ def read_admin_region_thumbnail_source(
         )
         for row in tile_rows
     }
+    metadata_key: tuple[object, ...] = tuple(
+        (requested_depth, metadata_by_depth.get(requested_depth))
+        for requested_depth in requested_depths
+    )
     if depth in metadata_by_depth:
-        metadata_key = tuple(
-            (requested_depth, metadata_by_depth.get(requested_depth))
-            for requested_depth in requested_depths
-        )
         cache_key = (
             "tile",
             connection_scope,
@@ -142,24 +142,10 @@ def read_admin_region_thumbnail_source(
                 mode="cached",
                 cached_paths=cached_paths,
             )
-        content_rows = connection.execute(
-            f"""
-            SELECT tile, depth
-            FROM admin_region_tiles
-            WHERE z = 0
-              AND x = 0
-              AND y = 0
-              AND focus_region_id = 'world'
-              AND depth IN ({placeholders})
-            ORDER BY depth
-            """,
-            requested_depths,
-        ).fetchall()
-        tiles_by_depth: dict[int, bytes] = {}
-        for row in content_rows:
-            tile_value = row_value(row, "tile", 0)
-            if tile_value is not None:
-                tiles_by_depth[int(row_value(row, "depth", 1))] = bytes(tile_value)
+        tiles_by_depth = read_admin_region_thumbnail_tiles(
+            connection,
+            depths=requested_depths,
+        )
         tile = tiles_by_depth.get(depth, b"")
         if tile:
             return AdminRegionThumbnailSource(
@@ -169,12 +155,50 @@ def read_admin_region_thumbnail_source(
                 tile=tile,
                 china_base_tile=tiles_by_depth.get(2, b"") if depth > 1 else b"",
             )
+        china_base_tile = tiles_by_depth.get(2, b"") if depth > 1 else b""
+        content_depths: tuple[int, ...] = ()
+    else:
+        china_base_tile = b""
+        content_depths = tuple(metadata_by_depth)
 
     return read_raw_admin_region_thumbnail_source(
         connection,
         connection_scope=connection_scope,
         depth=depth,
+        tile_metadata_key=metadata_key,
+        china_base_tile=china_base_tile,
+        content_depths=content_depths,
     )
+
+
+def read_admin_region_thumbnail_tiles(
+    connection: sqlite3.Connection,
+    *,
+    depths: Iterable[int],
+) -> dict[int, bytes]:
+    requested_depths = sorted({int(depth) for depth in depths})
+    if not requested_depths:
+        return {}
+    placeholders = ",".join("?" for _ in requested_depths)
+    content_rows = connection.execute(
+        f"""
+        SELECT tile, depth
+        FROM admin_region_tiles
+        WHERE z = 0
+          AND x = 0
+          AND y = 0
+          AND focus_region_id = 'world'
+          AND depth IN ({placeholders})
+        ORDER BY depth
+        """,
+        requested_depths,
+    ).fetchall()
+    tiles_by_depth: dict[int, bytes] = {}
+    for row in content_rows:
+        tile_value = row_value(row, "tile", 0)
+        if tile_value is not None:
+            tiles_by_depth[int(row_value(row, "depth", 1))] = bytes(tile_value)
+    return tiles_by_depth
 
 
 def read_raw_admin_region_thumbnail_source(
@@ -182,6 +206,9 @@ def read_raw_admin_region_thumbnail_source(
     *,
     connection_scope: sqlite3.Connection,
     depth: int,
+    tile_metadata_key: tuple[object, ...] = (),
+    china_base_tile: bytes = b"",
+    content_depths: tuple[int, ...] = (),
 ) -> AdminRegionThumbnailSource:
     country_filter = COUNTRY_SCOPE_FILTER if depth == 1 else ""
     stats_row = connection.execute(
@@ -204,6 +231,7 @@ def read_raw_admin_region_thumbnail_source(
         "raw",
         connection_scope,
         depth,
+        tile_metadata_key,
         data_version,
         connection.total_changes,
         region_count,
@@ -219,12 +247,20 @@ def read_raw_admin_region_thumbnail_source(
             cached_paths=cached_paths,
         )
 
+    if content_depths:
+        tiles_by_depth = read_admin_region_thumbnail_tiles(
+            connection,
+            depths=content_depths,
+        )
+        china_base_tile = tiles_by_depth.get(2, b"") if depth > 1 else b""
+
     bounds_rows = query_region_bounds(connection, depth=depth)
     if geometry_bytes > RAW_FALLBACK_MAX_GEOMETRY_BYTES:
         return AdminRegionThumbnailSource(
             cache_key=cache_key,
             depth=depth,
             mode="bounds",
+            china_base_tile=china_base_tile,
             bounds_rows=bounds_rows,
         )
 
@@ -242,6 +278,7 @@ def read_raw_admin_region_thumbnail_source(
         cache_key=cache_key,
         depth=depth,
         mode="raw",
+        china_base_tile=china_base_tile,
         geometry_rows=tuple(
             (str(row_value(row, "id", 0)), str(row_value(row, "geometry", 1)))
             for row in rows
@@ -361,6 +398,45 @@ def decode_fill_geometries(tile: bytes) -> dict[str, list[BaseGeometry]]:
     return dict(grouped_geometries)
 
 
+def build_tile_base_path(
+    grouped_geometries: dict[str, list[BaseGeometry]],
+    *,
+    depth: int,
+) -> str:
+    base_geometries: list[BaseGeometry] = []
+    for geometries in grouped_geometries.values():
+        for geometry in geometries:
+            simplified = geometry.simplify(
+                TILE_SIMPLIFY_UNITS,
+                preserve_topology=False,
+            )
+            if not simplified.is_empty:
+                base_geometries.append(simplified)
+    if not base_geometries:
+        return ""
+
+    base_geometry = safe_union(base_geometries, grid_size=TILE_UNION_GRID_UNITS)
+    base_depth = 1 if depth == 1 else 2
+    projected_base = clip_thumbnail_geometry(
+        project_tile_geometry(
+            base_geometry,
+            depth=base_depth,
+            simplify=False,
+        ),
+    )
+    if depth > 1:
+        projected_base = remove_polygon_holes(projected_base)
+    return bounded_geometry_path(
+        projected_base.simplify(0.6, preserve_topology=True),
+    )
+
+
+def build_china_base_tile_path(tile: bytes, *, depth: int) -> str:
+    if not tile:
+        return ""
+    return build_tile_base_path(decode_fill_geometries(tile), depth=depth)
+
+
 def build_tile_thumbnail_paths(
     source: AdminRegionThumbnailSource,
 ) -> AdminRegionThumbnailPaths:
@@ -430,32 +506,7 @@ def build_tile_thumbnail_paths(
         if base_tile == source.tile
         else decode_fill_geometries(base_tile)
     )
-    base_geometries: list[BaseGeometry] = []
-    for geometries in base_groups.values():
-        for geometry in geometries:
-            simplified = geometry.simplify(
-                TILE_SIMPLIFY_UNITS,
-                preserve_topology=False,
-            )
-            if not simplified.is_empty:
-                base_geometries.append(simplified)
-    if base_geometries:
-        base_geometry = safe_union(base_geometries, grid_size=TILE_UNION_GRID_UNITS)
-        base_depth = 1 if source.depth == 1 else 2
-        projected_base = clip_thumbnail_geometry(
-            project_tile_geometry(
-                base_geometry,
-                depth=base_depth,
-                simplify=False,
-            ),
-        )
-        if source.depth > 1:
-            projected_base = remove_polygon_holes(projected_base)
-        base_path = bounded_geometry_path(
-            projected_base.simplify(0.6, preserve_topology=True),
-        )
-    else:
-        base_path = ""
+    base_path = build_tile_base_path(base_groups, depth=source.depth)
     if not base_path:
         base_path = join_bounded_region_paths(region_paths)
     return AdminRegionThumbnailPaths(
@@ -509,8 +560,12 @@ def build_raw_thumbnail_paths(
                     ),
                 ),
             )
+    fallback_base_path = join_bounded_region_paths(region_paths)
     return AdminRegionThumbnailPaths(
-        base_path=join_bounded_region_paths(region_paths),
+        base_path=(
+            build_china_base_tile_path(source.china_base_tile, depth=source.depth)
+            or fallback_base_path
+        ),
         region_paths=tuple(region_paths),
     )
 
@@ -530,8 +585,12 @@ def build_bounds_thumbnail_paths(
         for region_id, (path, bounds) in sorted(coarse_by_id.items())
         if path
     )
+    fallback_base_path = join_bounded_region_paths(region_paths)
     return AdminRegionThumbnailPaths(
-        base_path=join_bounded_region_paths(region_paths),
+        base_path=(
+            build_china_base_tile_path(source.china_base_tile, depth=source.depth)
+            or fallback_base_path
+        ),
         region_paths=region_paths,
     )
 
