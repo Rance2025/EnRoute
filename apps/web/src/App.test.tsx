@@ -1087,18 +1087,27 @@ describe('App', () => {
 
     const detailDialog = screen.getByRole('dialog', { name: '流水详情' })
 
-    expect(within(detailDialog).getByText('修改流水')).toBeInTheDocument()
-    expect(within(detailDialog).getByText('删除流水')).toBeInTheDocument()
-    expect(within(detailDialog).getByText('原始分类')).toBeInTheDocument()
-    expect(within(detailDialog).getByText('归入分类')).toBeInTheDocument()
+    expect(within(detailDialog).getByRole('button', { name: '编辑流水' })).toBeInTheDocument()
+    expect(within(detailDialog).queryByText('删除流水')).not.toBeInTheDocument()
+    expect(within(detailDialog).getByText('分类')).toBeInTheDocument()
+    expect(within(detailDialog).getByText('餐饮 / 饮品')).toBeInTheDocument()
 
     fireEvent.click(within(detailDialog).getByRole('button', { name: '关闭' }))
     fireEvent.click(within(workspace).getByRole('button', { name: '新增流水' }))
 
     const newDialog = screen.getByRole('dialog', { name: '新增流水' })
 
-    expect(within(newDialog).getByText('记录新流水')).toBeInTheDocument()
+    expect(within(newDialog).getByText('本地原型 · 本次会话有效')).toBeInTheDocument()
     expect(within(newDialog).getByText('保存流水')).toBeInTheDocument()
+
+    fireEvent.change(within(newDialog).getByLabelText('金额'), { target: { value: '12.34' } })
+    fireEvent.change(within(newDialog).getByLabelText('账户'), { target: { value: 'fund-wechat' } })
+    fireEvent.click(within(newDialog).getByRole('button', { name: '选择分类 餐饮 / 正餐' }))
+    fireEvent.change(within(newDialog).getByLabelText('备注'), { target: { value: '会话新增流水' } })
+    fireEvent.click(within(newDialog).getByRole('button', { name: '保存流水' }))
+
+    expect(screen.queryByRole('dialog', { name: '新增流水' })).not.toBeInTheDocument()
+    expect(within(workspace).getByRole('button', { name: '查看流水 会话新增流水' })).toBeInTheDocument()
   })
 
   it('renders analytics with charts plus category and tag tree statistics', async () => {

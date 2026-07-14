@@ -1,7 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
 
 import { ledgerAtlasDataset } from '../accounting/ledgerAtlasData'
 import { formatCnyFromCents } from '../accounting/money'
+import {
+  saveTransactionDraft,
+  type TransactionDraft,
+} from '../accounting/transactionDraft'
 import {
   filterTransactionsByTimeRange,
   getCategoryTreeStats,
@@ -10,7 +14,6 @@ import {
   getPortfolioPeriodSummary,
   getTagTreeStats,
 } from '../accounting/selectors'
-import type { Transaction } from '../accounting/types'
 import type {
   AccountingSection,
   AccountingShellAction,
@@ -19,12 +22,11 @@ import type {
 } from '../accounting/shell'
 import type { TimeRangeSelection } from '../time/timeRange'
 import { AnalyticsWorkspace } from './accounting/AnalyticsWorkspace'
+import { AccountsWorkspace, LedgerWorkspace } from './accounting/LedgerWorkspace'
 import {
-  LedgerDetailDialog,
-  LedgerWorkspace,
-  NewTransactionDialog,
-  AccountsWorkspace,
-} from './accounting/LedgerWorkspace'
+  TransactionDialog,
+  type TransactionDialogMode,
+} from './accounting/TransactionDialog'
 
 type AccountingPageProps = {
   section: AccountingSection
@@ -43,15 +45,15 @@ export function AccountingPage({
   onShellCommandHandled,
   onShellSnapshotChange,
 }: AccountingPageProps) {
-  const [dataset] = useState(() => ({
+  const [dataset, setDataset] = useState(() => ({
     ...ledgerAtlasDataset,
     accounts: [...ledgerAtlasDataset.accounts],
     transactions: [...ledgerAtlasDataset.transactions],
     categories: [...ledgerAtlasDataset.categories],
     tags: [...ledgerAtlasDataset.tags],
   }))
-  const [activeTransaction, setActiveTransaction] = useState<Transaction | null>(null)
-  const [isNewTransactionOpen, setIsNewTransactionOpen] = useState(false)
+  const [dialogMode, setDialogMode] = useState<TransactionDialogMode | null>(null)
+  const [dialogReturnFocusTo, setDialogReturnFocusTo] = useState<HTMLElement | null>(null)
   const [selectedAccountId, setSelectedAccountId] = useState(
     () => ledgerAtlasDataset.accounts[0]?.id ?? '',
   )
@@ -95,8 +97,14 @@ export function AccountingPage({
         <LedgerWorkspace
           dataset={dataset}
           transactions={transactions}
-          onSelectTransaction={setActiveTransaction}
-          onCreateTransaction={() => setIsNewTransactionOpen(true)}
+          onSelectTransaction={(transaction) => {
+            setDialogReturnFocusTo(getActiveElement())
+            setDialogMode({ kind: 'detail', transactionId: transaction.id })
+          }}
+          onCreateTransaction={() => {
+            setDialogReturnFocusTo(getActiveElement())
+            setDialogMode({ kind: 'create' })
+          }}
         />
       ) : null}
 
@@ -119,16 +127,19 @@ export function AccountingPage({
         />
       ) : null}
 
-      {activeTransaction ? (
-        <LedgerDetailDialog
+      {dialogMode ? (
+        <TransactionDialog
+          key={dialogMode.kind === 'create' ? 'create' : `${dialogMode.kind}-${dialogMode.transactionId}`}
           dataset={dataset}
-          transaction={activeTransaction}
-          onClose={() => setActiveTransaction(null)}
+          mode={dialogMode}
+          returnFocusTo={dialogReturnFocusTo}
+          onModeChange={setDialogMode}
+          onSave={(draft) => {
+            saveDraft(draft, setDataset)
+            setDialogMode(null)
+          }}
+          onClose={() => setDialogMode(null)}
         />
-      ) : null}
-
-      {isNewTransactionOpen ? (
-        <NewTransactionDialog onClose={() => setIsNewTransactionOpen(false)} />
       ) : null}
     </section>
   )
@@ -213,4 +224,18 @@ function createShellSnapshot(
 
 function formatCurrency(amountInCents: number) {
   return `${amountInCents < 0 ? '-' : ''}¥${formatCnyFromCents(Math.abs(amountInCents))}`
+}
+
+function getActiveElement() {
+  return document.activeElement instanceof HTMLElement ? document.activeElement : null
+}
+
+function saveDraft(
+  draft: TransactionDraft,
+  setDataset: Dispatch<SetStateAction<typeof ledgerAtlasDataset>>,
+) {
+  setDataset((current) => ({
+    ...current,
+    transactions: saveTransactionDraft(current.transactions, draft, new Date().toISOString()),
+  }))
 }
