@@ -251,6 +251,8 @@ function MapboxCanvasComponent({
   const languageRef = useRef(language)
   const appliedLanguageRef = useRef<MapboxLanguage | undefined>(undefined)
   const activeAdminRegionIdsRef = useRef<string[] | null>(null)
+  const adminRegionActiveOnlyRef = useRef(adminRegionActiveOnly)
+  const adminRegionVisibleIdsRef = useRef(adminRegionVisibleIds)
   const appliedLayerVisibilityRef = useRef({
     styleLoadRevision: -1,
     adminRegionLinesVisible: true,
@@ -311,6 +313,11 @@ function MapboxCanvasComponent({
     () => createFootprintTileRange(timeRange),
     [timeRange],
   )
+
+  useEffect(() => {
+    adminRegionActiveOnlyRef.current = adminRegionActiveOnly
+    adminRegionVisibleIdsRef.current = adminRegionVisibleIds
+  }, [adminRegionActiveOnly, adminRegionVisibleIds])
 
   useEffect(() => {
     latestResolvedStyleUrlRef.current = resolvedStyleUrl
@@ -379,6 +386,7 @@ function MapboxCanvasComponent({
     currentTileUrl: string,
     depth: AdminRegionDepth,
     focusRegionId: string,
+    regionIds: string[] | null,
   ) => {
     const map = mapRef.current
 
@@ -393,10 +401,20 @@ function MapboxCanvasComponent({
         depth,
       }),
     )
-    map.addLayer(createAdminRegionFillLayer())
-    map.addLayer(createAdminRegionLineLayer())
+    const activeRegionIds = regionIds ?? undefined
+    map.addLayer(createAdminRegionFillLayer(activeRegionIds))
+    map.addLayer(createAdminRegionLineLayer(activeRegionIds))
     map.addLayer(createAdminRegionSelectionFillLayer())
   }, [removeAdminRegionLayers])
+
+  const resolveAdminRegionVisibleIds = useCallback((): string[] | null => {
+    const externalRegionIds = adminRegionVisibleIdsRef.current
+
+    if (externalRegionIds !== undefined) return externalRegionIds
+    if (!adminRegionActiveOnlyRef.current) return null
+
+    return activeAdminRegionIdsRef.current ?? []
+  }, [])
 
   const applyAdminRegionLayerFilters = useCallback((regionIds: string[] | null) => {
     const map = mapRef.current
@@ -849,6 +867,7 @@ function MapboxCanvasComponent({
       resolvedAdminRegionTileUrl,
       adminRegionDepth,
       focusedAdminRegionId,
+      resolveAdminRegionVisibleIds(),
     )
   }, [
     adminRegionDepth,
@@ -856,6 +875,7 @@ function MapboxCanvasComponent({
     focusedAdminRegionId,
     refreshAdminRegionLayers,
     removeAdminRegionLayers,
+    resolveAdminRegionVisibleIds,
     resolvedAdminRegionTileUrl,
     status,
     styleLoadRevision,
@@ -926,16 +946,14 @@ function MapboxCanvasComponent({
   useEffect(() => {
     if (status !== 'ready' || !styleMutationReady || !adminRegionUnlockEnabled) return
 
-    applyAdminRegionLayerFilters(
-      adminRegionVisibleIds === undefined
-        ? adminRegionActiveOnly ? activeAdminRegionIdsRef.current ?? [] : null
-        : adminRegionVisibleIds,
-    )
+    applyAdminRegionLayerFilters(resolveAdminRegionVisibleIds())
   }, [
     adminRegionActiveOnly,
+    adminRegionDepth,
     adminRegionUnlockEnabled,
     adminRegionVisibleIds,
     applyAdminRegionLayerFilters,
+    resolveAdminRegionVisibleIds,
     status,
     styleLoadRevision,
     styleMutationReady,

@@ -123,6 +123,21 @@ const adminRegionSummaryFixture = {
   }],
 }
 
+const provinceAdminRegionSummaryFixture = {
+  depth: 2 as const,
+  visitedRegionIds: ['310000'],
+  visitedCount: 1,
+  totalCount: 34,
+  thumbnail: { viewBox: '0 0 320 150', basePath: 'M0 0Z', visitedPath: 'M2 2Z' },
+  rankings: [{
+    rank: 1,
+    regionId: '310000',
+    name: '上海市',
+    footprintCount: 120,
+    bounds: { west: 120.8, south: 30.7, east: 122.2, north: 31.9 },
+  }],
+}
+
 vi.mock('./layers/adminRegionSummaryDataSource', async () => {
   const actual = await vi.importActual<typeof import('./layers/adminRegionSummaryDataSource')>(
     './layers/adminRegionSummaryDataSource',
@@ -444,6 +459,50 @@ describe('App', () => {
     ))
     expect(screen.getByTestId('mapbox-canvas')).toHaveAttribute('data-footprints-visible', 'false')
     expect(loadAdminRegionSummary).toHaveBeenCalledWith(expect.objectContaining({ depth: 1 }))
+  })
+
+  it('clears stale region summary data while a new depth is loading', async () => {
+    let resolveProvinceSummary!: (summary: typeof provinceAdminRegionSummaryFixture) => void
+    const provinceSummaryRequest = new Promise<typeof provinceAdminRegionSummaryFixture>((resolve) => {
+      resolveProvinceSummary = resolve
+    })
+    vi.mocked(loadAdminRegionSummary).mockImplementation(async ({ depth }) => (
+      depth === 2 ? provinceSummaryRequest : adminRegionSummaryFixture
+    ))
+
+    render(<App amapConfig={missingAmapConfig} />)
+    await settleLazyImports()
+
+    fireEvent.click(within(screen.getByRole('navigation', { name: '二级导航' }))
+      .getByRole('button', { name: '区域' }))
+    await waitFor(() => expect(screen.getByTestId('mapbox-canvas')).toHaveAttribute(
+      'data-admin-region-visible-ids',
+      'CN',
+    ))
+
+    fireEvent.click(within(screen.getByRole('group', { name: '行政区层级' }))
+      .getByRole('button', { name: '省' }))
+
+    expect(screen.getByTestId('mapbox-canvas')).toHaveAttribute(
+      'data-admin-region-visible-ids',
+      '',
+    )
+    expect(screen.getByText('-- / -- 省级行政区')).toBeInTheDocument()
+
+    await act(async () => {
+      resolveProvinceSummary(provinceAdminRegionSummaryFixture)
+    })
+
+    await waitFor(() => expect(screen.getByTestId('mapbox-canvas')).toHaveAttribute(
+      'data-admin-region-visible-ids',
+      '310000',
+    ))
+    expect(screen.getByText('1 / 34 省级行政区')).toBeInTheDocument()
+
+    fireEvent.click(within(screen.getByRole('group', { name: '行政区层级' }))
+      .getByRole('button', { name: '省' }))
+
+    expect(screen.queryByText('加载中')).not.toBeInTheDocument()
   })
 
   it('moves region range and footprint switches into map settings', async () => {

@@ -397,9 +397,12 @@ function App(props: AppProps) {
     writeShowFootprintsInRegionMode(nextVisible)
   }, [])
   const handleAdminRegionDepthChange = useCallback((nextDepth: AdminRegionDepth) => {
+    if (nextDepth === adminRegionDepth) return
+
     setSelectedAdminRegion(null)
+    setAdminRegionSummaryStatus('loading')
     setAdminRegionDepth(nextDepth)
-  }, [])
+  }, [adminRegionDepth])
   const handleMapProjectionChange = useCallback((nextProjection: MapProjectionPreference) => {
     setMapProjection(nextProjection)
     writeMapProjection(nextProjection)
@@ -585,9 +588,12 @@ function App(props: AppProps) {
   ])
   const selectedMapStyle = useMemo(() => resolveMapStyleOption(mapStyle), [mapStyle])
   const isRegionMode = view === 'map' && activeSecondaryNavId === 'regions'
+  const currentAdminRegionSummary = adminRegionSummary?.depth === adminRegionDepth
+    ? adminRegionSummary
+    : null
   const adminRegionVisibleIds = showAllAdminRegions
     ? null
-    : adminRegionSummary?.visitedRegionIds ?? []
+    : currentAdminRegionSummary?.visitedRegionIds ?? []
   const mapAdminRegionVisibleIds = isRegionMode ? adminRegionVisibleIds : undefined
   const footprintsVisible = !isRegionMode || showFootprintsInRegionMode
 
@@ -597,6 +603,12 @@ function App(props: AppProps) {
     }
 
     const abortController = new AbortController()
+    queueMicrotask(() => {
+      if (abortController.signal.aborted) return
+
+      setAdminRegionSummary(null)
+      setAdminRegionSummaryStatus('loading')
+    })
 
     loadAdminRegionSummary({
       depth: adminRegionDepth,
@@ -616,6 +628,7 @@ function App(props: AppProps) {
         return
       }
 
+      setAdminRegionSummary(null)
       setAdminRegionSummaryStatus('error')
     })
 
@@ -763,7 +776,7 @@ function App(props: AppProps) {
           {isRegionMode ? (
             <AdminRegionContextPanel
               depth={adminRegionDepth}
-              summary={adminRegionSummary}
+              summary={currentAdminRegionSummary}
               status={adminRegionSummaryStatus}
               onDepthChange={handleAdminRegionDepthChange}
               onRegionSelect={setSelectedAdminRegion}
