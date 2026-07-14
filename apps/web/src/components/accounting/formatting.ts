@@ -12,6 +12,22 @@ export function formatSignedCny(amountInCents: number) {
   return `${sign}¥${formatCnyFromCents(Math.abs(amountInCents))}`
 }
 
+export function formatCurrency(amountInCents: number) {
+  const absolute = Math.abs(amountInCents) / 100
+  return `${amountInCents < 0 ? '-' : ''}¥${absolute.toLocaleString('zh-CN', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`
+}
+
+export function formatSignedCurrency(amountInCents: number) {
+  if (amountInCents === 0) return '¥0.00'
+  return `${amountInCents > 0 ? '+' : '-'}¥${(Math.abs(amountInCents) / 100).toLocaleString('zh-CN', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`
+}
+
 export function formatMonthDay(value: string) {
   return new Intl.DateTimeFormat('zh-CN', {
     month: '2-digit',

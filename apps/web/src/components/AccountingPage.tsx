@@ -3,6 +3,10 @@ import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from
 import { ledgerAtlasDataset } from '../accounting/ledgerAtlasData'
 import { formatCnyFromCents } from '../accounting/money'
 import {
+  getTopCategoryComposition,
+  getTopDirectTagAmounts,
+} from '../accounting/insightSelectors'
+import {
   saveTransactionDraft,
   type TransactionDraft,
 } from '../accounting/transactionDraft'
@@ -64,6 +68,14 @@ export function AccountingPage({
   const metrics = useMemo(() => getPeriodMetrics(dataset, timeRange), [dataset, timeRange])
   const summaries = useMemo(() => getAccountPeriodSummaries(dataset, timeRange), [dataset, timeRange])
   const portfolio = useMemo(() => getPortfolioPeriodSummary(dataset, timeRange), [dataset, timeRange])
+  const categoryComposition = useMemo(
+    () => getTopCategoryComposition(dataset, transactions),
+    [dataset, transactions],
+  )
+  const topTags = useMemo(
+    () => getTopDirectTagAmounts(dataset, transactions, 5),
+    [dataset, transactions],
+  )
   const categoryStats = useMemo(
     () => getCategoryTreeStats(dataset, timeRange),
     [dataset, timeRange],
@@ -97,6 +109,9 @@ export function AccountingPage({
         <LedgerWorkspace
           dataset={dataset}
           transactions={transactions}
+          portfolio={portfolio}
+          categoryComposition={categoryComposition}
+          topTags={topTags}
           onSelectTransaction={(transaction) => {
             setDialogReturnFocusTo(getActiveElement())
             setDialogMode({ kind: 'detail', transactionId: transaction.id })

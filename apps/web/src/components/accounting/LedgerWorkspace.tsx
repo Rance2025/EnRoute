@@ -13,11 +13,19 @@ import type {
   AccountPeriodSummary,
   AccountingDataset,
   Transaction,
+  PortfolioPeriodSummary,
 } from '../../accounting/types'
+import type {
+  CategoryCompositionBar,
+  DirectTagAmount,
+} from '../../accounting/insightSelectors'
+import { CategoryStackedColumns } from './CategoryStackedColumns'
 import {
   formatMonthDay,
 } from './formatting'
 import { TransactionRow } from './TransactionRow'
+import { NetWorthPanel } from './NetWorthPanel'
+import { TagAmountTable } from './TagAmountTable'
 
 const typeLabels = {
   income: '收入',
@@ -77,6 +85,9 @@ const accountCardBrandConfigs: Record<AccountCardBrand, AccountCardBrandConfig> 
 type LedgerWorkspaceProps = {
   dataset: AccountingDataset
   transactions: Transaction[]
+  portfolio: PortfolioPeriodSummary
+  categoryComposition: { income: CategoryCompositionBar; expense: CategoryCompositionBar }
+  topTags: DirectTagAmount[]
   onSelectTransaction: (transaction: Transaction) => void
   onCreateTransaction: () => void
 }
@@ -84,15 +95,18 @@ type LedgerWorkspaceProps = {
 export function LedgerWorkspace({
   dataset,
   transactions,
+  portfolio,
+  categoryComposition,
+  topTags,
   onSelectTransaction,
   onCreateTransaction,
 }: LedgerWorkspaceProps) {
   return (
     <div
-      className="accounting-workspace ios-account-ledger-workspace"
+      className="accounting-workspace ios-account-ledger-workspace glass-panel glass-panel--solid"
       aria-label="账户与流水工作台"
     >
-      <section className="glass-panel glass-panel--solid ios-panel ios-ledger-main">
+      <section className="ios-ledger-main accounting-ledger-column">
         <header className="ios-ledger-toolbar">
           <div>
             <strong>流水明细</strong>
@@ -111,17 +125,32 @@ export function LedgerWorkspace({
         </header>
 
         <div className="accounting-scroll--ledger" aria-label="流水列表">
-          {transactions.map((transaction) => (
-            <TransactionRow
-              key={transaction.id}
-              dataset={dataset}
-              transaction={transaction}
-              onSelect={() => onSelectTransaction(transaction)}
-            />
+          {groupTransactionsByDate(transactions).map((group) => (
+            <section className="ledger-date-group" key={group.date} aria-label={group.label}>
+              <header><span>{group.label}</span><small>{group.transactions.length} 笔</small></header>
+              {group.transactions.map((transaction) => (
+                <TransactionRow
+                  key={transaction.id}
+                  dataset={dataset}
+                  transaction={transaction}
+                  onSelect={() => onSelectTransaction(transaction)}
+                />
+              ))}
+            </section>
           ))}
           {transactions.length === 0 ? (
             <div className="ios-empty-ledger">当前时间范围内没有流水</div>
           ) : null}
+        </div>
+      </section>
+      <section className="accounting-insights-column" aria-label="流水关键洞察">
+        <NetWorthPanel summary={portfolio} />
+        <div className="accounting-insights-column__lower">
+          <CategoryStackedColumns
+            income={categoryComposition.income}
+            expense={categoryComposition.expense}
+          />
+          <TagAmountTable tags={topTags} />
         </div>
       </section>
     </div>
@@ -475,4 +504,21 @@ function formatSigned(amountInCents: number) {
   if (amountInCents === 0) return '¥0.00'
 
   return `${amountInCents > 0 ? '+' : '-'}¥${formatCnyFromCents(Math.abs(amountInCents))}`
+}
+
+function groupTransactionsByDate(transactions: Transaction[]) {
+  const groups = new Map<string, Transaction[]>()
+  for (const transaction of transactions) {
+    const date = transaction.occurredAt.slice(0, 10)
+    groups.set(date, [...(groups.get(date) ?? []), transaction])
+  }
+  return [...groups.entries()].map(([date, dateTransactions]) => ({
+    date,
+    label: new Intl.DateTimeFormat('zh-CN', {
+      month: '2-digit',
+      day: '2-digit',
+      weekday: 'short',
+    }).format(new Date(`${date}T12:00:00+08:00`)),
+    transactions: dateTransactions,
+  }))
 }
