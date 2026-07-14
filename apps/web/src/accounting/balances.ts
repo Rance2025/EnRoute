@@ -1,4 +1,4 @@
-import type { Account, Transaction } from './types'
+import type { Account, AccountingDataset, Transaction } from './types'
 
 export function calculateAccountBalances(accounts: Account[], transactions: Transaction[]) {
   const balances = Object.fromEntries(
@@ -7,23 +7,40 @@ export function calculateAccountBalances(accounts: Account[], transactions: Tran
   const accountById = new Map(accounts.map((account) => [account.id, account]))
 
   for (const transaction of transactions) {
-    if (transaction.type === 'income') {
-      if (!isAfterAccountOpening(accountById.get(transaction.accountId), transaction)) continue
-      balances[transaction.accountId] += transaction.amountInCents
-    } else if (transaction.type === 'expense') {
-      if (!isAfterAccountOpening(accountById.get(transaction.accountId), transaction)) continue
-      balances[transaction.accountId] -= transaction.amountInCents
-    } else {
-      if (isAfterAccountOpening(accountById.get(transaction.fromAccountId), transaction)) {
-        balances[transaction.fromAccountId] -= transaction.amountInCents
-      }
-      if (isAfterAccountOpening(accountById.get(transaction.toAccountId), transaction)) {
-        balances[transaction.toAccountId] += transaction.amountInCents
-      }
+    for (const account of accounts) {
+      if (!isAfterAccountOpening(accountById.get(account.id), transaction)) continue
+      balances[account.id] += getSignedAccountMovement(transaction, account.id)
     }
   }
 
   return balances
+}
+
+export function getSignedAccountMovement(transaction: Transaction, accountId: string) {
+  if (transaction.type === 'income') {
+    return transaction.accountId === accountId ? transaction.amountInCents : 0
+  }
+  if (transaction.type === 'expense') {
+    return transaction.accountId === accountId ? -transaction.amountInCents : 0
+  }
+  if (transaction.fromAccountId === accountId) return -transaction.amountInCents
+  if (transaction.toAccountId === accountId) return transaction.amountInCents
+  return 0
+}
+
+export function getAccountBalanceAt(
+  dataset: AccountingDataset,
+  accountId: string,
+  exclusiveEndDate: string,
+) {
+  const account = dataset.accounts.find((candidate) => candidate.id === accountId)
+  if (!account) return 0
+
+  return dataset.transactions.reduce((balance, transaction) => {
+    if (transaction.occurredAt.slice(0, 10) >= exclusiveEndDate) return balance
+    if (!isAfterAccountOpening(account, transaction)) return balance
+    return balance + getSignedAccountMovement(transaction, accountId)
+  }, account.openingBalanceInCents)
 }
 
 export function validateTransaction(transaction: Transaction) {

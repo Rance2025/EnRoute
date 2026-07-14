@@ -145,7 +145,22 @@ export type AccountPeriodSummary = {
   expenseInCents: number
   transferInInCents: number
   transferOutInCents: number
+  netChangeInCents: number
   closingInCents: number
+  transactionCount: number
+}
+
+export type PortfolioPeriodSummary = {
+  openingAssetsInCents: number
+  openingLiabilitiesInCents: number
+  openingNetWorthInCents: number
+  incomeInCents: number
+  expenseInCents: number
+  transferInCents: number
+  netChangeInCents: number
+  closingAssetsInCents: number
+  closingLiabilitiesInCents: number
+  closingNetWorthInCents: number
   transactionCount: number
 }
 
