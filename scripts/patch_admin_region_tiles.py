@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Iterable, Sequence
 
 from mapbox_vector_tile import encode
+from mapbox_vector_tile.Mapbox import vector_tile_pb2
 import requests
 from shapely.geometry import GeometryCollection, MultiPolygon, Point, Polygon, mapping, shape
 from shapely.geometry.base import BaseGeometry
@@ -27,6 +28,7 @@ from enroute_api.admin_regions.store import (
     transform_geojson_geometry_coordinates,
 )
 from enroute_api.admin_regions.tiles import (
+    ADMIN_REGION_BOUNDARY_REGION_IDS_PROPERTY,
     ADMIN_REGION_FILL_FEATURE_KIND,
     ADMIN_REGION_LINE_FEATURE_KIND,
     ADMIN_REGION_LEGACY_REBUILD_TILE_BBOX_PADDING_DEGREES,
@@ -35,7 +37,9 @@ from enroute_api.admin_regions.tiles import (
     ADMIN_REGION_WORLD_FOCUS_ID,
     AdminRegionTileBuildResult,
     build_admin_region_tiles,
+    coordinate_to_tile,
     count_tile_features,
+    create_admin_region_line_features_from_fill_features,
     create_admin_region_tile_line_features_from_prepared_rows,
     decode_admin_region_tile,
     encode_admin_region_mvt_from_prepared_rows,
@@ -73,6 +77,7 @@ TAIWAN_MAINLAND_AUTHORITY_REGION_PREFIXES = (
     f"{TAIWAN_TOWN_ID_PREFIX}09020",
 )
 TAIWAN_PROVINCE_MASK_BBOX_TOLERANCE_DEGREES = 0.5
+ADMIN_REGION_TARGET_LINE_PATCH_SIGNATURE = "admin-region-mvt-target-line-overlay-v1"
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -103,6 +108,24 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         initialize_schema(connection)
         initialize_admin_region_tile_schema(connection)
+        if args.patch_cached_region_lines:
+            for depth in depths:
+                result = patch_cached_admin_region_target_lines(
+                    connection,
+                    focus_region_id=ADMIN_REGION_WORLD_FOCUS_ID,
+                    depth=depth,
+                    region_id=args.patch_cached_region_lines,
+                    min_zoom=args.min_zoom,
+                    max_zoom=args.max_zoom,
+                    commit_interval=args.commit_interval,
+                )
+                print(
+                    f"Patched cached line features in {result.built_count} admin region tile rows "
+                    f"from {result.candidate_count} bounded candidates for region "
+                    f"{args.patch_cached_region_lines} depth {depth} "
+                    f"zoom {args.min_zoom}-{args.max_zoom}",
+                )
+            return 0
         if args.rebuild_china_admin_levels:
             if china_admin_region_data_path is None:
                 raise ValueError("--rebuild-china-admin-levels requires --china-admin-region-data-path")
@@ -300,6 +323,11 @@ def parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
         "--patch-admin-region-tile-lines",
         action="store_true",
         help="Regenerate only line features in existing admin_region_tiles rows, preserving cached fill features.",
+    )
+    parser.add_argument(
+        "--patch-cached-region-lines",
+        metavar="REGION_ID",
+        help="Derive one region's boundary lines from cached fills without loading global source geometry.",
     )
     parser.add_argument(
         "--taiwan-county-data-path",
@@ -1667,6 +1695,87 @@ def encode_admin_region_tile_features(features: list[dict[str, Any]]) -> bytes:
     )
 
 
+def replace_cached_admin_region_target_lines(
+    tile: bytes,
+    *,
+    decoded_features: list[dict[str, Any]],
+    region_id: str,
+    replacement_line_features: list[dict[str, object]],
+) -> tuple[bytes, int]:
+    tile_message = vector_tile_pb2.tile()
+    tile_message.ParseFromString(tile)
+    layer = next(
+        (layer for layer in tile_message.layers if layer.name == ADMIN_REGION_TILE_LAYER_NAME),
+        None,
+    )
+    if layer is None:
+        raise ValueError(f"Tile is missing {ADMIN_REGION_TILE_LAYER_NAME} layer")
+    if len(layer.features) != len(decoded_features):
+        raise ValueError("Decoded admin-region feature count does not match raw MVT features")
+
+    remove_indexes = [
+        index
+        for index, feature in enumerate(decoded_features)
+        if get_admin_region_feature_kind(feature) == ADMIN_REGION_LINE_FEATURE_KIND
+        and get_admin_region_feature_region_id(feature) == region_id
+    ]
+    for index in reversed(remove_indexes):
+        del layer.features[index]
+
+    replacement_tile = vector_tile_pb2.tile()
+    replacement_tile.ParseFromString(
+        encode_admin_region_tile_features(replacement_line_features),
+    )
+    replacement_layer = next(
+        (layer for layer in replacement_tile.layers if layer.name == ADMIN_REGION_TILE_LAYER_NAME),
+        None,
+    )
+    if replacement_layer is None:
+        raise ValueError(f"Replacement tile is missing {ADMIN_REGION_TILE_LAYER_NAME} layer")
+
+    key_indexes = {key: index for index, key in enumerate(layer.keys)}
+    replacement_key_indexes: dict[int, int] = {}
+    for index, key in enumerate(replacement_layer.keys):
+        target_index = key_indexes.get(key)
+        if target_index is None:
+            target_index = len(layer.keys)
+            layer.keys.append(key)
+            key_indexes[key] = target_index
+        replacement_key_indexes[index] = target_index
+
+    value_indexes = {
+        value.SerializeToString(): index
+        for index, value in enumerate(layer.values)
+    }
+    replacement_value_indexes: dict[int, int] = {}
+    for index, value in enumerate(replacement_layer.values):
+        serialized = value.SerializeToString()
+        target_index = value_indexes.get(serialized)
+        if target_index is None:
+            target_index = len(layer.values)
+            layer.values.add().CopyFrom(value)
+            value_indexes[serialized] = target_index
+        replacement_value_indexes[index] = target_index
+
+    for replacement_feature in replacement_layer.features:
+        tags = list(replacement_feature.tags)
+        if len(tags) % 2 != 0:
+            raise ValueError("Replacement MVT feature has an invalid tag sequence")
+        target_feature = layer.features.add()
+        target_feature.CopyFrom(replacement_feature)
+        del target_feature.tags[:]
+        target_feature.tags.extend(
+            mapped_index
+            for index in range(0, len(tags), 2)
+            for mapped_index in (
+                replacement_key_indexes[tags[index]],
+                replacement_value_indexes[tags[index + 1]],
+            )
+        )
+
+    return tile_message.SerializeToString(), len(layer.features)
+
+
 def rebuild_admin_region_overlay_tile_keys(
     connection: sqlite3.Connection,
     *,
@@ -1748,6 +1857,176 @@ def rebuild_admin_region_overlay_tile_keys(
         candidate_count=len(resolved_tile_keys),
         built_count=built_count,
         feature_count=candidate_feature_count,
+    )
+
+
+def patch_cached_admin_region_target_lines(
+    connection: sqlite3.Connection,
+    *,
+    focus_region_id: str,
+    depth: int,
+    region_id: str,
+    min_zoom: int,
+    max_zoom: int,
+    commit_interval: int,
+) -> AdminRegionTileBuildResult:
+    region_bounds = connection.execute(
+        """
+        SELECT min_lng, max_lng, min_lat, max_lat
+        FROM admin_regions
+        WHERE id = ?
+        """,
+        (region_id,),
+    ).fetchone()
+    if region_bounds is None:
+        raise ValueError(f"Admin region {region_id} does not exist")
+
+    candidate_keys: list[tuple[int, int, int]] = []
+    for z in range(min_zoom, max_zoom + 1):
+        west_x, north_y = coordinate_to_tile(
+            longitude=float(region_bounds["min_lng"]),
+            latitude=float(region_bounds["max_lat"]),
+            z=z,
+        )
+        east_x, south_y = coordinate_to_tile(
+            longitude=float(region_bounds["max_lng"]),
+            latitude=float(region_bounds["min_lat"]),
+            z=z,
+        )
+        candidate_keys.extend(
+            (int(row["z"]), int(row["x"]), int(row["y"]))
+            for row in connection.execute(
+                """
+                SELECT z, x, y
+                FROM admin_region_tiles
+                WHERE focus_region_id = ?
+                  AND depth = ?
+                  AND z = ?
+                  AND x BETWEEN ? AND ?
+                  AND y BETWEEN ? AND ?
+                  AND algorithm_signature != ?
+                ORDER BY x, y
+                """,
+                (
+                    focus_region_id,
+                    depth,
+                    z,
+                    min(west_x, east_x),
+                    max(west_x, east_x),
+                    min(north_y, south_y),
+                    max(north_y, south_y),
+                    ADMIN_REGION_TILE_ALGORITHM_SIGNATURE,
+                ),
+            )
+        )
+
+    updated_at = int(time.time() * 1000)
+    built_count = 0
+    for z, x, y in candidate_keys:
+        tile_row = connection.execute(
+            """
+            SELECT tile
+            FROM admin_region_tiles
+            WHERE z = ?
+              AND x = ?
+              AND y = ?
+              AND focus_region_id = ?
+              AND depth = ?
+            """,
+            (z, x, y, focus_region_id, depth),
+        ).fetchone()
+        if tile_row is None:
+            continue
+
+        existing_features = get_admin_region_tile_features(bytes(tile_row["tile"]))
+        target_fill_features = [
+            feature
+            for feature in existing_features
+            if get_admin_region_feature_kind(feature) == ADMIN_REGION_FILL_FEATURE_KIND
+            and get_admin_region_feature_region_id(feature) == region_id
+        ]
+        target_line_features = create_admin_region_line_features_from_fill_features(
+            target_fill_features,
+        )
+        if not target_line_features:
+            continue
+
+        for feature in target_line_features:
+            properties = feature.get("properties")
+            if isinstance(properties, dict):
+                properties[ADMIN_REGION_BOUNDARY_REGION_IDS_PROPERTY] = f"|{region_id}|"
+
+        existing_target_line_features = [
+            feature
+            for feature in existing_features
+            if get_admin_region_feature_kind(feature) == ADMIN_REGION_LINE_FEATURE_KIND
+            and get_admin_region_feature_region_id(feature) == region_id
+        ]
+        if normalize_admin_region_feature_payloads(
+            existing_target_line_features,
+        ) == normalize_admin_region_feature_payloads(target_line_features):
+            continue
+
+        tile, feature_count = replace_cached_admin_region_target_lines(
+            bytes(tile_row["tile"]),
+            decoded_features=existing_features,
+            region_id=region_id,
+            replacement_line_features=target_line_features,
+        )
+        connection.execute(
+            """
+            UPDATE admin_region_tiles
+            SET algorithm_signature = ?,
+                tile = ?,
+                feature_count = ?,
+                updated_at = ?
+            WHERE z = ?
+              AND x = ?
+              AND y = ?
+              AND focus_region_id = ?
+              AND depth = ?
+            """,
+            (
+                ADMIN_REGION_TARGET_LINE_PATCH_SIGNATURE,
+                tile,
+                feature_count,
+                updated_at,
+                z,
+                x,
+                y,
+                focus_region_id,
+                depth,
+            ),
+        )
+        built_count += 1
+        if commit_interval > 0 and built_count % commit_interval == 0:
+            connection.commit()
+
+    connection.commit()
+    return AdminRegionTileBuildResult(
+        focus_region_id=focus_region_id,
+        depth=depth,
+        min_zoom=min_zoom,
+        max_zoom=max_zoom,
+        candidate_count=len(candidate_keys),
+        built_count=built_count,
+        feature_count=1,
+    )
+
+
+def normalize_admin_region_feature_payloads(
+    features: Iterable[dict[str, object]],
+) -> list[str]:
+    return sorted(
+        json.dumps(
+            {
+                "geometry": feature.get("geometry"),
+                "properties": feature.get("properties"),
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        for feature in features
     )
 
 
