@@ -13,11 +13,9 @@ import {
 } from '../accounting/transactionDraft'
 import {
   filterTransactionsByTimeRange,
-  getCategoryTreeStats,
   getPeriodMetrics,
   getAccountPeriodSummaries,
   getPortfolioPeriodSummary,
-  getTagTreeStats,
 } from '../accounting/selectors'
 import type {
   AccountingSection,
@@ -26,7 +24,7 @@ import type {
   AccountingStatisticsControls,
 } from '../accounting/shell'
 import type { TimeRangeSelection } from '../time/timeRange'
-import { AnalyticsWorkspace } from './accounting/AnalyticsWorkspace'
+import { AnalyticsWorkspace, type AnalyticsFocus } from './accounting/AnalyticsWorkspace'
 import { LedgerWorkspace } from './accounting/LedgerWorkspace'
 import { AccountsWorkspace } from './accounting/AccountsWorkspace'
 import { AccountManagementDialog } from './accounting/AccountManagementDialog'
@@ -64,6 +62,7 @@ export function AccountingPage({
   const [selectedAccountId, setSelectedAccountId] = useState(
     () => ledgerAtlasDataset.accounts[0]?.id ?? '',
   )
+  const [analyticsFocus, setAnalyticsFocus] = useState<AnalyticsFocus | null>(null)
   const transactions = useMemo(
     () => filterTransactionsByTimeRange(dataset.transactions, timeRange),
     [dataset.transactions, timeRange],
@@ -79,11 +78,6 @@ export function AccountingPage({
     () => getTopDirectTagAmounts(dataset, transactions, 5),
     [dataset, transactions],
   )
-  const categoryStats = useMemo(
-    () => getCategoryTreeStats(dataset, timeRange),
-    [dataset, timeRange],
-  )
-  const tagStats = useMemo(() => getTagTreeStats(ledgerAtlasDataset, timeRange), [timeRange])
   const selectedSummary = summaries.find((summary) => summary.account.id === selectedAccountId)
   const activeSummaries = summaries.filter((summary) => !summary.account.archivedAt)
   const selectedAccountTransactions = useMemo(
@@ -110,8 +104,9 @@ export function AccountingPage({
       portfolio,
       selectedSummary,
       statisticsControls,
+      analyticsFocus,
     ),
-    [metrics, portfolio, section, selectedSummary, statisticsControls, timeRange],
+    [analyticsFocus, metrics, portfolio, section, selectedSummary, statisticsControls, timeRange],
   )
 
   useEffect(() => {
@@ -158,10 +153,9 @@ export function AccountingPage({
       {section === 'analytics' ? (
         <AnalyticsWorkspace
           dataset={dataset}
-          metrics={metrics}
-          transactions={transactions}
-          categoryStats={categoryStats}
-          tagStats={tagStats}
+          timeRange={timeRange}
+          controls={statisticsControls}
+          onFocusChange={setAnalyticsFocus}
         />
       ) : null}
 
@@ -209,6 +203,7 @@ function createShellSnapshot(
   portfolio: ReturnType<typeof getPortfolioPeriodSummary>,
   selectedSummary: ReturnType<typeof getAccountPeriodSummaries>[number] | undefined,
   statisticsControls: AccountingStatisticsControls,
+  analyticsFocus: AnalyticsFocus | null,
 ): AccountingShellSnapshot {
   if (section === 'accounts' && selectedSummary) {
     return {
@@ -238,6 +233,27 @@ function createShellSnapshot(
   }
 
   if (section === 'analytics') {
+    if (analyticsFocus) {
+      return {
+        metricItems: [
+          { label: '收入', value: formatCurrency(metrics.incomeInCents) },
+          { label: '支出', value: formatCurrency(metrics.expenseInCents) },
+          { label: metrics.netInCents >= 0 ? '净收入' : '净支出', value: formatCurrency(metrics.netInCents) },
+        ],
+        context: {
+          eyebrow: analyticsFocus.taxonomy === 'category' ? '分类焦点' : '标签焦点',
+          title: analyticsFocus.path,
+          description: '直接值与后代聚合分开计算，便于辨认树状口径。',
+          rows: [
+            { label: '直接金额', value: formatCurrency(analyticsFocus.direct.incomeInCents + analyticsFocus.direct.expenseInCents) },
+            { label: '聚合金额', value: formatCurrency(analyticsFocus.aggregate.incomeInCents + analyticsFocus.aggregate.expenseInCents) },
+            { label: '笔数', value: `${analyticsFocus.aggregate.transactionCount} 笔` },
+            { label: '上周期', value: analyticsFocus.previousChangeLabel },
+          ],
+          actions: [],
+        },
+      }
+    }
     return {
       metricItems: [
         { label: '收入', value: formatCurrency(metrics.incomeInCents) },

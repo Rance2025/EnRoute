@@ -1143,15 +1143,14 @@ describe('App', () => {
 
     const reportWorkspace = await screen.findByLabelText('统计工作区')
 
-    expect(within(reportWorkspace).getByText('统计总览')).toBeInTheDocument()
-    expect(within(reportWorkspace).getByLabelText('收支环形图')).toBeInTheDocument()
-    expect(within(reportWorkspace).getByText('分类占比')).toBeInTheDocument()
-    expect(within(reportWorkspace).getByText('标签关联')).toBeInTheDocument()
-    expect(within(reportWorkspace).getByLabelText('分类树统计')).toBeInTheDocument()
-    expect(within(reportWorkspace).getByLabelText('标签树统计')).toBeInTheDocument()
-    expect(within(reportWorkspace).getAllByText('旅行 / 住宿').length).toBeGreaterThan(0)
+    expect(within(reportWorkspace).getByLabelText('收支趋势图')).toBeInTheDocument()
+    expect(within(reportWorkspace).getByLabelText('分类层级分析')).toBeInTheDocument()
+    expect(within(reportWorkspace).getByLabelText('标签层级分析')).toBeInTheDocument()
+    expect(within(reportWorkspace).getByText('标签可能重叠，不可横向相加')).toBeInTheDocument()
+    fireEvent.click(within(reportWorkspace).getByRole('button', { name: '树表' }))
+    expect(within(reportWorkspace).getByRole('button', { name: '旅行 / 住宿' })).toBeInTheDocument()
     expect(within(reportWorkspace).getAllByText('地点旅行 / 青岛之行').length).toBeGreaterThan(0)
-    expect(reportWorkspace.querySelector('.ios-chart-ring')).not.toBeNull()
+    expect(within(reportWorkspace).queryByText('标签 × 分类')).not.toBeInTheDocument()
   })
 
   it('switches between ledger accounts and analytics from the shared secondary rail', async () => {

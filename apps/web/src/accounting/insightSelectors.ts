@@ -56,6 +56,9 @@ export type AccountBalanceStep = {
 export type CashflowBucket = MoneyBreakdown & {
   key: string
   label: string
+  incomeCount: number
+  expenseCount: number
+  transferCount: number
 }
 
 export type AccountContribution = MoneyBreakdown & {
@@ -269,6 +272,11 @@ export function getCashflowTrend(
       key,
       label: key,
       ...summarizeTransactions(transactions, includeTransfers),
+      incomeCount: transactions.filter((transaction) => transaction.type === 'income').length,
+      expenseCount: transactions.filter((transaction) => transaction.type === 'expense').length,
+      transferCount: includeTransfers
+        ? transactions.filter((transaction) => transaction.type === 'transfer').length
+        : 0,
     }))
 }
 
