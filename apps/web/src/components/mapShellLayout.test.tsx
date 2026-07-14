@@ -881,6 +881,23 @@ describe('unified shell layout', () => {
     expect(within(accountingMetricStrip).queryByText('当前足迹')).not.toBeInTheDocument()
   })
 
+  it('keeps one left glass panel geometry while accounting page content changes', async () => {
+    render(<App amapConfig={configuredAmap} />)
+    fireEvent.click(screen.getByRole('button', { name: '记账' }))
+    await settleLazyImports()
+
+    const panel = screen.getByLabelText('时间范围面板')
+    const className = panel.className
+    const rail = screen.getByRole('navigation', { name: '二级导航' })
+    fireEvent.click(within(rail).getByRole('button', { name: '账户' }))
+    expect(screen.getByLabelText('时间范围面板')).toBe(panel)
+    expect(panel.className).toBe(className)
+    fireEvent.click(within(rail).getByRole('button', { name: '统计' }))
+    expect(screen.getByLabelText('时间范围面板')).toBe(panel)
+    expect(panel.className).toBe(className)
+    expect(screen.getByLabelText('统计口径')).toBeInTheDocument()
+  })
+
   it('keeps accounting secondary navigation in the shared right rail', async () => {
     render(<App amapConfig={configuredAmap} />)
 
@@ -915,7 +932,7 @@ describe('unified shell layout', () => {
 
     expect(getRailLabels()).toEqual(['流水', '账户', '统计'])
     expect(rail.querySelector('[aria-pressed="true"]')).toHaveTextContent('统计')
-    expect(document.querySelector('.ios-analytics-workspace')).not.toBeNull()
+    expect(document.querySelector('.analytics-workspace')).not.toBeNull()
     expect(document.querySelector('.ios-account-filter-panel')).toBeNull()
   })
 

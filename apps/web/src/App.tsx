@@ -41,6 +41,7 @@ import {
   type AdminRegionSummary,
 } from './layers/adminRegionSummaryDataSource'
 import { AdminRegionContextPanel } from './components/AdminRegionContextPanel'
+import { AccountingRightContextPanel } from './components/accounting/AccountingRightContextPanel'
 import {
   formatAverageDistanceMeters,
   formatDistanceMeters,
@@ -333,7 +334,7 @@ function App(props: AppProps) {
     useState<AccountingShellSnapshot | null>(null)
   const [accountingShellCommand, setAccountingShellCommand] =
     useState<AccountingShellAction | null>(null)
-  const [accountingStatisticsControls] = useState(defaultAccountingStatisticsControls)
+  const [accountingStatisticsControls, setAccountingStatisticsControls] = useState(defaultAccountingStatisticsControls)
   const [adminRegionDepth, setAdminRegionDepth] = useState<AdminRegionDepth>(
     DEFAULT_ADMIN_REGION_DEPTH,
   )
@@ -733,6 +734,12 @@ function App(props: AppProps) {
         secondaryContextLabel={activeSecondaryNavItem?.label}
         view={view}
         selection={selectedTimeRange}
+        accountingStatisticsControls={view === 'accounting' && getAccountingSection(activeSecondaryNavId) === 'analytics'
+          ? accountingStatisticsControls
+          : undefined}
+        onAccountingStatisticsControlsChange={view === 'accounting' && getAccountingSection(activeSecondaryNavId) === 'analytics'
+          ? setAccountingStatisticsControls
+          : undefined}
         onSelectionChange={setSelectedTimeRange}
       />
 
@@ -1045,47 +1052,8 @@ function DefaultRightContextCards({
   accountingSnapshot: AccountingShellSnapshot | null
   onAccountingAction: (action: AccountingShellAction) => void
 }) {
-  if (view === 'accounting' && accountingSnapshot) {
-    return (
-      <>
-        <section
-          className="glass-panel glass-panel--solid glass-panel--card right-context-panel__glass right-context-panel__summary"
-          aria-label="当前分区摘要"
-        >
-          <span className="right-context-panel__eyebrow">{accountingSnapshot.context.eyebrow}</span>
-          <strong>{accountingSnapshot.context.title}</strong>
-          <p>{accountingSnapshot.context.description}</p>
-        </section>
-        <section
-          className="glass-panel glass-panel--solid glass-panel--card right-context-panel__glass right-context-panel__legend"
-          aria-label="工作区状态"
-        >
-          <span className="right-context-panel__eyebrow">工作区状态</span>
-          <div className="right-context-panel__rows">
-            {accountingSnapshot.context.rows.map((row) => (
-              <div className="right-context-panel__row" key={row.label}>
-                <span>{row.label}</span>
-                <strong>{row.value}</strong>
-              </div>
-            ))}
-          </div>
-          {accountingSnapshot.context.actions.length > 0 ? (
-            <div className="right-context-panel__actions">
-              {accountingSnapshot.context.actions.map((action) => (
-                <button
-                  key={action.id}
-                  type="button"
-                  className={action.tone === 'danger' ? 'is-danger' : undefined}
-                  onClick={() => onAccountingAction(action.id)}
-                >
-                  {action.label}
-                </button>
-              ))}
-            </div>
-          ) : null}
-        </section>
-      </>
-    )
+  if (view === 'accounting') {
+    return <AccountingRightContextPanel snapshot={accountingSnapshot} onAction={onAccountingAction} />
   }
 
   return (
