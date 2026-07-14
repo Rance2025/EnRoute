@@ -23,6 +23,8 @@ const legacyFunds: ImportedMoneyFund[] = [
   legacyFund('fund-huabei', '花呗', 2, 'credit'),
   legacyFund('fund-meituan', '美团月付', 3, 'credit'),
   legacyFund('fund-bank', '银行卡', 4, 'bank'),
+  legacyFund('fund-alipay', '支付宝', 5, 'wallet'),
+  legacyFund('fund-cash', '现金', 6, 'cash'),
 ]
 
 const importedSource: ImportedMoneySourceRecord[] = [
@@ -43,6 +45,10 @@ export const ledgerAtlasCategories: Category[] = [
   { id: 'expense-travel', type: 'expense', name: '旅行', sortOrder: 2 },
   { id: 'expense-hotel', type: 'expense', name: '住宿', parentId: 'expense-travel', sortOrder: 1 },
   { id: 'expense-transport', type: 'expense', name: '交通', sortOrder: 3 },
+  { id: 'expense-shopping', type: 'expense', name: '购物', sortOrder: 4 },
+  { id: 'expense-learning', type: 'expense', name: '学习', sortOrder: 5 },
+  { id: 'expense-health', type: 'expense', name: '健康', sortOrder: 6 },
+  { id: 'expense-entertainment', type: 'expense', name: '娱乐', sortOrder: 7 },
   { id: 'transfer-repay', type: 'transfer', name: '还款', sortOrder: 1 },
 ]
 
@@ -53,6 +59,8 @@ export const ledgerAtlasTags: Tag[] = [
   { id: 'qingdao-trip', name: '青岛之行', parentId: 'place', sortOrder: 1 },
   { id: 'topic', name: '主题', sortOrder: 3 },
   { id: 'daily-routine', name: '日常节律', parentId: 'topic', sortOrder: 1 },
+  { id: 'work', name: '工作', sortOrder: 4 },
+  { id: 'work-travel', name: '旅行', parentId: 'work', sortOrder: 1 },
 ]
 
 const backup: ImportedMoneyBackup = {
@@ -68,12 +76,13 @@ export const ledgerAtlasDataset: AccountingDataset = enrichDataset(
 function enrichDataset(dataset: AccountingDataset): AccountingDataset {
   return {
     ...dataset,
+    accounts: dataset.accounts.map(enrichAccount),
     transactions: dataset.transactions.map((transaction) => {
       if (transaction.id === 'tx-salary-june') {
         return toIncomeTransaction(transaction, 'income-work', ['college'])
       }
       if (transaction.id === 'tx-dinner-qingdao') {
-        return toExpenseTransaction(transaction, 'expense-dinner', ['qingdao-trip'])
+        return toExpenseTransaction(transaction, 'expense-dinner', ['qingdao-trip', 'college'])
       }
       if (transaction.id === 'tx-yogurt') {
         return toExpenseTransaction(transaction, 'expense-drink', ['daily-routine'])
@@ -90,6 +99,38 @@ function enrichDataset(dataset: AccountingDataset): AccountingDataset {
       return toExpenseTransaction(transaction, 'expense-drink', ['daily-routine'])
     }),
   }
+}
+
+function enrichAccount(account: AccountingDataset['accounts'][number]) {
+  const accountDetails = {
+    'fund-wechat': {
+      openingBalanceInCents: 8_620_40,
+      brand: { slug: 'wechat', label: '微信', color: '#1f9f69' },
+    },
+    'fund-huabei': {
+      openingBalanceInCents: -5_840_00,
+      brand: { slug: 'alipay', label: '花呗', color: '#397d8c' },
+    },
+    'fund-meituan': {
+      openingBalanceInCents: -2_720_00,
+      brand: { slug: 'meituan', label: '美团', color: '#47777a' },
+    },
+    'fund-bank': {
+      openingBalanceInCents: 28_650_20,
+      brand: { slug: 'cmb', label: '招商银行', color: '#6b837d' },
+    },
+    'fund-alipay': {
+      openingBalanceInCents: 12_420_50,
+      brand: { slug: 'alipay', label: '支付宝', color: '#2f7f83' },
+    },
+    'fund-cash': {
+      openingBalanceInCents: 1_860_00,
+      brand: { slug: 'cash', label: '现金', color: '#78948c' },
+    },
+  } satisfies Record<string, Pick<typeof account, 'openingBalanceInCents' | 'brand'>>
+  const details = accountDetails[account.id as keyof typeof accountDetails]
+
+  return details ? { ...account, ...details } : account
 }
 
 function toIncomeTransaction(

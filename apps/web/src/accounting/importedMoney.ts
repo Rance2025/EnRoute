@@ -67,16 +67,24 @@ export function convertImportedMoneyBackup(
 }
 
 function convertImportedFundToAccount(fund: ImportedMoneyFund): Account {
+  const nature = inferAccountNature(fund.type)
   return {
     id: fund.uuid,
     name: fund.name,
-    openingBalanceInCents: 0,
+    nature,
+    currency: 'CNY',
+    openingBalanceInCents: nature === 'liability' ? -Math.abs(toCents(fund.limit)) : toCents(fund.limit),
     openingBalanceAt: importedEpoch,
+    sourceLabel: '记账助手导入',
     createdAt: formatImportedMoneyTime(fund.createTime),
     updatedAt: formatImportedMoneyTime(fund.updateTime),
     sourceFundId: fund.uuid,
     sourceFundType: fund.type,
   }
+}
+
+function inferAccountNature(sourceFundType: string) {
+  return /credit|loan|debt|花呗|月付/i.test(sourceFundType) ? 'liability' : 'asset'
 }
 
 function toCents(value: number | string) {

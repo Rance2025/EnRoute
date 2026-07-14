@@ -1,10 +1,22 @@
 export type TransactionType = 'income' | 'expense' | 'transfer'
 
+export type AccountNature = 'asset' | 'liability'
+
+export type AccountBrand = {
+  slug: string
+  label: string
+  color: string
+}
+
 export type Account = {
   id: string
   name: string
+  nature: AccountNature
+  currency: 'CNY'
   openingBalanceInCents: number
   openingBalanceAt: string
+  brand?: AccountBrand
+  sourceLabel?: string
   createdAt: string
   updatedAt: string
   archivedAt?: string

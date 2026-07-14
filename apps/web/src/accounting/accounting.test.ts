@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { calculateAccountBalances, validateTransaction } from './balances'
 import { demoAccounts, demoCategories, demoTags, demoTransactions } from './demoData'
+import { ledgerAtlasDataset } from './ledgerAtlasData'
 import { formatCnyFromCents, parseCnyToCents } from './money'
 import { getCategoryPath, getTagPath } from './trees'
 import type { Account, Category, Tag, Transaction } from './types'
@@ -10,6 +11,8 @@ const accounts: Account[] = [
   {
     id: 'cash',
     name: '现金',
+    nature: 'asset',
+    currency: 'CNY',
     openingBalanceInCents: 100_00,
     openingBalanceAt: '2026-06-01T00:00:00+08:00',
     createdAt: '2026-06-18T08:00:00+08:00',
@@ -18,6 +21,8 @@ const accounts: Account[] = [
   {
     id: 'credit',
     name: '月付',
+    nature: 'liability',
+    currency: 'CNY',
     openingBalanceInCents: 0,
     openingBalanceAt: '2026-06-01T00:00:00+08:00',
     createdAt: '2026-06-18T08:00:00+08:00',
@@ -171,5 +176,36 @@ describe('demo data integrity', () => {
         expect(tagIds.has(tagId)).toBe(true)
       }
     }
+  })
+})
+
+describe('ledger atlas analysis fixture', () => {
+  it('contains explicit asset and liability accounts in CNY', () => {
+    expect(new Set(ledgerAtlasDataset.accounts.map((account) => account.nature))).toEqual(
+      new Set(['asset', 'liability']),
+    )
+    expect(ledgerAtlasDataset.accounts.filter((account) => account.nature === 'asset').length).toBeGreaterThanOrEqual(4)
+    expect(ledgerAtlasDataset.accounts.every((account) => account.currency === 'CNY')).toBe(true)
+    expect(
+      ledgerAtlasDataset.accounts.some(
+        (account) => account.nature === 'liability' && account.openingBalanceInCents < 0,
+      ),
+    ).toBe(true)
+  })
+
+  it('keeps transaction categories type-compatible and tags referentially valid', () => {
+    const categoryById = new Map(
+      ledgerAtlasDataset.categories.map((category) => [category.id, category]),
+    )
+    const tagIds = new Set(ledgerAtlasDataset.tags.map((tag) => tag.id))
+
+    for (const transaction of ledgerAtlasDataset.transactions) {
+      if (transaction.categoryId) {
+        expect(categoryById.get(transaction.categoryId)?.type).toBe(transaction.type)
+      }
+      expect(transaction.tagIds.every((tagId) => tagIds.has(tagId))).toBe(true)
+    }
+
+    expect(ledgerAtlasDataset.transactions.some((transaction) => transaction.tagIds.length > 1)).toBe(true)
   })
 })
