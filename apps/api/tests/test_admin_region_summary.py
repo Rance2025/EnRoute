@@ -516,6 +516,7 @@ def test_missing_current_z1_keeps_depth_two_z1_base_with_read_only_fallback(
 
     for builder_name in (
         "build_admin_region_tile",
+        "build_admin_region_tile_keys",
         "build_admin_region_tiles",
         "rebuild_admin_region_tile_from_current_rows",
     ):
