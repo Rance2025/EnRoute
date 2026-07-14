@@ -14,6 +14,28 @@ const range: TimeRangeSelection = {
 }
 
 describe('AnalyticsWorkspace', () => {
+  it('keeps empty periods and missing taxonomies finite without fabricated treemap areas', () => {
+    const emptyDataset = {
+      ...ledgerAtlasDataset,
+      transactions: [],
+      categories: [],
+      tags: [],
+    }
+    const { container } = render(
+      <AnalyticsWorkspace
+        dataset={emptyDataset}
+        timeRange={range}
+        controls={defaultAccountingStatisticsControls}
+        onFocusChange={() => undefined}
+      />,
+    )
+
+    expect(container.textContent).not.toMatch(/NaN|Infinity/)
+    expect(screen.getByText('无可比数据')).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: '分类矩形树图' }).children).toHaveLength(0)
+    expect(screen.getByRole('table', { name: '标签树金额表' })).toBeInTheDocument()
+  })
+
   it('uses one control contract for trend, category hierarchy, and tag hierarchy', () => {
     render(
       <AnalyticsWorkspace

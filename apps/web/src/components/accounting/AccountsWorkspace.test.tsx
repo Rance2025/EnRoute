@@ -25,6 +25,26 @@ const range: TimeRangeSelection = {
 }
 
 describe('AccountsWorkspace', () => {
+  it('renders a truthful empty state without attempting carousel math', () => {
+    const { container } = render(
+      <AccountsWorkspace
+        dataset={{ ...ledgerAtlasDataset, accounts: [], transactions: [] }}
+        summaries={[]}
+        transactions={[]}
+        selectedAccountId=""
+        balanceSteps={[]}
+        categoryComposition={{ income: { totalInCents: 0, segments: [] }, expense: { totalInCents: 0, segments: [] } }}
+        topTags={[]}
+        onSelectAccount={() => undefined}
+        onSelectTransaction={() => undefined}
+      />,
+    )
+
+    expect(screen.getByText('还没有可用账户')).toBeInTheDocument()
+    expect(container.textContent).not.toMatch(/NaN|Infinity/)
+    expect(screen.queryByLabelText('账户卡片轮替')).not.toBeInTheDocument()
+  })
+
   it('updates transactions metrics and charts when the front card changes', () => {
     render(<WorkspaceHarness />)
 

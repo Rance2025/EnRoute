@@ -20,7 +20,9 @@ export function CashflowTrendChart({
   granularity,
 }: CashflowTrendChartProps) {
   const values = buckets.flatMap((bucket) => bucketValues(bucket, measure))
-  const previousValues = previousBuckets.map((bucket) => netValue(bucket, measure))
+  const hasPreviousData = previousBuckets.some((bucket) => bucket.transactionCount > 0)
+  const comparablePreviousBuckets = hasPreviousData ? previousBuckets : []
+  const previousValues = comparablePreviousBuckets.map((bucket) => netValue(bucket, measure))
   const max = Math.max(...values, ...previousValues, 1)
   const min = Math.min(...values, ...previousValues, 0)
   const span = Math.max(max - min, 1)
@@ -28,7 +30,7 @@ export function CashflowTrendChart({
   const groupWidth = buckets.length === 0 ? viewBoxWidth : (viewBoxWidth - 56) / buckets.length
   const barWidth = Math.max(4, Math.min(18, groupWidth * 0.22))
   const netPoints = buckets.map((bucket, index) => point(index, netValue(bucket, measure), groupWidth, min, span))
-  const previousPoints = previousBuckets.map((bucket, index) => point(index, netValue(bucket, measure), groupWidth, min, span))
+  const previousPoints = comparablePreviousBuckets.map((bucket, index) => point(index, netValue(bucket, measure), groupWidth, min, span))
 
   return (
     <section className="accounting-trend" aria-label="主收支趋势">
@@ -58,12 +60,12 @@ export function CashflowTrendChart({
         {netPoints.length > 0 ? <polyline data-testid="trend-net-line" data-scale="shared" className="accounting-trend__net" points={netPoints.join(' ')} fill="none" /> : null}
         {previousPoints.length > 0 ? <polyline data-testid="trend-previous-line" className="accounting-trend__previous" points={previousPoints.join(' ')} fill="none" strokeDasharray="6 6" /> : null}
       </svg>
-      {previousBuckets.length === 0 ? <p className="accounting-chart-empty">无可比数据</p> : null}
+      {!hasPreviousData ? <p className="accounting-chart-empty">无可比数据</p> : null}
       <div className="accounting-chart-legend" aria-label="趋势图例">
         <span><i data-tone="income" />收入</span>
         <span><i data-tone="expense" />支出</span>
         <span><i data-tone="net" />净额</span>
-        {previousBuckets.length > 0 ? <span><i data-tone="previous" />上周期净额</span> : null}
+        {hasPreviousData ? <span><i data-tone="previous" />上周期净额</span> : null}
       </div>
       <table className="sr-only">
         <caption>收支趋势数据</caption>

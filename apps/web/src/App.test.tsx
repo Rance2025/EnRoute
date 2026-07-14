@@ -1055,7 +1055,7 @@ describe('App', () => {
     expect(screen.queryByText('本期流水')).not.toBeInTheDocument()
   })
 
-  it('opens transaction and new-ledger modals from the accounting workspace', async () => {
+  it('creates and edits a categorized multi-tag transaction then carries context across all accounting pages', async () => {
     useAccountingFixtureDate()
 
     render(
@@ -1103,11 +1103,39 @@ describe('App', () => {
     fireEvent.change(within(newDialog).getByLabelText('金额'), { target: { value: '12.34' } })
     fireEvent.change(within(newDialog).getByLabelText('账户'), { target: { value: 'fund-wechat' } })
     fireEvent.click(within(newDialog).getByRole('button', { name: '选择分类 餐饮 / 正餐' }))
+    fireEvent.click(within(newDialog).getByRole('button', { name: '选择标签 地点旅行 / 青岛之行' }))
+    fireEvent.click(within(newDialog).getByRole('button', { name: '选择标签 人生阶段 / 大学' }))
     fireEvent.change(within(newDialog).getByLabelText('备注'), { target: { value: '会话新增流水' } })
     fireEvent.click(within(newDialog).getByRole('button', { name: '保存流水' }))
 
     expect(screen.queryByRole('dialog', { name: '新增流水' })).not.toBeInTheDocument()
-    expect(within(workspace).getByRole('button', { name: '查看流水 会话新增流水' })).toBeInTheDocument()
+    const createdRow = within(workspace).getByRole('button', { name: '查看流水 会话新增流水' })
+    expect(createdRow).toHaveTextContent('青岛之行')
+    expect(createdRow).toHaveTextContent('大学')
+
+    fireEvent.click(createdRow)
+    const createdDetail = screen.getByRole('dialog', { name: '流水详情' })
+    expect(createdDetail).toHaveTextContent('地点旅行 / 青岛之行')
+    expect(createdDetail).toHaveTextContent('人生阶段 / 大学')
+    fireEvent.click(within(createdDetail).getByRole('button', { name: '编辑流水' }))
+    const editDialog = screen.getByRole('dialog', { name: '编辑流水' })
+    fireEvent.change(within(editDialog).getByLabelText('金额'), { target: { value: '66.66' } })
+    fireEvent.click(within(editDialog).getByRole('button', { name: '保存流水' }))
+    expect(within(workspace).getByRole('button', { name: '查看流水 会话新增流水' })).toHaveTextContent('-¥66.66')
+
+    const secondaryNav = screen.getByRole('navigation', { name: '二级导航' })
+    fireEvent.click(within(secondaryNav).getByRole('button', { name: '账户' }))
+    const accountsWorkspace = await screen.findByLabelText('账户工作台')
+    fireEvent.click(within(accountsWorkspace).getByRole('button', { name: '选择账户 花呗' }))
+    expect(within(accountsWorkspace).getByRole('heading', { name: '花呗' })).toBeInTheDocument()
+
+    fireEvent.click(within(secondaryNav).getByRole('button', { name: '统计' }))
+    const statisticsControls = await screen.findByLabelText('统计口径')
+    fireEvent.change(within(statisticsControls).getByLabelText('时间粒度'), { target: { value: 'week' } })
+    const analytics = await screen.findByLabelText('统计工作区')
+    expect(within(analytics).getByText('最终粒度：周')).toBeInTheDocument()
+    fireEvent.click(within(analytics).getByRole('button', { name: /餐饮/ }))
+    expect(screen.getByLabelText('当前分区摘要')).toHaveTextContent('餐饮')
   })
 
   it('renders analytics with charts plus category and tag tree statistics', async () => {

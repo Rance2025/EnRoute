@@ -32,6 +32,7 @@ describe('TransactionDialog', () => {
     fireEvent.change(within(dialog).getByLabelText('账户'), { target: { value: 'fund-bank' } })
     fireEvent.click(within(dialog).getByRole('button', { name: '选择分类 工作收入' }))
     fireEvent.click(within(dialog).getByRole('button', { name: '选择标签 人生阶段 / 大学' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: '选择标签 地点旅行 / 青岛之行' }))
     fireEvent.change(within(dialog).getByLabelText('备注'), { target: { value: '临时收入' } })
     fireEvent.click(within(dialog).getByRole('button', { name: '保存流水' }))
 
@@ -40,7 +41,7 @@ describe('TransactionDialog', () => {
       amount: '88.50',
       accountId: 'fund-bank',
       categoryId: 'income-work',
-      tagIds: ['college'],
+      tagIds: ['college', 'qingdao-trip'],
       note: '临时收入',
     }))
   })
