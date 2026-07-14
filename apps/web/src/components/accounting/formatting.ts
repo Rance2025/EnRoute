@@ -5,6 +5,12 @@ import type {
   Transaction,
 } from '../../accounting/types'
 import { getCategoryPath, getTagPath } from '../../accounting/trees'
+import { formatCnyFromCents } from '../../accounting/money'
+
+export function formatSignedCny(amountInCents: number) {
+  const sign = amountInCents > 0 ? '+' : amountInCents < 0 ? '-' : ''
+  return `${sign}¥${formatCnyFromCents(Math.abs(amountInCents))}`
+}
 
 export function formatMonthDay(value: string) {
   return new Intl.DateTimeFormat('zh-CN', {
