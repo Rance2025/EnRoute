@@ -40,9 +40,11 @@ export function getTreeDepth<T extends { id: string; parentId?: string }>(
   let depth = 0
   let current = byId.get(itemId)
 
-  while (current?.parentId && byId.has(current.parentId)) {
+  while (current?.parentId) {
+    const parent = byId.get(current.parentId)
+    if (!parent) break
     depth += 1
-    current = byId.get(current.parentId)
+    current = parent
   }
 
   return depth
@@ -56,8 +58,10 @@ export function getTopLevelTreeId<T extends { id: string; parentId?: string }>(
   let current = byId.get(itemId)
   if (!current) return undefined
 
-  while (current.parentId && byId.has(current.parentId)) {
-    current = byId.get(current.parentId)
+  while (current.parentId) {
+    const parent = byId.get(current.parentId)
+    if (!parent) break
+    current = parent
   }
 
   return current.id
