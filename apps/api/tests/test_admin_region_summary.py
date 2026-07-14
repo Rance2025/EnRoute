@@ -10,6 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 from mapbox_vector_tile import encode
 
+from enroute_api.admin_regions import tiles as admin_region_tiles_module
 from enroute_api.admin_regions import thumbnail as thumbnail_module
 from enroute_api.admin_regions.summary import query_admin_region_statistics
 from enroute_api.admin_regions.thumbnail import create_admin_region_thumbnail
@@ -457,10 +458,11 @@ def test_china_base_falls_back_to_depth_two_z0_tile(
 
 
 @pytest.mark.parametrize(
-    ("depth", "visited_region_id", "force_bounds"),
+    ("depth", "visited_region_id", "force_bounds", "tile_region_ids"),
     [
-        (3, "310100", False),
-        (4, "310115", True),
+        (2, "310000", False, ("310000", "330000")),
+        (3, "310100", False, ("310100", "330100")),
+        (4, "310115", True, ("310115", "330106")),
     ],
 )
 def test_missing_current_z1_keeps_depth_two_z1_base_with_read_only_fallback(
@@ -469,22 +471,60 @@ def test_missing_current_z1_keeps_depth_two_z1_base_with_read_only_fallback(
     depth: int,
     visited_region_id: str,
     force_bounds: bool,
+    tile_region_ids: tuple[str, str],
 ):
-    insert_thumbnail_tile(connection, depth=2, z=1, x=1, y=0, adjacent=True)
-    insert_thumbnail_tile(connection, depth=depth, x_offset=-2000)
-    province = create_admin_region_thumbnail(connection, depth=2, visited_region_ids=set())
+    if depth == 2:
+        connection.execute(
+            "UPDATE admin_regions SET geometry = ? WHERE id = '310000'",
+            (rectangle_geometry(120.8, 30.6, 122.2, 31.9, holes=[(121.1, 30.9, 121.5, 31.3)]),),
+        )
+        connection.commit()
+        province_base = None
+    else:
+        insert_thumbnail_tile(connection, depth=2, z=1, x=1, y=0, adjacent=True)
+        province_base = create_admin_region_thumbnail(
+            connection,
+            depth=2,
+            visited_region_ids=set(),
+        )["basePath"]
+    same_depth_z0_tile = insert_thumbnail_tile(
+        connection,
+        depth=depth,
+        region_ids=tile_region_ids,
+        included_region_ids={visited_region_id},
+    )
     if force_bounds:
         monkeypatch.setattr(thumbnail_module, "RAW_FALLBACK_MAX_GEOMETRY_BYTES", -1)
 
     traced_statements: list[str] = []
+    decoded_tiles: list[bytes] = []
     shape_calls = 0
+    real_decode = thumbnail_module.decode
     real_shape = thumbnail_module.shape
+
+    def track_decoded_tiles(tile: bytes, *, default_options: dict[str, bool]):
+        decoded_tiles.append(tile)
+        return real_decode(tile, default_options=default_options)
 
     def count_shape_calls(geometry):
         nonlocal shape_calls
         shape_calls += 1
         return real_shape(geometry)
 
+    def fail_admin_region_tile_builder(*_args, **_kwargs):
+        pytest.fail("thumbnail fallback must not build admin-region tiles")
+
+    for builder_name in (
+        "build_admin_region_tile",
+        "build_admin_region_tiles",
+        "rebuild_admin_region_tile_from_current_rows",
+    ):
+        monkeypatch.setattr(
+            admin_region_tiles_module,
+            builder_name,
+            fail_admin_region_tile_builder,
+        )
+    monkeypatch.setattr(thumbnail_module, "decode", track_decoded_tiles)
     monkeypatch.setattr(thumbnail_module, "shape", count_shape_calls)
     connection.set_trace_callback(traced_statements.append)
     try:
@@ -504,11 +544,15 @@ def test_missing_current_z1_keeps_depth_two_z1_base_with_read_only_fallback(
 
     normalized_statements = [" ".join(statement.lower().split()) for statement in traced_statements]
     write_prefixes = ("insert ", "update ", "delete ", "drop ", "create ")
-    assert first["basePath"] == second["basePath"] == province["basePath"]
+    assert first["basePath"] == second["basePath"]
+    if province_base is not None:
+        assert first["basePath"] == province_base
     assert first["basePath"].count("M") == 1
     assert first["visitedPath"].startswith("M")
-    if not force_bounds:
+    if depth in {2, 3}:
         assert first["visitedPath"].count("M") == 2
+    if depth > 2:
+        assert same_depth_z0_tile not in decoded_tiles
     assert first_shape_call_count > 0
     assert shape_calls == first_shape_call_count
     assert not any(statement.startswith(write_prefixes) for statement in normalized_statements)
@@ -1098,11 +1142,13 @@ def insert_thumbnail_tile(
     z: int = 0,
     x: int = 0,
     y: int = 0,
+    region_ids: tuple[str, str] = ("310100", "330100"),
     included_region_ids: set[str] | None = None,
     x_offset: int = 0,
     adjacent: bool = False,
 ) -> bytes:
-    included_ids = {"310100", "330100"} if included_region_ids is None else included_region_ids
+    first_region_id, second_region_id = region_ids
+    included_ids = set(region_ids) if included_region_ids is None else included_region_ids
     tile_scale = 2**z
 
     def tile_point(global_x: int, global_y: int) -> list[int]:
@@ -1127,7 +1173,7 @@ def insert_thumbnail_tile(
                     ],
                 ],
             },
-            "properties": {"region_id": "310100", "level": depth, "kind": "fill"},
+            "properties": {"region_id": first_region_id, "level": depth, "kind": "fill"},
         },
         {
             "geometry": {
@@ -1142,7 +1188,7 @@ def insert_thumbnail_tile(
                     ],
                 ],
             },
-            "properties": {"region_id": "330100", "level": depth, "kind": "fill"},
+            "properties": {"region_id": second_region_id, "level": depth, "kind": "fill"},
         },
     ]
     selected_features = [
