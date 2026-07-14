@@ -26,6 +26,14 @@ CSV_HEADER = (
 )
 
 
+def assert_svg_path_within_viewbox(path: str) -> None:
+    coordinates = [float(value) for value in re.findall(r"-?\d+(?:\.\d+)?", path)]
+    assert coordinates
+    assert len(coordinates) % 2 == 0
+    assert all(0 <= x <= 320 for x in coordinates[::2])
+    assert all(0 <= y <= 150 for y in coordinates[1::2])
+
+
 @pytest.fixture
 def connection():
     connection = sqlite3.connect(":memory:")
@@ -347,19 +355,105 @@ def test_thumbnail_uses_fixed_world_and_china_frames_without_presentation_attrib
     assert json.dumps(city).find("stroke") == -1
 
 
-def test_province_city_and_district_share_one_gapless_china_base(
+@pytest.mark.parametrize("depth", [2, 3, 4])
+def test_china_thumbnail_prefers_current_depth_z1_tile_with_coordinate_context(
+    connection: sqlite3.Connection,
+    depth: int,
+):
+    insert_thumbnail_tile(connection, depth=depth, x_offset=-2000)
+    insert_thumbnail_tile(connection, depth=2, z=1, x=1, y=0, adjacent=True)
+    if depth != 2:
+        insert_thumbnail_tile(connection, depth=depth, z=1, x=1, y=0)
+    connection.execute("DELETE FROM admin_regions WHERE id = '310100'")
+    connection.commit()
+
+    thumbnail = create_admin_region_thumbnail(
+        connection,
+        depth=depth,
+        visited_region_ids={"310100"},
+    )
+
+    assert thumbnail["viewBox"] == "0 0 320 150"
+    assert thumbnail["basePath"].startswith("M")
+    assert thumbnail["visitedPath"].startswith("M")
+    assert_svg_path_within_viewbox(thumbnail["basePath"])
+    assert_svg_path_within_viewbox(thumbnail["visitedPath"])
+
+
+def test_world_thumbnail_keeps_depth_one_z0_tile(
     connection: sqlite3.Connection,
 ):
-    insert_thumbnail_tile(connection, depth=2, adjacent=True)
-    insert_thumbnail_tile(connection, depth=3, x_offset=120, adjacent=True)
-    insert_thumbnail_tile(connection, depth=4, x_offset=240, adjacent=True)
+    insert_thumbnail_tile(connection, depth=1, included_region_ids={"310100"})
+    insert_thumbnail_tile(
+        connection,
+        depth=1,
+        z=1,
+        x=1,
+        y=0,
+        included_region_ids={"330100"},
+    )
 
-    province = create_admin_region_thumbnail(connection, depth=2, visited_region_ids=set())
-    city = create_admin_region_thumbnail(connection, depth=3, visited_region_ids=set())
-    district = create_admin_region_thumbnail(connection, depth=4, visited_region_ids=set())
+    thumbnail = create_admin_region_thumbnail(
+        connection,
+        depth=1,
+        visited_region_ids={"310100"},
+    )
+
+    assert thumbnail["visitedPath"].startswith("M")
+
+
+def test_province_city_and_district_share_depth_two_z1_base_and_use_own_z1_visit(
+    connection: sqlite3.Connection,
+):
+    for depth in (2, 3, 4):
+        insert_thumbnail_tile(connection, depth=depth, x_offset=-2000, adjacent=True)
+    insert_thumbnail_tile(connection, depth=2, z=1, x=1, y=0, adjacent=True)
+    insert_thumbnail_tile(connection, depth=3, z=1, x=1, y=0, x_offset=20, adjacent=True)
+    insert_thumbnail_tile(connection, depth=4, z=1, x=1, y=0, x_offset=40, adjacent=True)
+
+    province = create_admin_region_thumbnail(
+        connection,
+        depth=2,
+        visited_region_ids={"310100"},
+    )
+    city = create_admin_region_thumbnail(
+        connection,
+        depth=3,
+        visited_region_ids={"310100"},
+    )
+    district = create_admin_region_thumbnail(
+        connection,
+        depth=4,
+        visited_region_ids={"310100"},
+    )
 
     assert province["basePath"] == city["basePath"] == district["basePath"]
     assert province["basePath"].count("M") == 1
+    assert len({province["visitedPath"], city["visitedPath"], district["visitedPath"]}) == 3
+
+
+def test_china_base_falls_back_to_depth_two_z0_tile(
+    connection: sqlite3.Connection,
+):
+    insert_thumbnail_tile(connection, depth=2, adjacent=True)
+    insert_thumbnail_tile(connection, depth=3, x_offset=-2000, adjacent=True)
+    insert_thumbnail_tile(connection, depth=3, z=1, x=1, y=0, x_offset=20)
+
+    province = create_admin_region_thumbnail(
+        connection,
+        depth=2,
+        visited_region_ids=set(),
+    )
+    city = create_admin_region_thumbnail(
+        connection,
+        depth=3,
+        visited_region_ids={"310100"},
+    )
+
+    assert province["basePath"] == city["basePath"]
+    assert province["basePath"].count("M") == 1
+    assert_svg_path_within_viewbox(city["basePath"])
+    assert_svg_path_within_viewbox(city["visitedPath"])
 
 
 @pytest.mark.parametrize(
@@ -369,14 +463,15 @@ def test_province_city_and_district_share_one_gapless_china_base(
         (4, "310115", True),
     ],
 )
-def test_missing_current_tile_keeps_province_base_with_raw_or_bounds_regions(
+def test_missing_current_z1_keeps_depth_two_z1_base_with_read_only_fallback(
     connection: sqlite3.Connection,
     monkeypatch: pytest.MonkeyPatch,
     depth: int,
     visited_region_id: str,
     force_bounds: bool,
 ):
-    insert_thumbnail_tile(connection, depth=2, adjacent=True)
+    insert_thumbnail_tile(connection, depth=2, z=1, x=1, y=0, adjacent=True)
+    insert_thumbnail_tile(connection, depth=depth, x_offset=-2000)
     province = create_admin_region_thumbnail(connection, depth=2, visited_region_ids=set())
     if force_bounds:
         monkeypatch.setattr(thumbnail_module, "RAW_FALLBACK_MAX_GEOMETRY_BYTES", -1)
@@ -408,19 +503,21 @@ def test_missing_current_tile_keeps_province_base_with_raw_or_bounds_regions(
         connection.set_trace_callback(None)
 
     normalized_statements = [" ".join(statement.lower().split()) for statement in traced_statements]
+    write_prefixes = ("insert ", "update ", "delete ", "drop ", "create ")
     assert first["basePath"] == second["basePath"] == province["basePath"]
     assert first["basePath"].count("M") == 1
     assert first["visitedPath"].startswith("M")
+    if not force_bounds:
+        assert first["visitedPath"].count("M") == 2
     assert first_shape_call_count > 0
     assert shape_calls == first_shape_call_count
-    assert sum("length(tile)" in statement for statement in normalized_statements) == 2
-    assert sum("select tile" in statement for statement in normalized_statements) == 1
+    assert not any(statement.startswith(write_prefixes) for statement in normalized_statements)
 
 
 def test_thumbnail_unions_adjacent_visited_regions_before_writing_path(
     connection: sqlite3.Connection,
 ):
-    insert_thumbnail_tile(connection, depth=3, adjacent=True)
+    insert_thumbnail_tile(connection, depth=3, z=1, x=1, y=0, adjacent=True)
     thumbnail = create_admin_region_thumbnail(
         connection,
         depth=3,
@@ -434,7 +531,14 @@ def test_thumbnail_repairs_invalid_tile_polygon_before_clipping(
     connection: sqlite3.Connection,
     monkeypatch: pytest.MonkeyPatch,
 ):
-    insert_thumbnail_tile(connection, depth=4, included_region_ids={"310100"})
+    insert_thumbnail_tile(
+        connection,
+        depth=4,
+        z=1,
+        x=1,
+        y=0,
+        included_region_ids={"310100"},
+    )
 
     def decode_invalid_tile(tile: bytes, *, default_options: dict[str, bool]):
         del tile
@@ -447,11 +551,11 @@ def test_thumbnail_repairs_invalid_tile_polygon_before_clipping(
                             "type": "Polygon",
                             "coordinates": [
                                 [
-                                    [3400, 1600],
-                                    [3430, 1640],
-                                    [3400, 1640],
-                                    [3430, 1600],
-                                    [3400, 1600],
+                                    [2704, 3200],
+                                    [2764, 3280],
+                                    [2704, 3280],
+                                    [2764, 3200],
+                                    [2704, 3200],
                                 ],
                             ],
                         },
@@ -513,7 +617,7 @@ def test_thumbnail_reuses_compact_precomputed_paths_without_reading_raw_geometry
         "UPDATE admin_regions SET geometry = ? WHERE id = '310100'",
         (dense_rectangle_geometry(120.85, 30.65, 122.15, 31.9),),
     )
-    insert_thumbnail_tile(connection, depth=3)
+    insert_thumbnail_tile(connection, depth=3, z=1, x=1, y=0)
     traced_statements: list[str] = []
     connection.set_trace_callback(traced_statements.append)
     shape_calls = 0
@@ -557,6 +661,9 @@ def test_thumbnail_queries_bounds_for_visited_regions_missing_from_the_tile(
     insert_thumbnail_tile(
         connection,
         depth=3,
+        z=1,
+        x=1,
+        y=0,
         included_region_ids={"310100"},
     )
     traced_statements: list[str] = []
@@ -590,8 +697,15 @@ def test_thumbnail_cache_keeps_connections_with_identical_tile_metadata_isolated
         connection.row_factory = sqlite3.Row
         initialize_schema(connection)
         seed_admin_regions(connection)
-    first_tile = insert_thumbnail_tile(first_connection, depth=3, x_offset=0)
-    second_tile = insert_thumbnail_tile(second_connection, depth=3, x_offset=100)
+    first_tile = insert_thumbnail_tile(first_connection, depth=3, z=1, x=1, y=0)
+    second_tile = insert_thumbnail_tile(
+        second_connection,
+        depth=3,
+        z=1,
+        x=1,
+        y=0,
+        x_offset=100,
+    )
     assert len(first_tile) == len(second_tile)
     monkeypatch.setattr(thumbnail_module, "id", lambda _connection: 7, raising=False)
 
@@ -711,6 +825,9 @@ def test_admin_region_summary_api_uses_ranking_bounds_for_visited_regions_missin
         insert_thumbnail_tile(
             connection,
             depth=3,
+            z=1,
+            x=1,
+            y=0,
             included_region_ids={"310100"},
         )
 
@@ -978,11 +1095,22 @@ def insert_thumbnail_tile(
     connection: sqlite3.Connection,
     *,
     depth: int,
+    z: int = 0,
+    x: int = 0,
+    y: int = 0,
     included_region_ids: set[str] | None = None,
     x_offset: int = 0,
     adjacent: bool = False,
 ) -> bytes:
     included_ids = {"310100", "330100"} if included_region_ids is None else included_region_ids
+    tile_scale = 2**z
+
+    def tile_point(global_x: int, global_y: int) -> list[int]:
+        return [
+            (global_x + x_offset) * tile_scale - x * 4096,
+            global_y * tile_scale - y * 4096,
+        ]
+
     second_top = 1600 if adjacent else 1640
     second_bottom = 1640 if adjacent else 1680
     features = [
@@ -991,11 +1119,11 @@ def insert_thumbnail_tile(
                 "type": "Polygon",
                 "coordinates": [
                     [
-                        [3400 + x_offset, 1600],
-                        [3430 + x_offset, 1600],
-                        [3430 + x_offset, 1640],
-                        [3400 + x_offset, 1640],
-                        [3400 + x_offset, 1600],
+                        tile_point(3400, 1600),
+                        tile_point(3430, 1600),
+                        tile_point(3430, 1640),
+                        tile_point(3400, 1640),
+                        tile_point(3400, 1600),
                     ],
                 ],
             },
@@ -1006,11 +1134,11 @@ def insert_thumbnail_tile(
                 "type": "Polygon",
                 "coordinates": [
                     [
-                        [3370 + x_offset, second_top],
-                        [3400 + x_offset, second_top],
-                        [3400 + x_offset, second_bottom],
-                        [3370 + x_offset, second_bottom],
-                        [3370 + x_offset, second_top],
+                        tile_point(3370, second_top),
+                        tile_point(3400, second_top),
+                        tile_point(3400, second_bottom),
+                        tile_point(3370, second_bottom),
+                        tile_point(3370, second_top),
                     ],
                 ],
             },
@@ -1036,9 +1164,9 @@ def insert_thumbnail_tile(
         INSERT INTO admin_region_tiles (
           z, x, y, focus_region_id, depth, algorithm_signature,
           tile, feature_count, updated_at
-        ) VALUES (0, 0, 0, 'world', ?, 'thumbnail-test-v1', ?, ?, 1)
+        ) VALUES (?, ?, ?, 'world', ?, 'thumbnail-test-v1', ?, ?, 1)
         """,
-        (depth, tile, len(selected_features)),
+        (z, x, y, depth, tile, len(selected_features)),
     )
     connection.commit()
     return tile

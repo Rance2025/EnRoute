@@ -27,6 +27,8 @@ TILE_UNION_GRID_UNITS = 4.0
 RAW_FALLBACK_MAX_GEOMETRY_BYTES = 2_000_000
 MAX_THUMBNAIL_PATH_LENGTH = 200_000
 THUMBNAIL_CACHE_MAXSIZE = 16
+WORLD_THUMBNAIL_TILE = (0, 0, 0)
+CHINA_THUMBNAIL_TILE = (1, 1, 0)
 
 COUNTRY_SCOPE_FILTER = """
   AND LOWER(TRIM(name)) NOT IN ('antarctica', '南极洲')
@@ -54,12 +56,20 @@ class AdminRegionThumbnailPaths:
 
 
 @dataclass(frozen=True)
+class AdminRegionThumbnailTile:
+    z: int
+    x: int
+    y: int
+    content: bytes
+
+
+@dataclass(frozen=True)
 class AdminRegionThumbnailSource:
     cache_key: tuple[object, ...]
     depth: int
     mode: str
-    tile: bytes = b""
-    china_base_tile: bytes = b""
+    tile: AdminRegionThumbnailTile | None = None
+    china_base_tile: AdminRegionThumbnailTile | None = None
     geometry_rows: tuple[tuple[str, str], ...] = ()
     bounds_rows: tuple[tuple[str, float, float, float, float], ...] = ()
     cached_paths: AdminRegionThumbnailPaths | None = None
@@ -67,6 +77,35 @@ class AdminRegionThumbnailSource:
 
 _thumbnail_cache: OrderedDict[tuple[object, ...], AdminRegionThumbnailPaths] = OrderedDict()
 _thumbnail_cache_lock = Lock()
+
+
+def preferred_thumbnail_tile_key(depth: int) -> tuple[int, int, int]:
+    return WORLD_THUMBNAIL_TILE if depth == 1 else CHINA_THUMBNAIL_TILE
+
+
+def requested_thumbnail_tile_keys(depth: int) -> tuple[tuple[int, int, int, int], ...]:
+    keys = {(depth, *preferred_thumbnail_tile_key(depth))}
+    if depth > 1:
+        keys.update(
+            {
+                (2, *CHINA_THUMBNAIL_TILE),
+                (2, *WORLD_THUMBNAIL_TILE),
+            },
+        )
+    return tuple(sorted(keys))
+
+
+def exact_thumbnail_tile_predicate(
+    keys: Iterable[tuple[int, int, int, int]],
+) -> tuple[str, tuple[int, ...]]:
+    normalized_keys = tuple(sorted({tuple(int(value) for value in key) for key in keys}))
+    if not normalized_keys:
+        return "0", ()
+    predicate = " OR ".join(
+        "(depth = ? AND z = ? AND x = ? AND y = ?)" for _key in normalized_keys
+    )
+    parameters = tuple(value for key in normalized_keys for value in key)
+    return predicate, parameters
 
 
 def create_admin_region_thumbnail(
@@ -98,36 +137,50 @@ def read_admin_region_thumbnail_source(
 ) -> AdminRegionThumbnailSource:
     validate_thumbnail_depth(depth)
     connection_scope = connection
-    requested_depths = sorted({depth, 2} if depth > 1 else {depth})
-    placeholders = ",".join("?" for _ in requested_depths)
+    requested_tile_keys = requested_thumbnail_tile_keys(depth)
+    tile_predicate, tile_parameters = exact_thumbnail_tile_predicate(requested_tile_keys)
     tile_rows = connection.execute(
         f"""
-        SELECT depth, algorithm_signature, updated_at, feature_count,
+        SELECT depth, z, x, y, algorithm_signature, updated_at, feature_count,
                LENGTH(tile) AS tile_length
         FROM admin_region_tiles
-        WHERE z = 0
-          AND x = 0
-          AND y = 0
-          AND focus_region_id = 'world'
-          AND depth IN ({placeholders})
-        ORDER BY depth
+        WHERE focus_region_id = 'world'
+          AND ({tile_predicate})
+        ORDER BY depth, z, x, y
         """,
-        requested_depths,
+        tile_parameters,
     ).fetchall()
-    metadata_by_depth = {
-        int(row_value(row, "depth", 0)): (
-            str(row_value(row, "algorithm_signature", 1)),
-            int(row_value(row, "updated_at", 2)),
-            int(row_value(row, "feature_count", 3)),
-            int(row_value(row, "tile_length", 4)),
+    metadata_by_key = {
+        (
+            int(row_value(row, "depth", 0)),
+            int(row_value(row, "z", 1)),
+            int(row_value(row, "x", 2)),
+            int(row_value(row, "y", 3)),
+        ): (
+            str(row_value(row, "algorithm_signature", 4)),
+            int(row_value(row, "updated_at", 5)),
+            int(row_value(row, "feature_count", 6)),
+            int(row_value(row, "tile_length", 7)),
         )
         for row in tile_rows
     }
     metadata_key: tuple[object, ...] = tuple(
-        (requested_depth, metadata_by_depth.get(requested_depth))
-        for requested_depth in requested_depths
+        (requested_tile_key, metadata_by_key.get(requested_tile_key))
+        for requested_tile_key in requested_tile_keys
     )
-    if depth in metadata_by_depth:
+    current_tile_key = (depth, *preferred_thumbnail_tile_key(depth))
+    china_base_tile_key = next(
+        (
+            candidate
+            for candidate in (
+                (2, *CHINA_THUMBNAIL_TILE),
+                (2, *WORLD_THUMBNAIL_TILE),
+            )
+            if depth > 1 and candidate in metadata_by_key
+        ),
+        None,
+    )
+    if current_tile_key in metadata_by_key:
         cache_key = (
             "tile",
             connection_scope,
@@ -142,63 +195,70 @@ def read_admin_region_thumbnail_source(
                 mode="cached",
                 cached_paths=cached_paths,
             )
-        tiles_by_depth = read_admin_region_thumbnail_tiles(
+        content_tile_keys = {current_tile_key}
+        if china_base_tile_key is not None:
+            content_tile_keys.add(china_base_tile_key)
+        tiles_by_key = read_admin_region_thumbnail_tiles(
             connection,
-            depths=requested_depths,
+            keys=content_tile_keys,
         )
-        tile = tiles_by_depth.get(depth, b"")
-        if tile:
+        tile = tiles_by_key.get(current_tile_key)
+        if tile is not None:
             return AdminRegionThumbnailSource(
                 cache_key=cache_key,
                 depth=depth,
                 mode="tile",
                 tile=tile,
-                china_base_tile=tiles_by_depth.get(2, b"") if depth > 1 else b"",
+                china_base_tile=(
+                    tiles_by_key.get(china_base_tile_key)
+                    if china_base_tile_key is not None
+                    else None
+                ),
             )
-        china_base_tile = tiles_by_depth.get(2, b"") if depth > 1 else b""
-        content_depths: tuple[int, ...] = ()
-    else:
-        china_base_tile = b""
-        content_depths = tuple(metadata_by_depth)
 
     return read_raw_admin_region_thumbnail_source(
         connection,
         connection_scope=connection_scope,
         depth=depth,
         tile_metadata_key=metadata_key,
-        china_base_tile=china_base_tile,
-        content_depths=content_depths,
+        china_base_tile_key=china_base_tile_key,
     )
 
 
 def read_admin_region_thumbnail_tiles(
     connection: sqlite3.Connection,
     *,
-    depths: Iterable[int],
-) -> dict[int, bytes]:
-    requested_depths = sorted({int(depth) for depth in depths})
-    if not requested_depths:
+    keys: Iterable[tuple[int, int, int, int]],
+) -> dict[tuple[int, int, int, int], AdminRegionThumbnailTile]:
+    requested_keys = tuple(sorted({tuple(int(value) for value in key) for key in keys}))
+    if not requested_keys:
         return {}
-    placeholders = ",".join("?" for _ in requested_depths)
+    tile_predicate, tile_parameters = exact_thumbnail_tile_predicate(requested_keys)
     content_rows = connection.execute(
         f"""
-        SELECT tile, depth
+        SELECT tile, depth, z, x, y
         FROM admin_region_tiles
-        WHERE z = 0
-          AND x = 0
-          AND y = 0
-          AND focus_region_id = 'world'
-          AND depth IN ({placeholders})
-        ORDER BY depth
+        WHERE focus_region_id = 'world'
+          AND ({tile_predicate})
+        ORDER BY depth, z, x, y
         """,
-        requested_depths,
+        tile_parameters,
     ).fetchall()
-    tiles_by_depth: dict[int, bytes] = {}
+    tiles_by_key: dict[tuple[int, int, int, int], AdminRegionThumbnailTile] = {}
     for row in content_rows:
         tile_value = row_value(row, "tile", 0)
         if tile_value is not None:
-            tiles_by_depth[int(row_value(row, "depth", 1))] = bytes(tile_value)
-    return tiles_by_depth
+            depth = int(row_value(row, "depth", 1))
+            z = int(row_value(row, "z", 2))
+            x = int(row_value(row, "x", 3))
+            y = int(row_value(row, "y", 4))
+            tiles_by_key[(depth, z, x, y)] = AdminRegionThumbnailTile(
+                z=z,
+                x=x,
+                y=y,
+                content=bytes(tile_value),
+            )
+    return tiles_by_key
 
 
 def read_raw_admin_region_thumbnail_source(
@@ -207,8 +267,7 @@ def read_raw_admin_region_thumbnail_source(
     connection_scope: sqlite3.Connection,
     depth: int,
     tile_metadata_key: tuple[object, ...] = (),
-    china_base_tile: bytes = b"",
-    content_depths: tuple[int, ...] = (),
+    china_base_tile_key: tuple[int, int, int, int] | None = None,
 ) -> AdminRegionThumbnailSource:
     country_filter = COUNTRY_SCOPE_FILTER if depth == 1 else ""
     stats_row = connection.execute(
@@ -247,12 +306,13 @@ def read_raw_admin_region_thumbnail_source(
             cached_paths=cached_paths,
         )
 
-    if content_depths:
-        tiles_by_depth = read_admin_region_thumbnail_tiles(
+    china_base_tile = None
+    if china_base_tile_key is not None:
+        tiles_by_key = read_admin_region_thumbnail_tiles(
             connection,
-            depths=content_depths,
+            keys=(china_base_tile_key,),
         )
-        china_base_tile = tiles_by_depth.get(2, b"") if depth > 1 else b""
+        china_base_tile = tiles_by_key.get(china_base_tile_key)
 
     bounds_rows = query_region_bounds(connection, depth=depth)
     if geometry_bytes > RAW_FALLBACK_MAX_GEOMETRY_BYTES:
@@ -402,6 +462,7 @@ def build_tile_base_path(
     grouped_geometries: dict[str, list[BaseGeometry]],
     *,
     depth: int,
+    tile: AdminRegionThumbnailTile,
 ) -> str:
     base_geometries: list[BaseGeometry] = []
     for geometries in grouped_geometries.values():
@@ -421,6 +482,7 @@ def build_tile_base_path(
         project_tile_geometry(
             base_geometry,
             depth=base_depth,
+            tile=tile,
             simplify=False,
         ),
     )
@@ -431,16 +493,27 @@ def build_tile_base_path(
     )
 
 
-def build_china_base_tile_path(tile: bytes, *, depth: int) -> str:
-    if not tile:
+def build_china_base_tile_path(
+    tile: AdminRegionThumbnailTile | None,
+    *,
+    depth: int,
+) -> str:
+    if tile is None:
         return ""
-    return build_tile_base_path(decode_fill_geometries(tile), depth=depth)
+    return build_tile_base_path(
+        decode_fill_geometries(tile.content),
+        depth=depth,
+        tile=tile,
+    )
 
 
 def build_tile_thumbnail_paths(
     source: AdminRegionThumbnailSource,
 ) -> AdminRegionThumbnailPaths:
-    grouped_geometries = decode_fill_geometries(source.tile)
+    tile = source.tile
+    if tile is None:
+        return AdminRegionThumbnailPaths(base_path="", region_paths=())
+    grouped_geometries = decode_fill_geometries(tile.content)
 
     coarse_by_id = create_coarse_paths(source.bounds_rows, depth=source.depth)
     region_paths: list[AdminRegionThumbnailPath] = []
@@ -455,6 +528,7 @@ def build_tile_thumbnail_paths(
                 coarse_bounds = project_tile_bounds(
                     combine_bounds(geometry.bounds for geometry in geometries),
                     depth=source.depth,
+                    tile=tile,
                 )
                 coarse_path = bounds_to_svg_path(coarse_bounds)
                 projected_bounds = coarse_bounds
@@ -472,6 +546,7 @@ def build_tile_thumbnail_paths(
                     project_tile_geometry(
                         region_geometry,
                         depth=source.depth,
+                        tile=tile,
                         simplify=False,
                     ),
                 )
@@ -500,13 +575,17 @@ def build_tile_thumbnail_paths(
                 ),
             )
 
-    base_tile = source.china_base_tile or source.tile
+    base_tile = source.china_base_tile or tile
     base_groups = (
         grouped_geometries
-        if base_tile == source.tile
-        else decode_fill_geometries(base_tile)
+        if base_tile == tile
+        else decode_fill_geometries(base_tile.content)
     )
-    base_path = build_tile_base_path(base_groups, depth=source.depth)
+    base_path = build_tile_base_path(
+        base_groups,
+        depth=source.depth,
+        tile=base_tile,
+    )
     if not base_path:
         base_path = join_bounded_region_paths(region_paths)
     return AdminRegionThumbnailPaths(
@@ -758,11 +837,12 @@ def project_tile_geometry(
     geometry: BaseGeometry,
     *,
     depth: int,
+    tile: AdminRegionThumbnailTile,
     simplify: bool = True,
 ) -> BaseGeometry:
     def project(x, y, z=None):
         del z
-        return project_tile_position(float(x), float(y), depth=depth)
+        return project_tile_position(float(x), float(y), depth=depth, tile=tile)
 
     projected = transform(project, force_2d(geometry))
     return projected.simplify(0.6, preserve_topology=True) if simplify else projected
@@ -772,16 +852,27 @@ def project_tile_bounds(
     bounds: tuple[float, float, float, float],
     *,
     depth: int,
+    tile: AdminRegionThumbnailTile,
 ) -> tuple[float, float, float, float]:
     west, north, east, south = normalize_bounds(bounds)
-    north_west = project_tile_position(west, north, depth=depth)
-    south_east = project_tile_position(east, south, depth=depth)
+    north_west = project_tile_position(west, north, depth=depth, tile=tile)
+    south_east = project_tile_position(east, south, depth=depth, tile=tile)
     return normalize_bounds((*north_west, *south_east))
 
 
-def project_tile_position(x: float, y: float, *, depth: int) -> tuple[float, float]:
-    longitude = x / MVT_EXTENT * 360.0 - 180.0
-    mercator_y = math.pi - 2.0 * math.pi * y / MVT_EXTENT
+def project_tile_position(
+    x: float,
+    y: float,
+    *,
+    depth: int,
+    tile: AdminRegionThumbnailTile,
+) -> tuple[float, float]:
+    tile_count = 2**tile.z
+    world_extent = MVT_EXTENT * tile_count
+    global_x = tile.x * MVT_EXTENT + x
+    global_y = tile.y * MVT_EXTENT + y
+    longitude = global_x / world_extent * 360.0 - 180.0
+    mercator_y = math.pi - 2.0 * math.pi * global_y / world_extent
     latitude = math.degrees(math.atan(math.sinh(mercator_y)))
     return project_geographic_position(longitude, latitude, depth=depth)
 
