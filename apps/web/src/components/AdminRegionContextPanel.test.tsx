@@ -95,12 +95,25 @@ function renderPanel({
   return { onDepthChange, onRegionSelect, onRetry }
 }
 
+function expectElementsInDocumentOrder(...elements: Element[]) {
+  elements.slice(1).forEach((element, index) => {
+    expect(
+      elements[index].compareDocumentPosition(element) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
+  })
+}
+
 describe('AdminRegionContextPanel', () => {
   it('renders the atlas card with one-row depth controls and dynamic city count', () => {
     const { onDepthChange } = renderPanel()
 
-    expect(screen.getByRole('heading', { name: '足迹版图' })).toBeInTheDocument()
-    expect(screen.getByText('3 / 12 城市')).toBeInTheDocument()
+    const heading = screen.getByRole('heading', { name: '足迹版图' })
+    const count = screen.getByText('3 / 12 城市')
+    const atlasHead = heading.closest('.admin-region-atlas-card__head')
+
+    expect(atlasHead).not.toBeNull()
+    expect(atlasHead).toContainElement(heading)
+    expect(atlasHead).toContainElement(count)
     expect(screen.queryByText('当前层级')).not.toBeInTheDocument()
     expect(screen.queryByText('累计距离')).not.toBeInTheDocument()
 
@@ -117,9 +130,7 @@ describe('AdminRegionContextPanel', () => {
     )
 
     const thumbnail = screen.getByLabelText('城市足迹缩略图')
-    expect(
-      thumbnail.compareDocumentPosition(depthControl) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
+    expectElementsInDocumentOrder(atlasHead as Element, thumbnail, depthControl)
     expect(thumbnail).toHaveAttribute('viewBox', citySummary.thumbnail.viewBox)
     expect(thumbnail).toHaveAttribute('preserveAspectRatio', 'xMidYMid meet')
     expect(thumbnail.querySelector('.admin-region-atlas-card__base')).toHaveAttribute(
@@ -202,8 +213,12 @@ describe('AdminRegionContextPanel', () => {
 
     cleanup()
     renderPanel({ status: 'loading', summary: null })
-    expect(screen.getByText('加载中')).toBeInTheDocument()
+    const loadingDepthControl = screen.getByRole('group', { name: '行政区层级' })
+    const loadingStatus = screen.getByRole('status')
+
+    expect(loadingStatus).toHaveTextContent('加载中')
     expect(screen.getByText('-- / -- 城市')).toBeInTheDocument()
+    expectElementsInDocumentOrder(loadingDepthControl, loadingStatus)
 
     cleanup()
     renderPanel({ summary: { ...citySummary, visitedCount: 0, rankings: [], visitedRegionIds: [] } })
