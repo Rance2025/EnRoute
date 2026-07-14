@@ -16,7 +16,7 @@ type AnalyticsWorkspaceProps = {
   transactions: Transaction[]
   categoryStats: TaxonomyNodeStat[]
   tagStats: TaxonomyNodeStat[]
-  onBackToLedger: () => void
+  onBackToLedger?: () => void
 }
 
 export function AnalyticsWorkspace({
@@ -40,9 +40,11 @@ export function AnalyticsWorkspace({
       <section className="glass-panel glass-panel--solid ios-panel ios-report-overview">
         <header className="ios-panel-head">
           <strong>统计总览</strong>
-          <button type="button" className="accounting-action" onClick={onBackToLedger}>
-            返回流水
-          </button>
+          {onBackToLedger ? (
+            <button type="button" className="accounting-action" onClick={onBackToLedger}>
+              返回流水
+            </button>
+          ) : null}
         </header>
         <div
           className="ios-chart-ring"

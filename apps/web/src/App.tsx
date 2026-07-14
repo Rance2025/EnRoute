@@ -22,11 +22,18 @@ import {
   Shapes,
   Settings,
   Wallet,
+  WalletCards,
   X,
   type LucideIcon,
 } from 'lucide-react'
 
 import type { FootprintMetrics } from './layers/footprintTypes'
+import {
+  defaultAccountingStatisticsControls,
+  type AccountingSection,
+  type AccountingShellAction,
+  type AccountingShellSnapshot,
+} from './accounting/shell'
 import type { AdminRegionDepth } from './layers/adminRegionVectorTileSource'
 import {
   loadAdminRegionSummary,
@@ -94,7 +101,7 @@ type AppProps = {
   amapConfig?: AmapConfig
 }
 
-type SecondaryNavId = 'footprints' | 'regions' | 'stats' | 'ledger'
+type SecondaryNavId = 'footprints' | 'regions' | 'stats' | 'ledger' | 'accounts'
 type SecondaryNavItem = {
   id: SecondaryNavId
   label: string
@@ -173,6 +180,7 @@ const secondaryNavItemsByView: Record<AppView, SecondaryNavItem[]> = {
   schedule: [],
   accounting: [
     { id: 'ledger', label: '流水', icon: List },
+    { id: 'accounts', label: '账户', icon: WalletCards },
     { id: 'stats', label: '统计', icon: BarChart3 },
   ],
 }
@@ -321,6 +329,11 @@ function App(props: AppProps) {
   const [secondaryNavSelection, setSecondaryNavSelection] = useState<SecondaryNavSelection>(
     defaultSecondaryNavSelection,
   )
+  const [accountingShellSnapshot, setAccountingShellSnapshot] =
+    useState<AccountingShellSnapshot | null>(null)
+  const [accountingShellCommand, setAccountingShellCommand] =
+    useState<AccountingShellAction | null>(null)
+  const [accountingStatisticsControls] = useState(defaultAccountingStatisticsControls)
   const [adminRegionDepth, setAdminRegionDepth] = useState<AdminRegionDepth>(
     DEFAULT_ADMIN_REGION_DEPTH,
   )
@@ -711,7 +724,11 @@ function App(props: AppProps) {
       </nav>
 
       <TimeContextPanel
-        metricItems={view === 'map' ? mapMetricItems : undefined}
+        metricItems={view === 'map'
+          ? mapMetricItems
+          : view === 'accounting'
+            ? accountingShellSnapshot?.metricItems
+            : undefined}
         distanceSeries={view === 'map' ? footprintMetrics.distanceSeries : undefined}
         secondaryContextLabel={activeSecondaryNavItem?.label}
         view={view}
@@ -775,6 +792,8 @@ function App(props: AppProps) {
               activeSecondaryNavId={activeSecondaryNavId}
               activeSecondaryNavLabel={activeSecondaryNavItem?.label ?? '概览'}
               footprintMetrics={footprintMetrics}
+              accountingSnapshot={view === 'accounting' ? accountingShellSnapshot : null}
+              onAccountingAction={setAccountingShellCommand}
             />
           )}
         </div>
@@ -811,14 +830,12 @@ function App(props: AppProps) {
         <section className="main-workspace" aria-label="在途 EnRoute 主工作区">
           <Suspense fallback={null}>
             <LazyAccountingPage
-              section={activeSecondaryNavId === 'stats' ? 'analytics' : 'workspace'}
+              section={getAccountingSection(activeSecondaryNavId)}
               timeRange={selectedTimeRange}
-              onSectionChange={(nextSection) =>
-                setSecondaryNavSelection((current) => ({
-                  ...current,
-                  accounting: nextSection === 'analytics' ? 'stats' : 'ledger',
-                }))
-              }
+              statisticsControls={accountingStatisticsControls}
+              shellCommand={accountingShellCommand}
+              onShellCommandHandled={() => setAccountingShellCommand(null)}
+              onShellSnapshotChange={setAccountingShellSnapshot}
             />
           </Suspense>
         </section>
@@ -1018,12 +1035,59 @@ function DefaultRightContextCards({
   activeSecondaryNavId,
   activeSecondaryNavLabel,
   footprintMetrics,
+  accountingSnapshot,
+  onAccountingAction,
 }: {
   view: AppView
   activeSecondaryNavId: SecondaryNavId
   activeSecondaryNavLabel: string
   footprintMetrics: FootprintMetrics
+  accountingSnapshot: AccountingShellSnapshot | null
+  onAccountingAction: (action: AccountingShellAction) => void
 }) {
+  if (view === 'accounting' && accountingSnapshot) {
+    return (
+      <>
+        <section
+          className="glass-panel glass-panel--solid glass-panel--card right-context-panel__glass right-context-panel__summary"
+          aria-label="当前分区摘要"
+        >
+          <span className="right-context-panel__eyebrow">{accountingSnapshot.context.eyebrow}</span>
+          <strong>{accountingSnapshot.context.title}</strong>
+          <p>{accountingSnapshot.context.description}</p>
+        </section>
+        <section
+          className="glass-panel glass-panel--solid glass-panel--card right-context-panel__glass right-context-panel__legend"
+          aria-label="工作区状态"
+        >
+          <span className="right-context-panel__eyebrow">工作区状态</span>
+          <div className="right-context-panel__rows">
+            {accountingSnapshot.context.rows.map((row) => (
+              <div className="right-context-panel__row" key={row.label}>
+                <span>{row.label}</span>
+                <strong>{row.value}</strong>
+              </div>
+            ))}
+          </div>
+          {accountingSnapshot.context.actions.length > 0 ? (
+            <div className="right-context-panel__actions">
+              {accountingSnapshot.context.actions.map((action) => (
+                <button
+                  key={action.id}
+                  type="button"
+                  className={action.tone === 'danger' ? 'is-danger' : undefined}
+                  onClick={() => onAccountingAction(action.id)}
+                >
+                  {action.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </section>
+      </>
+    )
+  }
+
   return (
     <>
       <section
@@ -1052,6 +1116,12 @@ function DefaultRightContextCards({
       </section>
     </>
   )
+}
+
+function getAccountingSection(activeSecondaryNavId: SecondaryNavId): AccountingSection {
+  if (activeSecondaryNavId === 'accounts') return 'accounts'
+  if (activeSecondaryNavId === 'stats') return 'analytics'
+  return 'ledger'
 }
 
 function timeSelectionsAreEqual(

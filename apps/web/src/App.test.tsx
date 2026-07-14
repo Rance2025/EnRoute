@@ -1145,7 +1145,7 @@ describe('App', () => {
     expect(reportWorkspace.querySelector('.ios-chart-ring')).not.toBeNull()
   })
 
-  it('uses a statistics entrance instead of top-level ledger account report tabs', async () => {
+  it('switches between ledger accounts and analytics from the shared secondary rail', async () => {
     render(
       <App
         amapConfig={{
@@ -1176,11 +1176,20 @@ describe('App', () => {
       'aria-pressed',
       'true',
     )
-    expect(within(secondaryNav).queryByRole('button', { name: '账户' })).not.toBeInTheDocument()
+    expect(within(secondaryNav).getByRole('button', { name: '账户' })).toBeInTheDocument()
     expect(within(secondaryNav).getByRole('button', { name: '统计' })).toBeInTheDocument()
     expect(await screen.findByLabelText('账户与流水工作台')).toBeInTheDocument()
     expect(screen.queryByRole('navigation', { name: '记账二级导航' })).not.toBeInTheDocument()
     expect(screen.queryByLabelText('账户工作台')).not.toBeInTheDocument()
+
+    fireEvent.click(within(secondaryNav).getByRole('button', { name: '账户' }))
+
+    expect(await screen.findByLabelText('账户工作台')).toBeInTheDocument()
+    expect(within(secondaryNav).getByRole('button', { name: '账户' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(screen.getByText('当前账户')).toBeInTheDocument()
 
     fireEvent.click(within(secondaryNav).getByRole('button', { name: '统计' }))
 
@@ -1189,7 +1198,7 @@ describe('App', () => {
       'aria-pressed',
       'true',
     )
-    expect(screen.getByRole('button', { name: '返回流水' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '返回流水' })).not.toBeInTheDocument()
 
     fireEvent.click(within(secondaryNav).getByRole('button', { name: '流水' }))
 

@@ -896,7 +896,7 @@ describe('unified shell layout', () => {
     const settingsButton = rail.querySelector('.right-context-settings-button')
 
     expect(rail).toHaveClass('secondary-nav-rail')
-    expect(getRailLabels()).toEqual(['流水', '统计'])
+    expect(getRailLabels()).toEqual(['流水', '账户', '统计'])
     expect(settingsButton).toBeInstanceOf(HTMLButtonElement)
     expect(settingsButton).toHaveAttribute('aria-label', '打开设置')
     expect(rail.querySelector('[aria-pressed="true"]')).toHaveTextContent('流水')
@@ -904,10 +904,16 @@ describe('unified shell layout', () => {
     expect(document.querySelector('.ios-ledger-control-panel')).toBeNull()
     expect(document.querySelector('.ios-account-filter-panel')).toBeNull()
 
+    fireEvent.click(within(rail).getByRole('button', { name: '账户' }))
+    screen.getByLabelText('账户工作台')
+
+    expect(getRailLabels()).toEqual(['流水', '账户', '统计'])
+    expect(rail.querySelector('[aria-pressed="true"]')).toHaveTextContent('账户')
+
     fireEvent.click(within(rail).getByRole('button', { name: '统计' }))
     screen.getByLabelText('统计工作区')
 
-    expect(getRailLabels()).toEqual(['流水', '统计'])
+    expect(getRailLabels()).toEqual(['流水', '账户', '统计'])
     expect(rail.querySelector('[aria-pressed="true"]')).toHaveTextContent('统计')
     expect(document.querySelector('.ios-analytics-workspace')).not.toBeNull()
     expect(document.querySelector('.ios-account-filter-panel')).toBeNull()
