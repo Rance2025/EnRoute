@@ -347,6 +347,34 @@ def test_thumbnail_uses_fixed_world_and_china_frames_without_presentation_attrib
     assert json.dumps(city).find("stroke") == -1
 
 
+def test_province_city_and_district_share_one_gapless_china_base(
+    connection: sqlite3.Connection,
+):
+    insert_thumbnail_tile(connection, depth=2, adjacent=True)
+    insert_thumbnail_tile(connection, depth=3, x_offset=120, adjacent=True)
+    insert_thumbnail_tile(connection, depth=4, x_offset=240, adjacent=True)
+
+    province = create_admin_region_thumbnail(connection, depth=2, visited_region_ids=set())
+    city = create_admin_region_thumbnail(connection, depth=3, visited_region_ids=set())
+    district = create_admin_region_thumbnail(connection, depth=4, visited_region_ids=set())
+
+    assert province["basePath"] == city["basePath"] == district["basePath"]
+    assert province["basePath"].count("M") == 1
+
+
+def test_thumbnail_unions_adjacent_visited_regions_before_writing_path(
+    connection: sqlite3.Connection,
+):
+    insert_thumbnail_tile(connection, depth=3, adjacent=True)
+    thumbnail = create_admin_region_thumbnail(
+        connection,
+        depth=3,
+        visited_region_ids={"310100", "330100"},
+    )
+
+    assert thumbnail["visitedPath"].count("M") == 1
+
+
 def test_thumbnail_visited_path_only_contains_requested_regions(
     connection: sqlite3.Connection,
 ):
@@ -849,8 +877,11 @@ def insert_thumbnail_tile(
     depth: int,
     included_region_ids: set[str] | None = None,
     x_offset: int = 0,
+    adjacent: bool = False,
 ) -> bytes:
     included_ids = {"310100", "330100"} if included_region_ids is None else included_region_ids
+    second_top = 1600 if adjacent else 1640
+    second_bottom = 1640 if adjacent else 1680
     features = [
         {
             "geometry": {
@@ -872,11 +903,11 @@ def insert_thumbnail_tile(
                 "type": "Polygon",
                 "coordinates": [
                     [
-                        [3370 + x_offset, 1640],
-                        [3400 + x_offset, 1640],
-                        [3400 + x_offset, 1680],
-                        [3370 + x_offset, 1680],
-                        [3370 + x_offset, 1640],
+                        [3370 + x_offset, second_top],
+                        [3400 + x_offset, second_top],
+                        [3400 + x_offset, second_bottom],
+                        [3370 + x_offset, second_bottom],
+                        [3370 + x_offset, second_top],
                     ],
                 ],
             },
