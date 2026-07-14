@@ -13,6 +13,9 @@ const mapControlsSource = readFileSync('src/components/MapControls.tsx', 'utf8')
 const segmentedControlSource = readFileSync('src/components/SegmentedControl.tsx', 'utf8')
 const timeContextPanelSource = readFileSync('src/components/TimeContextPanel.tsx', 'utf8')
 const adminRegionContextPanelSource = readFileSync('src/components/AdminRegionContextPanel.tsx', 'utf8')
+const accountingRightContextPanelSource = readFileSync('src/components/accounting/AccountingRightContextPanel.tsx', 'utf8')
+const accountingCss = readFileSync('src/components/accounting/accounting.css', 'utf8')
+const accountingPageSource = readFileSync('src/components/AccountingPage.tsx', 'utf8')
 
 function cssRule(selector: string) {
   const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -132,8 +135,8 @@ describe('map chrome layout', () => {
     expect(timeContextPanelSource).toContain(
       'className="glass-panel glass-panel--solid glass-panel--large time-context-panel"',
     )
-    expect(appSource).toContain('className="glass-panel glass-panel--solid glass-panel--card right-context-panel__glass right-context-panel__summary"')
-    expect(appSource).toContain('className="glass-panel glass-panel--solid glass-panel--card right-context-panel__glass right-context-panel__legend"')
+    expect(accountingRightContextPanelSource).toContain('className="glass-panel glass-panel--solid glass-panel--card right-context-panel__glass right-context-panel__summary"')
+    expect(accountingRightContextPanelSource).toContain('className="glass-panel glass-panel--solid glass-panel--card right-context-panel__glass right-context-panel__legend"')
     expect(adminRegionContextPanelSource).toContain(
       'className="glass-panel glass-panel--solid glass-panel--card right-context-panel__glass admin-region-atlas-card"',
     )
@@ -164,6 +167,25 @@ describe('map chrome layout', () => {
         expectNoOwnedGlassMaterial(rule)
       }
     }
+  })
+
+  it('gives the accounting center the shared glass material and dense local scroll layout', () => {
+    expect(accountingPageSource).toContain("import './accounting/accounting.css'")
+    expect(appCss).toContain('--panel-glass-background: var(--solid-glass-panel-bg)')
+    expect(appCss).toContain('--panel-glass-border: var(--glass-panel-border)')
+    expect(appCss).toContain('--panel-glass-shadow: var(--glass-panel-shadow)')
+    expect(accountingCss).toContain('grid-template-columns: minmax(300px, 41fr) minmax(0, 59fr)')
+    expect(accountingCss).toContain('background: var(--panel-glass-background)')
+    expect(accountingCss).toContain('border: 1px solid var(--panel-glass-border)')
+    expect(accountingCss).toContain('box-shadow: var(--panel-glass-shadow), var(--panel-glass-inset)')
+    expect(accountingCss).toContain('.accounting-scroll--ledger')
+    expect(accountingCss).toContain('overflow-y: auto')
+    expect(accountingCss).toContain('.taxonomy-table-wrap')
+    expect(accountingCss).toContain('@media (max-width: 760px)')
+    expect(accountingCss).toContain('grid-template-columns: minmax(0, 1fr)')
+    expect(accountingCss).not.toMatch(/\.app-shell--accounting[^,{]*\.time-context-panel/)
+    expect(accountingCss).not.toContain('--accounting-expense: #b8544c')
+    expect(accountingCss).not.toContain('--accounting-expense: #d05b52')
   })
 
   it('reserves symmetric side panels and keeps the map workspace between them', () => {
@@ -1500,12 +1522,12 @@ describe('map chrome layout', () => {
       ledgerSource.indexOf('export function LedgerWorkspace'),
       ledgerSource.indexOf('type AccountsWorkspaceProps'),
     )
-    const workspaceRule = cssRule('.ios-account-ledger-workspace')
+    const workspaceRule = cssRuleIn(accountingCss, '.ios-account-ledger-workspace')
 
     expect(workspaceRule).toContain(
-      'grid-template-columns: minmax(0, 1fr)',
+      'grid-template-columns: minmax(300px, 41fr) minmax(0, 59fr)',
     )
-    expect(ledgerWorkspaceSource).toContain('className="glass-panel glass-panel--solid ios-panel ios-ledger-main"')
+    expect(ledgerWorkspaceSource).toContain('className="ios-ledger-main accounting-ledger-column"')
     expect(ledgerWorkspaceSource).not.toContain('className="ios-ledger-control-panel"')
     expect(ledgerWorkspaceSource).not.toContain('className="ios-panel ios-account-filter-panel"')
   })
@@ -1851,17 +1873,17 @@ describe('map chrome layout', () => {
   })
 
   it('contains ledger rows so amount and date content cannot spill out of the row', () => {
-    const rowRule = cssRule('.ios-transaction-row')
-    const sideRule = cssRule('.ios-transaction-row__side')
-    const metaRule = cssRule('.ios-transaction-row__meta')
+    const rowRule = cssRuleIn(accountingCss, '.ios-transaction-row')
+    const sideRule = cssRuleIn(accountingCss, '.ios-transaction-row__side')
+    const metaRule = cssRuleIn(accountingCss, '.ios-transaction-row__meta')
     const sideTextRule =
-      appCss.match(
+      accountingCss.match(
         /\.ios-transaction-row__side b,\s*\.ios-transaction-row__meta\s*\{[^}]*\}/,
       )?.[0] ?? ''
-    const ledgerSource = readFileSync('src/components/accounting/LedgerWorkspace.tsx', 'utf8')
+    const transactionRowSource = readFileSync('src/components/accounting/TransactionRow.tsx', 'utf8')
 
     expect(rowRule).toContain('grid-template-columns:')
-    expect(rowRule).toContain('minmax(96px, 112px)')
+    expect(rowRule).toContain('30px minmax(0, 1fr) auto')
     expect(rowRule).toContain('overflow: hidden')
     expect(sideRule).toContain('min-width: 0')
     expect(sideRule).toContain('justify-items: end')
@@ -1869,9 +1891,9 @@ describe('map chrome layout', () => {
     expect(metaRule).toContain('gap:')
     expect(sideTextRule).toContain('max-width: 100%')
     expect(sideTextRule).toContain('text-overflow: ellipsis')
-    expect(ledgerSource).toContain('className="ios-transaction-row__meta"')
-    expect(ledgerSource).toMatch(
-      /<span className="ios-transaction-row__meta">\s*<time>\{formatMonthDay\(transaction\.occurredAt\)\}<\/time>\s*<small>\{typeLabels\[transaction\.type\]\}<\/small>\s*<\/span>/,
+    expect(transactionRowSource).toContain('className="ios-transaction-row__meta"')
+    expect(transactionRowSource).toMatch(
+      /<span className="ios-transaction-row__meta">\s*<time dateTime=\{transaction\.occurredAt\}>\{formatMonthDay\(transaction\.occurredAt\)\}<\/time>\s*<small>\{presentation\.label\}<\/small>\s*<\/span>/,
     )
   })
 

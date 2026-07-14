@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
 
+import './accounting/accounting.css'
+
 import { ledgerAtlasDataset } from '../accounting/ledgerAtlasData'
 import { formatCnyFromCents } from '../accounting/money'
 import {
