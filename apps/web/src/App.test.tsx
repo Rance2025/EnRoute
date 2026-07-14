@@ -1198,7 +1198,7 @@ describe('App', () => {
       'aria-pressed',
       'true',
     )
-    expect(screen.getByText('当前账户')).toBeInTheDocument()
+    expect(screen.getAllByText('当前账户')).toHaveLength(2)
 
     fireEvent.click(within(secondaryNav).getByRole('button', { name: '统计' }))
 

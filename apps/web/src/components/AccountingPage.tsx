@@ -5,6 +5,7 @@ import { formatCnyFromCents } from '../accounting/money'
 import {
   getTopCategoryComposition,
   getTopDirectTagAmounts,
+  getAccountBalanceSteps,
 } from '../accounting/insightSelectors'
 import {
   saveTransactionDraft,
@@ -26,7 +27,9 @@ import type {
 } from '../accounting/shell'
 import type { TimeRangeSelection } from '../time/timeRange'
 import { AnalyticsWorkspace } from './accounting/AnalyticsWorkspace'
-import { AccountsWorkspace, LedgerWorkspace } from './accounting/LedgerWorkspace'
+import { LedgerWorkspace } from './accounting/LedgerWorkspace'
+import { AccountsWorkspace } from './accounting/AccountsWorkspace'
+import { AccountManagementDialog } from './accounting/AccountManagementDialog'
 import {
   TransactionDialog,
   type TransactionDialogMode,
@@ -82,6 +85,23 @@ export function AccountingPage({
   )
   const tagStats = useMemo(() => getTagTreeStats(ledgerAtlasDataset, timeRange), [timeRange])
   const selectedSummary = summaries.find((summary) => summary.account.id === selectedAccountId)
+  const activeSummaries = summaries.filter((summary) => !summary.account.archivedAt)
+  const selectedAccountTransactions = useMemo(
+    () => transactions.filter((transaction) => transactionBelongsToAccount(transaction, selectedAccountId)),
+    [selectedAccountId, transactions],
+  )
+  const selectedAccountBalanceSteps = useMemo(
+    () => getAccountBalanceSteps(dataset, timeRange, selectedAccountId),
+    [dataset, selectedAccountId, timeRange],
+  )
+  const selectedAccountCategoryComposition = useMemo(
+    () => getTopCategoryComposition(dataset, selectedAccountTransactions),
+    [dataset, selectedAccountTransactions],
+  )
+  const selectedAccountTopTags = useMemo(
+    () => getTopDirectTagAmounts(dataset, selectedAccountTransactions, 5),
+    [dataset, selectedAccountTransactions],
+  )
   const shellSnapshot = useMemo(
     () => createShellSnapshot(
       section,
@@ -97,11 +117,6 @@ export function AccountingPage({
   useEffect(() => {
     onShellSnapshotChange(shellSnapshot)
   }, [onShellSnapshotChange, shellSnapshot])
-
-  useEffect(() => {
-    if (!shellCommand) return
-    onShellCommandHandled()
-  }, [onShellCommandHandled, shellCommand])
 
   return (
     <section className="accounting-page" aria-label="iOS 记账工作台">
@@ -125,10 +140,18 @@ export function AccountingPage({
 
       {section === 'accounts' ? (
         <AccountsWorkspace
-          summaries={summaries}
-          transactions={transactions}
+          dataset={dataset}
+          summaries={activeSummaries}
+          transactions={selectedAccountTransactions}
           selectedAccountId={selectedAccountId}
+          balanceSteps={selectedAccountBalanceSteps}
+          categoryComposition={selectedAccountCategoryComposition}
+          topTags={selectedAccountTopTags}
           onSelectAccount={setSelectedAccountId}
+          onSelectTransaction={(transaction) => {
+            setDialogReturnFocusTo(getActiveElement())
+            setDialogMode({ kind: 'detail', transactionId: transaction.id })
+          }}
         />
       ) : null}
 
@@ -154,6 +177,25 @@ export function AccountingPage({
             setDialogMode(null)
           }}
           onClose={() => setDialogMode(null)}
+        />
+      ) : null}
+      {shellCommand && selectedSummary ? (
+        <AccountManagementDialog
+          key={`${shellCommand}-${selectedSummary.account.id}`}
+          action={shellCommand}
+          account={selectedSummary.account}
+          onSave={(account) => {
+            setDataset((current) => ({
+              ...current,
+              accounts: current.accounts.map((candidate) => candidate.id === account.id ? account : candidate),
+            }))
+            if (account.archivedAt) {
+              const nextAccount = activeSummaries.find((summary) => summary.account.id !== account.id)
+              if (nextAccount) setSelectedAccountId(nextAccount.account.id)
+            }
+            onShellCommandHandled()
+          }}
+          onClose={onShellCommandHandled}
         />
       ) : null}
     </section>
@@ -253,4 +295,13 @@ function saveDraft(
     ...current,
     transactions: saveTransactionDraft(current.transactions, draft, new Date().toISOString()),
   }))
+}
+
+function transactionBelongsToAccount(
+  transaction: typeof ledgerAtlasDataset.transactions[number],
+  accountId: string,
+) {
+  return transaction.type === 'transfer'
+    ? transaction.fromAccountId === accountId || transaction.toAccountId === accountId
+    : transaction.accountId === accountId
 }
