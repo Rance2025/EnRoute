@@ -56,10 +56,10 @@ export function AdminRegionContextPanel({
           </div>
           <strong className="admin-region-atlas-card__count">{countLabel}</strong>
         </div>
-        <DepthControl depth={depth} onDepthChange={onDepthChange} />
         <svg
           className="admin-region-atlas-card__thumbnail"
           viewBox={summary?.thumbnail.viewBox ?? '0 0 320 150'}
+          preserveAspectRatio="xMidYMid meet"
           role="img"
           aria-label={thumbnailLabel}
           focusable="false"
@@ -67,6 +67,7 @@ export function AdminRegionContextPanel({
           <path className="admin-region-atlas-card__base" d={summary?.thumbnail.basePath ?? ''} />
           <path className="admin-region-atlas-card__visited" d={summary?.thumbnail.visitedPath ?? ''} />
         </svg>
+        <DepthControl depth={depth} onDepthChange={onDepthChange} />
         {status === 'loading' ? (
           <span className="admin-region-context-panel__status" role="status">加载中</span>
         ) : null}

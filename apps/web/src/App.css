@@ -2334,10 +2334,10 @@
 .admin-region-atlas-card__depth-control {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 4px;
-  padding: 6px;
-  border-radius: 14px;
-  background: rgba(23, 35, 31, 0.045);
+  gap: 6px;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .admin-region-atlas-card__depth-control button {
@@ -2367,7 +2367,7 @@
   display: block;
   width: 100%;
   aspect-ratio: 32 / 15;
-  overflow: visible;
+  overflow: hidden;
 }
 
 .admin-region-atlas-card__base {

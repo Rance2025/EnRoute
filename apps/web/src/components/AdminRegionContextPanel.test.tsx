@@ -117,7 +117,11 @@ describe('AdminRegionContextPanel', () => {
     )
 
     const thumbnail = screen.getByLabelText('城市足迹缩略图')
+    expect(
+      thumbnail.compareDocumentPosition(depthControl) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
     expect(thumbnail).toHaveAttribute('viewBox', citySummary.thumbnail.viewBox)
+    expect(thumbnail).toHaveAttribute('preserveAspectRatio', 'xMidYMid meet')
     expect(thumbnail.querySelector('.admin-region-atlas-card__base')).toHaveAttribute(
       'd',
       citySummary.thumbnail.basePath,
