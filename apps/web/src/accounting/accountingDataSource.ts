@@ -78,7 +78,7 @@ function toTransactionWrite(transaction: Transaction) {
 
 async function requestJson(
   url: string,
-  { fetcher, signal, method, body }: RequestOptions & { method?: string; body?: string },
+  { fetcher = fetch, signal, method, body }: RequestOptions & { method?: string; body?: string },
 ): Promise<unknown> {
   const response = await fetcher(url, {
     ...(method ? { method } : {}),

@@ -44,7 +44,7 @@ export function TransactionDialog({
   dataset: AccountingDataset
   mode: TransactionDialogMode
   onModeChange: (mode: TransactionDialogMode) => void
-  onSave: (draft: TransactionDraft) => void
+  onSave: (draft: TransactionDraft) => void | Promise<void>
   onClose: () => void
   returnFocusTo?: HTMLElement | null
 }) {
@@ -54,6 +54,8 @@ export function TransactionDialog({
     : dataset.transactions.find((candidate) => candidate.id === mode.transactionId)
   const [draft, setDraft] = useState<TransactionDraft>(() => getInitialDraft(mode, transaction))
   const [errors, setErrors] = useState<TransactionDraftErrors>({})
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
 
   useEffect(() => {
     panelRef.current?.querySelector<HTMLElement>('button, input, select, textarea')?.focus()
@@ -90,7 +92,7 @@ export function TransactionDialog({
     const tagPaths = getTransactionTagPaths(dataset.tags, transaction)
     return (
       <DialogShell title="流水详情" panelRef={panelRef} onClose={onClose}>
-        <p className="accounting-prototype-note">本地原型 · 本次会话有效</p>
+        <p className="accounting-prototype-note">已连接 EnRoute 本地记账数据库</p>
         <div className={`ios-amount-card ios-amount-card--${transaction.type}`}>
           <span>{formatMonthDay(transaction.occurredAt)}</span>
           <strong>{formatDisplayAmount(transaction.type, transaction.amountInCents)}</strong>
@@ -119,16 +121,24 @@ export function TransactionDialog({
   }
 
   const title = mode.kind === 'edit' ? '编辑流水' : '新增流水'
-  const submit = () => {
+  const submit = async () => {
     const nextErrors = validateTransactionDraft(draft, dataset)
     setErrors(nextErrors)
     if (Object.keys(nextErrors).length > 0) return
-    onSave(draft)
+    setSaving(true)
+    setSaveError('')
+    try {
+      await onSave(draft)
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : '无法保存流水')
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
     <DialogShell title={title} panelRef={panelRef} onClose={onClose}>
-      <p className="accounting-prototype-note">本地原型 · 本次会话有效</p>
+      <p className="accounting-prototype-note">保存后将写入 EnRoute 本地记账数据库</p>
       <div className="transaction-form">
         <fieldset>
           <legend>类型</legend>
@@ -222,9 +232,10 @@ export function TransactionDialog({
         </FormField>
       </div>
       <footer className="accounting-modal-actions">
+        {saveError ? <small role="alert">{saveError}</small> : null}
         <button type="button" onClick={onClose}>取消</button>
-        <button type="button" className="is-primary" aria-label="保存流水" onClick={submit}>
-          保存流水
+        <button type="button" className="is-primary" aria-label="保存流水" onClick={submit} disabled={saving}>
+          {saving ? '正在保存' : '保存流水'}
         </button>
       </footer>
     </DialogShell>

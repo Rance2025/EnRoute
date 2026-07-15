@@ -845,6 +845,7 @@ function App(props: AppProps) {
                 shellCommand={accountingShellCommand}
                 onShellCommandHandled={() => setAccountingShellCommand(null)}
                 onShellSnapshotChange={setAccountingShellSnapshot}
+                onRequestTimeRangeChange={setSelectedTimeRange}
               />
             </Suspense>
           </WorkspaceLoadBoundary>

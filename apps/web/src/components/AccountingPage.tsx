@@ -1,8 +1,13 @@
-import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
+import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 
 import './accounting/accounting.css'
 
-import { loadAccountingDataset } from '../accounting/accountingDataSource'
+import {
+  createAccountingTransaction,
+  loadAccountingDataset,
+  updateAccountingAccount,
+  updateAccountingTransaction,
+} from '../accounting/accountingDataSource'
 import { formatCnyFromCents } from '../accounting/money'
 import type { AccountingDataset } from '../accounting/types'
 import {
@@ -26,7 +31,7 @@ import type {
   AccountingShellSnapshot,
   AccountingStatisticsControls,
 } from '../accounting/shell'
-import type { TimeRangeSelection } from '../time/timeRange'
+import { createTodayKey, type TimeRangeSelection } from '../time/timeRange'
 import { AnalyticsWorkspace, type AnalyticsFocus } from './accounting/AnalyticsWorkspace'
 import { LedgerWorkspace } from './accounting/LedgerWorkspace'
 import { AccountsWorkspace } from './accounting/AccountsWorkspace'
@@ -54,6 +59,7 @@ type AccountingPageProps = {
   shellCommand: AccountingShellAction | null
   onShellCommandHandled: () => void
   onShellSnapshotChange: (snapshot: AccountingShellSnapshot) => void
+  onRequestTimeRangeChange?: (selection: TimeRangeSelection) => void
 }
 
 export function AccountingPage({
@@ -63,6 +69,7 @@ export function AccountingPage({
   shellCommand,
   onShellCommandHandled,
   onShellSnapshotChange,
+  onRequestTimeRangeChange,
 }: AccountingPageProps) {
   const [dataset, setDataset] = useState<AccountingDataset | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -71,6 +78,7 @@ export function AccountingPage({
   const [dialogReturnFocusTo, setDialogReturnFocusTo] = useState<HTMLElement | null>(null)
   const [selectedAccountId, setSelectedAccountId] = useState('')
   const [analyticsFocus, setAnalyticsFocus] = useState<AnalyticsFocus | null>(null)
+  const didAutoLocateLatestMonthRef = useRef(false)
   const activeDataset = dataset ?? EMPTY_ACCOUNTING_DATASET
 
   useEffect(() => {
@@ -140,6 +148,34 @@ export function AccountingPage({
   useEffect(() => {
     if (dataset) onShellSnapshotChange(shellSnapshot)
   }, [dataset, onShellSnapshotChange, shellSnapshot])
+
+  useEffect(() => {
+    if (
+      didAutoLocateLatestMonthRef.current
+      || !dataset
+      || !onRequestTimeRangeChange
+      || transactions.length > 0
+      || timeRange.mode !== 'month'
+      || timeRange.anchorDate !== createTodayKey()
+    ) return
+    const latestOccurredAt = dataset.imports
+      ?.map((metadata) => metadata.latestOccurredAt)
+      .sort()
+      .at(-1)
+    if (!latestOccurredAt) return
+    const latestDate = latestOccurredAt.slice(0, 10)
+    if (latestDate >= timeRange.start && latestDate <= timeRange.end) return
+    const [year, month] = latestDate.split('-').map(Number)
+    const end = new Date(year, month, 0).getDate().toString().padStart(2, '0')
+    didAutoLocateLatestMonthRef.current = true
+    onRequestTimeRangeChange({
+      mode: 'month',
+      start: `${year}-${String(month).padStart(2, '0')}-01`,
+      end: `${year}-${String(month).padStart(2, '0')}-${end}`,
+      anchorDate: latestDate,
+      label: '最新账单月份',
+    })
+  }, [dataset, onRequestTimeRangeChange, timeRange, transactions.length])
 
   if (!dataset) {
     return (
@@ -218,8 +254,8 @@ export function AccountingPage({
           mode={dialogMode}
           returnFocusTo={dialogReturnFocusTo}
           onModeChange={setDialogMode}
-          onSave={(draft) => {
-            saveDraft(draft, setDataset)
+          onSave={async (draft) => {
+            await persistDraft(draft, dataset, setDataset)
             setDialogMode(null)
           }}
           onClose={() => setDialogMode(null)}
@@ -230,12 +266,26 @@ export function AccountingPage({
           key={`${shellCommand}-${selectedSummary.account.id}`}
           action={shellCommand}
           account={selectedSummary.account}
-          onSave={(account) => {
-            setDataset((current) => ({
+          onSave={async (account) => {
+            const persistedAccount = await updateAccountingAccount(account.id, {
+              name: account.name,
+              nature: account.nature,
+              openingBalanceInCents: account.openingBalanceInCents,
+              openingBalanceAt: account.openingBalanceAt,
+              sourceLabel: account.sourceLabel,
+              brandSlug: account.brand?.slug,
+              brandLabel: account.brand?.label,
+              brandColor: account.brand?.color,
+              hidden: account.hidden,
+              archivedAt: account.archivedAt,
+            })
+            setDataset((current) => current ? ({
               ...current,
-              accounts: current.accounts.map((candidate) => candidate.id === account.id ? account : candidate),
-            }))
-            if (account.archivedAt) {
+              accounts: current.accounts.map((candidate) => (
+                candidate.id === persistedAccount.id ? persistedAccount : candidate
+              )),
+            }) : current)
+            if (persistedAccount.archivedAt) {
               const nextAccount = activeSummaries.find((summary) => summary.account.id !== account.id)
               if (nextAccount) setSelectedAccountId(nextAccount.account.id)
             }
@@ -355,13 +405,30 @@ function getActiveElement() {
   return document.activeElement instanceof HTMLElement ? document.activeElement : null
 }
 
-function saveDraft(
+async function persistDraft(
   draft: TransactionDraft,
+  dataset: AccountingDataset,
   setDataset: Dispatch<SetStateAction<AccountingDataset | null>>,
 ) {
+  const nextTransactions = saveTransactionDraft(
+    dataset.transactions,
+    draft,
+    new Date().toISOString(),
+  )
+  const candidate = draft.transactionId
+    ? nextTransactions.find((transaction) => transaction.id === draft.transactionId)
+    : nextTransactions.at(-1)
+  if (!candidate) throw new Error('无法生成待保存流水')
+  const persisted = draft.transactionId
+    ? await updateAccountingTransaction(draft.transactionId, candidate)
+    : await createAccountingTransaction(candidate)
   setDataset((current) => current ? ({
     ...current,
-    transactions: saveTransactionDraft(current.transactions, draft, new Date().toISOString()),
+    transactions: draft.transactionId
+      ? current.transactions.map((transaction) => (
+          transaction.id === persisted.id ? persisted : transaction
+        ))
+      : [...current.transactions, persisted],
   }) : current)
 }
 

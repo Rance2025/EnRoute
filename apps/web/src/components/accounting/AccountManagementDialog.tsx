@@ -14,7 +14,7 @@ export function AccountManagementDialog({
 }: {
   action: AccountingShellAction
   account: Account
-  onSave: (account: Account) => void
+  onSave: (account: Account) => void | Promise<void>
   onClose: () => void
 }) {
   const [draft, setDraft] = useState(account)
@@ -22,10 +22,18 @@ export function AccountManagementDialog({
     (Math.abs(account.openingBalanceInCents) / 100).toFixed(2),
   )
   const [error, setError] = useState('')
-  const save = (next: Account, timestamp = new Date().toISOString()) => onSave({
-    ...next,
-    updatedAt: timestamp,
-  })
+  const [saving, setSaving] = useState(false)
+  const save = async (next: Account, timestamp = new Date().toISOString()) => {
+    setSaving(true)
+    setError('')
+    try {
+      await onSave({ ...next, updatedAt: timestamp })
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : '无法保存账户')
+    } finally {
+      setSaving(false)
+    }
+  }
   const title = getActionTitle(action)
 
   return (
@@ -35,6 +43,7 @@ export function AccountManagementDialog({
           <div><span>账户管理</span><strong>{title}</strong></div>
           <button type="button" aria-label="关闭" onClick={onClose}><X size={18} /></button>
         </header>
+        {error ? <small className="account-management-dialog__error" role="alert">{error}</small> : null}
         {action === 'edit-account' ? (
           <div className="account-management-dialog__form">
             <label><span>账户名称</span><input aria-label="账户名称" value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} /></label>
@@ -47,8 +56,7 @@ export function AccountManagementDialog({
           <div className="account-management-dialog__form">
             <p>当前期初 {formatCurrency(account.openingBalanceInCents)}</p>
             <label><span>{account.nature === 'liability' ? '期初欠款' : '期初余额'}</span><input aria-label="期初余额" inputMode="decimal" value={openingBalance} onChange={(event) => setOpeningBalance(event.target.value)} /></label>
-            {error ? <small role="alert">{error}</small> : null}
-            <button type="button" className="is-primary" onClick={() => {
+            <button type="button" className="is-primary" disabled={saving} onClick={() => {
               try {
                 const cents = parseCnyToCents(openingBalance)
                 if (cents < 0) throw new Error('期初金额不能小于零')

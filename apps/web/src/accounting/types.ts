@@ -54,6 +54,7 @@ type TransactionBase = {
   createdAt: string
   updatedAt: string
   sourceId?: string
+  origin?: 'import' | 'manual'
   source?: AccountingTransactionSource
   importStatus?: AccountingImportStatus
 }
