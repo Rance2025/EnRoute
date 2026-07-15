@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import sqlite3
 from collections import OrderedDict, defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from threading import Lock
 from typing import Iterable
@@ -439,7 +441,8 @@ def decode_fill_geometries(tile: bytes) -> dict[str, list[BaseGeometry]]:
     decoded = decode(tile, default_options={"y_coord_down": True})
     layer = decoded.get("admin_regions")
     features = layer.get("features", []) if isinstance(layer, dict) else []
-    grouped_geometries: dict[str, list[BaseGeometry]] = defaultdict(list)
+    decoded_geometries: list[tuple[str, BaseGeometry]] = []
+    repair_indices: list[int] = []
     for feature in features if isinstance(features, list) else []:
         if not isinstance(feature, dict):
             continue
@@ -454,9 +457,44 @@ def decode_fill_geometries(tile: bytes) -> dict[str, list[BaseGeometry]]:
         region_id = properties.get("region_id", properties.get("id"))
         if region_id in {None, ""}:
             continue
-        geometry = repair_polygonal_geometry(shape(geometry_mapping))
+        geometry = force_2d(shape(geometry_mapping))
+        decoded_geometries.append((str(region_id), geometry))
+        if not (
+            isinstance(geometry, (Polygon, MultiPolygon))
+            and geometry.is_valid
+        ):
+            repair_indices.append(len(decoded_geometries) - 1)
+
+    # Keep small tiles serial and amortize startup across four repairs per worker.
+    repair_worker_count = min(
+        8,
+        os.cpu_count() or 1,
+        len(repair_indices) // 4,
+    )
+    geometries_to_repair = [
+        decoded_geometries[index][1]
+        for index in repair_indices
+    ]
+    if repair_worker_count > 1:
+        with ThreadPoolExecutor(max_workers=repair_worker_count) as executor:
+            repaired_geometries = executor.map(
+                repair_polygonal_geometry,
+                geometries_to_repair,
+            )
+            repaired_geometries = tuple(repaired_geometries)
+    else:
+        repaired_geometries = tuple(
+            repair_polygonal_geometry(geometry)
+            for geometry in geometries_to_repair
+        )
+    for index, geometry in zip(repair_indices, repaired_geometries, strict=True):
+        region_id = decoded_geometries[index][0]
+        decoded_geometries[index] = region_id, geometry
+
+    grouped_geometries: dict[str, list[BaseGeometry]] = defaultdict(list)
+    for region_id, geometry in decoded_geometries:
         if not geometry.is_empty:
-            grouped_geometries[str(region_id)].append(geometry)
+            grouped_geometries[region_id].append(geometry)
     return dict(grouped_geometries)
 
 
@@ -469,16 +507,18 @@ def build_tile_base_path(
     base_geometries: list[BaseGeometry] = []
     for geometries in grouped_geometries.values():
         for geometry in geometries:
-            repaired = repair_polygonal_geometry(geometry)
-            if repaired.is_empty:
+            prepared = geometry
+            if prepared.is_empty:
                 continue
             if depth == 1:
-                repaired = repaired.simplify(
+                prepared = prepared.simplify(
                     TILE_SIMPLIFY_UNITS,
                     preserve_topology=False,
                 )
-            if not repaired.is_empty:
-                base_geometries.append(repaired)
+                if not prepared.is_valid:
+                    prepared = repair_polygonal_geometry(prepared)
+            if not prepared.is_empty:
+                base_geometries.append(prepared)
     if not base_geometries:
         return ""
 
@@ -542,10 +582,17 @@ def build_tile_thumbnail_paths(
                 coarse_path = bounds_to_svg_path(coarse_bounds)
                 projected_bounds = coarse_bounds
             if source.depth == 1:
-                geometries = [
-                    geometry.simplify(TILE_SIMPLIFY_UNITS, preserve_topology=False)
-                    for geometry in geometries
-                ]
+                simplified_geometries = []
+                for geometry in geometries:
+                    simplified = geometry.simplify(
+                        TILE_SIMPLIFY_UNITS,
+                        preserve_topology=False,
+                    )
+                    if not simplified.is_valid:
+                        simplified = repair_polygonal_geometry(simplified)
+                    if not simplified.is_empty:
+                        simplified_geometries.append(simplified)
+                geometries = simplified_geometries
             region_geometry = safe_union(
                 geometries,
                 grid_size=TILE_UNION_GRID_UNITS if source.depth == 1 else 0.25,
@@ -765,29 +812,27 @@ def safe_union(
     *,
     grid_size: float,
 ) -> BaseGeometry:
-    non_empty = [
-        repaired
-        for geometry in geometries
-        if not geometry.is_empty
-        for repaired in (repair_polygonal_geometry(geometry),)
-        if not repaired.is_empty
-    ]
+    non_empty = [geometry for geometry in geometries if not geometry.is_empty]
     if not non_empty:
         return GeometryCollection()
     try:
-        unioned = union_all(non_empty, grid_size=grid_size)
+        return union_all(non_empty, grid_size=grid_size)
     except GEOSException:
         unioned = union_all(
             [repair_polygonal_geometry(geometry.buffer(0)) for geometry in non_empty],
             grid_size=grid_size,
         )
-    return repair_polygonal_geometry(unioned)
+        return repair_polygonal_geometry(unioned)
 
 
 def repair_polygonal_geometry(geometry: BaseGeometry) -> BaseGeometry:
     resolved = force_2d(geometry)
+    if isinstance(resolved, (Polygon, MultiPolygon)) and resolved.is_valid:
+        return resolved
     if not resolved.is_valid:
         resolved = make_valid(resolved)
+        if isinstance(resolved, (Polygon, MultiPolygon)) and resolved.is_valid:
+            return resolved
     polygons = list(iter_polygons(resolved))
     if not polygons:
         return GeometryCollection()

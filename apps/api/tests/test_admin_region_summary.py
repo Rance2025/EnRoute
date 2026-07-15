@@ -38,13 +38,36 @@ def assert_svg_path_within_viewbox(path: str) -> None:
 
 
 def svg_subpath_polygons(path: str) -> tuple[Polygon, ...]:
+    subpaths = re.findall(r"M[^M]+?Z", path)
+    assert subpaths
+    assert "".join(subpaths) == path
     polygons = []
-    for subpath in re.findall(r"M[^M]+?Z", path):
+    for subpath in subpaths:
+        command_coordinates = re.findall(r"([ML])([^ MLZ]+) ([^ MLZ]+)", subpath)
+        assert len(command_coordinates) >= 3
+        assert command_coordinates[0][0] == "M"
+        assert all(command == "L" for command, _x, _y in command_coordinates[1:])
+        assert (
+            "".join(
+                f"{command}{x_value} {y_value}"
+                for command, x_value, y_value in command_coordinates
+            )
+            + "Z"
+            == subpath
+        )
         coordinates = [
-            float(value)
-            for value in re.findall(r"-?\d+(?:\.\d+)?", subpath)
+            (float(x_value), float(y_value))
+            for _command, x_value, y_value in command_coordinates
         ]
-        polygons.append(Polygon(zip(coordinates[::2], coordinates[1::2])))
+        assert all(math.isfinite(value) for position in coordinates for value in position)
+        polygon = Polygon(coordinates)
+        west, north, east, south = polygon.bounds
+        assert polygon.exterior.is_ring
+        assert polygon.is_valid
+        assert east > west
+        assert south > north
+        assert polygon.area > 0
+        polygons.append(polygon)
     return tuple(polygons)
 
 
@@ -398,6 +421,118 @@ def test_thumbnail_restores_global_mercator_position_before_frame_projection(
         )
 
 
+@pytest.mark.parametrize(
+    "geometry",
+    [
+        Polygon([(10, 10), (20, 10), (20, 20), (10, 20)]),
+        MultiPolygon(
+            [
+                Polygon([(10, 10), (20, 10), (20, 20), (10, 20)]),
+                Polygon([(30, 30), (40, 30), (40, 40), (30, 40)]),
+            ],
+        ),
+    ],
+    ids=("polygon", "multipolygon"),
+)
+def test_repair_polygonal_geometry_fast_paths_valid_2d_inputs(
+    geometry: Polygon | MultiPolygon,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    def unexpected_reconstruction(*args, **kwargs):
+        del args, kwargs
+        pytest.fail("valid 2D polygonal geometry must not be reconstructed")
+
+    monkeypatch.setattr(thumbnail_module, "make_valid", unexpected_reconstruction)
+    monkeypatch.setattr(thumbnail_module, "union_all", unexpected_reconstruction)
+
+    repaired = thumbnail_module.repair_polygonal_geometry(geometry)
+
+    assert repaired.geom_type == geometry.geom_type
+    assert repaired.equals_exact(geometry, tolerance=0.0)
+
+
+def test_decode_fast_paths_valid_polygonal_shapes(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    tile = encode(
+        [
+            {
+                "name": "admin_regions",
+                "features": [
+                    {
+                        "geometry": {
+                            "type": "Polygon",
+                            "coordinates": [rectangle_ring(10, 10, 20, 20)],
+                        },
+                        "properties": {
+                            "region_id": "polygon",
+                            "kind": "fill",
+                        },
+                    },
+                    {
+                        "geometry": {
+                            "type": "MultiPolygon",
+                            "coordinates": [
+                                [rectangle_ring(30, 30, 40, 40)],
+                                [rectangle_ring(50, 50, 60, 60)],
+                            ],
+                        },
+                        "properties": {
+                            "region_id": "multipolygon",
+                            "kind": "fill",
+                        },
+                    },
+                ],
+            },
+        ],
+        default_options={"extents": 4096, "y_coord_down": True},
+    )
+
+    def unexpected_repair(*args, **kwargs):
+        del args, kwargs
+        pytest.fail("decoded valid polygonal geometry must not enter repair")
+
+    monkeypatch.setattr(
+        thumbnail_module,
+        "repair_polygonal_geometry",
+        unexpected_repair,
+    )
+
+    decoded = thumbnail_module.decode_fill_geometries(tile)
+
+    assert isinstance(decoded["polygon"][0], Polygon)
+    assert isinstance(decoded["multipolygon"][0], MultiPolygon)
+
+
+def test_safe_union_does_not_repair_prepared_valid_inputs(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    prepared = (
+        Polygon(rectangle_ring(10, 10, 20, 20)),
+        MultiPolygon(
+            [
+                Polygon(rectangle_ring(30, 30, 40, 40)),
+                Polygon(rectangle_ring(50, 50, 60, 60)),
+            ],
+        ),
+    )
+
+    def unexpected_repair(geometry):
+        del geometry
+        pytest.fail("safe_union must not re-repair prepared valid inputs")
+
+    monkeypatch.setattr(
+        thumbnail_module,
+        "repair_polygonal_geometry",
+        unexpected_repair,
+    )
+
+    unioned = thumbnail_module.safe_union(prepared, grid_size=0.0)
+
+    assert unioned.is_valid
+    assert unioned.area == pytest.approx(sum(geometry.area for geometry in prepared))
+
+
 def test_china_z1_base_preserves_disconnected_south_china_sea_components(
     connection: sqlite3.Connection,
 ):
@@ -533,8 +668,24 @@ def test_china_z1_base_preserves_one_unit_island():
         visited_region_ids=set(),
     )
 
-    assert thumbnail["basePath"].count("M") == 2
-    assert_svg_path_within_viewbox(thumbnail["basePath"])
+    base_path = thumbnail["basePath"]
+    assert base_path.count("M") == 2
+    assert_svg_path_within_viewbox(base_path)
+    assert len(svg_subpath_polygons(base_path)) == 2
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "M1.0 1.0L1.0 2.0L1.0 3.0Z",
+        "M0 0L2 0Lnan 1L0 2Z",
+        "M0 0L1 0L0 1",
+    ],
+    ids=("zero-area", "non-finite", "not-closed"),
+)
+def test_svg_subpath_polygons_rejects_invalid_components(path: str):
+    with pytest.raises(AssertionError):
+        svg_subpath_polygons(path)
 
 
 def test_bounded_path_simplification_preserves_disconnected_components(
