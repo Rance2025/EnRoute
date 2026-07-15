@@ -108,6 +108,17 @@ vi.mock('./components/MapboxCanvas', async () => {
   }
 })
 
+vi.mock('./accounting/accountingDataSource', async () => {
+  const actual = await vi.importActual<typeof import('./accounting/accountingDataSource')>(
+    './accounting/accountingDataSource',
+  )
+  const { ledgerAtlasDataset } = await import('./accounting/ledgerAtlasData')
+  return {
+    ...actual,
+    loadAccountingDataset: vi.fn(async () => ledgerAtlasDataset),
+  }
+})
+
 const adminRegionSummaryFixture = {
   depth: 1 as const,
   visitedRegionIds: ['CN'],

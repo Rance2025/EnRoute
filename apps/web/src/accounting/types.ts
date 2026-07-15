@@ -15,10 +15,12 @@ export type Account = {
   currency: 'CNY'
   openingBalanceInCents: number
   openingBalanceAt: string
+  openingBalanceSource?: 'import-zero-baseline' | 'manual'
   brand?: AccountBrand
   sourceLabel?: string
   createdAt: string
   updatedAt: string
+  origin?: 'import' | 'manual'
   archivedAt?: string
   hidden?: boolean
   sourceFundId?: string
@@ -125,8 +127,19 @@ export type AccountingDataset = {
   transactions: Transaction[]
   categories: Category[]
   tags: Tag[]
+  imports?: AccountingImportMetadata[]
   legacyCategories: ImportedMoneyCategory[]
   legacyFunds: ImportedMoneyFund[]
+}
+
+export type AccountingImportMetadata = {
+  sourceKey: string
+  sourcePath: string
+  sourceSha256: string
+  importedAt: string
+  rowCount: number
+  earliestOccurredAt: string
+  latestOccurredAt: string
 }
 
 export type PeriodMetrics = {

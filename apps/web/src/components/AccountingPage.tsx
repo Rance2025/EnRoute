@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from
 
 import './accounting/accounting.css'
 
-import { ledgerAtlasDataset } from '../accounting/ledgerAtlasData'
+import { loadAccountingDataset } from '../accounting/accountingDataSource'
 import { formatCnyFromCents } from '../accounting/money'
+import type { AccountingDataset } from '../accounting/types'
 import {
   getTopCategoryComposition,
   getTopDirectTagAmounts,
@@ -34,6 +35,17 @@ import {
   TransactionDialog,
   type TransactionDialogMode,
 } from './accounting/TransactionDialog'
+import { AccountingLoadState } from './accounting/AccountingLoadState'
+
+const EMPTY_ACCOUNTING_DATASET: AccountingDataset = {
+  accounts: [],
+  transactions: [],
+  categories: [],
+  tags: [],
+  imports: [],
+  legacyCategories: [],
+  legacyFunds: [],
+}
 
 type AccountingPageProps = {
   section: AccountingSection
@@ -52,33 +64,47 @@ export function AccountingPage({
   onShellCommandHandled,
   onShellSnapshotChange,
 }: AccountingPageProps) {
-  const [dataset, setDataset] = useState(() => ({
-    ...ledgerAtlasDataset,
-    accounts: [...ledgerAtlasDataset.accounts],
-    transactions: [...ledgerAtlasDataset.transactions],
-    categories: [...ledgerAtlasDataset.categories],
-    tags: [...ledgerAtlasDataset.tags],
-  }))
+  const [dataset, setDataset] = useState<AccountingDataset | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [loadAttempt, setLoadAttempt] = useState(0)
   const [dialogMode, setDialogMode] = useState<TransactionDialogMode | null>(null)
   const [dialogReturnFocusTo, setDialogReturnFocusTo] = useState<HTMLElement | null>(null)
-  const [selectedAccountId, setSelectedAccountId] = useState(
-    () => ledgerAtlasDataset.accounts[0]?.id ?? '',
-  )
+  const [selectedAccountId, setSelectedAccountId] = useState('')
   const [analyticsFocus, setAnalyticsFocus] = useState<AnalyticsFocus | null>(null)
+  const activeDataset = dataset ?? EMPTY_ACCOUNTING_DATASET
+
+  useEffect(() => {
+    const controller = new AbortController()
+    setLoadError(null)
+    loadAccountingDataset({ signal: controller.signal })
+      .then((nextDataset) => {
+        setDataset(nextDataset)
+        setSelectedAccountId((current) => (
+          nextDataset.accounts.some((account) => account.id === current)
+            ? current
+            : nextDataset.accounts[0]?.id ?? ''
+        ))
+      })
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === 'AbortError') return
+        setLoadError(error instanceof Error ? error.message : '无法读取记账数据')
+      })
+    return () => controller.abort()
+  }, [loadAttempt])
   const transactions = useMemo(
-    () => filterTransactionsByTimeRange(dataset.transactions, timeRange),
-    [dataset.transactions, timeRange],
+    () => filterTransactionsByTimeRange(activeDataset.transactions, timeRange),
+    [activeDataset.transactions, timeRange],
   )
-  const metrics = useMemo(() => getPeriodMetrics(dataset, timeRange), [dataset, timeRange])
-  const summaries = useMemo(() => getAccountPeriodSummaries(dataset, timeRange), [dataset, timeRange])
-  const portfolio = useMemo(() => getPortfolioPeriodSummary(dataset, timeRange), [dataset, timeRange])
+  const metrics = useMemo(() => getPeriodMetrics(activeDataset, timeRange), [activeDataset, timeRange])
+  const summaries = useMemo(() => getAccountPeriodSummaries(activeDataset, timeRange), [activeDataset, timeRange])
+  const portfolio = useMemo(() => getPortfolioPeriodSummary(activeDataset, timeRange), [activeDataset, timeRange])
   const categoryComposition = useMemo(
-    () => getTopCategoryComposition(dataset, transactions),
-    [dataset, transactions],
+    () => getTopCategoryComposition(activeDataset, transactions),
+    [activeDataset, transactions],
   )
   const topTags = useMemo(
-    () => getTopDirectTagAmounts(dataset, transactions, 5),
-    [dataset, transactions],
+    () => getTopDirectTagAmounts(activeDataset, transactions, 5),
+    [activeDataset, transactions],
   )
   const selectedSummary = summaries.find((summary) => summary.account.id === selectedAccountId)
   const activeSummaries = summaries.filter((summary) => !summary.account.archivedAt)
@@ -87,16 +113,16 @@ export function AccountingPage({
     [selectedAccountId, transactions],
   )
   const selectedAccountBalanceSteps = useMemo(
-    () => getAccountBalanceSteps(dataset, timeRange, selectedAccountId),
-    [dataset, selectedAccountId, timeRange],
+    () => getAccountBalanceSteps(activeDataset, timeRange, selectedAccountId),
+    [activeDataset, selectedAccountId, timeRange],
   )
   const selectedAccountCategoryComposition = useMemo(
-    () => getTopCategoryComposition(dataset, selectedAccountTransactions),
-    [dataset, selectedAccountTransactions],
+    () => getTopCategoryComposition(activeDataset, selectedAccountTransactions),
+    [activeDataset, selectedAccountTransactions],
   )
   const selectedAccountTopTags = useMemo(
-    () => getTopDirectTagAmounts(dataset, selectedAccountTransactions, 5),
-    [dataset, selectedAccountTransactions],
+    () => getTopDirectTagAmounts(activeDataset, selectedAccountTransactions, 5),
+    [activeDataset, selectedAccountTransactions],
   )
   const shellSnapshot = useMemo(
     () => createShellSnapshot(
@@ -112,8 +138,32 @@ export function AccountingPage({
   )
 
   useEffect(() => {
-    onShellSnapshotChange(shellSnapshot)
-  }, [onShellSnapshotChange, shellSnapshot])
+    if (dataset) onShellSnapshotChange(shellSnapshot)
+  }, [dataset, onShellSnapshotChange, shellSnapshot])
+
+  if (!dataset) {
+    return (
+      <section className="accounting-page" aria-label="iOS 记账工作台">
+        {loadError ? (
+          <AccountingLoadState
+            kind="error"
+            message={loadError}
+            onRetry={() => setLoadAttempt((value) => value + 1)}
+          />
+        ) : (
+          <AccountingLoadState kind="loading" />
+        )}
+      </section>
+    )
+  }
+
+  if (dataset.accounts.length === 0 && dataset.transactions.length === 0) {
+    return (
+      <section className="accounting-page" aria-label="iOS 记账工作台">
+        <AccountingLoadState kind="empty" />
+      </section>
+    )
+  }
 
   return (
     <section className="accounting-page" aria-label="iOS 记账工作台">
@@ -307,16 +357,16 @@ function getActiveElement() {
 
 function saveDraft(
   draft: TransactionDraft,
-  setDataset: Dispatch<SetStateAction<typeof ledgerAtlasDataset>>,
+  setDataset: Dispatch<SetStateAction<AccountingDataset | null>>,
 ) {
-  setDataset((current) => ({
+  setDataset((current) => current ? ({
     ...current,
     transactions: saveTransactionDraft(current.transactions, draft, new Date().toISOString()),
-  }))
+  }) : current)
 }
 
 function transactionBelongsToAccount(
-  transaction: typeof ledgerAtlasDataset.transactions[number],
+  transaction: AccountingDataset['transactions'][number],
   accountId: string,
 ) {
   return transaction.type === 'transfer'
