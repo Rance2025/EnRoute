@@ -1,19 +1,10 @@
 import {
-  ArrowDownLeft,
-  ArrowRightLeft,
-  ArrowUpRight,
-  CalendarDays,
-  CreditCard,
-  Pencil,
   Plus,
-  Tags,
-  Trash2,
-  X,
 } from 'lucide-react'
 import { LayoutGroup, motion } from 'framer-motion'
 import { siAlipay, siMeituan, siTiktok, siWechat } from 'simple-icons'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { CSSProperties, ComponentType } from 'react'
+import type { CSSProperties } from 'react'
 
 import { formatCnyFromCents } from '../../accounting/money'
 import meituanLogoRabbitWordmarkUrl from '../../assets/meituan-logo-rabbit-wordmark.png'
@@ -22,27 +13,21 @@ import type {
   AccountPeriodSummary,
   AccountingDataset,
   Transaction,
-  TransactionType,
+  PortfolioPeriodSummary,
 } from '../../accounting/types'
+import type {
+  CategoryCompositionBar,
+  DirectTagAmount,
+} from '../../accounting/insightSelectors'
+import { CategoryStackedColumns } from './CategoryStackedColumns'
 import {
   formatMonthDay,
-  getLegacyCategoryLabel,
-  getLegacyFundLabel,
-  getTransactionAccountLabel,
-  getTransactionCategoryPath,
-  getTransactionTagPaths,
 } from './formatting'
+import { TransactionRow } from './TransactionRow'
+import { NetWorthPanel } from './NetWorthPanel'
+import { TagAmountTable } from './TagAmountTable'
 
-const typeIcons: Record<
-  TransactionType,
-  ComponentType<{ size?: number; strokeWidth?: number }>
-> = {
-  income: ArrowDownLeft,
-  expense: ArrowUpRight,
-  transfer: ArrowRightLeft,
-}
-
-const typeLabels: Record<TransactionType, string> = {
+const typeLabels = {
   income: '收入',
   expense: '支出',
   transfer: '转账',
@@ -100,6 +85,9 @@ const accountCardBrandConfigs: Record<AccountCardBrand, AccountCardBrandConfig> 
 type LedgerWorkspaceProps = {
   dataset: AccountingDataset
   transactions: Transaction[]
+  portfolio: PortfolioPeriodSummary
+  categoryComposition: { income: CategoryCompositionBar; expense: CategoryCompositionBar }
+  topTags: DirectTagAmount[]
   onSelectTransaction: (transaction: Transaction) => void
   onCreateTransaction: () => void
 }
@@ -107,15 +95,18 @@ type LedgerWorkspaceProps = {
 export function LedgerWorkspace({
   dataset,
   transactions,
+  portfolio,
+  categoryComposition,
+  topTags,
   onSelectTransaction,
   onCreateTransaction,
 }: LedgerWorkspaceProps) {
   return (
     <div
-      className="accounting-workspace ios-account-ledger-workspace"
+      className="accounting-workspace ios-account-ledger-workspace glass-panel glass-panel--solid"
       aria-label="账户与流水工作台"
     >
-      <section className="glass-panel glass-panel--solid ios-panel ios-ledger-main">
+      <section className="ios-ledger-main accounting-ledger-column">
         <header className="ios-ledger-toolbar">
           <div>
             <strong>流水明细</strong>
@@ -134,17 +125,32 @@ export function LedgerWorkspace({
         </header>
 
         <div className="accounting-scroll--ledger" aria-label="流水列表">
-          {transactions.map((transaction) => (
-            <TransactionRow
-              key={transaction.id}
-              dataset={dataset}
-              transaction={transaction}
-              onSelect={() => onSelectTransaction(transaction)}
-            />
+          {groupTransactionsByDate(transactions).map((group) => (
+            <section className="ledger-date-group" key={group.date} aria-label={group.label}>
+              <header><span>{group.label}</span><small>{group.transactions.length} 笔</small></header>
+              {group.transactions.map((transaction) => (
+                <TransactionRow
+                  key={transaction.id}
+                  dataset={dataset}
+                  transaction={transaction}
+                  onSelect={() => onSelectTransaction(transaction)}
+                />
+              ))}
+            </section>
           ))}
           {transactions.length === 0 ? (
             <div className="ios-empty-ledger">当前时间范围内没有流水</div>
           ) : null}
+        </div>
+      </section>
+      <section className="accounting-insights-column" aria-label="流水关键洞察">
+        <NetWorthPanel summary={portfolio} />
+        <div className="accounting-insights-column__lower">
+          <CategoryStackedColumns
+            income={categoryComposition.income}
+            expense={categoryComposition.expense}
+          />
+          <TagAmountTable tags={topTags} />
         </div>
       </section>
     </div>
@@ -466,52 +472,6 @@ function wrapIndex(index: number, length: number) {
   return ((index % length) + length) % length
 }
 
-function TransactionRow({
-  dataset,
-  transaction,
-  onSelect,
-}: {
-  dataset: AccountingDataset
-  transaction: Transaction
-  onSelect: () => void
-}) {
-  const Icon = typeIcons[transaction.type]
-  const categoryPath = getTransactionCategoryPath(dataset.categories, transaction)
-  const tagPaths = getTransactionTagPaths(dataset.tags, transaction)
-  const accountLabel = getTransactionAccountLabel(dataset, transaction)
-  const note = transaction.note ?? categoryPath
-
-  return (
-    <button
-      type="button"
-      className={`ios-transaction-row ios-transaction-row--${transaction.type}`}
-      onClick={onSelect}
-    >
-      <span className="ios-transaction-row__icon">
-        <Icon size={17} strokeWidth={2} />
-      </span>
-      <span className="ios-transaction-row__body">
-        <strong>{note}</strong>
-        <em>{accountLabel}</em>
-        <small>{categoryPath}</small>
-      </span>
-      <span className="ios-transaction-row__tags">
-        {tagPaths.map((tagPath) => (
-          <i key={tagPath}>{tagPath}</i>
-        ))}
-        {tagPaths.length === 0 ? <i>无标签</i> : null}
-      </span>
-      <span className="ios-transaction-row__side">
-        <b>{formatTransactionAmount(transaction)}</b>
-        <span className="ios-transaction-row__meta">
-          <time>{formatMonthDay(transaction.occurredAt)}</time>
-          <small>{typeLabels[transaction.type]}</small>
-        </span>
-      </span>
-    </button>
-  )
-}
-
 function AccountMovementRow({ transaction }: { transaction: Transaction }) {
   return (
     <article className={`ios-account-movement-row ios-account-movement-row--${transaction.type}`}>
@@ -522,128 +482,6 @@ function AccountMovementRow({ transaction }: { transaction: Transaction }) {
       </div>
       <b>{formatTransactionAmount(transaction)}</b>
     </article>
-  )
-}
-
-export function LedgerDetailDialog({
-  dataset,
-  transaction,
-  onClose,
-}: {
-  dataset: AccountingDataset
-  transaction: Transaction
-  onClose: () => void
-}) {
-  const categoryPath = getTransactionCategoryPath(dataset.categories, transaction)
-  const tagPaths = getTransactionTagPaths(dataset.tags, transaction)
-
-  return (
-    <div className="accounting-modal-backdrop">
-      <section
-        className="accounting-modal-card accounting-modal-card--detail"
-        role="dialog"
-        aria-modal="true"
-        aria-label="流水详情"
-      >
-        <header className="accounting-modal-head">
-          <div>
-            <span>{typeLabels[transaction.type]}</span>
-            <strong>{transaction.note ?? categoryPath}</strong>
-          </div>
-          <button type="button" aria-label="关闭" onClick={onClose}>
-            <X size={18} strokeWidth={2.2} />
-          </button>
-        </header>
-        <div className={`ios-amount-card ios-amount-card--${transaction.type}`}>
-          <span>{formatMonthDay(transaction.occurredAt)}</span>
-          <strong>{formatTransactionAmount(transaction)}</strong>
-          <em>{getTransactionAccountLabel(dataset, transaction)}</em>
-        </div>
-        <div className="ios-detail-list">
-          <DetailLine icon={CreditCard} label="账户" value={getTransactionAccountLabel(dataset, transaction)} />
-          <DetailLine icon={CalendarDays} label="发生时间" value={formatMonthDay(transaction.occurredAt)} />
-          <DetailLine icon={Tags} label="标签" value={tagPaths.join(' / ') || '无标签'} />
-          <DetailLine label="原始分类" value={getLegacyCategoryLabel(transaction)} />
-          <DetailLine label="归入分类" value={categoryPath} />
-          <DetailLine label="原始资金" value={getLegacyFundLabel(transaction)} />
-        </div>
-        <footer className="accounting-modal-actions">
-          <button type="button">
-            <Pencil size={15} strokeWidth={2.2} />
-            修改流水
-          </button>
-          <button type="button" className="is-danger">
-            <Trash2 size={15} strokeWidth={2.2} />
-            删除流水
-          </button>
-        </footer>
-      </section>
-    </div>
-  )
-}
-
-export function NewTransactionDialog({ onClose }: { onClose: () => void }) {
-  return (
-    <div className="accounting-modal-backdrop">
-      <section
-        className="accounting-modal-card accounting-modal-card--new"
-        role="dialog"
-        aria-modal="true"
-        aria-label="新增流水"
-      >
-        <header className="accounting-modal-head">
-          <div>
-            <span>新增流水</span>
-            <strong>记录新流水</strong>
-          </div>
-          <button type="button" aria-label="关闭" onClick={onClose}>
-            <X size={18} strokeWidth={2.2} />
-          </button>
-        </header>
-        <div className="ios-new-transaction-form">
-          <label>
-            <span>类型</span>
-            <div className="ios-form-chip-row" aria-label="流水类型">
-              <button type="button" className="is-active">支出</button>
-              <button type="button">收入</button>
-              <button type="button">转账</button>
-            </div>
-          </label>
-          <label>
-            <span>金额</span>
-            <input type="text" inputMode="decimal" placeholder="0.00" />
-          </label>
-          <label>
-            <span>备注</span>
-            <input type="text" placeholder="写下这笔钱发生了什么" />
-          </label>
-        </div>
-        <footer className="accounting-modal-actions">
-          <button type="button" onClick={onClose}>取消</button>
-          <button type="button" className="is-primary">保存流水</button>
-        </footer>
-      </section>
-    </div>
-  )
-}
-
-function DetailLine({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon?: ComponentType<{ size?: number; strokeWidth?: number }>
-  label: string
-  value: string
-}) {
-  return (
-    <div>
-      <span>
-        {Icon ? <Icon size={13} strokeWidth={2.2} /> : null}
-        {label}
-      </span>
-      <strong>{value}</strong>
-    </div>
   )
 }
 
@@ -666,4 +504,21 @@ function formatSigned(amountInCents: number) {
   if (amountInCents === 0) return '¥0.00'
 
   return `${amountInCents > 0 ? '+' : '-'}¥${formatCnyFromCents(Math.abs(amountInCents))}`
+}
+
+function groupTransactionsByDate(transactions: Transaction[]) {
+  const groups = new Map<string, Transaction[]>()
+  for (const transaction of transactions) {
+    const date = transaction.occurredAt.slice(0, 10)
+    groups.set(date, [...(groups.get(date) ?? []), transaction])
+  }
+  return [...groups.entries()].map(([date, dateTransactions]) => ({
+    date,
+    label: new Intl.DateTimeFormat('zh-CN', {
+      month: '2-digit',
+      day: '2-digit',
+      weekday: 'short',
+    }).format(new Date(`${date}T12:00:00+08:00`)),
+    transactions: dateTransactions,
+  }))
 }

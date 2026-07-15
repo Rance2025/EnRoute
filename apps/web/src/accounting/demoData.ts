@@ -6,6 +6,8 @@ export const demoAccounts: Account[] = [
   {
     id: 'wechat-daily',
     name: '微信 - 日常',
+    nature: 'asset',
+    currency: 'CNY',
     openingBalanceInCents: 638_42,
     openingBalanceAt: '2026-06-01T00:00:00+08:00',
     createdAt: now,
@@ -14,7 +16,9 @@ export const demoAccounts: Account[] = [
   {
     id: 'huabei',
     name: '花呗',
-    openingBalanceInCents: 0,
+    nature: 'liability',
+    currency: 'CNY',
+    openingBalanceInCents: -320_00,
     openingBalanceAt: '2026-06-01T00:00:00+08:00',
     createdAt: now,
     updatedAt: now,
@@ -22,7 +26,9 @@ export const demoAccounts: Account[] = [
   {
     id: 'meituan-monthly',
     name: '美团月付',
-    openingBalanceInCents: 0,
+    nature: 'liability',
+    currency: 'CNY',
+    openingBalanceInCents: -86_00,
     openingBalanceAt: '2026-06-01T00:00:00+08:00',
     createdAt: now,
     updatedAt: now,

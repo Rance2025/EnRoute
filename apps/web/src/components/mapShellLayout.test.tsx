@@ -881,6 +881,23 @@ describe('unified shell layout', () => {
     expect(within(accountingMetricStrip).queryByText('当前足迹')).not.toBeInTheDocument()
   })
 
+  it('keeps one left glass panel geometry while accounting page content changes', async () => {
+    render(<App amapConfig={configuredAmap} />)
+    fireEvent.click(screen.getByRole('button', { name: '记账' }))
+    await settleLazyImports()
+
+    const panel = screen.getByLabelText('时间范围面板')
+    const className = panel.className
+    const rail = screen.getByRole('navigation', { name: '二级导航' })
+    fireEvent.click(within(rail).getByRole('button', { name: '账户' }))
+    expect(screen.getByLabelText('时间范围面板')).toBe(panel)
+    expect(panel.className).toBe(className)
+    fireEvent.click(within(rail).getByRole('button', { name: '统计' }))
+    expect(screen.getByLabelText('时间范围面板')).toBe(panel)
+    expect(panel.className).toBe(className)
+    expect(screen.getByLabelText('统计口径')).toBeInTheDocument()
+  })
+
   it('keeps accounting secondary navigation in the shared right rail', async () => {
     render(<App amapConfig={configuredAmap} />)
 
@@ -896,7 +913,7 @@ describe('unified shell layout', () => {
     const settingsButton = rail.querySelector('.right-context-settings-button')
 
     expect(rail).toHaveClass('secondary-nav-rail')
-    expect(getRailLabels()).toEqual(['流水', '统计'])
+    expect(getRailLabels()).toEqual(['流水', '账户', '统计'])
     expect(settingsButton).toBeInstanceOf(HTMLButtonElement)
     expect(settingsButton).toHaveAttribute('aria-label', '打开设置')
     expect(rail.querySelector('[aria-pressed="true"]')).toHaveTextContent('流水')
@@ -904,12 +921,18 @@ describe('unified shell layout', () => {
     expect(document.querySelector('.ios-ledger-control-panel')).toBeNull()
     expect(document.querySelector('.ios-account-filter-panel')).toBeNull()
 
+    fireEvent.click(within(rail).getByRole('button', { name: '账户' }))
+    screen.getByLabelText('账户工作台')
+
+    expect(getRailLabels()).toEqual(['流水', '账户', '统计'])
+    expect(rail.querySelector('[aria-pressed="true"]')).toHaveTextContent('账户')
+
     fireEvent.click(within(rail).getByRole('button', { name: '统计' }))
     screen.getByLabelText('统计工作区')
 
-    expect(getRailLabels()).toEqual(['流水', '统计'])
+    expect(getRailLabels()).toEqual(['流水', '账户', '统计'])
     expect(rail.querySelector('[aria-pressed="true"]')).toHaveTextContent('统计')
-    expect(document.querySelector('.ios-analytics-workspace')).not.toBeNull()
+    expect(document.querySelector('.analytics-workspace')).not.toBeNull()
     expect(document.querySelector('.ios-account-filter-panel')).toBeNull()
   })
 

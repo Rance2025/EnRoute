@@ -12,6 +12,7 @@ import {
   type TimeRangeSelection,
 } from '../time/timeRange'
 import type { FootprintDistanceSeries } from '../layers/footprintTypes'
+import { defaultAccountingStatisticsControls } from '../accounting/shell'
 import { TimeContextPanel } from './TimeContextPanel'
 
 beforeEach(() => {
@@ -1329,6 +1330,11 @@ describe('TimeContextPanel', () => {
       <TimeContextPanel
         view="accounting"
         selection={selectMonth(2026, 6)}
+        metricItems={[
+          { label: '收入', value: '¥5172.41', tone: 'income' },
+          { label: '支出', value: '¥481.18', tone: 'expense' },
+          { label: '流水', value: '6 笔' },
+        ]}
         onSelectionChange={vi.fn()}
       />,
     )
@@ -1352,6 +1358,37 @@ describe('TimeContextPanel', () => {
     expect(within(timeCardSummary).queryByText('账户')).not.toBeInTheDocument()
     expect(screen.queryByLabelText('当前范围摘要')).not.toBeInTheDocument()
     expect(screen.queryByLabelText('记账概览卡片')).not.toBeInTheDocument()
+  })
+
+  it('renders statistics controls below the shared picker and publishes every change', () => {
+    const onControlsChange = vi.fn()
+    render(
+      <TimeContextPanel
+        view="accounting"
+        selection={selectMonth(2026, 6)}
+        metricItems={[
+          { label: '收入', value: '¥5172.41' },
+          { label: '支出', value: '¥481.18' },
+          { label: '净收入', value: '¥4691.23' },
+        ]}
+        accountingStatisticsControls={defaultAccountingStatisticsControls}
+        onAccountingStatisticsControlsChange={onControlsChange}
+        onSelectionChange={vi.fn()}
+      />,
+    )
+
+    const controls = screen.getByLabelText('统计口径')
+    expect(controls.compareDocumentPosition(screen.getByLabelText('时间编辑器')) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy()
+    fireEvent.click(within(controls).getByRole('button', { name: '笔数' }))
+    expect(onControlsChange).toHaveBeenLastCalledWith(expect.objectContaining({ measure: 'count' }))
+    fireEvent.change(within(controls).getByLabelText('时间粒度'), { target: { value: 'week' } })
+    expect(onControlsChange).toHaveBeenLastCalledWith(expect.objectContaining({ granularity: 'week' }))
+    fireEvent.click(within(controls).getByRole('checkbox', { name: '对比上周期' }))
+    expect(onControlsChange).toHaveBeenLastCalledWith(expect.objectContaining({ comparePrevious: false }))
+    fireEvent.click(within(controls).getByRole('checkbox', { name: '计入转账' }))
+    expect(onControlsChange).toHaveBeenLastCalledWith(expect.objectContaining({ includeTransfers: true }))
+    fireEvent.change(within(controls).getByLabelText('分类层级'), { target: { value: 'top' } })
+    expect(onControlsChange).toHaveBeenLastCalledWith(expect.objectContaining({ categoryDepth: 'top' }))
   })
 
   it('renders map metrics in the same global metric strip with map-specific content', () => {

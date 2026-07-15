@@ -21,9 +21,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 
-import { ledgerAtlasDataset } from '../accounting/ledgerAtlasData'
-import { formatCnyFromCents } from '../accounting/money'
-import { getPeriodMetrics } from '../accounting/selectors'
+import type { AccountingStatisticsControls } from '../accounting/shell'
 import type { AppView } from '../appLayout'
 import { SegmentedControl, type SegmentedOption } from './SegmentedControl'
 import {
@@ -88,6 +86,8 @@ type TimeContextPanelProps = {
   selection: TimeRangeSelection
   secondaryContextLabel?: string
   metricItems?: TimeContextMetricItem[]
+  accountingStatisticsControls?: AccountingStatisticsControls
+  onAccountingStatisticsControlsChange?: (next: AccountingStatisticsControls) => void
   distanceSeries?: FootprintDistanceSeries
   onSelectionChange: (selection: TimeRangeSelection) => void
 }
@@ -171,6 +171,8 @@ function useMeasuredStageHeight(isLayoutFrozen: boolean) {
 
 export function TimeContextPanel({
   metricItems,
+  accountingStatisticsControls,
+  onAccountingStatisticsControlsChange,
   distanceSeries,
   secondaryContextLabel,
   view,
@@ -194,9 +196,7 @@ export function TimeContextPanel({
   const heading = getTimeRangeDisplay(selection)
   const resetLabel = getCurrentRangeActionLabel(selection.mode)
   const timeActionLabel = resetLabel
-  const summaryItems = metricItems ?? (view === 'accounting'
-    ? getAccountingSummary(selection)
-    : [])
+  const summaryItems = metricItems ?? []
   const compatibleDistanceSeries = getCompatibleDistanceSeriesForSelection(distanceSeries, selection)
   const hasStaleDistanceSeries = Boolean(distanceSeries && !compatibleDistanceSeries)
   const distanceTrend = getDistanceTrendModel(
@@ -457,6 +457,13 @@ export function TimeContextPanel({
             )}
           </div>
         </div>
+
+        {accountingStatisticsControls && onAccountingStatisticsControlsChange ? (
+          <AccountingStatisticsControlPanel
+            value={accountingStatisticsControls}
+            onChange={onAccountingStatisticsControlsChange}
+          />
+        ) : null}
 
         {shouldRenderDistanceTrend ? (
           <section
@@ -951,28 +958,31 @@ function formatDistanceTrendValue(value: number) {
   }).format(value / 1000)} km`
 }
 
-function getAccountingSummary(selection: TimeRangeSelection): TimeContextMetricItem[] {
-  const metrics = getPeriodMetrics(ledgerAtlasDataset, selection)
+function AccountingStatisticsControlPanel({
+  value,
+  onChange,
+}: {
+  value: AccountingStatisticsControls
+  onChange: (next: AccountingStatisticsControls) => void
+}) {
+  const update = <Key extends keyof AccountingStatisticsControls>(
+    key: Key,
+    nextValue: AccountingStatisticsControls[Key],
+  ) => onChange({ ...value, [key]: nextValue })
 
-  return [
-    {
-      label: '收入',
-      value: formatAccountingCurrency(metrics.incomeInCents),
-      tone: 'income',
-    },
-    {
-      label: '支出',
-      value: formatAccountingCurrency(metrics.expenseInCents),
-      tone: 'expense',
-    },
-    { label: '流水', value: `${metrics.transactionCount} 笔` },
-  ]
-}
-
-function formatAccountingCurrency(amountInCents: number) {
-  const prefix = amountInCents < 0 ? '-¥' : '¥'
-
-  return `${prefix}${formatCnyFromCents(Math.abs(amountInCents))}`
+  return (
+    <section className="accounting-statistics-controls" aria-label="统计口径">
+      <header><span>分析口径</span><strong>统一筛选</strong></header>
+      <div className="accounting-statistics-controls__measure" role="group" aria-label="统计单位">
+        <button type="button" aria-pressed={value.measure === 'amount'} onClick={() => update('measure', 'amount')}>金额</button>
+        <button type="button" aria-pressed={value.measure === 'count'} onClick={() => update('measure', 'count')}>笔数</button>
+      </div>
+      <label><span>时间粒度</span><select aria-label="时间粒度" value={value.granularity} onChange={(event) => update('granularity', event.target.value as AccountingStatisticsControls['granularity'])}><option value="auto">自动</option><option value="day">日</option><option value="week">周</option><option value="month">月</option></select></label>
+      <label><span>分类层级</span><select aria-label="分类层级" value={value.categoryDepth} onChange={(event) => update('categoryDepth', event.target.value as AccountingStatisticsControls['categoryDepth'])}><option value="top">一级</option><option value="second">二级</option><option value="all">完整树</option></select></label>
+      <label className="accounting-statistics-controls__check"><input type="checkbox" checked={value.comparePrevious} onChange={(event) => update('comparePrevious', event.target.checked)} /><span>对比上周期</span></label>
+      <label className="accounting-statistics-controls__check"><input type="checkbox" checked={value.includeTransfers} onChange={(event) => update('includeTransfers', event.target.checked)} /><span>计入转账</span></label>
+    </section>
+  )
 }
 
 function timeSelectionsAreEqual(

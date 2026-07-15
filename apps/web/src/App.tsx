@@ -22,11 +22,18 @@ import {
   Shapes,
   Settings,
   Wallet,
+  WalletCards,
   X,
   type LucideIcon,
 } from 'lucide-react'
 
 import type { FootprintMetrics } from './layers/footprintTypes'
+import {
+  defaultAccountingStatisticsControls,
+  type AccountingSection,
+  type AccountingShellAction,
+  type AccountingShellSnapshot,
+} from './accounting/shell'
 import type { AdminRegionDepth } from './layers/adminRegionVectorTileSource'
 import {
   loadAdminRegionSummary,
@@ -34,6 +41,7 @@ import {
   type AdminRegionSummary,
 } from './layers/adminRegionSummaryDataSource'
 import { AdminRegionContextPanel } from './components/AdminRegionContextPanel'
+import { AccountingRightContextPanel } from './components/accounting/AccountingRightContextPanel'
 import {
   formatAverageDistanceMeters,
   formatDistanceMeters,
@@ -94,7 +102,7 @@ type AppProps = {
   amapConfig?: AmapConfig
 }
 
-type SecondaryNavId = 'footprints' | 'regions' | 'stats' | 'ledger'
+type SecondaryNavId = 'footprints' | 'regions' | 'stats' | 'ledger' | 'accounts'
 type SecondaryNavItem = {
   id: SecondaryNavId
   label: string
@@ -173,6 +181,7 @@ const secondaryNavItemsByView: Record<AppView, SecondaryNavItem[]> = {
   schedule: [],
   accounting: [
     { id: 'ledger', label: '流水', icon: List },
+    { id: 'accounts', label: '账户', icon: WalletCards },
     { id: 'stats', label: '统计', icon: BarChart3 },
   ],
 }
@@ -321,6 +330,11 @@ function App(props: AppProps) {
   const [secondaryNavSelection, setSecondaryNavSelection] = useState<SecondaryNavSelection>(
     defaultSecondaryNavSelection,
   )
+  const [accountingShellSnapshot, setAccountingShellSnapshot] =
+    useState<AccountingShellSnapshot | null>(null)
+  const [accountingShellCommand, setAccountingShellCommand] =
+    useState<AccountingShellAction | null>(null)
+  const [accountingStatisticsControls, setAccountingStatisticsControls] = useState(defaultAccountingStatisticsControls)
   const [adminRegionDepth, setAdminRegionDepth] = useState<AdminRegionDepth>(
     DEFAULT_ADMIN_REGION_DEPTH,
   )
@@ -711,11 +725,21 @@ function App(props: AppProps) {
       </nav>
 
       <TimeContextPanel
-        metricItems={view === 'map' ? mapMetricItems : undefined}
+        metricItems={view === 'map'
+          ? mapMetricItems
+          : view === 'accounting'
+            ? accountingShellSnapshot?.metricItems
+            : undefined}
         distanceSeries={view === 'map' ? footprintMetrics.distanceSeries : undefined}
         secondaryContextLabel={activeSecondaryNavItem?.label}
         view={view}
         selection={selectedTimeRange}
+        accountingStatisticsControls={view === 'accounting' && getAccountingSection(activeSecondaryNavId) === 'analytics'
+          ? accountingStatisticsControls
+          : undefined}
+        onAccountingStatisticsControlsChange={view === 'accounting' && getAccountingSection(activeSecondaryNavId) === 'analytics'
+          ? setAccountingStatisticsControls
+          : undefined}
         onSelectionChange={setSelectedTimeRange}
       />
 
@@ -775,6 +799,8 @@ function App(props: AppProps) {
               activeSecondaryNavId={activeSecondaryNavId}
               activeSecondaryNavLabel={activeSecondaryNavItem?.label ?? '概览'}
               footprintMetrics={footprintMetrics}
+              accountingSnapshot={view === 'accounting' ? accountingShellSnapshot : null}
+              onAccountingAction={setAccountingShellCommand}
             />
           )}
         </div>
@@ -811,14 +837,12 @@ function App(props: AppProps) {
         <section className="main-workspace" aria-label="在途 EnRoute 主工作区">
           <Suspense fallback={null}>
             <LazyAccountingPage
-              section={activeSecondaryNavId === 'stats' ? 'analytics' : 'workspace'}
+              section={getAccountingSection(activeSecondaryNavId)}
               timeRange={selectedTimeRange}
-              onSectionChange={(nextSection) =>
-                setSecondaryNavSelection((current) => ({
-                  ...current,
-                  accounting: nextSection === 'analytics' ? 'stats' : 'ledger',
-                }))
-              }
+              statisticsControls={accountingStatisticsControls}
+              shellCommand={accountingShellCommand}
+              onShellCommandHandled={() => setAccountingShellCommand(null)}
+              onShellSnapshotChange={setAccountingShellSnapshot}
             />
           </Suspense>
         </section>
@@ -1018,12 +1042,20 @@ function DefaultRightContextCards({
   activeSecondaryNavId,
   activeSecondaryNavLabel,
   footprintMetrics,
+  accountingSnapshot,
+  onAccountingAction,
 }: {
   view: AppView
   activeSecondaryNavId: SecondaryNavId
   activeSecondaryNavLabel: string
   footprintMetrics: FootprintMetrics
+  accountingSnapshot: AccountingShellSnapshot | null
+  onAccountingAction: (action: AccountingShellAction) => void
 }) {
+  if (view === 'accounting') {
+    return <AccountingRightContextPanel snapshot={accountingSnapshot} onAction={onAccountingAction} />
+  }
+
   return (
     <>
       <section
@@ -1052,6 +1084,12 @@ function DefaultRightContextCards({
       </section>
     </>
   )
+}
+
+function getAccountingSection(activeSecondaryNavId: SecondaryNavId): AccountingSection {
+  if (activeSecondaryNavId === 'accounts') return 'accounts'
+  if (activeSecondaryNavId === 'stats') return 'analytics'
+  return 'ledger'
 }
 
 function timeSelectionsAreEqual(
