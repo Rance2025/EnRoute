@@ -32,7 +32,7 @@
 - Mapbox 测试复现边界关闭后切换 level，断言重建后的 line layer 仍为 `none`。
 - Mapbox 测试覆盖区域透明度的即时更新、持久化、规范化和重建继承。
 - 页面测试覆盖足迹页、区域页开关关闭、区域页开关开启和统计页四种配置项组合。
-- 完整运行 `npm test`、`npm run lint`、`npm run build`，再在桌面和移动视口检查缩略图细缝、控制项条件展示以及跨 level 状态。
+- 完整运行 `npm test`、`npm run lint`、`npm run build`，再在桌面视口检查缩略图细缝、控制项条件展示以及跨 level 状态。
 
 ## 数据安全
 

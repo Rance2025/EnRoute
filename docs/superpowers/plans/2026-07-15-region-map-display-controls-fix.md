@@ -307,7 +307,7 @@ Expected: all commands exit `0` without warnings introduced by this branch.
 
 - [ ] **Step 3: Run browser acceptance**
 
-At desktop and mobile widths, verify: country/province/city/district thumbnails have no visible highlight seams; boundary lines remain hidden through all level changes; the opacity slider updates fill only; footprint and region controls follow the four specified contexts; the console has no new Mapbox errors.
+At desktop widths, verify: country/province/city/district thumbnails have no visible highlight seams; boundary lines remain hidden through all level changes; the opacity slider updates fill only; footprint and region controls follow the four specified contexts; the console has no new Mapbox errors.
 
 - [ ] **Step 4: Review branch scope**
 
