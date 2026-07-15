@@ -13,9 +13,15 @@
 ### Task 1: 建立预计算 schema、签名与只读就绪校验
 
 **Files:**
+- Create: `apps/api/src/enroute_api/admin_regions/precompute_meta.py`
 - Create: `apps/api/src/enroute_api/admin_regions/precompute.py`
 - Create: `apps/api/tests/test_admin_region_precompute.py`
+- Modify: `apps/api/src/enroute_api/admin_regions/store.py`
+- Modify: `apps/api/src/enroute_api/admin_regions/tiles.py`
 - Modify: `apps/api/src/enroute_api/footprints/store.py`
+- Modify: `apps/api/tests/test_admin_region_tiles.py`
+- Modify: `apps/api/tests/test_admin_regions_import.py`
+- Modify: `apps/api/tests/test_footprints_api.py`
 
 - [ ] **Step 1: 写 schema 与约束失败测试**
 
@@ -29,7 +35,7 @@ Expected: FAIL，模块或初始化函数尚不存在。
 
 - [ ] **Step 3: 写最小 schema 实现**
 
-在 `precompute.py` 中定义三个就绪键和初始化函数：
+在无几何依赖的 `precompute_meta.py` 中定义三个就绪键和失效 helper，避免 `tiles.py` 与 `precompute.py` 循环导入；在 `precompute.py` 中定义初始化函数：
 
 ```python
 THUMBNAIL_BASE_SIGNATURE_KEY = "adminRegionThumbnailBasePrecomputeSignature"
@@ -84,10 +90,22 @@ Run: `python -m pytest apps/api/tests/test_admin_region_precompute.py -k "schema
 
 Expected: PASS。
 
-- [ ] **Step 6: 提交 Task 1**
+- [ ] **Step 6: 写所有仓库写入路径的失效测试**
+
+锁定以下行为：新足迹插入或 `region_id` backfill 删除每日统计就绪键；`load_admin_regions()` 删除三类就绪键；构建、删除或清空相关 `admin_region_tiles` 删除底图/path 就绪键。即使某个维护脚本直接更新瓦片而未调用 helper，API 仍必须每次重算当前源瓦片签名并在不匹配时返回 503，不能只相信元数据键存在。
+
+- [ ] **Step 7: 实现窄范围失效 helper 并跑 GREEN**
+
+`precompute_meta.py` 提供 `invalidate_admin_region_daily_stats(connection)`、`invalidate_admin_region_thumbnail_paths(connection)` 和 `invalidate_admin_region_thumbnail_bases(connection)`；函数只删除三个新就绪键，不删除任何预计算数据行或既有瓦片。分别从 `insert_footprint_if_new()` 成功分支、`backfill_footprint_region_ids()` 有更新分支、`load_admin_regions()` 事务和行政区瓦片写入/删除 helper 调用。
+
+Run: `python -m pytest apps/api/tests/test_admin_region_precompute.py apps/api/tests/test_admin_region_tiles.py apps/api/tests/test_admin_regions_import.py apps/api/tests/test_footprints_api.py -k "precompute_signature or summary_signature" -q`
+
+Expected: PASS。
+
+- [ ] **Step 8: 提交 Task 1**
 
 ```powershell
-git add apps/api/src/enroute_api/admin_regions/precompute.py apps/api/src/enroute_api/footprints/store.py apps/api/tests/test_admin_region_precompute.py
+git add apps/api/src/enroute_api/admin_regions/precompute_meta.py apps/api/src/enroute_api/admin_regions/precompute.py apps/api/src/enroute_api/admin_regions/store.py apps/api/src/enroute_api/admin_regions/tiles.py apps/api/src/enroute_api/footprints/store.py apps/api/tests/test_admin_region_precompute.py apps/api/tests/test_admin_region_tiles.py apps/api/tests/test_admin_regions_import.py apps/api/tests/test_footprints_api.py
 git commit -m "feat: 建立区域摘要预计算表"
 ```
 
