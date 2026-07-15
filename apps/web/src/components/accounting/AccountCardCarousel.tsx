@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { useEffect, useMemo, useRef, type WheelEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 
 import type { AccountPeriodSummary } from '../../accounting/types'
 import { formatCurrency, formatSignedCurrency } from './formatting'
@@ -16,6 +16,7 @@ export function AccountCardCarousel({
   selectedAccountId: string
   onSelectAccount: (accountId: string) => void
 }) {
+  const carouselRef = useRef<HTMLDivElement>(null)
   const wheelDeltaRef = useRef(0)
   const wheelLockedRef = useRef(false)
   const unlockTimerRef = useRef<number | undefined>(undefined)
@@ -33,13 +34,13 @@ export function AccountCardCarousel({
     if (unlockTimerRef.current !== undefined) window.clearTimeout(unlockTimerRef.current)
   }, [])
 
-  const move = (direction: -1 | 1) => {
+  const move = useCallback((direction: -1 | 1) => {
     if (summaries.length < 2) return
     const next = summaries[wrapIndex(selectedIndex + direction, summaries.length)]
     if (next) onSelectAccount(next.account.id)
-  }
+  }, [onSelectAccount, selectedIndex, summaries])
 
-  const handleWheel = (event: WheelEvent<HTMLDivElement>) => {
+  const handleWheel = useCallback((event: WheelEvent) => {
     event.preventDefault()
     if (summaries.length < 2 || wheelLockedRef.current) return
     if (wheelDeltaRef.current !== 0 && Math.sign(wheelDeltaRef.current) !== Math.sign(event.deltaY)) {
@@ -55,7 +56,15 @@ export function AccountCardCarousel({
     unlockTimerRef.current = window.setTimeout(() => {
       wheelLockedRef.current = false
     }, WHEEL_LOCK_MS)
-  }
+  }, [move, summaries.length])
+
+  useEffect(() => {
+    const carousel = carouselRef.current
+    if (!carousel) return
+
+    carousel.addEventListener('wheel', handleWheel, { passive: false })
+    return () => carousel.removeEventListener('wheel', handleWheel)
+  }, [handleWheel])
 
   return (
     <section className="account-card-carousel-shell">
@@ -63,8 +72,9 @@ export function AccountCardCarousel({
         className="account-card-carousel"
         role="group"
         aria-label="账户卡片轮替"
+        data-density="compact"
         tabIndex={0}
-        onWheel={handleWheel}
+        ref={carouselRef}
         onKeyDown={(event) => {
           if (event.key === 'ArrowRight') {
             event.preventDefault()

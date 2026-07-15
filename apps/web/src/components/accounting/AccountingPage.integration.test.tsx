@@ -106,6 +106,48 @@ describe('AccountingPage real data integration', () => {
       label: '最新账单月份',
     })
   })
+
+  it('publishes real import provenance and the net-worth baseline limitation to the side rail', async () => {
+    const fetcher = vi.fn(async () => jsonResponse(realisticAccountingDataset))
+    const onShellSnapshotChange = vi.fn()
+    vi.stubGlobal('fetch', fetcher)
+
+    renderAccountingPage({ onShellSnapshotChange })
+
+    await waitFor(() => expect(onShellSnapshotChange).toHaveBeenCalled())
+    expect(onShellSnapshotChange).toHaveBeenLastCalledWith(expect.objectContaining({
+      context: expect.objectContaining({
+        rows: expect.arrayContaining([
+          { label: '数据来源', value: '1349 条真实导入' },
+          { label: '余额口径', value: '1 个账户使用导入零基线' },
+        ]),
+      }),
+    }))
+  })
+
+  it('opens the account page on the account used by the latest transaction instead of name order', async () => {
+    const dataset = {
+      ...realisticAccountingDataset,
+      accounts: [
+        {
+          ...realisticAccountingDataset.accounts[0],
+          id: 'account-alphabetical-first',
+          name: '专款',
+        },
+        realisticAccountingDataset.accounts[0],
+      ],
+    }
+    const fetcher = vi.fn(async () => jsonResponse(dataset))
+    const onShellSnapshotChange = vi.fn()
+    vi.stubGlobal('fetch', fetcher)
+
+    renderAccountingPage({ section: 'accounts', onShellSnapshotChange })
+
+    await waitFor(() => expect(onShellSnapshotChange).toHaveBeenCalled())
+    expect(onShellSnapshotChange).toHaveBeenLastCalledWith(expect.objectContaining({
+      context: expect.objectContaining({ title: '微信 - 日常' }),
+    }))
+  })
 })
 
 function renderAccountingPage(overrides: Partial<React.ComponentProps<typeof AccountingPage>> = {}) {

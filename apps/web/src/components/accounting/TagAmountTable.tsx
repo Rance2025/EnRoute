@@ -1,9 +1,9 @@
 import type { DirectTagAmount } from '../../accounting/insightSelectors'
 import { formatCurrency, formatSignedCurrency } from './formatting'
 
-export function TagAmountTable({ tags }: { tags: DirectTagAmount[] }) {
+export function TagAmountTable({ tags, compact = false }: { tags: DirectTagAmount[]; compact?: boolean }) {
   return (
-    <section className="tag-amount-table" aria-label="高频标签金额">
+    <section className={`tag-amount-table${compact ? ' tag-amount-table--compact' : ''}`} aria-label="高频标签金额">
       <header className="insight-panel-head">
         <div>
           <strong>高频标签</strong>

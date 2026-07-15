@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type CSSProperties } from 'react'
 
 import {
   getAccountContributions,
@@ -91,7 +91,11 @@ export function AnalyticsWorkspace({ dataset, timeRange, controls, onFocusChange
   }
 
   return (
-    <div className="accounting-workspace analytics-workspace" aria-label="统计工作区">
+    <div
+      className="accounting-workspace analytics-workspace"
+      aria-label="统计工作区"
+      data-layout="trend-hierarchy-insights"
+    >
       <section className="glass-panel glass-panel--solid accounting-analysis-card analytics-workspace__trend">
         <CashflowTrendChart buckets={trend} previousBuckets={previousTrend} measure={controls.measure} granularity={granularity} />
       </section>
@@ -99,16 +103,32 @@ export function AnalyticsWorkspace({ dataset, timeRange, controls, onFocusChange
         <section className="glass-panel glass-panel--solid accounting-analysis-card">
           <TaxonomyTreePanel taxonomy="category" nodes={categoryNodes} measure={controls.measure} onSelectNode={(node) => selectNode('category', node)} />
         </section>
-        <section className="glass-panel glass-panel--solid accounting-analysis-card">
-          <TaxonomyTreePanel taxonomy="tag" nodes={tagNodes} measure={controls.measure} onSelectNode={(node) => selectNode('tag', node)} />
-        </section>
       </div>
-      {focus ? (
-        <FocusDetail dataset={dataset} focus={focus} onClear={clearFocus} />
-      ) : (
-        <AnalyticsGuide dataset={dataset} range={timeRange} />
-      )}
+      <div className="analytics-workspace__side-stack">
+        {tagNodes.length > 0 ? (
+          <section className="glass-panel glass-panel--solid accounting-analysis-card analytics-workspace__tags">
+            <TaxonomyTreePanel taxonomy="tag" nodes={tagNodes} measure={controls.measure} onSelectNode={(node) => selectNode('tag', node)} />
+          </section>
+        ) : (
+          <AnalyticsTagNotice transactionCount={transactions.length} />
+        )}
+        {focus ? (
+          <FocusDetail dataset={dataset} focus={focus} onClear={clearFocus} />
+        ) : (
+          <AnalyticsGuide dataset={dataset} range={timeRange} />
+        )}
+      </div>
     </div>
+  )
+}
+
+function AnalyticsTagNotice({ transactionCount }: { transactionCount: number }) {
+  return (
+    <section className="glass-panel glass-panel--solid analytics-tag-notice" aria-label="统计标签数据说明">
+      <span>标签分析</span>
+      <strong>原始账单未携带标签</strong>
+      <p>当前 {transactionCount} 笔流水仍可按完整分类树分析；新建流水产生标签后，这里会自动切换为标签层级视图。</p>
+    </section>
   )
 }
 
@@ -133,10 +153,19 @@ function FocusDetail({ dataset, focus, onClear }: { dataset: AccountingDataset; 
 
 function AnalyticsGuide({ dataset, range }: { dataset: AccountingDataset; range: TimeRangeSelection }) {
   const contributions = getAccountContributions(dataset, range).slice(0, 4)
+  const maximum = Math.max(...contributions.map((item) => Math.abs(item.netInCents)), 1)
   return (
     <aside className="glass-panel glass-panel--solid analytics-guide" aria-label="统计分析说明">
-      <header><span>联动说明</span><strong>账户贡献与图例</strong></header>
-      <div className="analytics-guide__accounts"><strong>账户贡献</strong>{contributions.map((item) => <p key={item.accountId}><span>{item.accountName}</span><b>{signedMoney(item.netInCents)}</b></p>)}</div>
+      <header><span>期间洞察</span><strong>账户贡献</strong></header>
+      <div className="analytics-guide__accounts" aria-label="账户贡献排名">
+        {contributions.map((item) => (
+          <div className="analytics-account-contribution" key={item.accountId}>
+            <span>{item.accountName}</span><b>{signedMoney(item.netInCents)}</b>
+            <i aria-hidden="true"><em style={{ '--account-contribution': Math.abs(item.netInCents) / maximum } as CSSProperties} /></i>
+          </div>
+        ))}
+        {contributions.length === 0 ? <p>当前范围没有账户变动</p> : null}
+      </div>
       <p>选择分类或标签节点，可查看直接值、后代聚合、上周期变化和主要关联。</p>
     </aside>
   )

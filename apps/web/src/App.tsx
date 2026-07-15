@@ -738,6 +738,9 @@ function App(props: AppProps) {
         accountingStatisticsControls={view === 'accounting' && getAccountingSection(activeSecondaryNavId) === 'analytics'
           ? accountingStatisticsControls
           : undefined}
+        accountingRangeBrief={view === 'accounting' && getAccountingSection(activeSecondaryNavId) !== 'analytics'
+          ? accountingShellSnapshot?.rangeBrief
+          : undefined}
         onAccountingStatisticsControlsChange={view === 'accounting' && getAccountingSection(activeSecondaryNavId) === 'analytics'
           ? setAccountingStatisticsControls
           : undefined}

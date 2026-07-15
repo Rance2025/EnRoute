@@ -9,6 +9,7 @@ import {
   getTopDirectTagAmounts,
 } from '../../accounting/insightSelectors'
 import { ledgerAtlasDataset } from '../../accounting/ledgerAtlasData'
+import { realisticAccountingDataset } from '../../accounting/realDataFixtures'
 import { filterTransactionsByTimeRange, getAccountPeriodSummaries } from '../../accounting/selectors'
 import type { Account } from '../../accounting/types'
 import type { TimeRangeSelection } from '../../time/timeRange'
@@ -78,6 +79,29 @@ describe('AccountsWorkspace', () => {
     expect(screen.queryByText('删除账户')).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '确认归档账户' }))
     expect(onSave).toHaveBeenLastCalledWith(expect.objectContaining({ archivedAt: expect.any(String) }))
+  })
+
+  it('keeps the account selector compact and explains imported zero baselines without a blank tag card', () => {
+    const summaries = getAccountPeriodSummaries(realisticAccountingDataset, range)
+    const accountId = realisticAccountingDataset.accounts[0].id
+    render(
+      <AccountsWorkspace
+        dataset={realisticAccountingDataset}
+        summaries={summaries}
+        transactions={realisticAccountingDataset.transactions}
+        selectedAccountId={accountId}
+        balanceSteps={getAccountBalanceSteps(realisticAccountingDataset, range, accountId)}
+        categoryComposition={getTopCategoryComposition(realisticAccountingDataset, realisticAccountingDataset.transactions)}
+        topTags={[]}
+        onSelectAccount={() => undefined}
+        onSelectTransaction={() => undefined}
+      />,
+    )
+
+    expect(screen.getByLabelText('账户工作台')).toHaveAttribute('data-account-ratio', '41:59')
+    expect(screen.getByLabelText('账户卡片轮替')).toHaveAttribute('data-density', 'compact')
+    expect(screen.getByLabelText('账户数据说明')).toHaveTextContent('导入零基线')
+    expect(screen.queryByLabelText('高频标签金额')).not.toBeInTheDocument()
   })
 })
 

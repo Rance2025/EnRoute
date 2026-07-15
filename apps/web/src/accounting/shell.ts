@@ -9,6 +9,7 @@ export type AccountingShellAction =
 
 export type AccountingShellSnapshot = {
   metricItems: Array<{ label: string; value: string }>
+  rangeBrief?: AccountingRangeBrief
   context: {
     eyebrow: string
     title: string
@@ -16,6 +17,11 @@ export type AccountingShellSnapshot = {
     rows: Array<{ label: string; value: string }>
     actions: Array<{ id: AccountingShellAction; label: string; tone?: 'danger' }>
   }
+}
+
+export type AccountingRangeBrief = {
+  title: string
+  items: Array<{ label: string; value: string }>
 }
 
 export type AccountingStatisticsControls = {

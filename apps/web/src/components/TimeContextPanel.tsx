@@ -21,7 +21,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 
-import type { AccountingStatisticsControls } from '../accounting/shell'
+import type { AccountingRangeBrief, AccountingStatisticsControls } from '../accounting/shell'
 import type { AppView } from '../appLayout'
 import { SegmentedControl, type SegmentedOption } from './SegmentedControl'
 import {
@@ -87,6 +87,7 @@ type TimeContextPanelProps = {
   secondaryContextLabel?: string
   metricItems?: TimeContextMetricItem[]
   accountingStatisticsControls?: AccountingStatisticsControls
+  accountingRangeBrief?: AccountingRangeBrief
   onAccountingStatisticsControlsChange?: (next: AccountingStatisticsControls) => void
   distanceSeries?: FootprintDistanceSeries
   onSelectionChange: (selection: TimeRangeSelection) => void
@@ -172,6 +173,7 @@ function useMeasuredStageHeight(isLayoutFrozen: boolean) {
 export function TimeContextPanel({
   metricItems,
   accountingStatisticsControls,
+  accountingRangeBrief,
   onAccountingStatisticsControlsChange,
   distanceSeries,
   secondaryContextLabel,
@@ -465,6 +467,8 @@ export function TimeContextPanel({
           />
         ) : null}
 
+        {accountingRangeBrief ? <AccountingRangeBriefPanel brief={accountingRangeBrief} /> : null}
+
         {shouldRenderDistanceTrend ? (
           <section
             className={[
@@ -567,6 +571,19 @@ export function TimeContextPanel({
         ) : null}
       </div>
     </aside>
+  )
+}
+
+function AccountingRangeBriefPanel({ brief }: { brief: AccountingRangeBrief }) {
+  return (
+    <section className="accounting-range-brief" aria-label="记账时间窗口洞察">
+      <header><span>范围洞察</span><strong>{brief.title}</strong></header>
+      <div>
+        {brief.items.map((item) => (
+          <p key={item.label}><span>{item.label}</span><b>{item.value}</b></p>
+        ))}
+      </div>
+    </section>
   )
 }
 
