@@ -35,6 +35,10 @@
     0 3px 8px rgba(25, 38, 36, 0.06),
     inset 0 1px 0 rgba(255, 255, 255, 0.68);
   --glass-panel-filter: blur(24px) saturate(1.22) brightness(1.02);
+  --panel-glass-background: var(--solid-glass-panel-bg);
+  --panel-glass-border: var(--glass-panel-border);
+  --panel-glass-shadow: var(--glass-panel-shadow);
+  --panel-glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.72);
   --page-board-bg:
     radial-gradient(circle at 46% 6%, var(--theme-mist-board-highlight), transparent 34%),
     linear-gradient(145deg, var(--theme-mist-board-start), var(--theme-mist-board-end)),
@@ -2101,6 +2105,47 @@
   min-width: 0;
   overflow: visible;
   background: transparent;
+}
+
+.workspace-load-failure {
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: clamp(28px, 5vw, 64px);
+  color: #17231f;
+}
+
+.workspace-load-failure span {
+  color: rgba(23, 35, 31, 0.58);
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.workspace-load-failure strong {
+  margin-top: 8px;
+  font-size: clamp(24px, 3vw, 38px);
+}
+
+.workspace-load-failure p {
+  max-width: 440px;
+  margin: 12px 0 22px;
+  color: rgba(23, 35, 31, 0.66);
+  line-height: 1.65;
+}
+
+.workspace-load-failure button {
+  min-height: 38px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 999px;
+  color: #f7fbfa;
+  background: #123f35;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
 }
 
 .main-workspace--placeholder {

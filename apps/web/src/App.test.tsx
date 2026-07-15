@@ -1234,7 +1234,7 @@ describe('App', () => {
     expect(screen.queryByText('本期流水')).not.toBeInTheDocument()
   })
 
-  it('opens transaction and new-ledger modals from the accounting workspace', async () => {
+  it('creates and edits a categorized multi-tag transaction then carries context across all accounting pages', async () => {
     useAccountingFixtureDate()
 
     render(
@@ -1266,18 +1266,55 @@ describe('App', () => {
 
     const detailDialog = screen.getByRole('dialog', { name: '流水详情' })
 
-    expect(within(detailDialog).getByText('修改流水')).toBeInTheDocument()
-    expect(within(detailDialog).getByText('删除流水')).toBeInTheDocument()
-    expect(within(detailDialog).getByText('原始分类')).toBeInTheDocument()
-    expect(within(detailDialog).getByText('归入分类')).toBeInTheDocument()
+    expect(within(detailDialog).getByRole('button', { name: '编辑流水' })).toBeInTheDocument()
+    expect(within(detailDialog).queryByText('删除流水')).not.toBeInTheDocument()
+    expect(within(detailDialog).getByText('分类')).toBeInTheDocument()
+    expect(within(detailDialog).getByText('餐饮 / 饮品')).toBeInTheDocument()
 
     fireEvent.click(within(detailDialog).getByRole('button', { name: '关闭' }))
     fireEvent.click(within(workspace).getByRole('button', { name: '新增流水' }))
 
     const newDialog = screen.getByRole('dialog', { name: '新增流水' })
 
-    expect(within(newDialog).getByText('记录新流水')).toBeInTheDocument()
+    expect(within(newDialog).getByText('本地原型 · 本次会话有效')).toBeInTheDocument()
     expect(within(newDialog).getByText('保存流水')).toBeInTheDocument()
+
+    fireEvent.change(within(newDialog).getByLabelText('金额'), { target: { value: '12.34' } })
+    fireEvent.change(within(newDialog).getByLabelText('账户'), { target: { value: 'fund-wechat' } })
+    fireEvent.click(within(newDialog).getByRole('button', { name: '选择分类 餐饮 / 正餐' }))
+    fireEvent.click(within(newDialog).getByRole('button', { name: '选择标签 地点旅行 / 青岛之行' }))
+    fireEvent.click(within(newDialog).getByRole('button', { name: '选择标签 人生阶段 / 大学' }))
+    fireEvent.change(within(newDialog).getByLabelText('备注'), { target: { value: '会话新增流水' } })
+    fireEvent.click(within(newDialog).getByRole('button', { name: '保存流水' }))
+
+    expect(screen.queryByRole('dialog', { name: '新增流水' })).not.toBeInTheDocument()
+    const createdRow = within(workspace).getByRole('button', { name: '查看流水 会话新增流水' })
+    expect(createdRow).toHaveTextContent('青岛之行')
+    expect(createdRow).toHaveTextContent('大学')
+
+    fireEvent.click(createdRow)
+    const createdDetail = screen.getByRole('dialog', { name: '流水详情' })
+    expect(createdDetail).toHaveTextContent('地点旅行 / 青岛之行')
+    expect(createdDetail).toHaveTextContent('人生阶段 / 大学')
+    fireEvent.click(within(createdDetail).getByRole('button', { name: '编辑流水' }))
+    const editDialog = screen.getByRole('dialog', { name: '编辑流水' })
+    fireEvent.change(within(editDialog).getByLabelText('金额'), { target: { value: '66.66' } })
+    fireEvent.click(within(editDialog).getByRole('button', { name: '保存流水' }))
+    expect(within(workspace).getByRole('button', { name: '查看流水 会话新增流水' })).toHaveTextContent('-¥66.66')
+
+    const secondaryNav = screen.getByRole('navigation', { name: '二级导航' })
+    fireEvent.click(within(secondaryNav).getByRole('button', { name: '账户' }))
+    const accountsWorkspace = await screen.findByLabelText('账户工作台')
+    fireEvent.click(within(accountsWorkspace).getByRole('button', { name: '选择账户 花呗' }))
+    expect(within(accountsWorkspace).getByRole('heading', { name: '花呗' })).toBeInTheDocument()
+
+    fireEvent.click(within(secondaryNav).getByRole('button', { name: '统计' }))
+    const statisticsControls = await screen.findByLabelText('统计口径')
+    fireEvent.change(within(statisticsControls).getByLabelText('时间粒度'), { target: { value: 'week' } })
+    const analytics = await screen.findByLabelText('统计工作区')
+    expect(within(analytics).getByText('最终粒度：周')).toBeInTheDocument()
+    fireEvent.click(within(analytics).getByRole('button', { name: /餐饮/ }))
+    expect(screen.getByLabelText('当前分区摘要')).toHaveTextContent('餐饮')
   })
 
   it('renders analytics with charts plus category and tag tree statistics', async () => {
@@ -1313,18 +1350,17 @@ describe('App', () => {
 
     const reportWorkspace = await screen.findByLabelText('统计工作区')
 
-    expect(within(reportWorkspace).getByText('统计总览')).toBeInTheDocument()
-    expect(within(reportWorkspace).getByLabelText('收支环形图')).toBeInTheDocument()
-    expect(within(reportWorkspace).getByText('分类占比')).toBeInTheDocument()
-    expect(within(reportWorkspace).getByText('标签关联')).toBeInTheDocument()
-    expect(within(reportWorkspace).getByLabelText('分类树统计')).toBeInTheDocument()
-    expect(within(reportWorkspace).getByLabelText('标签树统计')).toBeInTheDocument()
-    expect(within(reportWorkspace).getAllByText('旅行 / 住宿').length).toBeGreaterThan(0)
+    expect(within(reportWorkspace).getByLabelText('收支趋势图')).toBeInTheDocument()
+    expect(within(reportWorkspace).getByLabelText('分类层级分析')).toBeInTheDocument()
+    expect(within(reportWorkspace).getByLabelText('标签层级分析')).toBeInTheDocument()
+    expect(within(reportWorkspace).getByText('标签可能重叠，不可横向相加')).toBeInTheDocument()
+    fireEvent.click(within(reportWorkspace).getByRole('button', { name: '树表' }))
+    expect(within(reportWorkspace).getByRole('button', { name: '旅行 / 住宿' })).toBeInTheDocument()
     expect(within(reportWorkspace).getAllByText('地点旅行 / 青岛之行').length).toBeGreaterThan(0)
-    expect(reportWorkspace.querySelector('.ios-chart-ring')).not.toBeNull()
+    expect(within(reportWorkspace).queryByText('标签 × 分类')).not.toBeInTheDocument()
   })
 
-  it('uses a statistics entrance instead of top-level ledger account report tabs', async () => {
+  it('switches between ledger accounts and analytics from the shared secondary rail', async () => {
     render(
       <App
         amapConfig={{
@@ -1355,11 +1391,20 @@ describe('App', () => {
       'aria-pressed',
       'true',
     )
-    expect(within(secondaryNav).queryByRole('button', { name: '账户' })).not.toBeInTheDocument()
+    expect(within(secondaryNav).getByRole('button', { name: '账户' })).toBeInTheDocument()
     expect(within(secondaryNav).getByRole('button', { name: '统计' })).toBeInTheDocument()
     expect(await screen.findByLabelText('账户与流水工作台')).toBeInTheDocument()
     expect(screen.queryByRole('navigation', { name: '记账二级导航' })).not.toBeInTheDocument()
     expect(screen.queryByLabelText('账户工作台')).not.toBeInTheDocument()
+
+    fireEvent.click(within(secondaryNav).getByRole('button', { name: '账户' }))
+
+    expect(await screen.findByLabelText('账户工作台')).toBeInTheDocument()
+    expect(within(secondaryNav).getByRole('button', { name: '账户' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(screen.getAllByText('当前账户')).toHaveLength(2)
 
     fireEvent.click(within(secondaryNav).getByRole('button', { name: '统计' }))
 
@@ -1368,7 +1413,7 @@ describe('App', () => {
       'aria-pressed',
       'true',
     )
-    expect(screen.getByRole('button', { name: '返回流水' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '返回流水' })).not.toBeInTheDocument()
 
     fireEvent.click(within(secondaryNav).getByRole('button', { name: '流水' }))
 

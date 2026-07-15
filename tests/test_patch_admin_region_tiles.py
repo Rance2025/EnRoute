@@ -6,6 +6,7 @@ from pathlib import Path
 
 from shapely.geometry import shape
 from mapbox_vector_tile import encode
+from mapbox_vector_tile.Mapbox import vector_tile_pb2
 
 from scripts import patch_admin_region_tiles as patch_admin_region_tiles_module
 from scripts.patch_admin_region_tiles import (
@@ -16,6 +17,7 @@ from scripts.patch_admin_region_tiles import (
 )
 from enroute_api.admin_regions.store import find_finest_region_id
 from enroute_api.admin_regions.tiles import (
+    ADMIN_REGION_FILL_FEATURE_KIND,
     ADMIN_REGION_TILE_LAYER_NAME,
     ADMIN_REGION_TILE_ALGORITHM_SIGNATURE,
     decode_admin_region_tile,
@@ -1956,3 +1958,570 @@ def test_patch_admin_region_tile_lines_preserves_cached_fill_features(tmp_path: 
     assert updated_tile_row["algorithm_signature"] == ADMIN_REGION_TILE_ALGORITHM_SIGNATURE
     assert updated_tile_row["feature_count"] == len(after_features)
     assert updated_tile_row["updated_at"] != 111
+
+
+def test_patch_cached_region_lines_uses_target_fills_without_loading_global_geometry(
+    tmp_path: Path,
+    monkeypatch,
+):
+    database_path = tmp_path / "footprints.sqlite"
+    cached_tile = encode(
+        [
+            {
+                "name": ADMIN_REGION_TILE_LAYER_NAME,
+                "features": [
+                    {
+                        "geometry": {
+                            "type": "Polygon",
+                            "coordinates": [
+                                [[100, 100], [900, 100], [900, 900], [100, 900], [100, 100]],
+                            ],
+                        },
+                        "properties": {
+                            "region_id": "cn",
+                            "name": "China",
+                            "level": 1,
+                            "kind": "fill",
+                            "fill_sentinel": "keep-china-fill",
+                        },
+                    },
+                    {
+                        "geometry": {
+                            "type": "Polygon",
+                            "coordinates": [
+                                [[900, 100], [1500, 100], [1500, 900], [900, 900], [900, 100]],
+                            ],
+                        },
+                        "properties": {
+                            "region_id": "in",
+                            "name": "India",
+                            "level": 1,
+                            "kind": "fill",
+                        },
+                    },
+                    {
+                        "geometry": {
+                            "type": "LineString",
+                            "coordinates": [[900, 100], [900, 900]],
+                        },
+                        "properties": {
+                            "region_id": "in",
+                            "name": "India",
+                            "level": 1,
+                            "kind": "line",
+                        },
+                    },
+                ],
+            },
+        ],
+        default_options={"extents": 4096, "y_coord_down": True},
+    )
+    cached_tile_message = vector_tile_pb2.tile()
+    cached_tile_message.ParseFromString(cached_tile)
+    cached_layer = cached_tile_message.layers[0]
+    degenerate_fill = cached_layer.features.add()
+    degenerate_fill.tags.extend(cached_layer.features[1].tags)
+    degenerate_fill.type = vector_tile_pb2.tile.Polygon
+    degenerate_fill.geometry.extend([9, 6328, 320, 18, 3, 0, 2, 0, 15])
+    cached_tile = cached_tile_message.SerializeToString()
+    unrelated_tile = encode(
+        [
+            {
+                "name": ADMIN_REGION_TILE_LAYER_NAME,
+                "features": [
+                    {
+                        "geometry": {
+                            "type": "Polygon",
+                            "coordinates": [
+                                [[100, 100], [500, 100], [500, 500], [100, 500], [100, 100]],
+                            ],
+                        },
+                        "properties": {
+                            "region_id": "unrelated",
+                            "name": "Unrelated",
+                            "level": 1,
+                            "kind": "fill",
+                        },
+                    },
+                ],
+            },
+        ],
+        default_options={"extents": 4096, "y_coord_down": True},
+    )
+
+    connection = sqlite3.connect(database_path)
+    connection.row_factory = sqlite3.Row
+    try:
+        initialize_admin_region_patch_test_schema(connection)
+        connection.executescript(
+            """
+            CREATE TABLE admin_region_tiles (
+              z INTEGER NOT NULL,
+              x INTEGER NOT NULL,
+              y INTEGER NOT NULL,
+              focus_region_id TEXT NOT NULL,
+              depth INTEGER NOT NULL,
+              algorithm_signature TEXT NOT NULL DEFAULT '',
+              tile BLOB NOT NULL,
+              feature_count INTEGER NOT NULL,
+              updated_at INTEGER NOT NULL,
+              PRIMARY KEY (z, x, y, focus_region_id, depth)
+            ) WITHOUT ROWID;
+            INSERT INTO visual_tiles (z, x, y, t_type, t, tile)
+            VALUES (4, 11, 6, 'all', '', x'010203');
+            """,
+        )
+        insert_test_admin_region(
+            connection,
+            region_id="cn",
+            name="China",
+            level=1,
+            geometry=make_square(0, 0, 20, 10),
+        )
+        connection.execute(
+            """
+            INSERT INTO admin_region_tiles
+              (z, x, y, focus_region_id, depth, algorithm_signature, tile, feature_count, updated_at)
+            VALUES
+              (0, 0, 0, 'world', 1, 'legacy-lines', ?, 3, 111),
+              (1, 0, 0, 'world', 1, 'unrelated-signature', ?, 1, 222)
+            """,
+            (cached_tile, unrelated_tile),
+        )
+        connection.commit()
+
+        before_features = decode_admin_region_tile(cached_tile)[ADMIN_REGION_TILE_LAYER_NAME]["features"]
+        before_fill_features = [
+            feature
+            for feature in before_features
+            if feature["properties"].get("kind") == "fill"
+        ]
+        before_raw_fill_features = raw_admin_region_feature_bytes(
+            cached_tile,
+            kind=ADMIN_REGION_FILL_FEATURE_KIND,
+        )
+
+        def reject_global_geometry_load(*args, **kwargs):
+            raise AssertionError("targeted cached-line patch must not load global source geometry")
+
+        monkeypatch.setattr(
+            patch_admin_region_tiles_module,
+            "resolve_focused_region_rows",
+            reject_global_geometry_load,
+        )
+        monkeypatch.setattr(
+            patch_admin_region_tiles_module,
+            "prepare_admin_region_tile_rows",
+            reject_global_geometry_load,
+        )
+
+        result = patch_admin_region_tiles_module.patch_cached_admin_region_target_lines(
+            connection,
+            focus_region_id="world",
+            depth=1,
+            region_id="cn",
+            min_zoom=0,
+            max_zoom=0,
+            commit_interval=1,
+        )
+        updated_tile_row = connection.execute(
+            """
+            SELECT algorithm_signature, tile, feature_count, updated_at
+            FROM admin_region_tiles
+            WHERE z = 0 AND x = 0 AND y = 0 AND focus_region_id = 'world' AND depth = 1
+            """,
+        ).fetchone()
+        unrelated_tile_row = connection.execute(
+            """
+            SELECT algorithm_signature, tile, updated_at
+            FROM admin_region_tiles
+            WHERE z = 1 AND x = 0 AND y = 0 AND focus_region_id = 'world' AND depth = 1
+            """,
+        ).fetchone()
+        visual_tile_row = connection.execute(
+            "SELECT tile FROM visual_tiles WHERE z = 4 AND x = 11 AND y = 6 AND t_type = 'all' AND t = ''",
+        ).fetchone()
+    finally:
+        connection.close()
+
+    after_features = decode_admin_region_tile(bytes(updated_tile_row["tile"]))[
+        ADMIN_REGION_TILE_LAYER_NAME
+    ]["features"]
+    after_fill_features = [
+        feature
+        for feature in after_features
+        if feature["properties"].get("kind") == "fill"
+    ]
+    line_region_ids = {
+        str(feature["properties"].get("region_id"))
+        for feature in after_features
+        if feature["properties"].get("kind") == "line"
+    }
+    line_boundary_region_ids = {
+        str(feature["properties"].get("region_id")): feature["properties"].get(
+            "boundary_region_ids",
+        )
+        for feature in after_features
+        if feature["properties"].get("kind") == "line"
+    }
+
+    assert result.candidate_count == 1
+    assert result.built_count == 1
+    assert result.feature_count == 1
+    assert after_fill_features == before_fill_features
+    assert raw_admin_region_feature_bytes(
+        bytes(updated_tile_row["tile"]),
+        kind=ADMIN_REGION_FILL_FEATURE_KIND,
+    ) == before_raw_fill_features
+    assert line_region_ids == {"cn", "in"}
+    assert line_boundary_region_ids["cn"] == "|cn|"
+    assert updated_tile_row["algorithm_signature"] == (
+        patch_admin_region_tiles_module.ADMIN_REGION_TARGET_LINE_PATCH_SIGNATURE
+    )
+    assert updated_tile_row["feature_count"] == len(after_features)
+    assert updated_tile_row["updated_at"] != 111
+    assert dict(unrelated_tile_row) == {
+        "algorithm_signature": "unrelated-signature",
+        "tile": unrelated_tile,
+        "updated_at": 222,
+    }
+    assert bytes(visual_tile_row["tile"]) == b"\x01\x02\x03"
+
+
+def test_patch_cached_region_lines_supports_multiple_targets_and_repeat_is_idempotent(
+    tmp_path: Path,
+):
+    database_path = tmp_path / "footprints.sqlite"
+    cached_tile = encode(
+        [
+            {
+                "name": ADMIN_REGION_TILE_LAYER_NAME,
+                "features": [
+                    {
+                        "geometry": {
+                            "type": "Polygon",
+                            "coordinates": [
+                                [[100, 100], [900, 100], [900, 900], [100, 900], [100, 100]],
+                            ],
+                        },
+                        "properties": {
+                            "region_id": "cn",
+                            "name": "China",
+                            "level": 1,
+                            "kind": "fill",
+                        },
+                    },
+                    {
+                        "geometry": {
+                            "type": "Polygon",
+                            "coordinates": [
+                                [[900, 100], [1500, 100], [1500, 900], [900, 900], [900, 100]],
+                            ],
+                        },
+                        "properties": {
+                            "region_id": "in",
+                            "name": "India",
+                            "level": 1,
+                            "kind": "fill",
+                        },
+                    },
+                ],
+            },
+        ],
+        default_options={"extents": 4096, "y_coord_down": True},
+    )
+
+    connection = sqlite3.connect(database_path)
+    connection.row_factory = sqlite3.Row
+    try:
+        initialize_admin_region_patch_test_schema(connection)
+        connection.execute(
+            """
+            CREATE TABLE admin_region_tiles (
+              z INTEGER NOT NULL,
+              x INTEGER NOT NULL,
+              y INTEGER NOT NULL,
+              focus_region_id TEXT NOT NULL,
+              depth INTEGER NOT NULL,
+              algorithm_signature TEXT NOT NULL DEFAULT '',
+              tile BLOB NOT NULL,
+              feature_count INTEGER NOT NULL,
+              updated_at INTEGER NOT NULL,
+              PRIMARY KEY (z, x, y, focus_region_id, depth)
+            ) WITHOUT ROWID
+            """,
+        )
+        insert_test_admin_region(
+            connection,
+            region_id="cn",
+            name="China",
+            level=1,
+            geometry=make_square(0, 0, 10, 10),
+        )
+        insert_test_admin_region(
+            connection,
+            region_id="in",
+            name="India",
+            level=1,
+            geometry=make_square(10, 0, 20, 10),
+        )
+        connection.execute(
+            """
+            INSERT INTO admin_region_tiles
+              (z, x, y, focus_region_id, depth, algorithm_signature, tile, feature_count, updated_at)
+            VALUES (0, 0, 0, 'world', 1, 'legacy-lines', ?, 2, 111)
+            """,
+            (cached_tile,),
+        )
+        connection.commit()
+
+        china_result = patch_admin_region_tiles_module.patch_cached_admin_region_target_lines(
+            connection,
+            focus_region_id="world",
+            depth=1,
+            region_id="cn",
+            min_zoom=0,
+            max_zoom=0,
+            commit_interval=1,
+        )
+        india_result = patch_admin_region_tiles_module.patch_cached_admin_region_target_lines(
+            connection,
+            focus_region_id="world",
+            depth=1,
+            region_id="in",
+            min_zoom=0,
+            max_zoom=0,
+            commit_interval=1,
+        )
+        tile_after_india = bytes(
+            connection.execute(
+                "SELECT tile FROM admin_region_tiles WHERE z = 0 AND x = 0 AND y = 0",
+            ).fetchone()["tile"],
+        )
+        repeated_china_result = (
+            patch_admin_region_tiles_module.patch_cached_admin_region_target_lines(
+                connection,
+                focus_region_id="world",
+                depth=1,
+                region_id="cn",
+                min_zoom=0,
+                max_zoom=0,
+                commit_interval=1,
+            )
+        )
+        tile_after_repeat = bytes(
+            connection.execute(
+                "SELECT tile FROM admin_region_tiles WHERE z = 0 AND x = 0 AND y = 0",
+            ).fetchone()["tile"],
+        )
+    finally:
+        connection.close()
+
+    final_features = decode_admin_region_tile(tile_after_repeat)[ADMIN_REGION_TILE_LAYER_NAME][
+        "features"
+    ]
+    line_features = [
+        feature
+        for feature in final_features
+        if feature["properties"].get("kind") == "line"
+    ]
+
+    assert china_result.built_count == 1
+    assert india_result.built_count == 1
+    assert repeated_china_result.candidate_count == 1
+    assert repeated_china_result.built_count == 0
+    assert {
+        str(feature["properties"].get("region_id"))
+        for feature in line_features
+    } == {"cn", "in"}
+    assert {
+        str(feature["properties"].get("boundary_region_ids"))
+        for feature in line_features
+    } == {"|cn|", "|in|"}
+    assert tile_after_repeat == tile_after_india
+
+
+def test_patch_cached_region_lines_limits_candidates_to_region_bbox(
+    tmp_path: Path,
+):
+    database_path = tmp_path / "footprints.sqlite"
+    cached_tile = encode(
+        [
+            {
+                "name": ADMIN_REGION_TILE_LAYER_NAME,
+                "features": [
+                    {
+                        "geometry": {
+                            "type": "Polygon",
+                            "coordinates": [
+                                [[100, 100], [900, 100], [900, 900], [100, 900], [100, 100]],
+                            ],
+                        },
+                        "properties": {
+                            "region_id": "target",
+                            "name": "Target",
+                            "level": 1,
+                            "kind": "fill",
+                        },
+                    },
+                ],
+            },
+        ],
+        default_options={"extents": 4096, "y_coord_down": True},
+    )
+
+    connection = sqlite3.connect(database_path)
+    connection.row_factory = sqlite3.Row
+    try:
+        initialize_admin_region_patch_test_schema(connection)
+        connection.execute(
+            """
+            CREATE TABLE admin_region_tiles (
+              z INTEGER NOT NULL,
+              x INTEGER NOT NULL,
+              y INTEGER NOT NULL,
+              focus_region_id TEXT NOT NULL,
+              depth INTEGER NOT NULL,
+              algorithm_signature TEXT NOT NULL DEFAULT '',
+              tile BLOB NOT NULL,
+              feature_count INTEGER NOT NULL,
+              updated_at INTEGER NOT NULL,
+              PRIMARY KEY (z, x, y, focus_region_id, depth)
+            ) WITHOUT ROWID
+            """,
+        )
+        insert_test_admin_region(
+            connection,
+            region_id="target",
+            name="Target",
+            level=1,
+            geometry=make_square(0, 0, 1, 1),
+        )
+        connection.executemany(
+            """
+            INSERT INTO admin_region_tiles
+              (z, x, y, focus_region_id, depth, algorithm_signature, tile, feature_count, updated_at)
+            VALUES (4, ?, ?, 'world', 1, 'legacy-lines', ?, 1, ?)
+            """,
+            [
+                (8, 7, cached_tile, 111),
+                (8, 8, cached_tile, 222),
+                (7, 7, cached_tile, 333),
+            ],
+        )
+        connection.commit()
+
+        result = patch_admin_region_tiles_module.patch_cached_admin_region_target_lines(
+            connection,
+            focus_region_id="world",
+            depth=1,
+            region_id="target",
+            min_zoom=4,
+            max_zoom=4,
+            commit_interval=1,
+        )
+        outside_row = connection.execute(
+            """
+            SELECT algorithm_signature, tile, updated_at
+            FROM admin_region_tiles
+            WHERE z = 4 AND x = 7 AND y = 7
+            """,
+        ).fetchone()
+    finally:
+        connection.close()
+
+    assert result.candidate_count == 2
+    assert result.built_count == 2
+    assert result.feature_count == 1
+    assert dict(outside_row) == {
+        "algorithm_signature": "legacy-lines",
+        "tile": cached_tile,
+        "updated_at": 333,
+    }
+
+
+def test_parse_args_accepts_cached_region_line_patch_target():
+    args = patch_admin_region_tiles_module.parse_args(
+        ["--patch-cached-region-lines", "cn", "--depth", "1"],
+    )
+
+    assert args.patch_cached_region_lines == "cn"
+    assert args.depth == 1
+
+
+def test_main_runs_cached_region_line_patch_without_default_global_work(
+    tmp_path: Path,
+    monkeypatch,
+):
+    database_path = tmp_path / "footprints.sqlite"
+    target_patch_calls = []
+
+    def record_target_patch(connection, **kwargs):
+        target_patch_calls.append(kwargs)
+        return patch_admin_region_tiles_module.AdminRegionTileBuildResult(
+            focus_region_id=kwargs["focus_region_id"],
+            depth=kwargs["depth"],
+            min_zoom=kwargs["min_zoom"],
+            max_zoom=kwargs["max_zoom"],
+            candidate_count=0,
+            built_count=0,
+            feature_count=0,
+        )
+
+    def reject_global_work(*args, **kwargs):
+        raise AssertionError("cached region line patch must not run default global work")
+
+    monkeypatch.setattr(
+        patch_admin_region_tiles_module,
+        "patch_cached_admin_region_target_lines",
+        record_target_patch,
+    )
+    monkeypatch.setattr(
+        patch_admin_region_tiles_module,
+        "load_greenland_feature",
+        reject_global_work,
+    )
+    monkeypatch.setattr(
+        patch_admin_region_tiles_module,
+        "build_admin_region_tiles",
+        reject_global_work,
+    )
+
+    result = patch_admin_region_tiles_module.main(
+        [
+            "--database",
+            str(database_path),
+            "--patch-cached-region-lines",
+            "cn",
+            "--depth",
+            "1",
+            "--min-zoom",
+            "3",
+            "--max-zoom",
+            "4",
+        ],
+    )
+
+    assert result == 0
+    assert target_patch_calls == [
+        {
+            "focus_region_id": "world",
+            "depth": 1,
+            "region_id": "cn",
+            "min_zoom": 3,
+            "max_zoom": 4,
+            "commit_interval": 1000,
+        },
+    ]
+
+
+def raw_admin_region_feature_bytes(tile: bytes, *, kind: str) -> list[bytes]:
+    decoded_features = decode_admin_region_tile(tile)[ADMIN_REGION_TILE_LAYER_NAME]["features"]
+    tile_message = vector_tile_pb2.tile()
+    tile_message.ParseFromString(tile)
+    layer = next(layer for layer in tile_message.layers if layer.name == ADMIN_REGION_TILE_LAYER_NAME)
+    return [
+        raw_feature.SerializeToString()
+        for raw_feature, decoded_feature in zip(layer.features, decoded_features, strict=True)
+        if decoded_feature["properties"].get("kind") == kind
+    ]

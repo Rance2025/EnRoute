@@ -4,10 +4,12 @@ import type {
   AccountingDataset,
   Category,
   PeriodMetrics,
+  PortfolioPeriodSummary,
   Tag,
   TaxonomyNodeStat,
   Transaction,
 } from './types'
+import { getAccountBalanceAt, getSignedAccountMovement } from './balances'
 
 type TreeNode = Category | Tag
 
@@ -64,6 +66,7 @@ export function getAccountPeriodSummaries(
   const transactions = filterTransactionsByTimeRange(dataset.transactions, range)
 
   return dataset.accounts.map((account) => {
+    const openingInCents = getAccountBalanceAt(dataset, account.id, range.start)
     let incomeInCents = 0
     let expenseInCents = 0
     let transferInInCents = 0
@@ -89,24 +92,62 @@ export function getAccountPeriodSummaries(
       }
     }
 
-    const closingInCents =
-      account.openingBalanceInCents +
-      incomeInCents -
-      expenseInCents +
-      transferInInCents -
-      transferOutInCents
+    const netChangeInCents = transactions.reduce(
+      (total, transaction) => total + getSignedAccountMovement(transaction, account.id),
+      0,
+    )
+    const closingInCents = openingInCents + netChangeInCents
 
     return {
       account,
-      openingInCents: account.openingBalanceInCents,
+      openingInCents,
       incomeInCents,
       expenseInCents,
       transferInInCents,
       transferOutInCents,
+      netChangeInCents,
       closingInCents,
       transactionCount,
     }
   })
+}
+
+export function getPortfolioPeriodSummary(
+  dataset: AccountingDataset,
+  range: TimeRangeSelection,
+): PortfolioPeriodSummary {
+  const accounts = getAccountPeriodSummaries(dataset, range)
+  const metrics = getPeriodMetrics(dataset, range)
+  const openingAssetsInCents = sumAccountBalances(accounts, 'asset', 'openingInCents')
+  const closingAssetsInCents = sumAccountBalances(accounts, 'asset', 'closingInCents')
+  const openingLiabilitiesInCents = -sumAccountBalances(accounts, 'liability', 'openingInCents')
+  const closingLiabilitiesInCents = -sumAccountBalances(accounts, 'liability', 'closingInCents')
+
+  return {
+    openingAssetsInCents,
+    openingLiabilitiesInCents,
+    openingNetWorthInCents: openingAssetsInCents - openingLiabilitiesInCents,
+    incomeInCents: metrics.incomeInCents,
+    expenseInCents: metrics.expenseInCents,
+    transferInCents: metrics.transferInCents,
+    netChangeInCents: metrics.incomeInCents - metrics.expenseInCents,
+    closingAssetsInCents,
+    closingLiabilitiesInCents,
+    closingNetWorthInCents: closingAssetsInCents - closingLiabilitiesInCents,
+    transactionCount: metrics.transactionCount,
+  }
+}
+
+function sumAccountBalances(
+  summaries: AccountPeriodSummary[],
+  nature: 'asset' | 'liability',
+  field: 'openingInCents' | 'closingInCents',
+) {
+  return summaries.reduce(
+    (total, summary) =>
+      summary.account.nature === nature ? total + summary[field] : total,
+    0,
+  )
 }
 
 export function getCategoryTreeStats(
