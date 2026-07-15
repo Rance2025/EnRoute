@@ -39,12 +39,15 @@ vi.mock('./MapboxCanvas', async () => {
       adminRegionDepth = 4,
       adminBoundariesVisible = true,
       adminRegionLinesVisible = true,
+      adminRegionFillOpacity = 0.18,
+      footprintStyleControlsVisible = true,
       placeLabelsVisible = true,
       projection,
       styleUrl,
       language,
       onAdminBoundariesVisibleChange,
       onAdminRegionLinesVisibleChange,
+      onAdminRegionFillOpacityChange,
       onPlaceLabelsVisibleChange,
       onMapStyleChange,
       onMapProjectionChange,
@@ -56,12 +59,15 @@ vi.mock('./MapboxCanvas', async () => {
       adminRegionDepth?: number
       adminBoundariesVisible?: boolean
       adminRegionLinesVisible?: boolean
+      adminRegionFillOpacity?: number
+      footprintStyleControlsVisible?: boolean
       placeLabelsVisible?: boolean
       projection?: string
       styleUrl?: string
       language?: string
       onAdminBoundariesVisibleChange?: (visible: boolean) => void
       onAdminRegionLinesVisibleChange?: (visible: boolean) => void
+      onAdminRegionFillOpacityChange?: (opacity: number) => void
       onPlaceLabelsVisibleChange?: (visible: boolean) => void
       onMapStyleChange?: (styleId: string) => void
       onMapProjectionChange?: (projection: string) => void
@@ -89,6 +95,8 @@ vi.mock('./MapboxCanvas', async () => {
           'data-admin-region-depth': String(adminRegionDepth),
           'data-admin-boundaries-visible': String(adminBoundariesVisible),
           'data-admin-region-lines-visible': String(adminRegionLinesVisible),
+          'data-admin-region-fill-opacity': String(adminRegionFillOpacity),
+          'data-footprint-style-controls-visible': String(footprintStyleControlsVisible),
           'data-place-labels-visible': String(placeLabelsVisible),
           'data-projection': projection,
           'data-style-url': styleUrl,
@@ -106,9 +114,13 @@ vi.mock('./MapboxCanvas', async () => {
           onFootprintStyleChange: updateFootprintStyle,
           adminBoundariesVisible,
           adminRegionLinesVisible,
+          adminRegionControlsVisible: adminRegionUnlockEnabled,
+          adminRegionFillOpacity,
+          footprintStyleControlsVisible,
           placeLabelsVisible,
           onAdminBoundariesVisibleChange,
           onAdminRegionLinesVisibleChange,
+          onAdminRegionFillOpacityChange,
           onPlaceLabelsVisibleChange,
           mapStyle: styleUrl?.includes('cmqvb5b20001e01s72ia82lz5') ? 'alternate' : 'primary',
           mapProjection: projection === 'mercator' ? 'mercator' : 'globe',
@@ -146,6 +158,7 @@ const FOOTPRINT_COLOR_SWATCHES_LABEL = '\u8db3\u8ff9\u70b9\u989c\u8272\u9884\u8b
 const PLACE_LABELS_LABEL = '\u663e\u793a\u5730\u540d'
 const ADMIN_BOUNDARIES_LABEL = '\u663e\u793a\u884c\u653f\u8fb9\u754c'
 const ADMIN_REGION_LINES_LABEL = '\u663e\u793a\u533a\u57df\u8fb9\u754c\u7ebf'
+const ADMIN_REGION_FILL_OPACITY_LABEL = '\u533a\u57df\u586b\u5145\u900f\u660e\u5ea6'
 
 const localStorageMock = createLocalStorageMock()
 Object.defineProperty(window, 'localStorage', {
@@ -369,8 +382,75 @@ describe('unified shell layout', () => {
       MAP_LANGUAGE_LABEL,
       PLACE_LABELS_LABEL,
       ADMIN_BOUNDARIES_LABEL,
-      ADMIN_REGION_LINES_LABEL,
     ])
+  })
+
+  it('shows only region-specific controls when region footprints are disabled', async () => {
+    render(<App amapConfig={configuredAmap} />)
+    await settleLazyImports()
+
+    const rail = within(screen.getByRole('navigation', { name: '二级导航' }))
+    fireEvent.click(rail.getByRole('button', { name: '区域' }))
+    fireEvent.click(screen.getByRole('button', { name: FOOTPRINT_SETTINGS_LABEL }))
+
+    const popover = screen.getByRole('dialog', { name: FOOTPRINT_SETTINGS_LABEL })
+    const regionOpacity = within(popover).getByLabelText(ADMIN_REGION_FILL_OPACITY_LABEL)
+
+    expect(within(popover).queryByLabelText(FOOTPRINT_SIZE_LABEL)).not.toBeInTheDocument()
+    expect(within(popover).queryByLabelText(FOOTPRINT_OPACITY_LABEL)).not.toBeInTheDocument()
+    expect(within(popover).queryByLabelText(FOOTPRINT_COLOR_LABEL)).not.toBeInTheDocument()
+    expect(within(popover).queryByLabelText(FOOTPRINT_COLOR_SWATCHES_LABEL)).not.toBeInTheDocument()
+    expect(regionOpacity).toHaveAttribute('type', 'range')
+    expect(regionOpacity).toHaveAttribute('min', '0.05')
+    expect(regionOpacity).toHaveAttribute('max', '1')
+    expect(regionOpacity).toHaveAttribute('step', '0.01')
+    expect(regionOpacity).toHaveValue('0.18')
+    expect(within(popover).getByRole('switch', { name: ADMIN_REGION_LINES_LABEL }))
+      .toBeInTheDocument()
+
+    fireEvent.change(regionOpacity, { target: { value: '0.42' } })
+
+    expect(regionOpacity).toHaveValue('0.42')
+    expect(window.localStorage.getItem('enroute:admin-region-fill-opacity')).toBe('0.42')
+  })
+
+  it('shows footprint controls in region mode only after region footprints are enabled', async () => {
+    render(<App amapConfig={configuredAmap} />)
+    await settleLazyImports()
+
+    const rail = within(screen.getByRole('navigation', { name: '二级导航' }))
+    fireEvent.click(rail.getByRole('button', { name: '区域' }))
+    fireEvent.click(screen.getByRole('button', { name: '打开设置' }))
+    const dialog = screen.getByRole('dialog', { name: '设置' })
+    fireEvent.click(within(dialog).getByRole('button', { name: '地图' }))
+    fireEvent.click(within(dialog).getByRole('switch', { name: '在区域页显示足迹点' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: '关闭设置' }))
+    fireEvent.click(screen.getByRole('button', { name: FOOTPRINT_SETTINGS_LABEL }))
+
+    const popover = screen.getByRole('dialog', { name: FOOTPRINT_SETTINGS_LABEL })
+    expect(within(popover).getByLabelText(FOOTPRINT_SIZE_LABEL)).toBeInTheDocument()
+    expect(within(popover).getByLabelText(FOOTPRINT_OPACITY_LABEL)).toBeInTheDocument()
+    expect(within(popover).getByLabelText(FOOTPRINT_COLOR_LABEL)).toBeInTheDocument()
+    expect(within(popover).getByLabelText(ADMIN_REGION_FILL_OPACITY_LABEL)).toBeInTheDocument()
+  })
+
+  it('hides footprint and region controls from the map statistics page', async () => {
+    render(<App amapConfig={configuredAmap} />)
+    await settleLazyImports()
+
+    const rail = within(screen.getByRole('navigation', { name: '二级导航' }))
+    fireEvent.click(rail.getByRole('button', { name: '统计' }))
+    fireEvent.click(screen.getByRole('button', { name: FOOTPRINT_SETTINGS_LABEL }))
+
+    const popover = screen.getByRole('dialog', { name: FOOTPRINT_SETTINGS_LABEL })
+    expect(within(popover).queryByLabelText(FOOTPRINT_SIZE_LABEL)).not.toBeInTheDocument()
+    expect(within(popover).queryByLabelText(FOOTPRINT_OPACITY_LABEL)).not.toBeInTheDocument()
+    expect(within(popover).queryByLabelText(FOOTPRINT_COLOR_LABEL)).not.toBeInTheDocument()
+    expect(within(popover).queryByLabelText(ADMIN_REGION_FILL_OPACITY_LABEL)).not.toBeInTheDocument()
+    expect(within(popover).queryByRole('switch', { name: ADMIN_REGION_LINES_LABEL }))
+      .not.toBeInTheDocument()
+    expect(within(popover).getByText(MAP_STYLE_LABEL)).toBeInTheDocument()
+    expect(within(popover).getByRole('switch', { name: PLACE_LABELS_LABEL })).toBeInTheDocument()
   })
 
   it('toggles map place labels and administrative boundaries from the footprint settings popover', async () => {
@@ -422,6 +502,9 @@ describe('unified shell layout', () => {
   it('toggles region boundary lines separately from base-map administrative boundaries', async () => {
     render(<App amapConfig={configuredAmap} />)
     await settleLazyImports()
+
+    fireEvent.click(within(screen.getByRole('navigation', { name: '二级导航' }))
+      .getByRole('button', { name: '区域' }))
 
     fireEvent.click(screen.getByRole('button', { name: FOOTPRINT_SETTINGS_LABEL }))
 

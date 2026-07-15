@@ -65,6 +65,7 @@ import {
 import type { AmapConfig } from './config/amap'
 import {
   readMapAdminBoundariesVisible,
+  readAdminRegionFillOpacity,
   readAdminRegionLinesVisible,
   readShowAllAdminRegions,
   readShowFootprintsInRegionMode,
@@ -79,6 +80,7 @@ import {
   writeAppTheme,
   writeGlassPanelOpacity,
   writeMapAdminBoundariesVisible,
+  writeAdminRegionFillOpacity,
   writeAdminRegionLinesVisible,
   writeShowAllAdminRegions,
   writeShowFootprintsInRegionMode,
@@ -346,6 +348,9 @@ function App(props: AppProps) {
   const [areAdminRegionLinesVisible, setAreAdminRegionLinesVisible] = useState(
     readAdminRegionLinesVisible,
   )
+  const [adminRegionFillOpacity, setAdminRegionFillOpacity] = useState(
+    readAdminRegionFillOpacity,
+  )
   const [showAllAdminRegions, setShowAllAdminRegions] = useState(readShowAllAdminRegions)
   const [showFootprintsInRegionMode, setShowFootprintsInRegionMode] = useState(
     readShowFootprintsInRegionMode,
@@ -450,6 +455,10 @@ function App(props: AppProps) {
   const handleAdminRegionLinesVisibleChange = useCallback((nextVisible: boolean) => {
     setAreAdminRegionLinesVisible(nextVisible)
     writeAdminRegionLinesVisible(nextVisible)
+  }, [])
+  const handleAdminRegionFillOpacityChange = useCallback((nextOpacity: number) => {
+    setAdminRegionFillOpacity(nextOpacity)
+    writeAdminRegionFillOpacity(nextOpacity)
   }, [])
   const handleShowAllAdminRegionsChange = useCallback((nextVisible: boolean) => {
     setShowAllAdminRegions(nextVisible)
@@ -682,6 +691,8 @@ function App(props: AppProps) {
     : currentAdminRegionSummary?.visitedRegionIds ?? []
   const mapAdminRegionVisibleIds = isRegionMode ? adminRegionVisibleIds : undefined
   const footprintsVisible = !isRegionMode || showFootprintsInRegionMode
+  const footprintStyleControlsVisible = activeSecondaryNavId === 'footprints'
+    || (isRegionMode && showFootprintsInRegionMode)
 
   useEffect(() => {
     let active = true
@@ -944,9 +955,12 @@ function App(props: AppProps) {
             placeLabelsVisible={areMapPlaceLabelsVisible}
             adminBoundariesVisible={areMapAdminBoundariesVisible}
             adminRegionLinesVisible={areAdminRegionLinesVisible}
+            adminRegionFillOpacity={adminRegionFillOpacity}
+            footprintStyleControlsVisible={footprintStyleControlsVisible}
             onPlaceLabelsVisibleChange={handleMapPlaceLabelsVisibleChange}
             onAdminBoundariesVisibleChange={handleMapAdminBoundariesVisibleChange}
             onAdminRegionLinesVisibleChange={handleAdminRegionLinesVisibleChange}
+            onAdminRegionFillOpacityChange={handleAdminRegionFillOpacityChange}
             projection={mapProjection}
             styleUrl={selectedMapStyle.url}
             language={mapLanguage === 'auto' ? undefined : mapLanguage}

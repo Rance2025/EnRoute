@@ -55,6 +55,7 @@ type MapboxCanvasProps = {
   adminRegionVisibleIds?: string[] | null
   adminRegionLinesVisible?: boolean
   adminRegionFillOpacity?: number
+  footprintStyleControlsVisible?: boolean
   footprintsVisible?: boolean
   selectedAdminRegion?: {
     regionId: string
@@ -69,6 +70,7 @@ type MapboxCanvasProps = {
   onPlaceLabelsVisibleChange?: (visible: boolean) => void
   onAdminBoundariesVisibleChange?: (visible: boolean) => void
   onAdminRegionLinesVisibleChange?: (visible: boolean) => void
+  onAdminRegionFillOpacityChange?: (opacity: number) => void
   onMapStyleChange?: (style: MapStylePreference) => void
   onMapProjectionChange?: (projection: MapboxProjection) => void
   onMapLanguageChange?: (language: MapboxLanguagePreference) => void
@@ -222,6 +224,7 @@ function MapboxCanvasComponent({
   adminRegionVisibleIds,
   adminRegionLinesVisible = true,
   adminRegionFillOpacity = DEFAULT_ADMIN_REGION_FILL_OPACITY,
+  footprintStyleControlsVisible = true,
   footprintsVisible = true,
   selectedAdminRegion = null,
   adminRegionDepth = DEFAULT_ADMIN_REGION_DEPTH,
@@ -233,6 +236,7 @@ function MapboxCanvasComponent({
   onPlaceLabelsVisibleChange,
   onAdminBoundariesVisibleChange,
   onAdminRegionLinesVisibleChange,
+  onAdminRegionFillOpacityChange,
   onMapStyleChange,
   onMapProjectionChange,
   onMapLanguageChange,
@@ -1295,12 +1299,16 @@ function MapboxCanvasComponent({
         placeLabelsVisible={placeLabelsVisible}
         adminBoundariesVisible={adminBoundariesVisible}
         adminRegionLinesVisible={adminRegionLinesVisible}
+        adminRegionControlsVisible={adminRegionUnlockEnabled}
+        adminRegionFillOpacity={adminRegionFillOpacity}
+        footprintStyleControlsVisible={footprintStyleControlsVisible}
         mapStyle={mapStyle}
         mapProjection={resolvedProjection}
         mapLanguage={mapLanguage}
         onPlaceLabelsVisibleChange={onPlaceLabelsVisibleChange}
         onAdminBoundariesVisibleChange={onAdminBoundariesVisibleChange}
         onAdminRegionLinesVisibleChange={onAdminRegionLinesVisibleChange}
+        onAdminRegionFillOpacityChange={onAdminRegionFillOpacityChange}
         onMapStyleChange={onMapStyleChange}
         onMapProjectionChange={onMapProjectionChange}
         onMapLanguageChange={onMapLanguageChange}
