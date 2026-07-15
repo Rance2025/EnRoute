@@ -256,6 +256,7 @@ function MapboxCanvasComponent({
   } | null>(null)
   const adminRegionActiveOnlyRef = useRef(adminRegionActiveOnly)
   const adminRegionVisibleIdsRef = useRef(adminRegionVisibleIds)
+  const footprintsVisibleRef = useRef(footprintsVisible)
   const appliedLayerVisibilityRef = useRef({
     styleLoadRevision: -1,
     adminRegionLinesVisible: true,
@@ -323,6 +324,10 @@ function MapboxCanvasComponent({
   }, [adminRegionActiveOnly, adminRegionVisibleIds])
 
   useEffect(() => {
+    footprintsVisibleRef.current = footprintsVisible
+  }, [footprintsVisible])
+
+  useEffect(() => {
     latestResolvedStyleUrlRef.current = resolvedStyleUrl
   }, [resolvedStyleUrl])
 
@@ -353,7 +358,12 @@ function MapboxCanvasComponent({
         tileUrl: createMapboxTileUrl(currentTileUrl),
       }),
     )
-    map.addLayer(createFootprintCircleLayer(footprintStyleRef.current))
+    map.addLayer({
+      ...createFootprintCircleLayer(footprintStyleRef.current),
+      layout: {
+        visibility: footprintsVisibleRef.current ? 'visible' : 'none',
+      },
+    })
   }, [])
 
   const updateFootprintLayerPaint = useCallback((nextFootprintStyle: FootprintStyle) => {
