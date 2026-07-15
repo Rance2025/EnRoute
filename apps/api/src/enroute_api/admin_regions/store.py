@@ -51,6 +51,8 @@ def initialize_admin_region_schema(connection: sqlite3.Connection) -> None:
           travel_distance_meters REAL NOT NULL DEFAULT 0
         );
         CREATE INDEX IF NOT EXISTS idx_admin_regions_level ON admin_regions(level);
+        CREATE INDEX IF NOT EXISTS idx_admin_regions_summary_metadata
+          ON admin_regions(level, id, name, min_lng, min_lat, max_lng, max_lat);
         CREATE INDEX IF NOT EXISTS idx_admin_regions_bbox
           ON admin_regions(min_lng, max_lng, min_lat, max_lat);
         CREATE TABLE IF NOT EXISTS admin_region_tree (

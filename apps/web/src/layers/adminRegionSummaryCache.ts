@@ -28,11 +28,16 @@ type RetryAdminRegionSummaryOptions = PrefetchAdminRegionSummariesOptions & {
   depth: AdminRegionDepth
 }
 
+type InflightAdminRegionSummary = {
+  controller: AbortController
+  promise: Promise<AdminRegionSummary>
+}
+
 const ADMIN_REGION_DEPTHS: readonly AdminRegionDepth[] = [1, 2, 3, 4]
 const MAX_COMPLETED_TIME_RANGES = 8
 
 const completed = new Map<string, AdminRegionSummary>()
-const inflight = new Map<string, Promise<AdminRegionSummary>>()
+const inflight = new Map<string, InflightAdminRegionSummary>()
 const recentTimeRanges = new Map<string, true>()
 
 export function prefetchAdminRegionSummaries({
@@ -77,9 +82,20 @@ export function retryAdminRegionSummary({
 }
 
 export function clearAdminRegionSummaryCache(): void {
+  for (const summaryKey of [...inflight.keys()]) {
+    abortInflightSummary(summaryKey)
+  }
   completed.clear()
-  inflight.clear()
   recentTimeRanges.clear()
+}
+
+export function cancelAdminRegionSummaryRequests(timeRange: TimeRangeSelection): void {
+  const summaryKeyPrefix = `${createTimeRangeKey(timeRange)}:`
+  for (const summaryKey of [...inflight.keys()]) {
+    if (summaryKey.startsWith(summaryKeyPrefix)) {
+      abortInflightSummary(summaryKey)
+    }
+  }
 }
 
 function loadSummary({
@@ -96,28 +112,29 @@ function loadSummary({
   if (cachedSummary) return Promise.resolve(cachedSummary)
 
   const activeRequest = inflight.get(summaryKey)
-  if (activeRequest) return activeRequest
+  if (activeRequest) return activeRequest.promise
 
   const rangeKey = createTimeRangeKey(timeRange)
+  const controller = new AbortController()
   const request = loader({
     depth,
     timeRange,
-    signal: new AbortController().signal,
+    signal: controller.signal,
   }).then((summary) => {
     if (summary.depth !== depth) {
       throw new Error(`Admin-region summary depth mismatch: expected ${depth}, got ${summary.depth}`)
     }
-    if (recentTimeRanges.has(rangeKey) && inflight.get(summaryKey) === request) {
+    if (recentTimeRanges.has(rangeKey) && inflight.get(summaryKey)?.promise === request) {
       completed.set(summaryKey, summary)
     }
     return summary
   }).finally(() => {
-    if (inflight.get(summaryKey) === request) {
+    if (inflight.get(summaryKey)?.promise === request) {
       inflight.delete(summaryKey)
     }
   })
 
-  inflight.set(summaryKey, request)
+  inflight.set(summaryKey, { controller, promise: request })
   return request
 }
 
@@ -134,9 +151,17 @@ function touchTimeRange(timeRange: TimeRangeSelection): void {
     for (const depth of ADMIN_REGION_DEPTHS) {
       const summaryKey = `${oldestRangeKey}:${depth}`
       completed.delete(summaryKey)
-      inflight.delete(summaryKey)
+      abortInflightSummary(summaryKey)
     }
   }
+}
+
+function abortInflightSummary(summaryKey: string): void {
+  const activeRequest = inflight.get(summaryKey)
+  if (!activeRequest) return
+
+  inflight.delete(summaryKey)
+  activeRequest.controller.abort()
 }
 
 function createSummaryKey(timeRange: TimeRangeSelection, depth: AdminRegionDepth): string {

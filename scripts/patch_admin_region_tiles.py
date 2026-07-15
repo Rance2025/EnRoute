@@ -22,6 +22,10 @@ if str(api_src_dir) not in sys.path:
     sys.path.insert(0, str(api_src_dir))
 
 from enroute_api.admin_regions.geometry import calculate_geometry_bbox
+from enroute_api.admin_regions.precompute_meta import (
+    invalidate_admin_region_daily_stats,
+    invalidate_admin_region_thumbnail_paths,
+)
 from enroute_api.admin_regions.store import (
     insert_admin_region_feature,
     normalize_admin_region_features,
@@ -468,6 +472,8 @@ def patch_taiwan_admin_levels(
                 (str(properties["parentId"]), str(properties["id"])),
             )
         delete_meta_value(connection, ADMIN_REGION_STATS_SIGNATURE_KEY)
+        invalidate_admin_region_thumbnail_paths(connection)
+        invalidate_admin_region_daily_stats(connection)
 
     inserted_count = connection.execute(
         """
@@ -545,6 +551,8 @@ def patch_taiwan_mainland_overlaps(
             )
         delete_admin_region_rows_by_ids(connection, deleted_ids)
         delete_meta_value(connection, ADMIN_REGION_STATS_SIGNATURE_KEY)
+        invalidate_admin_region_thumbnail_paths(connection)
+        invalidate_admin_region_daily_stats(connection)
 
     new_rows = query_admin_rows_by_ids(connection, updated_ids)
     new_rows_by_depth = {
@@ -1288,6 +1296,8 @@ def replace_admin_region_fact_rows(
                     "INSERT INTO admin_region_tree (parent_id, child_id) VALUES (?, ?)",
                     (str(parent_id), str(child_id)),
                 )
+        invalidate_admin_region_thumbnail_paths(connection)
+        invalidate_admin_region_daily_stats(connection)
 
 
 def create_china_patch_source_signature(china_admin_region_data_path: Path) -> str:
@@ -1438,6 +1448,8 @@ def upsert_admin_region_feature(connection: sqlite3.Connection, feature: dict[st
         ),
     )
     connection.execute("DELETE FROM admin_region_tree WHERE child_id = ?", (region_id,))
+    invalidate_admin_region_thumbnail_paths(connection)
+    invalidate_admin_region_daily_stats(connection)
     connection.commit()
     print(f"Upserted admin region {region_id} ({properties['name']})")
 

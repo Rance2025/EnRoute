@@ -3,7 +3,7 @@ from __future__ import annotations
 import sqlite3
 
 
-ADMIN_REGION_SUMMARY_ALGORITHM_SIGNATURE = "admin-region-summary-v1"
+ADMIN_REGION_SUMMARY_ALGORITHM_SIGNATURE = "admin-region-summary-v3"
 THUMBNAIL_BASE_SIGNATURE_KEY = "adminRegionThumbnailBasePrecomputeSignature"
 THUMBNAIL_PATH_SIGNATURE_KEY = "adminRegionThumbnailPathPrecomputeSignature"
 DAILY_STATS_SIGNATURE_KEY = "adminRegionDailyStatsPrecomputeSignature"

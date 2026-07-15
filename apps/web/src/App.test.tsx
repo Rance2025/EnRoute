@@ -684,6 +684,39 @@ describe('App', () => {
     )
   })
 
+  it('aborts inflight summaries from the previous time range', async () => {
+    const oldSignals: AbortSignal[] = []
+    const oldRejectors: Array<(reason: unknown) => void> = []
+    vi.mocked(loadAdminRegionSummary).mockImplementation(({ depth, timeRange, signal }) => {
+      if (timeRange.mode === 'year') {
+        return Promise.resolve(adminRegionSummaryFixtures[depth])
+      }
+
+      return new Promise((_, reject) => {
+        oldSignals.push(signal)
+        oldRejectors.push(reject)
+        signal.addEventListener('abort', () => {
+          reject(new DOMException('The operation was aborted', 'AbortError'))
+        }, { once: true })
+      })
+    })
+
+    render(<App amapConfig={missingAmapConfig} />)
+    await settleLazyImports()
+    fireEvent.click(within(screen.getByRole('navigation', { name: '二级导航' }))
+      .getByRole('button', { name: '区域' }))
+    await waitFor(() => expect(oldSignals).toHaveLength(4))
+
+    fireEvent.click(screen.getByRole('button', { name: '年' }))
+    await waitFor(() => expect(loadAdminRegionSummary).toHaveBeenCalledTimes(8))
+    const everyOldSignalWasAborted = oldSignals.every((signal) => signal.aborted)
+    oldRejectors.forEach((reject) => {
+      reject(new DOMException('Test cleanup', 'AbortError'))
+    })
+
+    expect(everyOldSignalWasAborted).toBe(true)
+  })
+
   it('reuses cached summaries when region mode is re-entered', async () => {
 
     render(<App amapConfig={missingAmapConfig} />)
@@ -749,6 +782,81 @@ describe('App', () => {
       'CN',
     ))
     expect(loadAdminRegionSummary).toHaveBeenCalledTimes(5)
+  })
+
+  it('does not let an older retry replace the current time-range error state', async () => {
+    let resolveOldRetry!: (summary: typeof adminRegionSummaryFixture) => void
+    const oldRetry = new Promise<typeof adminRegionSummaryFixture>((resolve) => {
+      resolveOldRetry = resolve
+    })
+    let oldRangeCountryRequestCount = 0
+    vi.mocked(loadAdminRegionSummary).mockImplementation(async ({ depth, timeRange }) => {
+      if (depth !== 1) return adminRegionSummaryFixtures[depth]
+      if (timeRange.mode === 'year') throw new Error('year summary unavailable')
+
+      oldRangeCountryRequestCount += 1
+      if (oldRangeCountryRequestCount === 1) throw new Error('summary unavailable')
+      return oldRetry
+    })
+
+    render(<App amapConfig={missingAmapConfig} />)
+    await settleLazyImports()
+    fireEvent.click(within(screen.getByRole('navigation', { name: '二级导航' }))
+      .getByRole('button', { name: '区域' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('区域摘要加载失败')
+
+    fireEvent.click(screen.getByRole('button', { name: '重新加载区域摘要' }))
+    fireEvent.click(screen.getByRole('button', { name: '年' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('区域摘要加载失败')
+
+    await act(async () => {
+      resolveOldRetry(adminRegionSummaryFixture)
+    })
+
+    expect(screen.getByRole('alert')).toHaveTextContent('区域摘要加载失败')
+    expect(document.querySelector('.admin-region-context-panel__status')).not.toBeInTheDocument()
+  })
+
+  it('does not let a retry from an older region session mark a reentered range ready', async () => {
+    let resolveOldRetry!: (summary: typeof adminRegionSummaryFixture) => void
+    const oldRetry = new Promise<typeof adminRegionSummaryFixture>((resolve) => {
+      resolveOldRetry = resolve
+    })
+    let countryRequestCount = 0
+    vi.mocked(loadAdminRegionSummary).mockImplementation(({ depth, signal }) => {
+      if (depth !== 1) return Promise.resolve(adminRegionSummaryFixtures[depth])
+
+      countryRequestCount += 1
+      if (countryRequestCount === 1) return Promise.reject(new Error('summary unavailable'))
+      if (countryRequestCount === 2) return oldRetry
+      return new Promise((_, reject) => {
+        signal.addEventListener('abort', () => {
+          reject(new DOMException('The operation was aborted', 'AbortError'))
+        }, { once: true })
+      })
+    })
+
+    render(<App amapConfig={missingAmapConfig} />)
+    await settleLazyImports()
+    const secondaryNav = within(screen.getByRole('navigation', { name: '二级导航' }))
+    fireEvent.click(secondaryNav.getByRole('button', { name: '区域' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('区域摘要加载失败')
+
+    fireEvent.click(screen.getByRole('button', { name: '重新加载区域摘要' }))
+    fireEvent.click(secondaryNav.getByRole('button', { name: '足迹' }))
+    fireEvent.click(secondaryNav.getByRole('button', { name: '区域' }))
+    await waitFor(() => expect(countryRequestCount).toBe(3))
+    expect(document.querySelector('.admin-region-context-panel__status')).toHaveTextContent('加载中')
+
+    await act(async () => {
+      resolveOldRetry(adminRegionSummaryFixture)
+    })
+
+    expect(document.querySelector('.admin-region-context-panel__status')).toHaveTextContent('加载中')
+    expect(screen.getByTestId('mapbox-canvas')).toHaveAttribute(
+      'data-admin-region-visible-ids',
+      '',
+    )
   })
 
   it('keeps an aborted summary in loading state without showing an error', async () => {

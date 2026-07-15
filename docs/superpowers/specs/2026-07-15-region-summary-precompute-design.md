@@ -72,6 +72,9 @@ CREATE TABLE admin_region_thumbnail_region_paths (
 ```
 
 - 深度 1 来自国家级 Z0；深度 2-4 分别来自对应层级的 Z1 `1/1/0` 瓦片。
+- 粗层级瓦片是逐行政区 path 的优先视觉等价来源，但单张 Z0/Z1 瓦片不保证覆盖该层级的每个规范行政区。若源瓦片已包含该层级的部分有效行政区，构建器只对缺失 ID 或粗化后 path 为空的 ID 使用 `admin_regions.geometry` 的规范 WGS-84 几何离线补绘；整张必需源瓦片缺失、为空、完全没有有效行政区或某一规范层级本身为空时仍直接失败。
+- geometry 补绘必须 fail closed：空或非多边形源、世界画幅外、投影后为空以及最终仍无法编码 path 都使构建失败。唯一允许的空 path 是深度 2-4 中有效多边形完全位于 `17.5°N` 以南并被既定中国缩略图南界裁掉的情况。
+- 世界和中国静态底图始终严格来自 Z0/Z1 瓦片，不使用 geometry 补绘，因此底图来源、视觉等价与即时只读加载契约不变。
 - 每行已经完成瓦片坐标还原、固定画幅投影、裁切、修复、简化和路径量化。
 - 同一层级的所有 path 使用完全相同的投影与量化规则。请求期按稳定的 `region_id` 顺序直接连接字符串，作为一个 SVG `<path>` 的多个子路径输出，不再调用 Shapely union。
 
@@ -103,9 +106,9 @@ CREATE TABLE admin_region_daily_stats (
 - `adminRegionThumbnailPathPrecomputeSignature`
 - `adminRegionDailyStatsPrecomputeSignature`
 
-底图签名只覆盖国家级 Z0 与省级 Z1 两行源瓦片；逐行政区 path 签名覆盖深度 1 的 Z0 和深度 2-4 的 Z1，共四行必需源瓦片。签名包含预计算算法版本及相应瓦片的 `(depth, z, x, y, algorithm_signature, updated_at, byte_length)`。静态底图接口只校验底图签名，摘要接口只校验 path 与每日统计签名，因此动态预计算失效不会连带清空仍然有效的静态底图。
+底图签名只覆盖国家级 Z0 与省级 Z1 两行源瓦片；逐行政区 path 签名覆盖深度 1 的 Z0 和深度 2-4 的 Z1，共四行必需源瓦片。签名包含 `admin-region-summary-v3` 算法版本及相应瓦片的 `(depth, z, x, y, algorithm_signature, updated_at, byte_length)`；逐行政区 path 签名还包含行政区源签名和深度 1-4 的规范行数，确保 geometry 补绘来源变化后旧结果不能继续被当作 ready。静态底图接口只校验底图签名，摘要接口只校验 path 与每日统计签名，因此动态预计算失效不会连带清空仍然有效的静态底图。
 
-仓库内会改变 `footprints.region_id`、足迹行或行政区树的写入路径必须删除每日统计就绪签名；会改变相关行政区瓦片的写入路径必须按受影响层级删除底图或逐行政区 path 签名。显式构建成功并提交事务后才重新写入签名。普通 API 不设置签名、不补数据，也不把“表存在但为空”视为 ready。
+仓库内会改变 `footprints.region_id`、足迹行或行政区树的写入路径必须删除每日统计就绪签名；会改变 `admin_regions.geometry` 或行政区树的维护入口必须删除逐行政区 path 与每日统计签名；会改变相关行政区瓦片的写入路径必须按受影响层级删除底图或逐行政区 path 签名。显式构建成功并提交事务后才重新写入签名。普通 API 不设置签名、不补数据，也不把“表存在但为空”视为 ready。
 
 ## 预计算构建器
 
@@ -119,7 +122,7 @@ npm run prepare:admin-region-summary
 
 1. 以只读方式核对国家 Z0、中国省级 Z1，以及深度 2-4 对应 Z1 源瓦片均存在且签名可接受。
 2. 生成世界和中国两个最终底图 path。
-3. 生成深度 1-4 的逐行政区最终 path。
+3. 生成深度 1-4 的逐行政区最终 path；先只查询规范 ID，再为缺失或粗化为空的 ID 以每批最多 400 个的方式读取 geometry 并逐行立即补绘，批次结束即释放原始 geometry，随后要求每个规范行政区都有一行结果。
 4. 一次读取足迹与行政区树，生成四层每日统计。
 5. 在一个 SQLite 事务中替换三张新表并写入就绪签名；任何步骤失败则回滚，保留上一次完整结果。
 
@@ -198,6 +201,8 @@ GET /api/admin-regions/summary?depth=3&start=2026-01-01&end=2026-07-15
 
 摘要读取使用独立的 SQLite `mode=ro` 连接，不占用 `FootprintStore` 的全局连接锁，使四个层级请求可以真正并发。请求期禁止读取原始 `footprints`、`admin_region_tree`、行政区 geometry 或瓦片 BLOB。
 
+源签名校验按四个必需 `(depth, z, x, y)` 分别做复合主键点查，不能把它们拼成只命中 `focus_region_id` 索引的 `OR` 扫描。行政区名称、分母和 bounds 读取使用不包含 geometry 的 `idx_admin_regions_summary_metadata(level, id, name, min_lng, min_lat, max_lng, max_lat)` covering index，避免为了 3,209 条区县元数据跨过数百 MB 的 geometry 回表。
+
 ### 缺失与过期
 
 - 静态底图预计算不可用时，底图接口返回 HTTP `503` 和稳定错误码。
@@ -252,7 +257,8 @@ GET /api/admin-regions/summary?depth=3&start=2026-01-01&end=2026-07-15
 在当前本地数据库和服务已启动的前提下：
 
 - 静态底图接口不得执行几何解码或 union，首次本地请求目标低于 `50 ms`，后续会话内层级切换无网络等待。
-- 单层摘要 SQL 目标低于 `5 ms`，四层并行请求端到端目标低于 `100 ms`；浏览器验收以 `200 ms` 内完成四层动态状态为上限，避免把机器调度噪声写成脆弱单测。
+- 每日统计聚合 SQL 目标低于 `5 ms`，完整单层只读函数目标低于 `25 ms`，四层并行请求端到端目标低于 `100 ms`；浏览器验收以 `200 ms` 内完成四层动态状态为上限，避免把机器调度噪声写成脆弱单测。
+- 当前真实数据库实测静态底图首请求约 `9.4 ms`，完整单层只读函数中位数约 `8.5 / 8.6 / 10.4 / 19.3 ms`，四层并行首批约 `48.9 ms`、暖态中位数约 `39.3 ms`。
 - 人为把摘要响应延迟 `500 ms` 时，世界或中国底图仍先可见且不闪空。
 - 层级切换命中缓存时，不新增 summary 网络请求。
 - 请求期调用旧的 MVT 解码、Shapely union 或原始足迹递归函数应由测试直接判为失败。
@@ -265,9 +271,12 @@ GET /api/admin-regions/summary?depth=3&start=2026-01-01&end=2026-07-15
 - 世界 Z0、中国 Z1 来源选择与签名校验。
 - 中国裁切后完整保留海南和台湾，排除 `17.5°N` 以南远端组件。
 - 深度 1-4 每个行政区 path 预绘制，省、市、区共享中国静态底图。
+- 粗瓦片部分缺项或已有 feature 粗化为空时仅补绘对应行政区；整张源瓦片、规范层级或 geometry 不可用时仍失败，静态底图不混入 geometry 补绘。
+- 401 个 fallback ID 必须拆为 `400 + 1` 两次查询并完整产出，构建过程不得跨批累计原始 geometry 或在结果对象中保留投影 Shapely geometry。
 - 上海时区跨日、祖先归并、日期范围求和、稳定排行和空范围。
 - 缺表、缺行、缺签名和算法签名过期均返回 `503`，不进入慢速回退。
 - 摘要只访问新统计/path 表与 `admin_regions` 非 geometry 字段。
+- 必需瓦片签名使用逐 key 点查；行政区轻量元数据查询计划使用 covering index 且不产生临时排序表。
 - 构建前后 `visual_tiles` 与 `admin_region_tiles` 的行数、内容摘要和签名保持完全不变。
 - 构建中故意抛错时事务回滚，上一次完整预计算仍保留。
 

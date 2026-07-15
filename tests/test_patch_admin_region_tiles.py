@@ -15,6 +15,11 @@ from scripts.patch_admin_region_tiles import (
     patch_taiwan_mainland_overlaps,
     patch_taiwan_admin_levels,
 )
+from enroute_api.admin_regions.precompute_meta import (
+    DAILY_STATS_SIGNATURE_KEY,
+    THUMBNAIL_BASE_SIGNATURE_KEY,
+    THUMBNAIL_PATH_SIGNATURE_KEY,
+)
 from enroute_api.admin_regions.store import find_finest_region_id
 from enroute_api.admin_regions.tiles import (
     ADMIN_REGION_FILL_FEATURE_KIND,
@@ -136,6 +141,26 @@ def initialize_admin_region_patch_test_schema(connection: sqlite3.Connection) ->
         );
         """
     )
+
+
+def insert_summary_precompute_signatures(connection: sqlite3.Connection) -> None:
+    connection.executemany(
+        "INSERT INTO footprint_meta (key, value) VALUES (?, 'ready')",
+        (
+            (THUMBNAIL_BASE_SIGNATURE_KEY,),
+            (THUMBNAIL_PATH_SIGNATURE_KEY,),
+            (DAILY_STATS_SIGNATURE_KEY,),
+        ),
+    )
+
+
+def read_summary_precompute_signature_keys(connection: sqlite3.Connection) -> set[str]:
+    return {
+        str(row[0])
+        for row in connection.execute(
+            "SELECT key FROM footprint_meta WHERE key LIKE 'adminRegion%PrecomputeSignature'",
+        )
+    }
 
 
 def insert_test_admin_region(
@@ -318,6 +343,7 @@ def test_patch_taiwan_admin_levels_preserves_existing_non_taiwan_rows(tmp_path: 
             VALUES (0, 0, 0, 'all', 'all', x'01')
             """,
         )
+        insert_summary_precompute_signatures(connection)
         connection.commit()
 
         result = patch_taiwan_admin_levels(
@@ -335,6 +361,7 @@ def test_patch_taiwan_admin_levels_preserves_existing_non_taiwan_rows(tmp_path: 
             for row in connection.execute("SELECT parent_id, child_id FROM admin_region_tree")
         }
         visual_tile_count = connection.execute("SELECT COUNT(*) FROM visual_tiles").fetchone()[0]
+        summary_signature_keys = read_summary_precompute_signature_keys(connection)
     finally:
         connection.close()
 
@@ -346,6 +373,42 @@ def test_patch_taiwan_admin_levels_preserves_existing_non_taiwan_rows(tmp_path: 
     assert ("tw-county-63000", "tw-town-63000010") in tree_rows
     assert ("cn", "310000") in tree_rows
     assert visual_tile_count == 1
+    assert summary_signature_keys == {THUMBNAIL_BASE_SIGNATURE_KEY}
+
+
+def test_upsert_admin_region_feature_invalidates_dynamic_summary_signatures() -> None:
+    connection = sqlite3.connect(":memory:")
+    connection.row_factory = sqlite3.Row
+    initialize_admin_region_patch_test_schema(connection)
+    connection.execute(
+        """
+        INSERT INTO visual_tiles (z, x, y, t_type, t, tile)
+        VALUES (0, 0, 0, 'all', 'all', x'01')
+        """,
+    )
+    insert_summary_precompute_signatures(connection)
+    connection.commit()
+    visual_tiles_before = [
+        tuple(row)
+        for row in connection.execute("SELECT * FROM visual_tiles ORDER BY z, x, y, t_type, t")
+    ]
+
+    patch_admin_region_tiles_module.upsert_admin_region_feature(
+        connection,
+        {
+            "type": "Feature",
+            "properties": {"id": "new-country", "name": "New Country", "level": 1},
+            "geometry": make_square(20, 0, 22, 2),
+        },
+    )
+
+    assert read_summary_precompute_signature_keys(connection) == {
+        THUMBNAIL_BASE_SIGNATURE_KEY,
+    }
+    assert [
+        tuple(row)
+        for row in connection.execute("SELECT * FROM visual_tiles ORDER BY z, x, y, t_type, t")
+    ] == visual_tiles_before
 
 
 def test_main_patches_taiwan_admin_levels_without_rebuilding_tiles(tmp_path: Path):
@@ -457,6 +520,10 @@ def test_taiwan_mainland_overlap_patch_clips_generated_rows_for_future_point_mat
               updated_at INTEGER NOT NULL,
               PRIMARY KEY (z, x, y, focus_region_id, depth)
             ) WITHOUT ROWID;
+            INSERT INTO admin_region_tiles
+              (z, x, y, focus_region_id, depth, algorithm_signature, tile, feature_count, updated_at)
+            VALUES
+              (0, 0, 0, 'world', 3, 'sentinel', x'0102', 1, 111);
             """
         )
         insert_test_admin_region(
@@ -509,7 +576,21 @@ def test_taiwan_mainland_overlap_patch_clips_generated_rows_for_future_point_mat
             VALUES (0, 0, 0, 'all', 'all', x'01')
             """,
         )
+        insert_summary_precompute_signatures(connection)
         connection.commit()
+        region_count_before = connection.execute("SELECT COUNT(*) FROM admin_regions").fetchone()[0]
+        visual_tiles_before = [
+            tuple(row)
+            for row in connection.execute(
+                "SELECT * FROM visual_tiles ORDER BY z, x, y, t_type, t",
+            )
+        ]
+        admin_region_tiles_before = [
+            tuple(row)
+            for row in connection.execute(
+                "SELECT * FROM admin_region_tiles ORDER BY z, x, y, focus_region_id, depth",
+            )
+        ]
 
         result = patch_taiwan_mainland_overlaps(
             connection,
@@ -523,7 +604,20 @@ def test_taiwan_mainland_overlap_patch_clips_generated_rows_for_future_point_mat
         kinmen = fetch_region_geometry(connection, "tw-county-99999")
         kincheng = fetch_region_geometry(connection, "tw-town-99999010")
         taipei = fetch_region_geometry(connection, "tw-county-63000")
-        visual_tile_count = connection.execute("SELECT COUNT(*) FROM visual_tiles").fetchone()[0]
+        region_count_after = connection.execute("SELECT COUNT(*) FROM admin_regions").fetchone()[0]
+        visual_tiles_after = [
+            tuple(row)
+            for row in connection.execute(
+                "SELECT * FROM visual_tiles ORDER BY z, x, y, t_type, t",
+            )
+        ]
+        admin_region_tiles_after = [
+            tuple(row)
+            for row in connection.execute(
+                "SELECT * FROM admin_region_tiles ORDER BY z, x, y, focus_region_id, depth",
+            )
+        ]
+        summary_signature_keys = read_summary_precompute_signature_keys(connection)
         overlap_point_match = find_finest_region_id(
             connection,
             longitude=118.75,
@@ -542,7 +636,10 @@ def test_taiwan_mainland_overlap_patch_clips_generated_rows_for_future_point_mat
     assert kinmen.intersection(shape(make_square(118, 24, 119, 25))).area == 0
     assert kincheng.intersection(shape(make_square(118, 24, 119, 25))).area == 0
     assert taipei.equals(shape(make_square(121, 25, 122, 26)))
-    assert visual_tile_count == 1
+    assert region_count_after == region_count_before
+    assert visual_tiles_after == visual_tiles_before
+    assert admin_region_tiles_after == admin_region_tiles_before
+    assert summary_signature_keys == {THUMBNAIL_BASE_SIGNATURE_KEY}
     assert overlap_point_match == "350000"
     assert taiwan_only_match == "tw-town-99999010"
 
@@ -1547,6 +1644,10 @@ def test_patch_admin_region_tiles_restores_china_levels_and_rebuilds_only_reques
             """,
             (country_tile,),
         )
+        connection.execute(
+            "CREATE TABLE footprint_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
+        )
+        insert_summary_precompute_signatures(connection)
         connection.commit()
     finally:
         connection.close()
@@ -1609,6 +1710,7 @@ def test_patch_admin_region_tiles_restores_china_levels_and_rebuilds_only_reques
             WHERE z = 0 AND x = 0 AND y = 0 AND focus_region_id = 'world' AND depth = 4
             """,
         ).fetchone()
+        summary_signature_keys = read_summary_precompute_signature_keys(connection)
     finally:
         connection.close()
 
@@ -1629,6 +1731,7 @@ def test_patch_admin_region_tiles_restores_china_levels_and_rebuilds_only_reques
         (4, ADMIN_REGION_TILE_ALGORITHM_SIGNATURE),
     ]
     assert depth_4_region_ids == {"310115"}
+    assert summary_signature_keys == {THUMBNAIL_BASE_SIGNATURE_KEY}
 
 
 def test_patch_admin_region_tiles_rebuilds_existing_admin_tile_range_without_reloading_sources(

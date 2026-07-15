@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
-from shapely.geometry import GeometryCollection, box
+from shapely.geometry import GeometryCollection, MultiPolygon, Polygon, box, shape
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import transform
 
@@ -56,6 +56,7 @@ class AdminRegionPrecomputeUnavailable(RuntimeError):
 
 
 CHINA_THUMBNAIL_SOUTH_BOUND = 17.5
+ADMIN_REGION_GEOMETRY_QUERY_BATCH_SIZE = 400
 
 
 @dataclass(frozen=True, order=True)
@@ -148,9 +149,39 @@ def create_admin_region_thumbnail_base_source_signature(
 def create_admin_region_thumbnail_path_source_signature(
     connection: sqlite3.Connection,
 ) -> str:
-    return create_admin_region_thumbnail_source_signature(
-        connection,
-        required_tile_keys=THUMBNAIL_PATH_TILE_KEYS,
+    signature = json.loads(
+        create_admin_region_thumbnail_source_signature(
+            connection,
+            required_tile_keys=THUMBNAIL_PATH_TILE_KEYS,
+        ),
+    )
+    source_signature_row = connection.execute(
+        "SELECT value FROM footprint_meta WHERE key = 'adminRegionSourceSignature'",
+    ).fetchone()
+    level_counts = {
+        str(int(row[0])): int(row[1])
+        for row in connection.execute(
+            """
+            SELECT level, COUNT(*)
+            FROM admin_regions
+            WHERE level BETWEEN 1 AND 4
+            GROUP BY level
+            ORDER BY level
+            """,
+        )
+    }
+    signature["adminRegions"] = {
+        "sourceSignature": str(source_signature_row[0]) if source_signature_row else None,
+        "levelCounts": {
+            str(depth): level_counts.get(str(depth), 0)
+            for depth in (1, 2, 3, 4)
+        },
+    }
+    return json.dumps(
+        signature,
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
     )
 
 
@@ -159,39 +190,31 @@ def create_admin_region_thumbnail_source_signature(
     *,
     required_tile_keys: tuple[tuple[int, int, int, int], ...],
 ) -> str:
-    predicate = " OR ".join(
-        "(depth = ? AND z = ? AND x = ? AND y = ?)" for _key in required_tile_keys
-    )
-    parameters = tuple(value for key in required_tile_keys for value in key)
-    rows = connection.execute(
-        f"""
-        SELECT
-          depth,
-          z,
-          x,
-          y,
-          algorithm_signature,
-          updated_at,
-          LENGTH(tile) AS byte_length
-        FROM admin_region_tiles
-        WHERE focus_region_id = 'world'
-          AND ({predicate})
-        ORDER BY depth, z, x, y
-        """,
-        parameters,
-    ).fetchall()
-    metadata_by_key = {
-        (int(row[0]), int(row[1]), int(row[2]), int(row[3])): {
-            "depth": int(row[0]),
-            "z": int(row[1]),
-            "x": int(row[2]),
-            "y": int(row[3]),
-            "algorithmSignature": str(row[4]),
-            "updatedAt": int(row[5]),
-            "byteLength": int(row[6]),
+    metadata_by_key = {}
+    for depth, z, x, y in required_tile_keys:
+        row = connection.execute(
+            """
+            SELECT algorithm_signature, updated_at, LENGTH(tile) AS byte_length
+            FROM admin_region_tiles
+            WHERE focus_region_id = 'world'
+              AND depth = ?
+              AND z = ?
+              AND x = ?
+              AND y = ?
+            """,
+            (depth, z, x, y),
+        ).fetchone()
+        if row is None:
+            continue
+        metadata_by_key[(depth, z, x, y)] = {
+            "depth": depth,
+            "z": z,
+            "x": x,
+            "y": y,
+            "algorithmSignature": str(row[0]),
+            "updatedAt": int(row[1]),
+            "byteLength": int(row[2]),
         }
-        for row in rows
-    }
     missing_keys = [key for key in required_tile_keys if key not in metadata_by_key]
     if missing_keys:
         missing = ", ".join("/".join(str(value) for value in key) for key in missing_keys)
@@ -437,6 +460,10 @@ def build_admin_region_summary_precompute(
         )
         for depth, z, x, y in THUMBNAIL_PATH_TILE_KEYS
     }
+    paths_by_depth = complete_precomputed_admin_region_path_coverage(
+        connection,
+        paths_by_depth,
+    )
     validate_precomputed_admin_region_path_coverage(connection, paths_by_depth)
     base_records = (
         create_thumbnail_base_record(
@@ -529,6 +556,10 @@ def validate_precomputed_admin_region_path_coverage(
                 (depth,),
             )
         }
+        if not expected_ids:
+            raise AdminRegionPrecomputeSourceError(
+                f"admin-region thumbnail paths have no canonical regions at depth {depth}",
+            )
         actual_ids = {path.region_id for path in paths.region_paths}
         missing_ids = sorted(expected_ids - actual_ids)
         if missing_ids:
@@ -536,6 +567,138 @@ def validate_precomputed_admin_region_path_coverage(
                 f"admin-region thumbnail paths are incomplete at depth {depth}: "
                 f"{', '.join(missing_ids)}",
             )
+
+
+def complete_precomputed_admin_region_path_coverage(
+    connection: sqlite3.Connection,
+    paths_by_depth: dict[int, AdminRegionThumbnailPaths],
+) -> dict[int, AdminRegionThumbnailPaths]:
+    completed = {}
+    for depth, paths in sorted(paths_by_depth.items()):
+        country_filter = COUNTRY_SCOPE_FILTER if depth == 1 else ""
+        expected_ids = {
+            str(row[0])
+            for row in connection.execute(
+                f"""
+                SELECT id
+                FROM admin_regions
+                WHERE level = ?
+                {country_filter}
+                ORDER BY id
+                """,
+                (depth,),
+            )
+        }
+        actual_by_id = {path.region_id: path for path in paths.region_paths}
+        actual_ids = set(actual_by_id)
+        fallback_ids = sorted(
+            (expected_ids - actual_ids)
+            | {
+                region_id
+                for region_id, path in actual_by_id.items()
+                if region_id in expected_ids and not path.path
+            },
+        )
+
+        if not fallback_ids or not (actual_ids & expected_ids):
+            completed[depth] = paths
+            continue
+
+        completed_by_id = dict(actual_by_id)
+        for offset in range(0, len(fallback_ids), ADMIN_REGION_GEOMETRY_QUERY_BATCH_SIZE):
+            batch_ids = fallback_ids[
+                offset:offset + ADMIN_REGION_GEOMETRY_QUERY_BATCH_SIZE
+            ]
+            batch_id_set = set(batch_ids)
+            returned_ids = set()
+            placeholders = ",".join("?" for _region_id in batch_ids)
+            for row in connection.execute(
+                f"""
+                SELECT id, geometry
+                FROM admin_regions
+                WHERE level = ?
+                {country_filter}
+                  AND id IN ({placeholders})
+                ORDER BY id
+                """,
+                (depth, *batch_ids),
+            ):
+                region_id = str(row[0])
+                returned_ids.add(region_id)
+                completed_by_id[region_id] = build_admin_region_geometry_fallback_path(
+                    region_id=region_id,
+                    geometry_json=row[1],
+                    depth=depth,
+                )
+            missing_ids = sorted(batch_id_set - returned_ids)
+            if missing_ids:
+                raise AdminRegionPrecomputeSourceError(
+                    "admin-region fallback geometry query is incomplete at depth "
+                    f"{depth}: {', '.join(missing_ids)}",
+                )
+        completed[depth] = AdminRegionThumbnailPaths(
+            base_path=paths.base_path,
+            region_paths=tuple(completed_by_id[region_id] for region_id in sorted(completed_by_id)),
+        )
+    return completed
+
+
+def build_admin_region_geometry_fallback_path(
+    *,
+    region_id: str,
+    geometry_json: object,
+    depth: int,
+) -> AdminRegionThumbnailPath:
+    try:
+        geographic_geometry = repair_polygonal_geometry(shape(json.loads(str(geometry_json))))
+    except (TypeError, ValueError, json.JSONDecodeError) as error:
+        raise AdminRegionPrecomputeSourceError(
+            f"admin-region fallback geometry is invalid: {region_id}",
+        ) from error
+    if geographic_geometry.is_empty or not isinstance(
+        geographic_geometry,
+        (Polygon, MultiPolygon),
+    ):
+        raise AdminRegionPrecomputeSourceError(
+            f"admin-region fallback geometry is empty or non-polygon: {region_id}",
+        )
+
+    west, south, east, north = precomputed_geographic_bounds(depth)
+    clipped_geometry = repair_polygonal_geometry(
+        geographic_geometry.intersection(box(west, south, east, north)),
+    )
+    if clipped_geometry.is_empty:
+        if depth > 1 and geographic_geometry.bounds[3] <= south:
+            return AdminRegionThumbnailPath(
+                region_id=region_id,
+                path="",
+                coarse_path="",
+                bounds=(0.0, 0.0, 0.0, 0.0),
+                geometry=GeometryCollection(),
+            )
+        raise AdminRegionPrecomputeSourceError(
+            f"admin-region fallback geometry is outside thumbnail bounds: {region_id}",
+        )
+
+    projected = project_precomputed_geographic_geometry(clipped_geometry, depth=depth)
+    if projected.is_empty:
+        raise AdminRegionPrecomputeSourceError(
+            f"admin-region fallback projected geometry is empty: {region_id}",
+        )
+    path = bounded_geometry_path(projected.simplify(0.6, preserve_topology=True))
+    if not path and not projected.is_empty:
+        path = bounded_geometry_path(projected)
+    if not path:
+        raise AdminRegionPrecomputeSourceError(
+            f"admin-region fallback path is empty: {region_id}",
+        )
+    return AdminRegionThumbnailPath(
+        region_id=region_id,
+        path=path,
+        coarse_path=path,
+        bounds=normalize_bounds(projected.bounds),
+        geometry=GeometryCollection(),
+    )
 
 
 def read_required_admin_region_thumbnail_tile(

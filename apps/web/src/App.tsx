@@ -39,6 +39,7 @@ import type {
   AdminRegionRanking,
 } from './layers/adminRegionSummaryDataSource'
 import {
+  cancelAdminRegionSummaryRequests,
   getCachedAdminRegionSummary,
   prefetchAdminRegionSummaries,
   retryAdminRegionSummary,
@@ -377,6 +378,7 @@ function App(props: AppProps) {
     useState<AdminRegionThumbnailBases | null>(null)
   const [adminRegionSummaryLoadState, setAdminRegionSummaryLoadState] =
     useState<AdminRegionSummaryLoadState | null>(null)
+  const adminRegionSummaryLifecycleRef = useRef(0)
   const [selectedAdminRegion, setSelectedAdminRegion] = useState<AdminRegionRanking | null>(null)
   const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRangeSelection>(
     createTodaySelection,
@@ -699,6 +701,8 @@ function App(props: AppProps) {
     if (!isRegionMode) return undefined
 
     let active = true
+    const lifecycleId = adminRegionSummaryLifecycleRef.current + 1
+    adminRegionSummaryLifecycleRef.current = lifecycleId
     const timeRangeKey = createAdminRegionSummaryTimeRangeKey(selectedTimeRange)
     void prefetchAdminRegionSummaries({
       timeRange: selectedTimeRange,
@@ -723,21 +727,27 @@ function App(props: AppProps) {
 
     return () => {
       active = false
+      if (adminRegionSummaryLifecycleRef.current === lifecycleId) {
+        adminRegionSummaryLifecycleRef.current += 1
+      }
+      cancelAdminRegionSummaryRequests(selectedTimeRange)
     }
   }, [isRegionMode, selectedTimeRange])
 
   const handleAdminRegionSummaryRetry = useCallback(() => {
+    const lifecycleId = adminRegionSummaryLifecycleRef.current
     const timeRangeKey = createAdminRegionSummaryTimeRangeKey(selectedTimeRange)
     const updateStatus = (status: AdminRegionSummaryLoadStatus) => {
       setAdminRegionSummaryLoadState((current) => {
-        const statuses = current?.timeRangeKey === timeRangeKey
-          ? current.statuses
-          : createLoadingAdminRegionSummaryStatuses()
+        if (
+          adminRegionSummaryLifecycleRef.current !== lifecycleId ||
+          current?.timeRangeKey !== timeRangeKey
+        ) return current
 
         return {
           timeRangeKey,
           statuses: {
-            ...statuses,
+            ...current.statuses,
             [adminRegionDepth]: status,
           },
         }

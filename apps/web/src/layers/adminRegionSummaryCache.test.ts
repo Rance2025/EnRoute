@@ -97,6 +97,35 @@ describe('adminRegionSummaryCache', () => {
     expect(getCachedAdminRegionSummary(timeRange, 4)).toEqual(createSummary(4))
   })
 
+  it('aborts every inflight loader when the cache is cleared', async () => {
+    const signals: AbortSignal[] = []
+    const rejectors: Array<(reason: unknown) => void> = []
+    const loader = vi.fn(({ signal }: { signal: AbortSignal }) => (
+      new Promise<AdminRegionSummary>((_resolve, reject) => {
+        signals.push(signal)
+        rejectors.push(reject)
+        signal.addEventListener('abort', () => {
+          reject(new DOMException('The operation was aborted', 'AbortError'))
+        }, { once: true })
+      })
+    ))
+
+    const pending = prefetchAdminRegionSummaries({
+      timeRange: createTimeRange(2),
+      loader,
+    })
+    expect(signals).toHaveLength(4)
+
+    clearAdminRegionSummaryCache()
+    const everySignalWasAborted = signals.every((signal) => signal.aborted)
+    rejectors.forEach((reject) => {
+      reject(new DOMException('Test cleanup', 'AbortError'))
+    })
+    await pending
+
+    expect(everySignalWasAborted).toBe(true)
+  })
+
   it('replaces one completed depth on retry and drops stale data when retry fails', async () => {
     const timeRange = createTimeRange(3)
     const loader = vi.fn(async ({ depth }: { depth: AdminRegionDepth }) => (

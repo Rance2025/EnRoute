@@ -131,6 +131,7 @@ def test_thumbnail_source_signatures_cover_only_their_required_z0_and_z1_tiles()
         precompute.create_admin_region_thumbnail_path_source_signature(connection),
     )
 
+    assert precompute.ADMIN_REGION_SUMMARY_ALGORITHM_SIGNATURE == "admin-region-summary-v3"
     assert base_signature["algorithmSignature"] == precompute.ADMIN_REGION_SUMMARY_ALGORITHM_SIGNATURE
     assert [
         (row["depth"], row["z"], row["x"], row["y"], row["byteLength"])
@@ -160,6 +161,58 @@ def test_thumbnail_source_signatures_cover_only_their_required_z0_and_z1_tiles()
     ) != path_signature
 
 
+def test_thumbnail_source_signature_uses_one_point_lookup_per_required_tile() -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+    connection = sqlite3.connect(":memory:")
+    connection.row_factory = sqlite3.Row
+    initialize_schema(connection)
+    required_tile_keys = precompute.THUMBNAIL_PATH_TILE_KEYS
+    for depth, z, x, y in required_tile_keys:
+        insert_admin_region_tile(
+            connection,
+            depth=depth,
+            z=z,
+            x=x,
+            y=y,
+            marker=f"{depth}/{z}/{x}/{y}".encode(),
+        )
+    connection.commit()
+    statements: list[str] = []
+    connection.set_trace_callback(statements.append)
+
+    try:
+        signature = json.loads(
+            precompute.create_admin_region_thumbnail_source_signature(
+                connection,
+                required_tile_keys=required_tile_keys,
+            ),
+        )
+    finally:
+        connection.set_trace_callback(None)
+
+    metadata_queries = [
+        " ".join(statement.lower().split())
+        for statement in statements
+        if "from admin_region_tiles" in " ".join(statement.lower().split())
+    ]
+    assert len(metadata_queries) == len(required_tile_keys) == 4
+    for query, (depth, z, x, y) in zip(metadata_queries, required_tile_keys, strict=True):
+        assert query.startswith(
+            "select algorithm_signature, updated_at, length(tile) as byte_length "
+            "from admin_region_tiles",
+        )
+        assert " or " not in query
+        assert "focus_region_id = 'world'" in query
+        assert f"depth = {depth}" in query
+        assert f"z = {z}" in query
+        assert f"x = {x}" in query
+        assert f"y = {y}" in query
+    assert [
+        (tile["depth"], tile["z"], tile["x"], tile["y"])
+        for tile in signature["tiles"]
+    ] == list(required_tile_keys)
+
+
 def test_thumbnail_source_signature_rejects_missing_required_tile() -> None:
     precompute = importlib.import_module("enroute_api.admin_regions.precompute")
     connection = sqlite3.connect(":memory:")
@@ -176,6 +229,24 @@ def test_thumbnail_source_signature_rejects_missing_required_tile() -> None:
 
     with pytest.raises(precompute.AdminRegionPrecomputeSourceError, match="2/1/1/0"):
         precompute.create_admin_region_thumbnail_base_source_signature(connection)
+
+
+def test_thumbnail_path_signature_tracks_admin_region_coverage() -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+    connection = create_precompute_source_database()
+    before = precompute.create_admin_region_thumbnail_path_source_signature(connection)
+
+    insert_region(connection, region_id="fallback-country", level=1)
+
+    after = precompute.create_admin_region_thumbnail_path_source_signature(connection)
+
+    assert after != before
+    assert json.loads(after)["adminRegions"]["levelCounts"] == {
+        "1": 2,
+        "2": 1,
+        "3": 1,
+        "4": 1,
+    }
 
 
 def test_new_footprint_invalidates_only_daily_stats_precompute_signature() -> None:
@@ -295,6 +366,312 @@ def test_precomputed_china_paths_keep_hainan_and_taiwan_but_clip_remote_south_ch
     )
 
 
+@pytest.mark.parametrize(
+    "geometry_json",
+    (
+        '{"type":"Polygon","coordinates":[]}',
+        '{"type":"Point","coordinates":[112,25]}',
+    ),
+    ids=("empty-polygon", "point"),
+)
+def test_geometry_fallback_rejects_empty_or_non_polygon_geometry(
+    geometry_json: str,
+) -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+
+    with pytest.raises(
+        precompute.AdminRegionPrecomputeSourceError,
+        match="fallback geometry is empty or non-polygon: invalid-region",
+    ):
+        precompute.build_admin_region_geometry_fallback_path(
+            region_id="invalid-region",
+            geometry_json=geometry_json,
+            depth=2,
+        )
+
+
+@pytest.mark.parametrize("depth", (2, 3, 4))
+def test_geometry_fallback_allows_valid_polygon_south_of_china_thumbnail(
+    depth: int,
+) -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+
+    path = precompute.build_admin_region_geometry_fallback_path(
+        region_id="south-china-sea",
+        geometry_json=(
+            '{"type":"Polygon","coordinates":'
+            '[[[112,9],[114,9],[114,11],[112,11],[112,9]]]}'
+        ),
+        depth=depth,
+    )
+
+    assert path.path == ""
+    assert path.geometry is not None and path.geometry.is_empty
+
+
+def test_geometry_fallback_rejects_valid_polygon_outside_world_thumbnail() -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+
+    with pytest.raises(
+        precompute.AdminRegionPrecomputeSourceError,
+        match="fallback geometry is outside thumbnail bounds: outside-world",
+    ):
+        precompute.build_admin_region_geometry_fallback_path(
+            region_id="outside-world",
+            geometry_json=(
+                '{"type":"Polygon","coordinates":'
+                '[[[10,-80],[12,-80],[12,-78],[10,-78],[10,-80]]]}'
+            ),
+            depth=1,
+        )
+
+
+def test_geometry_fallback_rejects_nonempty_geometry_without_bounded_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+    monkeypatch.setattr(precompute, "bounded_geometry_path", lambda _geometry: "")
+
+    with pytest.raises(
+        precompute.AdminRegionPrecomputeSourceError,
+        match="fallback path is empty: unencodable-region",
+    ):
+        precompute.build_admin_region_geometry_fallback_path(
+            region_id="unencodable-region",
+            geometry_json=(
+                '{"type":"Polygon","coordinates":'
+                '[[[112,25],[113,25],[113,26],[112,26],[112,25]]]}'
+            ),
+            depth=2,
+        )
+
+
+def test_path_coverage_queries_geometry_only_for_missing_or_empty_paths() -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+    connection = sqlite3.connect(":memory:")
+    connection.row_factory = sqlite3.Row
+    initialize_schema(connection)
+    for region_id in ("ready-country", "empty-country", "missing-country"):
+        insert_region(connection, region_id=region_id, level=1)
+    connection.execute(
+        "UPDATE admin_regions SET geometry = 'not-json' WHERE id = 'ready-country'",
+    )
+    connection.commit()
+    paths = precompute.AdminRegionThumbnailPaths(
+        base_path="M0 0Z",
+        region_paths=(
+            precompute.AdminRegionThumbnailPath(
+                region_id="ready-country",
+                path="M1 1Z",
+                coarse_path="M1 1Z",
+                bounds=(1.0, 1.0, 1.0, 1.0),
+                geometry=None,
+            ),
+            precompute.AdminRegionThumbnailPath(
+                region_id="empty-country",
+                path="",
+                coarse_path="",
+                bounds=(0.0, 0.0, 0.0, 0.0),
+                geometry=None,
+            ),
+        ),
+    )
+    statements: list[str] = []
+    connection.set_trace_callback(statements.append)
+
+    try:
+        completed = precompute.complete_precomputed_admin_region_path_coverage(
+            connection,
+            {1: paths},
+        )
+    finally:
+        connection.set_trace_callback(None)
+
+    geometry_queries = [
+        " ".join(statement.lower().split())
+        for statement in statements
+        if "select id, geometry" in " ".join(statement.lower().split())
+    ]
+    assert len(geometry_queries) == 1
+    assert "id in" in geometry_queries[0]
+    assert "'empty-country'" in geometry_queries[0]
+    assert "'missing-country'" in geometry_queries[0]
+    assert "'ready-country'" not in geometry_queries[0]
+    completed_by_id = {
+        path.region_id: path
+        for path in completed[1].region_paths
+    }
+    assert completed[1].base_path == paths.base_path
+    assert set(completed_by_id) == {
+        "empty-country",
+        "missing-country",
+        "ready-country",
+    }
+    assert all(
+        completed_by_id[region_id].geometry is None
+        or completed_by_id[region_id].geometry.is_empty
+        for region_id in ("empty-country", "missing-country")
+    )
+
+
+def test_path_coverage_batches_401_geometry_fallbacks_and_completes_all(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+    connection = sqlite3.connect(":memory:")
+    connection.row_factory = sqlite3.Row
+    initialize_schema(connection)
+    region_ids = tuple(f"batch-country-{index:03d}" for index in range(401))
+    for region_id in region_ids:
+        insert_region(connection, region_id=region_id, level=1)
+    connection.commit()
+    paths = precompute.AdminRegionThumbnailPaths(
+        base_path="M0 0Z",
+        region_paths=tuple(
+            precompute.AdminRegionThumbnailPath(
+                region_id=region_id,
+                path="",
+                coarse_path="",
+                bounds=(0.0, 0.0, 0.0, 0.0),
+                geometry=None,
+            )
+            for region_id in region_ids
+        ),
+    )
+    built_ids: list[str] = []
+
+    def build_fallback_path(
+        *,
+        region_id: str,
+        geometry_json: object,
+        depth: int,
+    ) -> object:
+        assert str(geometry_json).startswith('{"type":"Polygon"')
+        assert depth == 1
+        built_ids.append(region_id)
+        path = f"M{region_id[-3:]} 0Z"
+        return precompute.AdminRegionThumbnailPath(
+            region_id=region_id,
+            path=path,
+            coarse_path=path,
+            bounds=(0.0, 0.0, 1.0, 1.0),
+            geometry=None,
+        )
+
+    monkeypatch.setattr(
+        precompute,
+        "build_admin_region_geometry_fallback_path",
+        build_fallback_path,
+    )
+    statements: list[str] = []
+    connection.set_trace_callback(statements.append)
+
+    try:
+        completed = precompute.complete_precomputed_admin_region_path_coverage(
+            connection,
+            {1: paths},
+        )
+    finally:
+        connection.set_trace_callback(None)
+
+    geometry_queries = [
+        " ".join(statement.lower().split())
+        for statement in statements
+        if "select id, geometry" in " ".join(statement.lower().split())
+    ]
+    assert len(geometry_queries) == 2
+    assert all("id in (" in query for query in geometry_queries)
+    assert [query.count("batch-country-") for query in geometry_queries] == [400, 1]
+    assert built_ids == list(region_ids)
+    completed_by_id = {path.region_id: path for path in completed[1].region_paths}
+    assert set(completed_by_id) == set(region_ids)
+    assert all(completed_by_id[region_id].path for region_id in region_ids)
+
+
+def test_path_coverage_reports_missing_canonical_geometry_row() -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+    connection = sqlite3.connect(":memory:")
+    connection.row_factory = sqlite3.Row
+    initialize_schema(connection)
+    insert_region(connection, region_id="missing-country", level=1)
+    connection.commit()
+    paths = precompute.AdminRegionThumbnailPaths(
+        base_path="M0 0Z",
+        region_paths=(
+            precompute.AdminRegionThumbnailPath(
+                region_id="missing-country",
+                path="",
+                coarse_path="",
+                bounds=(0.0, 0.0, 0.0, 0.0),
+                geometry=None,
+            ),
+        ),
+    )
+
+    class MissingCanonicalGeometryConnection:
+        def execute(
+            self,
+            statement: str,
+            parameters: tuple[object, ...] = (),
+        ) -> object:
+            rows = connection.execute(statement, parameters)
+            if "SELECT id, geometry" not in statement:
+                return rows
+            return (row for row in rows if str(row[0]) != "missing-country")
+
+    with pytest.raises(
+        precompute.AdminRegionPrecomputeSourceError,
+        match=(
+            "admin-region fallback geometry query is incomplete at depth 1: "
+            "missing-country"
+        ),
+    ):
+        precompute.complete_precomputed_admin_region_path_coverage(
+            MissingCanonicalGeometryConnection(),
+            {1: paths},
+        )
+
+
+def test_path_coverage_skips_geometry_query_when_all_paths_are_ready() -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+    connection = sqlite3.connect(":memory:")
+    connection.row_factory = sqlite3.Row
+    initialize_schema(connection)
+    insert_region(connection, region_id="ready-country", level=1)
+    connection.execute(
+        "UPDATE admin_regions SET geometry = 'not-json' WHERE id = 'ready-country'",
+    )
+    connection.commit()
+    paths = precompute.AdminRegionThumbnailPaths(
+        base_path="M0 0Z",
+        region_paths=(
+            precompute.AdminRegionThumbnailPath(
+                region_id="ready-country",
+                path="M1 1Z",
+                coarse_path="M1 1Z",
+                bounds=(1.0, 1.0, 1.0, 1.0),
+                geometry=None,
+            ),
+        ),
+    )
+    statements: list[str] = []
+    connection.set_trace_callback(statements.append)
+
+    try:
+        completed = precompute.complete_precomputed_admin_region_path_coverage(
+            connection,
+            {1: paths},
+        )
+    finally:
+        connection.set_trace_callback(None)
+
+    assert completed[1] == paths
+    assert not any(
+        "select id, geometry" in " ".join(statement.lower().split())
+        for statement in statements
+    )
+
+
 def test_daily_stats_precompute_rolls_footprints_up_four_depths_in_shanghai_days() -> None:
     precompute = importlib.import_module("enroute_api.admin_regions.precompute")
     connection = sqlite3.connect(":memory:")
@@ -388,6 +765,119 @@ def test_build_admin_region_summary_precompute_atomically_populates_only_new_tab
     assert snapshot_protected_tiles(connection) == protected_before
 
 
+def test_build_admin_region_summary_precompute_fills_partial_tile_coverage_from_geometry() -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+    connection = create_precompute_source_database()
+    insert_region(connection, region_id="fallback-country", level=1)
+    insert_region(
+        connection,
+        region_id="fallback-district",
+        level=4,
+        parent_id="city-a",
+    )
+    connection.execute(
+        """
+        UPDATE admin_regions
+        SET geometry = ?, min_lng = 20, min_lat = 0, max_lng = 22, max_lat = 2
+        WHERE id = 'fallback-country'
+        """,
+        ('{"type":"Polygon","coordinates":[[[20,0],[22,0],[22,2],[20,2],[20,0]]]}',),
+    )
+    connection.execute(
+        """
+        UPDATE admin_regions
+        SET geometry = ?, min_lng = 112, min_lat = 25, max_lng = 113, max_lat = 26
+        WHERE id = 'fallback-district'
+        """,
+        ('{"type":"Polygon","coordinates":[[[112,25],[113,25],[113,26],[112,26],[112,25]]]}',),
+    )
+    insert_raw_footprint(
+        connection,
+        timestamp_seconds=int(datetime(2026, 7, 14, 16, 2, tzinfo=timezone.utc).timestamp()),
+        region_id="fallback-district",
+    )
+    connection.commit()
+
+    result = precompute.build_admin_region_summary_precompute(connection, updated_at=123)
+
+    assert result.thumbnail_region_path_count == 6
+    fallback_paths = connection.execute(
+        """
+        SELECT depth, region_id, path
+        FROM admin_region_thumbnail_region_paths
+        WHERE region_id IN ('fallback-country', 'fallback-district')
+        ORDER BY depth, region_id
+        """,
+    ).fetchall()
+    assert [(int(row[0]), str(row[1])) for row in fallback_paths] == [
+        (1, "fallback-country"),
+        (4, "fallback-district"),
+    ]
+    assert all(str(row[2]).startswith("M") for row in fallback_paths)
+    assert connection.execute(
+        """
+        SELECT footprint_count
+        FROM admin_region_daily_stats
+        WHERE depth = 4 AND region_id = 'fallback-district' AND day = 20260715
+        """,
+    ).fetchone()[0] == 1
+
+
+def test_build_admin_region_summary_precompute_replaces_empty_tile_path_from_geometry() -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+    connection = create_precompute_source_database()
+    insert_region(connection, region_id="tiny-country", level=1)
+    connection.execute(
+        """
+        UPDATE admin_regions
+        SET geometry = ?, min_lng = 30, min_lat = 0, max_lng = 31, max_lat = 1
+        WHERE id = 'tiny-country'
+        """,
+        ('{"type":"Polygon","coordinates":[[[30,0],[31,0],[31,1],[30,1],[30,0]]]}',),
+    )
+    tile = encode_geographic_admin_region_tile(
+        depth=1,
+        components={
+            "country-a": (-10.0, 10.0, 10.0, 30.0),
+            "tiny-country": (30.0, 0.0, 30.4, 0.4),
+        },
+        z=0,
+        x=0,
+        y=0,
+    )
+    connection.execute(
+        """
+        UPDATE admin_region_tiles
+        SET tile = ?, feature_count = 2, updated_at = 999
+        WHERE focus_region_id = 'world'
+          AND depth = 1 AND z = 0 AND x = 0 AND y = 0
+        """,
+        (tile,),
+    )
+    connection.commit()
+    tile_paths = precompute.build_precomputed_admin_region_thumbnail_paths(
+        AdminRegionThumbnailTile(z=0, x=0, y=0, content=tile),
+        depth=1,
+    )
+    assert next(
+        path.path for path in tile_paths.region_paths if path.region_id == "tiny-country"
+    ) == ""
+
+    result = precompute.build_admin_region_summary_precompute(connection, updated_at=123)
+
+    assert result.thumbnail_region_path_count == 5
+    assert connection.execute(
+        """
+        SELECT path
+        FROM admin_region_thumbnail_region_paths
+        WHERE depth = 1 AND region_id = 'tiny-country'
+        """,
+    ).fetchone()[0].startswith("M")
+    assert connection.execute(
+        "SELECT path FROM admin_region_thumbnail_bases WHERE scope = 'world'",
+    ).fetchone()[0] == tile_paths.base_path
+
+
 def test_build_admin_region_summary_precompute_rolls_back_to_previous_complete_result() -> None:
     precompute = importlib.import_module("enroute_api.admin_regions.precompute")
     connection = create_precompute_source_database()
@@ -407,6 +897,19 @@ def test_build_admin_region_summary_precompute_rolls_back_to_previous_complete_r
         precompute.build_admin_region_summary_precompute(connection, updated_at=456)
 
     assert snapshot_summary_precompute(connection) == previous_rows
+
+
+def test_build_admin_region_summary_precompute_rejects_empty_canonical_region_depth() -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+    connection = create_precompute_source_database()
+    connection.execute("UPDATE admin_regions SET level = 5 WHERE id = 'district-a'")
+    connection.commit()
+
+    with pytest.raises(
+        precompute.AdminRegionPrecomputeSourceError,
+        match="no canonical regions at depth 4",
+    ):
+        precompute.build_admin_region_summary_precompute(connection, updated_at=456)
 
 
 def test_build_admin_region_summary_precompute_rejects_incomplete_region_paths() -> None:

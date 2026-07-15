@@ -297,6 +297,31 @@ def test_areacity_import_stores_wgs84_geometry_and_preserves_source_geometry(
     assert match == "110000"
 
 
+def test_admin_region_summary_metadata_query_uses_covering_index() -> None:
+    connection = sqlite3.connect(":memory:")
+    initialize_admin_region_schema(connection)
+
+    plan = [
+        str(row[3]).lower()
+        for row in connection.execute(
+            """
+            EXPLAIN QUERY PLAN
+            SELECT id, name, min_lng, min_lat, max_lng, max_lat
+            FROM admin_regions
+            WHERE level = ?
+            ORDER BY id
+            """,
+            (4,),
+        )
+    ]
+
+    assert any(
+        "using covering index idx_admin_regions_summary_metadata" in detail
+        for detail in plan
+    ), plan
+    assert not any("temp b-tree" in detail for detail in plan), plan
+
+
 def test_initialize_admin_region_schema_migrates_source_geometry_columns(
     tmp_path: Path,
 ):
