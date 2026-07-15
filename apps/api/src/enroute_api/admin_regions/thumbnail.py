@@ -815,11 +815,21 @@ def safe_union(
     non_empty = [geometry for geometry in geometries if not geometry.is_empty]
     if not non_empty:
         return GeometryCollection()
+    prepared = [
+        geometry
+        if (
+            isinstance(geometry, (Polygon, MultiPolygon))
+            and geometry.is_valid
+            and not geometry.has_z
+        )
+        else repair_polygonal_geometry(geometry)
+        for geometry in non_empty
+    ]
     try:
-        return union_all(non_empty, grid_size=grid_size)
+        return union_all(prepared, grid_size=grid_size)
     except GEOSException:
         unioned = union_all(
-            [repair_polygonal_geometry(geometry.buffer(0)) for geometry in non_empty],
+            [repair_polygonal_geometry(geometry.buffer(0)) for geometry in prepared],
             grid_size=grid_size,
         )
         return repair_polygonal_geometry(unioned)

@@ -71,6 +71,33 @@ def svg_subpath_polygons(path: str) -> tuple[Polygon, ...]:
     return tuple(polygons)
 
 
+def invalid_bow_tie_features(count: int = 8) -> list[dict[str, object]]:
+    features = []
+    for index in range(count):
+        offset = index * 10
+        features.append(
+            {
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [
+                        [
+                            [offset, 0],
+                            [offset + 2, 2],
+                            [offset, 2],
+                            [offset + 2, 0],
+                            [offset, 0],
+                        ],
+                    ],
+                },
+                "properties": {
+                    "region_id": f"region-{index % 2}",
+                    "kind": "fill",
+                },
+            },
+        )
+    return features
+
+
 @pytest.fixture
 def connection():
     connection = sqlite3.connect(":memory:")
@@ -504,6 +531,95 @@ def test_decode_fast_paths_valid_polygonal_shapes(
     assert isinstance(decoded["multipolygon"][0], MultiPolygon)
 
 
+def test_decode_parallel_repair_matches_serial_order(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    features = invalid_bow_tie_features()
+
+    def decode_invalid_geometries(
+        tile: bytes,
+        *,
+        default_options: dict[str, bool],
+    ):
+        del tile
+        assert default_options == {"y_coord_down": True}
+        return {"admin_regions": {"features": features}}
+
+    executor_worker_counts = []
+    real_executor = thumbnail_module.ThreadPoolExecutor
+
+    def tracking_executor(*args, **kwargs):
+        executor_worker_counts.append(kwargs["max_workers"])
+        return real_executor(*args, **kwargs)
+
+    monkeypatch.setattr(thumbnail_module, "decode", decode_invalid_geometries)
+    monkeypatch.setattr(thumbnail_module, "ThreadPoolExecutor", tracking_executor)
+    monkeypatch.setattr(thumbnail_module.os, "cpu_count", lambda: 8)
+
+    parallel = thumbnail_module.decode_fill_geometries(b"parallel")
+
+    monkeypatch.setattr(thumbnail_module.os, "cpu_count", lambda: 1)
+    serial = thumbnail_module.decode_fill_geometries(b"serial")
+
+    assert executor_worker_counts == [2]
+    assert tuple(parallel) == tuple(serial) == ("region-0", "region-1")
+    assert {
+        region_id: tuple(geometry.wkb_hex for geometry in geometries)
+        for region_id, geometries in parallel.items()
+    } == {
+        region_id: tuple(geometry.wkb_hex for geometry in geometries)
+        for region_id, geometries in serial.items()
+    }
+    assert [geometry.bounds[0] for geometry in parallel["region-0"]] == [
+        0.0,
+        20.0,
+        40.0,
+        60.0,
+    ]
+    assert [geometry.bounds[0] for geometry in parallel["region-1"]] == [
+        10.0,
+        30.0,
+        50.0,
+        70.0,
+    ]
+
+
+def test_decode_parallel_repair_propagates_worker_exception(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    features = invalid_bow_tie_features()
+
+    def decode_invalid_geometries(
+        tile: bytes,
+        *,
+        default_options: dict[str, bool],
+    ):
+        del tile
+        assert default_options == {"y_coord_down": True}
+        return {"admin_regions": {"features": features}}
+
+    failure = RuntimeError("worker repair failed")
+    real_repair = thumbnail_module.repair_polygonal_geometry
+
+    def repair_or_fail(geometry):
+        if geometry.bounds[0] == 30.0:
+            raise failure
+        return real_repair(geometry)
+
+    monkeypatch.setattr(thumbnail_module, "decode", decode_invalid_geometries)
+    monkeypatch.setattr(thumbnail_module.os, "cpu_count", lambda: 8)
+    monkeypatch.setattr(
+        thumbnail_module,
+        "repair_polygonal_geometry",
+        repair_or_fail,
+    )
+
+    with pytest.raises(RuntimeError) as raised:
+        thumbnail_module.decode_fill_geometries(b"parallel")
+
+    assert raised.value is failure
+
+
 def test_safe_union_does_not_repair_prepared_valid_inputs(
     monkeypatch: pytest.MonkeyPatch,
 ):
@@ -531,6 +647,21 @@ def test_safe_union_does_not_repair_prepared_valid_inputs(
 
     assert unioned.is_valid
     assert unioned.area == pytest.approx(sum(geometry.area for geometry in prepared))
+
+
+def test_safe_union_repairs_single_invalid_polygon():
+    bow_tie = Polygon([(0, 0), (2, 2), (0, 2), (2, 0), (0, 0)])
+    assert not bow_tie.is_valid
+    assert not bow_tie.has_z
+
+    unioned = thumbnail_module.safe_union([bow_tie], grid_size=0.0)
+    polygons = tuple(thumbnail_module.iter_polygons(unioned))
+
+    assert isinstance(unioned, (Polygon, MultiPolygon))
+    assert unioned.is_valid
+    assert not unioned.has_z
+    assert len(polygons) == 2
+    assert unioned.area == pytest.approx(2.0)
 
 
 def test_china_z1_base_preserves_disconnected_south_china_sea_components(
