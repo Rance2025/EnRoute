@@ -15,11 +15,7 @@ const citySummary: AdminRegionSummary = {
   visitedRegionIds: ['310100', '330100', '440100'],
   visitedCount: 3,
   totalCount: 12,
-  thumbnail: {
-    viewBox: '0 0 320 180',
-    basePath: 'M0 0L320 0L320 180L0 180Z',
-    visitedPath: 'M10 10L80 10L80 60L10 60Z',
-  },
+  visitedPath: 'M10 10L80 10L80 60L10 60Z',
   rankings: [
     {
       rank: 1,
@@ -70,6 +66,7 @@ function renderPanel({
   depth = 3,
   status = 'ready',
   summary = citySummary,
+  thumbnailBasePath = 'M0 0L320 0L320 180L0 180Z',
   onDepthChange = vi.fn(),
   onRegionSelect = vi.fn(),
   onRetry = vi.fn(),
@@ -77,6 +74,7 @@ function renderPanel({
   depth?: AdminRegionDepth
   status?: 'idle' | 'loading' | 'ready' | 'error'
   summary?: AdminRegionSummary | null
+  thumbnailBasePath?: string
   onDepthChange?: (depth: AdminRegionDepth) => void
   onRegionSelect?: (ranking: AdminRegionSummary['rankings'][number]) => void
   onRetry?: () => void
@@ -86,6 +84,7 @@ function renderPanel({
       depth={depth}
       status={status}
       summary={summary}
+      thumbnailBasePath={thumbnailBasePath}
       onDepthChange={onDepthChange}
       onRegionSelect={onRegionSelect}
       onRetry={onRetry}
@@ -131,15 +130,15 @@ describe('AdminRegionContextPanel', () => {
 
     const thumbnail = screen.getByLabelText('城市足迹缩略图')
     expectElementsInDocumentOrder(atlasHead as Element, thumbnail, depthControl)
-    expect(thumbnail).toHaveAttribute('viewBox', citySummary.thumbnail.viewBox)
+    expect(thumbnail).toHaveAttribute('viewBox', '0 0 320 180')
     expect(thumbnail).toHaveAttribute('preserveAspectRatio', 'xMidYMid meet')
     expect(thumbnail.querySelector('.admin-region-atlas-card__base')).toHaveAttribute(
       'd',
-      citySummary.thumbnail.basePath,
+      'M0 0L320 0L320 180L0 180Z',
     )
     expect(thumbnail.querySelector('.admin-region-atlas-card__visited')).toHaveAttribute(
       'd',
-      citySummary.thumbnail.visitedPath,
+      citySummary.visitedPath,
     )
 
     fireEvent.click(within(depthControl).getByRole('button', { name: '区' }))
@@ -147,13 +146,18 @@ describe('AdminRegionContextPanel', () => {
   })
 
   it.each(['loading', 'error'] as const)(
-    'uses the 16:9 fallback thumbnail while the %s summary is unavailable',
+    'keeps the static 16:9 base while the dynamic summary is %s',
     (status) => {
       renderPanel({ status, summary: null })
 
       const thumbnail = screen.getByLabelText('城市足迹缩略图')
       expect(thumbnail).toHaveAttribute('viewBox', '0 0 320 180')
       expect(thumbnail).toHaveAttribute('preserveAspectRatio', 'xMidYMid meet')
+      expect(thumbnail.querySelector('.admin-region-atlas-card__base')).toHaveAttribute(
+        'd',
+        'M0 0L320 0L320 180L0 180Z',
+      )
+      expect(thumbnail.querySelector('.admin-region-atlas-card__visited')).toHaveAttribute('d', '')
     },
   )
 
@@ -167,6 +171,7 @@ describe('AdminRegionContextPanel', () => {
         depth={1}
         status="ready"
         summary={countrySummary}
+        thumbnailBasePath="M0 0Z"
         onDepthChange={vi.fn()}
         onRegionSelect={vi.fn()}
         onRetry={vi.fn()}
@@ -179,6 +184,7 @@ describe('AdminRegionContextPanel', () => {
         depth={2}
         status="ready"
         summary={provinceSummary}
+        thumbnailBasePath="M0 0Z"
         onDepthChange={vi.fn()}
         onRegionSelect={vi.fn()}
         onRetry={vi.fn()}
@@ -191,6 +197,7 @@ describe('AdminRegionContextPanel', () => {
         depth={4}
         status="ready"
         summary={districtSummary}
+        thumbnailBasePath="M0 0Z"
         onDepthChange={vi.fn()}
         onRegionSelect={vi.fn()}
         onRetry={vi.fn()}

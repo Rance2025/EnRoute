@@ -6,6 +6,7 @@ type AdminRegionSummaryStatus = 'idle' | 'loading' | 'ready' | 'error'
 type AdminRegionContextPanelProps = {
   depth: AdminRegionDepth
   summary: AdminRegionSummary | null
+  thumbnailBasePath: string
   status: AdminRegionSummaryStatus
   onDepthChange: (depth: AdminRegionDepth) => void
   onRegionSelect: (ranking: AdminRegionRanking) => void
@@ -29,6 +30,7 @@ const DEPTH_UNITS: Record<AdminRegionDepth, string> = {
 export function AdminRegionContextPanel({
   depth,
   summary,
+  thumbnailBasePath,
   status,
   onDepthChange,
   onRegionSelect,
@@ -58,14 +60,14 @@ export function AdminRegionContextPanel({
         </div>
         <svg
           className="admin-region-atlas-card__thumbnail"
-          viewBox={summary?.thumbnail.viewBox ?? '0 0 320 180'}
+          viewBox="0 0 320 180"
           preserveAspectRatio="xMidYMid meet"
           role="img"
           aria-label={thumbnailLabel}
           focusable="false"
         >
-          <path className="admin-region-atlas-card__base" d={summary?.thumbnail.basePath ?? ''} />
-          <path className="admin-region-atlas-card__visited" d={summary?.thumbnail.visitedPath ?? ''} />
+          <path className="admin-region-atlas-card__base" d={thumbnailBasePath} />
+          <path className="admin-region-atlas-card__visited" d={summary?.visitedPath ?? ''} />
         </svg>
         <DepthControl depth={depth} onDepthChange={onDepthChange} />
         {status === 'loading' ? (

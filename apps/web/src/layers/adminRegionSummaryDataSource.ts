@@ -21,11 +21,7 @@ export type AdminRegionSummary = {
   visitedRegionIds: string[]
   visitedCount: number
   totalCount: number
-  thumbnail: {
-    viewBox: string
-    basePath: string
-    visitedPath: string
-  }
+  visitedPath: string
   rankings: AdminRegionRanking[]
 }
 
@@ -70,7 +66,7 @@ function isAdminRegionSummary(value: unknown): value is AdminRegionSummary {
     value.visitedRegionIds.every((regionId) => typeof regionId === 'string') &&
     isNonNegativeInteger(value.visitedCount) &&
     isNonNegativeInteger(value.totalCount) &&
-    isAdminRegionThumbnail(value.thumbnail) &&
+    typeof value.visitedPath === 'string' &&
     Array.isArray(value.rankings) &&
     value.rankings.every(isAdminRegionRanking)
   )
@@ -78,15 +74,6 @@ function isAdminRegionSummary(value: unknown): value is AdminRegionSummary {
 
 function isAdminRegionDepth(value: unknown): value is AdminRegionDepth {
   return value === 1 || value === 2 || value === 3 || value === 4
-}
-
-function isAdminRegionThumbnail(value: unknown): value is AdminRegionSummary['thumbnail'] {
-  return (
-    isRecord(value) &&
-    typeof value.viewBox === 'string' &&
-    typeof value.basePath === 'string' &&
-    typeof value.visitedPath === 'string'
-  )
 }
 
 function isAdminRegionRanking(value: unknown): value is AdminRegionRanking {
