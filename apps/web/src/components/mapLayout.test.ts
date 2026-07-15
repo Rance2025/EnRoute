@@ -2068,6 +2068,25 @@ describe('map chrome layout', () => {
     expect(depthControlSourceIndex).toBeGreaterThan(thumbnailSourceIndex)
   })
 
+  it('aligns administrative region rankings in one line without separators', () => {
+    const rowRule = cssRule('.admin-region-ranking-card__row')
+    const nameRule = cssRule('.admin-region-ranking-card__name')
+    const barRule = cssRule('.admin-region-ranking-card__bar')
+    const valueRule = cssRule('.admin-region-ranking-card__row strong')
+
+    expect(rowRule).toContain('grid-template-columns: 22px 4em minmax(0, 1fr) auto')
+    expect(rowRule).toContain('font-size: 12px')
+    expect(rowRule).not.toContain('border-bottom')
+    expect(nameRule).toContain('overflow: hidden')
+    expect(nameRule).toContain('text-overflow: ellipsis')
+    expect(nameRule).toContain('white-space: nowrap')
+    expect(barRule).toContain('min-width: 0')
+    expect(cssRule('.admin-region-ranking-card__bar span')).toContain(
+      'transform-origin: left center',
+    )
+    expect(valueRule).toContain('font-variant-numeric: tabular-nums')
+  })
+
   it('covers antialias seams only on visited administrative region paths', () => {
     const baseRule = cssRule('.admin-region-atlas-card__base')
     const visitedRule = cssRule('.admin-region-atlas-card__visited')

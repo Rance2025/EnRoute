@@ -164,11 +164,11 @@ function RankingRow({
         onClick={() => onRegionSelect(ranking)}
       >
         <span className="admin-region-ranking-card__rank">{ranking.rank}</span>
-        <span className="admin-region-ranking-card__main">
-          <span className="admin-region-ranking-card__name">{ranking.name}</span>
-          <span className="admin-region-ranking-card__bar" aria-hidden="true">
-            <span style={{ transform: `scaleX(${ratio})` }} />
-          </span>
+        <span className="admin-region-ranking-card__name" title={ranking.name}>
+          {ranking.name}
+        </span>
+        <span className="admin-region-ranking-card__bar" aria-hidden="true">
+          <span style={{ transform: `scaleX(${ratio})` }} />
         </span>
         <strong>{ranking.footprintCount}</strong>
       </button>
