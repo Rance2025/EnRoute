@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import {
+  ADMIN_REGION_FILL_OPACITY_STORAGE_KEY,
   ADMIN_REGION_LINES_VISIBLE_STORAGE_KEY,
   GLASS_PANEL_OPACITY_STORAGE_KEY,
   MAP_ADMIN_BOUNDARIES_VISIBLE_STORAGE_KEY,
@@ -12,6 +13,7 @@ import {
   NAVIGATION_STYLE_STORAGE_KEY,
   SHOW_ALL_ADMIN_REGIONS_STORAGE_KEY,
   SHOW_FOOTPRINTS_IN_REGION_MODE_STORAGE_KEY,
+  readAdminRegionFillOpacity,
   readAdminRegionLinesVisible,
   readGlassPanelOpacity,
   readMapAdminBoundariesVisible,
@@ -23,6 +25,7 @@ import {
   readNavigationStyle,
   readShowAllAdminRegions,
   readShowFootprintsInRegionMode,
+  writeAdminRegionFillOpacity,
   writeAdminRegionLinesVisible,
   writeMapAdminBoundariesVisible,
   writeMapLanguage,
@@ -254,6 +257,33 @@ describe('navigationPreferences', () => {
     expect(readShowAllAdminRegions(storage)).toBe(false)
     expect(readShowFootprintsInRegionMode(storage)).toBe(false)
     expect(readAdminRegionLinesVisible(storage)).toBe(true)
+    expect(readAdminRegionFillOpacity(storage)).toBe(0.18)
+  })
+
+  it('normalizes the stored admin-region fill opacity preference', () => {
+    expect(readAdminRegionFillOpacity(
+      createStorage('0.42', ADMIN_REGION_FILL_OPACITY_STORAGE_KEY),
+    )).toBe(0.42)
+    expect(readAdminRegionFillOpacity(
+      createStorage('0.01', ADMIN_REGION_FILL_OPACITY_STORAGE_KEY),
+    )).toBe(0.05)
+    expect(readAdminRegionFillOpacity(
+      createStorage('1.2', ADMIN_REGION_FILL_OPACITY_STORAGE_KEY),
+    )).toBe(1)
+    expect(readAdminRegionFillOpacity(
+      createStorage('wide', ADMIN_REGION_FILL_OPACITY_STORAGE_KEY),
+    )).toBe(0.18)
+  })
+
+  it('writes the admin-region fill opacity rounded to 0.01 precision', () => {
+    const storage = createStorage()
+
+    writeAdminRegionFillOpacity(0.736, storage)
+
+    expect(storage.setItem).toHaveBeenCalledWith(
+      ADMIN_REGION_FILL_OPACITY_STORAGE_KEY,
+      '0.74',
+    )
   })
 
   it('reads stored region page display preferences', () => {
@@ -316,9 +346,11 @@ describe('navigationPreferences', () => {
       expect(readShowAllAdminRegions()).toBe(false)
       expect(readShowFootprintsInRegionMode()).toBe(false)
       expect(readAdminRegionLinesVisible()).toBe(true)
+      expect(readAdminRegionFillOpacity()).toBe(0.18)
       expect(() => writeShowAllAdminRegions(true)).not.toThrow()
       expect(() => writeShowFootprintsInRegionMode(true)).not.toThrow()
       expect(() => writeAdminRegionLinesVisible(false)).not.toThrow()
+      expect(() => writeAdminRegionFillOpacity(0.42)).not.toThrow()
     } finally {
       vi.unstubAllGlobals()
     }
@@ -356,8 +388,10 @@ describe('navigationPreferences', () => {
     expect(readShowAllAdminRegions(storage)).toBe(false)
     expect(readShowFootprintsInRegionMode(storage)).toBe(false)
     expect(readAdminRegionLinesVisible(storage)).toBe(true)
+    expect(readAdminRegionFillOpacity(storage)).toBe(0.18)
     expect(() => writeShowAllAdminRegions(true, storage)).not.toThrow()
     expect(() => writeShowFootprintsInRegionMode(true, storage)).not.toThrow()
     expect(() => writeAdminRegionLinesVisible(false, storage)).not.toThrow()
+    expect(() => writeAdminRegionFillOpacity(0.42, storage)).not.toThrow()
   })
 })

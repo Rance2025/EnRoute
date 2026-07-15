@@ -10,6 +10,8 @@ vi.mock('./components/MapboxCanvas', async () => {
       adminRegionVisibleIds,
       adminBoundariesVisible,
       adminRegionLinesVisible,
+      adminRegionFillOpacity,
+      footprintStyleControlsVisible,
       footprintsVisible,
       selectedAdminRegion,
       placeLabelsVisible,
@@ -20,6 +22,8 @@ vi.mock('./components/MapboxCanvas', async () => {
       adminRegionVisibleIds?: string[] | null
       adminBoundariesVisible?: boolean
       adminRegionLinesVisible?: boolean
+      adminRegionFillOpacity?: number
+      footprintStyleControlsVisible?: boolean
       footprintsVisible?: boolean
       selectedAdminRegion?: { regionId: string } | null
       placeLabelsVisible?: boolean
@@ -75,6 +79,8 @@ vi.mock('./components/MapboxCanvas', async () => {
               : adminRegionVisibleIds.join(','),
           'data-admin-boundaries-visible': String(adminBoundariesVisible),
           'data-admin-region-lines-visible': String(adminRegionLinesVisible),
+          'data-admin-region-fill-opacity': String(adminRegionFillOpacity),
+          'data-footprint-style-controls-visible': String(footprintStyleControlsVisible),
           'data-footprints-visible': String(footprintsVisible),
           'data-selected-admin-region-id': selectedAdminRegion?.regionId,
           'data-place-labels-visible': String(placeLabelsVisible),
@@ -893,6 +899,14 @@ describe('App', () => {
 
     expect(showAll).toHaveAttribute('aria-checked', 'false')
     expect(showPoints).toHaveAttribute('aria-checked', 'false')
+    expect(screen.getByTestId('mapbox-canvas')).toHaveAttribute(
+      'data-footprint-style-controls-visible',
+      'false',
+    )
+    expect(screen.getByTestId('mapbox-canvas')).toHaveAttribute(
+      'data-admin-region-fill-opacity',
+      '0.18',
+    )
 
     fireEvent.click(showAll)
     fireEvent.click(showPoints)
@@ -902,6 +916,10 @@ describe('App', () => {
       'all',
     )
     expect(screen.getByTestId('mapbox-canvas')).toHaveAttribute('data-footprints-visible', 'true')
+    expect(screen.getByTestId('mapbox-canvas')).toHaveAttribute(
+      'data-footprint-style-controls-visible',
+      'true',
+    )
     expect(window.localStorage.getItem('enroute:show-all-admin-regions')).toBe('true')
     expect(window.localStorage.getItem('enroute:show-footprints-in-region-mode')).toBe('true')
   })

@@ -3,6 +3,17 @@ import { describe, expect, it } from 'vitest'
 import * as adminRegionVectorTiles from './adminRegionVectorTileSource'
 
 describe('adminRegionVectorTileSource', () => {
+  it('normalizes the configurable admin-region fill opacity', () => {
+    expect(adminRegionVectorTiles.DEFAULT_ADMIN_REGION_FILL_OPACITY).toBe(0.18)
+    expect(adminRegionVectorTiles.ADMIN_REGION_FILL_OPACITY_MIN).toBe(0.05)
+    expect(adminRegionVectorTiles.ADMIN_REGION_FILL_OPACITY_MAX).toBe(1)
+    expect(adminRegionVectorTiles.ADMIN_REGION_FILL_OPACITY_STEP).toBe(0.01)
+    expect(adminRegionVectorTiles.normalizeAdminRegionFillOpacity(0.736)).toBe(0.74)
+    expect(adminRegionVectorTiles.normalizeAdminRegionFillOpacity(0.01)).toBe(0.05)
+    expect(adminRegionVectorTiles.normalizeAdminRegionFillOpacity(1.2)).toBe(1)
+    expect(adminRegionVectorTiles.normalizeAdminRegionFillOpacity(Number.NaN)).toBe(0.18)
+  })
+
   it('builds a global Mapbox vector source capped at the admin cache zoom', () => {
     const source = adminRegionVectorTiles.createAdminRegionVectorTileSource({
       focusRegionId: 'world',
@@ -19,7 +30,7 @@ describe('adminRegionVectorTileSource', () => {
   })
 
   it('builds admin-region fill and line layers from the vector tile source layer', () => {
-    const fillLayer = adminRegionVectorTiles.createAdminRegionFillLayer()
+    const fillLayer = adminRegionVectorTiles.createAdminRegionFillLayer(undefined, 0.42)
     const lineLayer = adminRegionVectorTiles.createAdminRegionLineLayer()
 
     expect(fillLayer).toMatchObject({
@@ -36,7 +47,7 @@ describe('adminRegionVectorTileSource', () => {
     })
     expect(fillLayer.paint).toMatchObject({
       'fill-color': '#1f6f67',
-      'fill-opacity': 0.18,
+      'fill-opacity': 0.42,
     })
 
     expect(lineLayer).toMatchObject({

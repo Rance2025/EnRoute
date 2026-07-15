@@ -16,6 +16,12 @@ export const ADMIN_REGION_FILL_LAYER_ID = 'admin-regions-fill'
 export const ADMIN_REGION_LINE_LAYER_ID = 'admin-regions-line'
 export const ADMIN_REGION_SELECTION_FILL_LAYER_ID = 'admin-regions-selection-fill'
 export const ADMIN_REGION_BOUNDARY_REGION_IDS_PROPERTY = 'boundary_region_ids'
+export const DEFAULT_ADMIN_REGION_FILL_OPACITY = 0.18
+export const ADMIN_REGION_FILL_OPACITY_MIN = 0.05
+export const ADMIN_REGION_FILL_OPACITY_MAX = 1
+export const ADMIN_REGION_FILL_OPACITY_STEP = 0.01
+
+const ADMIN_REGION_FILL_OPACITY_PRECISION = 100
 
 type AdminRegionLayerFilter = NonNullable<LayerSpecification['filter']>
 
@@ -62,7 +68,24 @@ export function createAdminRegionSelectionFillFilter(regionId?: string): AdminRe
   ]
 }
 
-export function createAdminRegionFillLayer(activeRegionIds?: string[]): LayerSpecification {
+export function normalizeAdminRegionFillOpacity(opacity: unknown) {
+  if (typeof opacity !== 'number' || !Number.isFinite(opacity)) {
+    return DEFAULT_ADMIN_REGION_FILL_OPACITY
+  }
+
+  const clampedOpacity = Math.min(
+    Math.max(opacity, ADMIN_REGION_FILL_OPACITY_MIN),
+    ADMIN_REGION_FILL_OPACITY_MAX,
+  )
+
+  return Math.round(clampedOpacity * ADMIN_REGION_FILL_OPACITY_PRECISION) /
+    ADMIN_REGION_FILL_OPACITY_PRECISION
+}
+
+export function createAdminRegionFillLayer(
+  activeRegionIds?: string[],
+  opacity = DEFAULT_ADMIN_REGION_FILL_OPACITY,
+): LayerSpecification {
   return {
     id: ADMIN_REGION_FILL_LAYER_ID,
     type: 'fill',
@@ -72,7 +95,7 @@ export function createAdminRegionFillLayer(activeRegionIds?: string[]): LayerSpe
     filter: createAdminRegionFillFilter(activeRegionIds),
     paint: {
       'fill-color': '#1f6f67',
-      'fill-opacity': 0.18,
+      'fill-opacity': normalizeAdminRegionFillOpacity(opacity),
       'fill-antialias': false,
     },
   }

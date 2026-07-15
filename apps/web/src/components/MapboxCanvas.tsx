@@ -13,8 +13,10 @@ import {
   createAdminRegionSelectionFillFilter,
   createAdminRegionSelectionFillLayer,
   createAdminRegionVectorTileSource,
+  DEFAULT_ADMIN_REGION_FILL_OPACITY,
   DEFAULT_ADMIN_REGION_TILE_URL,
   MAX_ADMIN_REGION_TILE_ZOOM,
+  normalizeAdminRegionFillOpacity,
   type AdminRegionDepth,
 } from '../layers/adminRegionVectorTileSource'
 import {
@@ -52,6 +54,8 @@ type MapboxCanvasProps = {
   adminRegionActiveOnly?: boolean
   adminRegionVisibleIds?: string[] | null
   adminRegionLinesVisible?: boolean
+  adminRegionFillOpacity?: number
+  footprintStyleControlsVisible?: boolean
   footprintsVisible?: boolean
   selectedAdminRegion?: {
     regionId: string
@@ -66,6 +70,7 @@ type MapboxCanvasProps = {
   onPlaceLabelsVisibleChange?: (visible: boolean) => void
   onAdminBoundariesVisibleChange?: (visible: boolean) => void
   onAdminRegionLinesVisibleChange?: (visible: boolean) => void
+  onAdminRegionFillOpacityChange?: (opacity: number) => void
   onMapStyleChange?: (style: MapStylePreference) => void
   onMapProjectionChange?: (projection: MapboxProjection) => void
   onMapLanguageChange?: (language: MapboxLanguagePreference) => void
@@ -218,6 +223,8 @@ function MapboxCanvasComponent({
   adminRegionActiveOnly = false,
   adminRegionVisibleIds,
   adminRegionLinesVisible = true,
+  adminRegionFillOpacity = DEFAULT_ADMIN_REGION_FILL_OPACITY,
+  footprintStyleControlsVisible = true,
   footprintsVisible = true,
   selectedAdminRegion = null,
   adminRegionDepth = DEFAULT_ADMIN_REGION_DEPTH,
@@ -229,6 +236,7 @@ function MapboxCanvasComponent({
   onPlaceLabelsVisibleChange,
   onAdminBoundariesVisibleChange,
   onAdminRegionLinesVisibleChange,
+  onAdminRegionFillOpacityChange,
   onMapStyleChange,
   onMapProjectionChange,
   onMapLanguageChange,
@@ -256,6 +264,10 @@ function MapboxCanvasComponent({
   } | null>(null)
   const adminRegionActiveOnlyRef = useRef(adminRegionActiveOnly)
   const adminRegionVisibleIdsRef = useRef(adminRegionVisibleIds)
+  const adminRegionLinesVisibleRef = useRef(adminRegionLinesVisible)
+  const adminRegionFillOpacityRef = useRef(
+    normalizeAdminRegionFillOpacity(adminRegionFillOpacity),
+  )
   const footprintsVisibleRef = useRef(footprintsVisible)
   const appliedLayerVisibilityRef = useRef({
     styleLoadRevision: -1,
@@ -326,6 +338,26 @@ function MapboxCanvasComponent({
   useEffect(() => {
     footprintsVisibleRef.current = footprintsVisible
   }, [footprintsVisible])
+
+  useEffect(() => {
+    adminRegionLinesVisibleRef.current = adminRegionLinesVisible
+  }, [adminRegionLinesVisible])
+
+  useEffect(() => {
+    const nextOpacity = normalizeAdminRegionFillOpacity(adminRegionFillOpacity)
+    adminRegionFillOpacityRef.current = nextOpacity
+
+    const map = mapRef.current
+    if (
+      status !== 'ready' ||
+      !styleMutationReady ||
+      !map?.getLayer(ADMIN_REGION_FILL_LAYER_ID)
+    ) {
+      return
+    }
+
+    map.setPaintProperty(ADMIN_REGION_FILL_LAYER_ID, 'fill-opacity', nextOpacity)
+  }, [adminRegionFillOpacity, status, styleMutationReady])
 
   useEffect(() => {
     latestResolvedStyleUrlRef.current = resolvedStyleUrl
@@ -415,8 +447,16 @@ function MapboxCanvasComponent({
       }),
     )
     const activeRegionIds = regionIds ?? undefined
-    map.addLayer(createAdminRegionFillLayer(activeRegionIds))
-    map.addLayer(createAdminRegionLineLayer(activeRegionIds))
+    map.addLayer(createAdminRegionFillLayer(
+      activeRegionIds,
+      adminRegionFillOpacityRef.current,
+    ))
+    map.addLayer({
+      ...createAdminRegionLineLayer(activeRegionIds),
+      layout: {
+        visibility: adminRegionLinesVisibleRef.current ? 'visible' : 'none',
+      },
+    })
     map.addLayer(createAdminRegionSelectionFillLayer())
   }, [removeAdminRegionLayers])
 
@@ -1259,12 +1299,16 @@ function MapboxCanvasComponent({
         placeLabelsVisible={placeLabelsVisible}
         adminBoundariesVisible={adminBoundariesVisible}
         adminRegionLinesVisible={adminRegionLinesVisible}
+        adminRegionControlsVisible={adminRegionUnlockEnabled}
+        adminRegionFillOpacity={adminRegionFillOpacity}
+        footprintStyleControlsVisible={footprintStyleControlsVisible}
         mapStyle={mapStyle}
         mapProjection={resolvedProjection}
         mapLanguage={mapLanguage}
         onPlaceLabelsVisibleChange={onPlaceLabelsVisibleChange}
         onAdminBoundariesVisibleChange={onAdminBoundariesVisibleChange}
         onAdminRegionLinesVisibleChange={onAdminRegionLinesVisibleChange}
+        onAdminRegionFillOpacityChange={onAdminRegionFillOpacityChange}
         onMapStyleChange={onMapStyleChange}
         onMapProjectionChange={onMapProjectionChange}
         onMapLanguageChange={onMapLanguageChange}

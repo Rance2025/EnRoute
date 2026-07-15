@@ -914,6 +914,96 @@ describe('MapboxCanvas footprint vector tiles', () => {
     expect(getMockLayerVisibility(mapRecords[0], 'footprints-circle')).toBe('none')
   })
 
+  it('keeps custom region lines hidden when a level change rebuilds the layer', async () => {
+    const { mapRecords } = mockMapboxRuntime()
+    const { MapboxCanvas } = await import('./MapboxCanvas')
+
+    const { rerender } = render(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        timeRange={selectedRange}
+        adminRegionUnlockEnabled
+        adminRegionDepth={2}
+        adminRegionLinesVisible={false}
+      />,
+    )
+    act(() => mapRecords[0].emit('load'))
+
+    expect(getMockLayerVisibility(mapRecords[0], 'admin-regions-line')).toBe('none')
+
+    rerender(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        timeRange={selectedRange}
+        adminRegionUnlockEnabled
+        adminRegionDepth={3}
+        adminRegionLinesVisible={false}
+      />,
+    )
+
+    expect(getMockLayerVisibility(mapRecords[0], 'admin-regions-line')).toBe('none')
+  })
+
+  it('updates region fill opacity in place and reuses it when a level change rebuilds the layer', async () => {
+    const { mapRecords } = mockMapboxRuntime()
+    const { MapboxCanvas } = await import('./MapboxCanvas')
+
+    const { rerender } = render(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        timeRange={selectedRange}
+        adminRegionUnlockEnabled
+        adminRegionDepth={2}
+        adminRegionFillOpacity={0.42}
+      />,
+    )
+    act(() => mapRecords[0].emit('load'))
+
+    expect(mapRecords[0].layers.find((layer) => (
+      typeof layer === 'object' &&
+      layer !== null &&
+      'id' in layer &&
+      layer.id === 'admin-regions-fill'
+    ))).toMatchObject({
+      paint: expect.objectContaining({ 'fill-opacity': 0.42 }),
+    })
+
+    rerender(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        timeRange={selectedRange}
+        adminRegionUnlockEnabled
+        adminRegionDepth={2}
+        adminRegionFillOpacity={0.64}
+      />,
+    )
+
+    expect(mapRecords[0].paintProperties).toContainEqual([
+      'admin-regions-fill',
+      'fill-opacity',
+      0.64,
+    ])
+
+    rerender(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        timeRange={selectedRange}
+        adminRegionUnlockEnabled
+        adminRegionDepth={4}
+        adminRegionFillOpacity={0.64}
+      />,
+    )
+
+    expect(mapRecords[0].layers.find((layer) => (
+      typeof layer === 'object' &&
+      layer !== null &&
+      'id' in layer &&
+      layer.id === 'admin-regions-fill'
+    ))).toMatchObject({
+      paint: expect.objectContaining({ 'fill-opacity': 0.64 }),
+    })
+  })
+
   it('keeps rebuilt footprint layer hidden until visibility is explicitly restored', async () => {
     const { mapRecords } = mockMapboxRuntime()
     const { MapboxCanvas } = await import('./MapboxCanvas')

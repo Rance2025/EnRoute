@@ -3,6 +3,13 @@ import { forwardRef, useEffect, useId, useRef, useState } from 'react'
 import { Crosshair, Globe2, LocateFixed, Minus, Plus, Settings2 } from 'lucide-react'
 import { MAP_STYLE_OPTIONS, type MapStylePreference } from '../mapStyleOptions'
 import {
+  ADMIN_REGION_FILL_OPACITY_MAX,
+  ADMIN_REGION_FILL_OPACITY_MIN,
+  ADMIN_REGION_FILL_OPACITY_STEP,
+  DEFAULT_ADMIN_REGION_FILL_OPACITY,
+  normalizeAdminRegionFillOpacity,
+} from '../layers/adminRegionVectorTileSource'
+import {
   FOOTPRINT_OPACITY_MAX,
   FOOTPRINT_OPACITY_MIN,
   FOOTPRINT_OPACITY_STEP,
@@ -31,12 +38,16 @@ type MapControlsProps = {
   placeLabelsVisible?: boolean
   adminBoundariesVisible?: boolean
   adminRegionLinesVisible?: boolean
+  adminRegionControlsVisible?: boolean
+  adminRegionFillOpacity?: number
+  footprintStyleControlsVisible?: boolean
   mapStyle?: MapStylePreference
   mapProjection?: MapProjectionPreference
   mapLanguage?: MapLanguagePreference
   onPlaceLabelsVisibleChange?: (visible: boolean) => void
   onAdminBoundariesVisibleChange?: (visible: boolean) => void
   onAdminRegionLinesVisibleChange?: (visible: boolean) => void
+  onAdminRegionFillOpacityChange?: (opacity: number) => void
   onMapStyleChange?: (style: MapStylePreference) => void
   onMapProjectionChange?: (projection: MapProjectionPreference) => void
   onMapLanguageChange?: (language: MapLanguagePreference) => void
@@ -48,12 +59,16 @@ type FootprintStylePopoverProps = {
   placeLabelsVisible?: boolean
   adminBoundariesVisible?: boolean
   adminRegionLinesVisible?: boolean
+  adminRegionControlsVisible?: boolean
+  adminRegionFillOpacity?: number
+  footprintStyleControlsVisible?: boolean
   mapStyle?: MapStylePreference
   mapProjection?: MapProjectionPreference
   mapLanguage?: MapLanguagePreference
   onPlaceLabelsVisibleChange?: (visible: boolean) => void
   onAdminBoundariesVisibleChange?: (visible: boolean) => void
   onAdminRegionLinesVisibleChange?: (visible: boolean) => void
+  onAdminRegionFillOpacityChange?: (opacity: number) => void
   onMapStyleChange?: (style: MapStylePreference) => void
   onMapProjectionChange?: (projection: MapProjectionPreference) => void
   onMapLanguageChange?: (language: MapLanguagePreference) => void
@@ -65,6 +80,7 @@ const MAP_STYLE_LABEL = '\u5730\u56fe\u6837\u5f0f'
 const MAP_PROJECTION_LABEL = '\u5730\u56fe\u5f62\u6001'
 const MAP_LANGUAGE_LABEL = '\u5730\u56fe\u8bed\u8a00'
 const ADMIN_REGION_LINES_LABEL = '\u663e\u793a\u533a\u57df\u8fb9\u754c\u7ebf'
+const ADMIN_REGION_FILL_OPACITY_LABEL = '\u533a\u57df\u586b\u5145\u900f\u660e\u5ea6'
 const MAP_PROJECTION_OPTIONS: Array<{ value: MapProjectionPreference; label: string }> = [
   { value: 'globe', label: '\u7403\u5f62' },
   { value: 'mercator', label: '\u5e73\u9762' },
@@ -86,12 +102,16 @@ export function MapControls({
   placeLabelsVisible = true,
   adminBoundariesVisible = true,
   adminRegionLinesVisible = true,
+  adminRegionControlsVisible = false,
+  adminRegionFillOpacity = DEFAULT_ADMIN_REGION_FILL_OPACITY,
+  footprintStyleControlsVisible = true,
   mapStyle = 'primary',
   mapProjection = 'globe',
   mapLanguage = 'auto',
   onPlaceLabelsVisibleChange,
   onAdminBoundariesVisibleChange,
   onAdminRegionLinesVisibleChange,
+  onAdminRegionFillOpacityChange,
   onMapStyleChange,
   onMapProjectionChange,
   onMapLanguageChange,
@@ -186,12 +206,16 @@ export function MapControls({
           placeLabelsVisible={placeLabelsVisible}
           adminBoundariesVisible={adminBoundariesVisible}
           adminRegionLinesVisible={adminRegionLinesVisible}
+          adminRegionControlsVisible={adminRegionControlsVisible}
+          adminRegionFillOpacity={adminRegionFillOpacity}
+          footprintStyleControlsVisible={footprintStyleControlsVisible}
           mapStyle={mapStyle}
           mapProjection={mapProjection}
           mapLanguage={mapLanguage}
           onPlaceLabelsVisibleChange={onPlaceLabelsVisibleChange}
           onAdminBoundariesVisibleChange={onAdminBoundariesVisibleChange}
           onAdminRegionLinesVisibleChange={onAdminRegionLinesVisibleChange}
+          onAdminRegionFillOpacityChange={onAdminRegionFillOpacityChange}
           onMapStyleChange={onMapStyleChange}
           onMapProjectionChange={onMapProjectionChange}
           onMapLanguageChange={onMapLanguageChange}
@@ -207,12 +231,16 @@ const FootprintStylePopover = forwardRef<HTMLDivElement, FootprintStylePopoverPr
   placeLabelsVisible = true,
   adminBoundariesVisible = true,
   adminRegionLinesVisible = true,
+  adminRegionControlsVisible = false,
+  adminRegionFillOpacity = DEFAULT_ADMIN_REGION_FILL_OPACITY,
+  footprintStyleControlsVisible = true,
   mapStyle = 'primary',
   mapProjection = 'globe',
   mapLanguage = 'auto',
   onPlaceLabelsVisibleChange,
   onAdminBoundariesVisibleChange,
   onAdminRegionLinesVisibleChange,
+  onAdminRegionFillOpacityChange,
   onMapStyleChange,
   onMapProjectionChange,
   onMapLanguageChange,
@@ -224,6 +252,10 @@ const FootprintStylePopover = forwardRef<HTMLDivElement, FootprintStylePopoverPr
   const sizeInputId = useId()
   const opacityInputId = useId()
   const colorInputId = useId()
+  const adminRegionOpacityInputId = useId()
+  const normalizedAdminRegionFillOpacity = normalizeAdminRegionFillOpacity(
+    adminRegionFillOpacity,
+  )
 
   useEffect(() => {
     onFootprintStyleChangeRef.current = onFootprintStyleChange
@@ -288,57 +320,68 @@ const FootprintStylePopover = forwardRef<HTMLDivElement, FootprintStylePopoverPr
     })
   }
 
+  function updateAdminRegionFillOpacity(value: string) {
+    const nextOpacity = Number.parseFloat(value)
+    if (!Number.isFinite(nextOpacity)) return
+
+    onAdminRegionFillOpacityChange?.(normalizeAdminRegionFillOpacity(nextOpacity))
+  }
+
   return (
     <div ref={ref} className="glass-panel glass-panel--solid glass-panel--card footprint-style-popover" role="dialog" aria-label="足迹显示设置">
-      <div className="footprint-style-popover__row">
-        <label className="footprint-style-popover__label" htmlFor={sizeInputId}>足迹点大小</label>
-        <span className="footprint-style-popover__value">{draftFootprintStyle.pixelSize}</span>
-        <input
-          id={sizeInputId}
-          type="range"
-          min={FOOTPRINT_PIXEL_SIZE_MIN}
-          max={FOOTPRINT_PIXEL_SIZE_MAX}
-          step={FOOTPRINT_PIXEL_SIZE_STEP}
-          value={draftFootprintStyle.pixelSize}
-          onChange={(event) => updatePixelSize(event.target.value)}
-        />
-      </div>
-      <div className="footprint-style-popover__row">
-        <label className="footprint-style-popover__label" htmlFor={opacityInputId}>足迹点透明度</label>
-        <span className="footprint-style-popover__value">{draftFootprintStyle.opacity}</span>
-        <input
-          id={opacityInputId}
-          type="range"
-          min={FOOTPRINT_OPACITY_MIN}
-          max={FOOTPRINT_OPACITY_MAX}
-          step={FOOTPRINT_OPACITY_STEP}
-          value={draftFootprintStyle.opacity}
-          onChange={(event) => updateOpacity(event.target.value)}
-        />
-      </div>
-      <div className="footprint-style-popover__row">
-        <label className="footprint-style-popover__label" htmlFor={colorInputId}>足迹点颜色</label>
-        <input
-          id={colorInputId}
-          type="color"
-          value={draftFootprintStyle.color}
-          style={{ '--footprint-color': draftFootprintStyle.color } as CSSProperties}
-          onChange={(event) => updateColor(event.target.value)}
-        />
-      </div>
-      <div className="footprint-style-popover__swatches" aria-label="足迹点颜色预设">
-        {FOOTPRINT_COLOR_SWATCHES.map((color) => (
-          <button
-            key={color}
-            type="button"
-            className="footprint-style-popover__swatch"
-            aria-label={`选择足迹点颜色 ${color}`}
-            title={color}
-            style={{ '--swatch-color': color } as CSSProperties}
-            onClick={() => updateColor(color)}
-          />
-        ))}
-      </div>
+      {footprintStyleControlsVisible ? (
+        <>
+          <div className="footprint-style-popover__row">
+            <label className="footprint-style-popover__label" htmlFor={sizeInputId}>足迹点大小</label>
+            <span className="footprint-style-popover__value">{draftFootprintStyle.pixelSize}</span>
+            <input
+              id={sizeInputId}
+              type="range"
+              min={FOOTPRINT_PIXEL_SIZE_MIN}
+              max={FOOTPRINT_PIXEL_SIZE_MAX}
+              step={FOOTPRINT_PIXEL_SIZE_STEP}
+              value={draftFootprintStyle.pixelSize}
+              onChange={(event) => updatePixelSize(event.target.value)}
+            />
+          </div>
+          <div className="footprint-style-popover__row">
+            <label className="footprint-style-popover__label" htmlFor={opacityInputId}>足迹点透明度</label>
+            <span className="footprint-style-popover__value">{draftFootprintStyle.opacity}</span>
+            <input
+              id={opacityInputId}
+              type="range"
+              min={FOOTPRINT_OPACITY_MIN}
+              max={FOOTPRINT_OPACITY_MAX}
+              step={FOOTPRINT_OPACITY_STEP}
+              value={draftFootprintStyle.opacity}
+              onChange={(event) => updateOpacity(event.target.value)}
+            />
+          </div>
+          <div className="footprint-style-popover__row">
+            <label className="footprint-style-popover__label" htmlFor={colorInputId}>足迹点颜色</label>
+            <input
+              id={colorInputId}
+              type="color"
+              value={draftFootprintStyle.color}
+              style={{ '--footprint-color': draftFootprintStyle.color } as CSSProperties}
+              onChange={(event) => updateColor(event.target.value)}
+            />
+          </div>
+          <div className="footprint-style-popover__swatches" aria-label="足迹点颜色预设">
+            {FOOTPRINT_COLOR_SWATCHES.map((color) => (
+              <button
+                key={color}
+                type="button"
+                className="footprint-style-popover__swatch"
+                aria-label={`选择足迹点颜色 ${color}`}
+                title={color}
+                style={{ '--swatch-color': color } as CSSProperties}
+                onClick={() => updateColor(color)}
+              />
+            ))}
+          </div>
+        </>
+      ) : null}
       {onMapProjectionChange ? (
         <div className="footprint-style-popover__row footprint-style-popover__row--inline">
           <span className="footprint-style-popover__label">{MAP_PROJECTION_LABEL}</span>
@@ -404,7 +447,26 @@ const FootprintStylePopover = forwardRef<HTMLDivElement, FootprintStylePopoverPr
           <span className="footprint-style-popover__switch-control" aria-hidden="true" />
         </button>
       ) : null}
-      {onAdminRegionLinesVisibleChange ? (
+      {adminRegionControlsVisible && onAdminRegionFillOpacityChange ? (
+        <div className="footprint-style-popover__row">
+          <label className="footprint-style-popover__label" htmlFor={adminRegionOpacityInputId}>
+            {ADMIN_REGION_FILL_OPACITY_LABEL}
+          </label>
+          <span className="footprint-style-popover__value">
+            {normalizedAdminRegionFillOpacity}
+          </span>
+          <input
+            id={adminRegionOpacityInputId}
+            type="range"
+            min={ADMIN_REGION_FILL_OPACITY_MIN}
+            max={ADMIN_REGION_FILL_OPACITY_MAX}
+            step={ADMIN_REGION_FILL_OPACITY_STEP}
+            value={normalizedAdminRegionFillOpacity}
+            onChange={(event) => updateAdminRegionFillOpacity(event.target.value)}
+          />
+        </div>
+      ) : null}
+      {adminRegionControlsVisible && onAdminRegionLinesVisibleChange ? (
         <button
           type="button"
           role="switch"
