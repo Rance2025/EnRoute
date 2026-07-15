@@ -42,6 +42,7 @@ import {
 } from './layers/adminRegionSummaryDataSource'
 import { AdminRegionContextPanel } from './components/AdminRegionContextPanel'
 import { AccountingRightContextPanel } from './components/accounting/AccountingRightContextPanel'
+import { WorkspaceLoadBoundary } from './components/WorkspaceLoadBoundary'
 import {
   formatAverageDistanceMeters,
   formatDistanceMeters,
@@ -835,16 +836,18 @@ function App(props: AppProps) {
         </Suspense>
       ) : view === 'accounting' ? (
         <section className="main-workspace" aria-label="在途 EnRoute 主工作区">
-          <Suspense fallback={null}>
-            <LazyAccountingPage
-              section={getAccountingSection(activeSecondaryNavId)}
-              timeRange={selectedTimeRange}
-              statisticsControls={accountingStatisticsControls}
-              shellCommand={accountingShellCommand}
-              onShellCommandHandled={() => setAccountingShellCommand(null)}
-              onShellSnapshotChange={setAccountingShellSnapshot}
-            />
-          </Suspense>
+          <WorkspaceLoadBoundary>
+            <Suspense fallback={null}>
+              <LazyAccountingPage
+                section={getAccountingSection(activeSecondaryNavId)}
+                timeRange={selectedTimeRange}
+                statisticsControls={accountingStatisticsControls}
+                shellCommand={accountingShellCommand}
+                onShellCommandHandled={() => setAccountingShellCommand(null)}
+                onShellSnapshotChange={setAccountingShellSnapshot}
+              />
+            </Suspense>
+          </WorkspaceLoadBoundary>
         </section>
       ) : (
         <PlaceholderWorkspace view={view} />
