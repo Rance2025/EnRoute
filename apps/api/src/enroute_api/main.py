@@ -3,6 +3,8 @@ from __future__ import annotations
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
 
+from .accounting.router import create_accounting_router
+from .accounting.store import AccountingStore
 from .admin_regions.preview import get_shanghai_preview_regions
 from .config import Settings
 from .footprints.store import AdminRegionSummaryInputError, FootprintStore
@@ -17,6 +19,8 @@ def create_app(*, settings: Settings | None = None) -> FastAPI:
         coordinate_system=resolved_settings.footprint_coordinate_system,
         admin_region_data_path=resolved_settings.admin_region_data_path,
     )
+    accounting_store = AccountingStore(resolved_settings.accounting_db_path)
+    app.include_router(create_accounting_router(accounting_store), prefix="/api/accounting")
 
     @app.get("/api/health")
     def health() -> dict[str, str]:

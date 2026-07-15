@@ -1527,6 +1527,12 @@ describe('map chrome layout', () => {
     expect(workspaceRule).toContain(
       'grid-template-columns: minmax(300px, 41fr) minmax(0, 59fr)',
     )
+    expect(workspaceRule).toContain('align-items: stretch')
+    expect(cssRuleIn(accountingCss, '.accounting-insights-column')).toContain('height: 100%')
+    expect(cssRuleIn(accountingCss, '.category-column')).toContain('height: 100%')
+    expect(cssRuleIn(accountingCss, '.net-worth-bridge')).toContain('align-items: stretch')
+    expect(cssRuleIn(accountingCss, '.net-worth-bridge__item > span')).not.toContain('max-height: 72px')
+    expect(cssRuleIn(accountingCss, '.taxonomy-treemap')).toContain('grid-row: 3')
     expect(ledgerWorkspaceSource).toContain('className="ios-ledger-main accounting-ledger-column"')
     expect(ledgerWorkspaceSource).not.toContain('className="ios-ledger-control-panel"')
     expect(ledgerWorkspaceSource).not.toContain('className="ios-panel ios-account-filter-panel"')
@@ -1598,6 +1604,16 @@ describe('map chrome layout', () => {
     expect(ledgerSource).not.toContain('onWheel={handleAccountStackWheel}')
     expect(ledgerSource).toContain('orderedStackSummaries.map')
     expect(ledgerSource).toContain('function rotateAccountSummaries')
+  })
+
+  it('uses a non-passive native wheel listener for the active account carousel', () => {
+    const carouselSource = readFileSync('src/components/accounting/AccountCardCarousel.tsx', 'utf8')
+
+    expect(carouselSource).toContain('const carouselRef = useRef<HTMLDivElement>(null)')
+    expect(carouselSource).toContain("addEventListener('wheel', handleWheel, { passive: false })")
+    expect(carouselSource).toContain("removeEventListener('wheel', handleWheel)")
+    expect(carouselSource).toContain('ref={carouselRef}')
+    expect(carouselSource).not.toContain('onWheel={handleWheel}')
   })
 
   it('keeps all-ledger selection outside the stack and promotes display cards without filtering the ledger', () => {
@@ -1883,7 +1899,7 @@ describe('map chrome layout', () => {
     const transactionRowSource = readFileSync('src/components/accounting/TransactionRow.tsx', 'utf8')
 
     expect(rowRule).toContain('grid-template-columns:')
-    expect(rowRule).toContain('30px minmax(0, 1fr) auto')
+    expect(rowRule).toContain('28px minmax(0, 1fr) minmax(48px, 0.7fr) auto')
     expect(rowRule).toContain('overflow: hidden')
     expect(sideRule).toContain('min-width: 0')
     expect(sideRule).toContain('justify-items: end')

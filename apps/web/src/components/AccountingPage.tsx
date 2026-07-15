@@ -1,9 +1,15 @@
-import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
+import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 
 import './accounting/accounting.css'
 
-import { ledgerAtlasDataset } from '../accounting/ledgerAtlasData'
+import {
+  createAccountingTransaction,
+  loadAccountingDataset,
+  updateAccountingAccount,
+  updateAccountingTransaction,
+} from '../accounting/accountingDataSource'
 import { formatCnyFromCents } from '../accounting/money'
+import type { AccountingDataset } from '../accounting/types'
 import {
   getTopCategoryComposition,
   getTopDirectTagAmounts,
@@ -25,7 +31,7 @@ import type {
   AccountingShellSnapshot,
   AccountingStatisticsControls,
 } from '../accounting/shell'
-import type { TimeRangeSelection } from '../time/timeRange'
+import { createTodayKey, type TimeRangeSelection } from '../time/timeRange'
 import { AnalyticsWorkspace, type AnalyticsFocus } from './accounting/AnalyticsWorkspace'
 import { LedgerWorkspace } from './accounting/LedgerWorkspace'
 import { AccountsWorkspace } from './accounting/AccountsWorkspace'
@@ -34,6 +40,17 @@ import {
   TransactionDialog,
   type TransactionDialogMode,
 } from './accounting/TransactionDialog'
+import { AccountingLoadState } from './accounting/AccountingLoadState'
+
+const EMPTY_ACCOUNTING_DATASET: AccountingDataset = {
+  accounts: [],
+  transactions: [],
+  categories: [],
+  tags: [],
+  imports: [],
+  legacyCategories: [],
+  legacyFunds: [],
+}
 
 type AccountingPageProps = {
   section: AccountingSection
@@ -42,6 +59,7 @@ type AccountingPageProps = {
   shellCommand: AccountingShellAction | null
   onShellCommandHandled: () => void
   onShellSnapshotChange: (snapshot: AccountingShellSnapshot) => void
+  onRequestTimeRangeChange?: (selection: TimeRangeSelection) => void
 }
 
 export function AccountingPage({
@@ -51,34 +69,49 @@ export function AccountingPage({
   shellCommand,
   onShellCommandHandled,
   onShellSnapshotChange,
+  onRequestTimeRangeChange,
 }: AccountingPageProps) {
-  const [dataset, setDataset] = useState(() => ({
-    ...ledgerAtlasDataset,
-    accounts: [...ledgerAtlasDataset.accounts],
-    transactions: [...ledgerAtlasDataset.transactions],
-    categories: [...ledgerAtlasDataset.categories],
-    tags: [...ledgerAtlasDataset.tags],
-  }))
+  const [dataset, setDataset] = useState<AccountingDataset | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [loadAttempt, setLoadAttempt] = useState(0)
   const [dialogMode, setDialogMode] = useState<TransactionDialogMode | null>(null)
   const [dialogReturnFocusTo, setDialogReturnFocusTo] = useState<HTMLElement | null>(null)
-  const [selectedAccountId, setSelectedAccountId] = useState(
-    () => ledgerAtlasDataset.accounts[0]?.id ?? '',
-  )
+  const [selectedAccountId, setSelectedAccountId] = useState('')
   const [analyticsFocus, setAnalyticsFocus] = useState<AnalyticsFocus | null>(null)
+  const didAutoLocateLatestMonthRef = useRef(false)
+  const activeDataset = dataset ?? EMPTY_ACCOUNTING_DATASET
+
+  useEffect(() => {
+    const controller = new AbortController()
+    loadAccountingDataset({ signal: controller.signal })
+      .then((nextDataset) => {
+        setDataset(nextDataset)
+        setSelectedAccountId((current) => (
+          nextDataset.accounts.some((account) => account.id === current)
+            ? current
+            : getDefaultAccountId(nextDataset)
+        ))
+      })
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === 'AbortError') return
+        setLoadError(error instanceof Error ? error.message : '无法读取记账数据')
+      })
+    return () => controller.abort()
+  }, [loadAttempt])
   const transactions = useMemo(
-    () => filterTransactionsByTimeRange(dataset.transactions, timeRange),
-    [dataset.transactions, timeRange],
+    () => filterTransactionsByTimeRange(activeDataset.transactions, timeRange),
+    [activeDataset.transactions, timeRange],
   )
-  const metrics = useMemo(() => getPeriodMetrics(dataset, timeRange), [dataset, timeRange])
-  const summaries = useMemo(() => getAccountPeriodSummaries(dataset, timeRange), [dataset, timeRange])
-  const portfolio = useMemo(() => getPortfolioPeriodSummary(dataset, timeRange), [dataset, timeRange])
+  const metrics = useMemo(() => getPeriodMetrics(activeDataset, timeRange), [activeDataset, timeRange])
+  const summaries = useMemo(() => getAccountPeriodSummaries(activeDataset, timeRange), [activeDataset, timeRange])
+  const portfolio = useMemo(() => getPortfolioPeriodSummary(activeDataset, timeRange), [activeDataset, timeRange])
   const categoryComposition = useMemo(
-    () => getTopCategoryComposition(dataset, transactions),
-    [dataset, transactions],
+    () => getTopCategoryComposition(activeDataset, transactions),
+    [activeDataset, transactions],
   )
   const topTags = useMemo(
-    () => getTopDirectTagAmounts(dataset, transactions, 5),
-    [dataset, transactions],
+    () => getTopDirectTagAmounts(activeDataset, transactions, 5),
+    [activeDataset, transactions],
   )
   const selectedSummary = summaries.find((summary) => summary.account.id === selectedAccountId)
   const activeSummaries = summaries.filter((summary) => !summary.account.archivedAt)
@@ -87,16 +120,16 @@ export function AccountingPage({
     [selectedAccountId, transactions],
   )
   const selectedAccountBalanceSteps = useMemo(
-    () => getAccountBalanceSteps(dataset, timeRange, selectedAccountId),
-    [dataset, selectedAccountId, timeRange],
+    () => getAccountBalanceSteps(activeDataset, timeRange, selectedAccountId),
+    [activeDataset, selectedAccountId, timeRange],
   )
   const selectedAccountCategoryComposition = useMemo(
-    () => getTopCategoryComposition(dataset, selectedAccountTransactions),
-    [dataset, selectedAccountTransactions],
+    () => getTopCategoryComposition(activeDataset, selectedAccountTransactions),
+    [activeDataset, selectedAccountTransactions],
   )
   const selectedAccountTopTags = useMemo(
-    () => getTopDirectTagAmounts(dataset, selectedAccountTransactions, 5),
-    [dataset, selectedAccountTransactions],
+    () => getTopDirectTagAmounts(activeDataset, selectedAccountTransactions, 5),
+    [activeDataset, selectedAccountTransactions],
   )
   const shellSnapshot = useMemo(
     () => createShellSnapshot(
@@ -105,15 +138,72 @@ export function AccountingPage({
       metrics,
       portfolio,
       selectedSummary,
+      transactions,
+      activeDataset,
       statisticsControls,
       analyticsFocus,
     ),
-    [analyticsFocus, metrics, portfolio, section, selectedSummary, statisticsControls, timeRange],
+    [activeDataset, analyticsFocus, metrics, portfolio, section, selectedSummary, statisticsControls, timeRange, transactions],
   )
 
   useEffect(() => {
-    onShellSnapshotChange(shellSnapshot)
-  }, [onShellSnapshotChange, shellSnapshot])
+    if (dataset) onShellSnapshotChange(shellSnapshot)
+  }, [dataset, onShellSnapshotChange, shellSnapshot])
+
+  useEffect(() => {
+    if (
+      didAutoLocateLatestMonthRef.current
+      || !dataset
+      || !onRequestTimeRangeChange
+      || transactions.length > 0
+      || timeRange.mode !== 'month'
+      || timeRange.anchorDate !== createTodayKey()
+    ) return
+    const latestOccurredAt = dataset.imports
+      ?.map((metadata) => metadata.latestOccurredAt)
+      .sort()
+      .at(-1)
+    if (!latestOccurredAt) return
+    const latestDate = latestOccurredAt.slice(0, 10)
+    if (latestDate >= timeRange.start && latestDate <= timeRange.end) return
+    const [year, month] = latestDate.split('-').map(Number)
+    const end = new Date(year, month, 0).getDate().toString().padStart(2, '0')
+    didAutoLocateLatestMonthRef.current = true
+    onRequestTimeRangeChange({
+      mode: 'month',
+      start: `${year}-${String(month).padStart(2, '0')}-01`,
+      end: `${year}-${String(month).padStart(2, '0')}-${end}`,
+      anchorDate: latestDate,
+      label: '最新账单月份',
+    })
+  }, [dataset, onRequestTimeRangeChange, timeRange, transactions.length])
+
+  if (!dataset) {
+    return (
+      <section className="accounting-page" aria-label="iOS 记账工作台">
+        {loadError ? (
+          <AccountingLoadState
+            kind="error"
+            message={loadError}
+            onRetry={() => {
+              setLoadError(null)
+              setLoadAttempt((value) => value + 1)
+            }}
+          />
+        ) : (
+          <AccountingLoadState kind="loading" />
+        )}
+      </section>
+    )
+  }
+
+  if (dataset.accounts.length === 0 && dataset.transactions.length === 0) {
+    return (
+      <section className="accounting-page" aria-label="iOS 记账工作台">
+        <AccountingLoadState kind="empty" />
+      </section>
+    )
+  }
 
   return (
     <section className="accounting-page" aria-label="iOS 记账工作台">
@@ -168,8 +258,8 @@ export function AccountingPage({
           mode={dialogMode}
           returnFocusTo={dialogReturnFocusTo}
           onModeChange={setDialogMode}
-          onSave={(draft) => {
-            saveDraft(draft, setDataset)
+          onSave={async (draft) => {
+            await persistDraft(draft, dataset, setDataset)
             setDialogMode(null)
           }}
           onClose={() => setDialogMode(null)}
@@ -180,12 +270,26 @@ export function AccountingPage({
           key={`${shellCommand}-${selectedSummary.account.id}`}
           action={shellCommand}
           account={selectedSummary.account}
-          onSave={(account) => {
-            setDataset((current) => ({
+          onSave={async (account) => {
+            const persistedAccount = await updateAccountingAccount(account.id, {
+              name: account.name,
+              nature: account.nature,
+              openingBalanceInCents: account.openingBalanceInCents,
+              openingBalanceAt: account.openingBalanceAt,
+              sourceLabel: account.sourceLabel,
+              brandSlug: account.brand?.slug,
+              brandLabel: account.brand?.label,
+              brandColor: account.brand?.color,
+              hidden: account.hidden,
+              archivedAt: account.archivedAt,
+            })
+            setDataset((current) => current ? ({
               ...current,
-              accounts: current.accounts.map((candidate) => candidate.id === account.id ? account : candidate),
-            }))
-            if (account.archivedAt) {
+              accounts: current.accounts.map((candidate) => (
+                candidate.id === persistedAccount.id ? persistedAccount : candidate
+              )),
+            }) : current)
+            if (persistedAccount.archivedAt) {
               const nextAccount = activeSummaries.find((summary) => summary.account.id !== account.id)
               if (nextAccount) setSelectedAccountId(nextAccount.account.id)
             }
@@ -204,6 +308,8 @@ function createShellSnapshot(
   metrics: ReturnType<typeof getPeriodMetrics>,
   portfolio: ReturnType<typeof getPortfolioPeriodSummary>,
   selectedSummary: ReturnType<typeof getAccountPeriodSummaries>[number] | undefined,
+  transactions: AccountingDataset['transactions'],
+  dataset: AccountingDataset,
   statisticsControls: AccountingStatisticsControls,
   analyticsFocus: AnalyticsFocus | null,
 ): AccountingShellSnapshot {
@@ -214,6 +320,14 @@ function createShellSnapshot(
         { label: '期末', value: formatCurrency(selectedSummary.closingInCents) },
         { label: '净变动', value: formatCurrency(selectedSummary.netChangeInCents) },
       ],
+      rangeBrief: {
+        title: '账户期间流动',
+        items: [
+          { label: '收入', value: formatCurrency(selectedSummary.incomeInCents) },
+          { label: '支出', value: formatCurrency(selectedSummary.expenseInCents) },
+          { label: '转入 / 转出', value: `${formatCurrency(selectedSummary.transferInInCents)} / ${formatCurrency(selectedSummary.transferOutInCents)}` },
+        ],
+      },
       context: {
         eyebrow: '当前账户',
         title: selectedSummary.account.name,
@@ -221,7 +335,8 @@ function createShellSnapshot(
         rows: [
           { label: '性质', value: selectedSummary.account.nature === 'asset' ? '资产' : '负债' },
           { label: '币种', value: selectedSummary.account.currency },
-          { label: '数据来源', value: selectedSummary.account.sourceLabel ?? '本地原型' },
+          { label: '数据来源', value: selectedSummary.account.sourceLabel ?? '本地账本' },
+          { label: '余额口径', value: selectedSummary.account.openingBalanceSource === 'import-zero-baseline' ? '导入零基线，待补期初' : '已设置真实期初' },
         ],
         actions: [
           { id: 'edit-account', label: '编辑账户资料' },
@@ -265,7 +380,9 @@ function createShellSnapshot(
       context: {
         eyebrow: '当前分区',
         title: '统计',
-        description: '全局趋势、完整分类树与标签树在中间联动展开。',
+        description: dataset.tags.length > 0
+          ? '全局趋势、完整分类树、标签树与账户贡献在中间联动展开。'
+          : '全局趋势、完整分类树与账户贡献在中间展开；原始账单没有标签字段。',
         rows: [
           { label: '统计口径', value: statisticsControls.measure === 'amount' ? '金额' : '笔数' },
           { label: '时间粒度', value: statisticsControls.granularity },
@@ -282,19 +399,37 @@ function createShellSnapshot(
       { label: '支出', value: formatCurrency(metrics.expenseInCents) },
       { label: '流水', value: `${metrics.transactionCount} 笔` },
     ],
+    rangeBrief: createLedgerRangeBrief(transactions),
     context: {
       eyebrow: '当前分区',
       title: '流水',
-      description: '流水录入、全部账户净资产和轻量洞察在中间展开。',
+      description: '真实流水、全部账户期末净资产和分类洞察在中间展开。',
       rows: [
         { label: '范围', value: `${timeRange.start} — ${timeRange.end}` },
         { label: '账户', value: '全部账户' },
         { label: '期末净资产', value: formatCurrency(portfolio.closingNetWorthInCents) },
-        { label: '状态', value: '本地原型' },
+        { label: '数据来源', value: formatImportProvenance(dataset) },
+        { label: '余额口径', value: formatBaselineProvenance(dataset) },
       ],
       actions: [],
     },
   }
+}
+
+function formatImportProvenance(dataset: AccountingDataset) {
+  const importedRows = dataset.imports?.reduce((total, item) => total + item.rowCount, 0) ?? 0
+  return importedRows > 0
+    ? `${importedRows} 条真实导入`
+    : `${dataset.transactions.length} 条本地账本`
+}
+
+function formatBaselineProvenance(dataset: AccountingDataset) {
+  const zeroBaselineAccounts = dataset.accounts.filter(
+    (account) => account.openingBalanceSource === 'import-zero-baseline',
+  ).length
+  return zeroBaselineAccounts > 0
+    ? `${zeroBaselineAccounts} 个账户使用导入零基线`
+    : '全部账户已设置期初'
 }
 
 function formatCurrency(amountInCents: number) {
@@ -305,18 +440,67 @@ function getActiveElement() {
   return document.activeElement instanceof HTMLElement ? document.activeElement : null
 }
 
-function saveDraft(
+function getDefaultAccountId(dataset: AccountingDataset) {
+  const latestTransaction = dataset.transactions.reduce<(typeof dataset.transactions)[number] | undefined>(
+    (latest, transaction) => !latest || transaction.occurredAt > latest.occurredAt ? transaction : latest,
+    undefined,
+  )
+  const latestAccountId = latestTransaction?.type === 'transfer'
+    ? latestTransaction.toAccountId
+    : latestTransaction?.accountId
+  if (latestAccountId && dataset.accounts.some((account) => account.id === latestAccountId && !account.archivedAt)) {
+    return latestAccountId
+  }
+  return dataset.accounts.find((account) => !account.archivedAt)?.id ?? ''
+}
+
+async function persistDraft(
   draft: TransactionDraft,
-  setDataset: Dispatch<SetStateAction<typeof ledgerAtlasDataset>>,
+  dataset: AccountingDataset,
+  setDataset: Dispatch<SetStateAction<AccountingDataset | null>>,
 ) {
-  setDataset((current) => ({
+  const nextTransactions = saveTransactionDraft(
+    dataset.transactions,
+    draft,
+    new Date().toISOString(),
+  )
+  const candidate = draft.transactionId
+    ? nextTransactions.find((transaction) => transaction.id === draft.transactionId)
+    : nextTransactions.at(-1)
+  if (!candidate) throw new Error('无法生成待保存流水')
+  const persisted = draft.transactionId
+    ? await updateAccountingTransaction(draft.transactionId, candidate)
+    : await createAccountingTransaction(candidate)
+  setDataset((current) => current ? ({
     ...current,
-    transactions: saveTransactionDraft(current.transactions, draft, new Date().toISOString()),
-  }))
+    transactions: draft.transactionId
+      ? current.transactions.map((transaction) => (
+          transaction.id === persisted.id ? persisted : transaction
+        ))
+      : [...current.transactions, persisted],
+  }) : current)
+}
+
+function createLedgerRangeBrief(transactions: AccountingDataset['transactions']) {
+  const activeDays = new Set(transactions.map((transaction) => transaction.occurredAt.slice(0, 10))).size
+  const expenses = transactions.filter((transaction) => transaction.type === 'expense')
+  const expenseTotal = expenses.reduce((total, transaction) => total + transaction.amountInCents, 0)
+  const largestExpense = expenses.reduce<(typeof expenses)[number] | undefined>(
+    (largest, transaction) => !largest || transaction.amountInCents > largest.amountInCents ? transaction : largest,
+    undefined,
+  )
+  return {
+    title: '时间窗口洞察',
+    items: [
+      { label: '活跃天数', value: `${activeDays} 天` },
+      { label: '日均支出', value: formatCurrency(activeDays === 0 ? 0 : Math.round(expenseTotal / activeDays)) },
+      { label: '最高单笔', value: formatCurrency(largestExpense?.amountInCents ?? 0) },
+    ],
+  }
 }
 
 function transactionBelongsToAccount(
-  transaction: typeof ledgerAtlasDataset.transactions[number],
+  transaction: AccountingDataset['transactions'][number],
   accountId: string,
 ) {
   return transaction.type === 'transfer'

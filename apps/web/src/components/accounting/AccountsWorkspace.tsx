@@ -8,6 +8,7 @@ import type {
   AccountingDataset,
   Transaction,
 } from '../../accounting/types'
+import { Database, Tags } from 'lucide-react'
 import { AccountBalanceStepChart } from './AccountBalanceStepChart'
 import { AccountCardCarousel } from './AccountCardCarousel'
 import { AccountingMetric } from './AccountingMetric'
@@ -47,7 +48,11 @@ export function AccountsWorkspace({
   }
 
   return (
-    <section className="accounting-workspace accounts-workspace glass-panel glass-panel--solid" aria-label="账户工作台">
+    <section
+      className="accounting-workspace accounts-workspace glass-panel glass-panel--solid"
+      aria-label="账户工作台"
+      data-account-ratio="41:59"
+    >
       <div className="accounts-workspace__left">
         <header className="accounts-workspace__title">
           <div><span>当前账户</span><h2>{summary.account.name}</h2></div>
@@ -91,9 +96,33 @@ export function AccountsWorkspace({
             income={categoryComposition.income}
             expense={categoryComposition.expense}
           />
-          <TagAmountTable tags={topTags} />
+          {topTags.length > 0 ? (
+            <TagAmountTable tags={topTags} compact />
+          ) : (
+            <AccountDataNotice summary={summary} />
+          )}
         </div>
       </div>
+    </section>
+  )
+}
+
+function AccountDataNotice({ summary }: { summary: AccountPeriodSummary }) {
+  const openingBasis = summary.account.openingBalanceSource === 'import-zero-baseline'
+    ? '导入零基线'
+    : '手动期初余额'
+  return (
+    <section className="account-data-notice" aria-label="账户数据说明">
+      <header>
+        <span><Database size={15} aria-hidden="true" /></span>
+        <div><strong>{openingBasis}</strong><small>{summary.account.sourceLabel ?? '本地记账数据'}</small></div>
+      </header>
+      <dl>
+        <div><dt>性质</dt><dd>{summary.account.nature === 'asset' ? '资产' : '负债'}</dd></div>
+        <div><dt>期间流水</dt><dd>{summary.transactionCount} 笔</dd></div>
+        <div><dt>币种</dt><dd>{summary.account.currency}</dd></div>
+      </dl>
+      <p><Tags size={13} aria-hidden="true" /> 原始账单未携带标签，新流水建立标签后会在这里按金额展示。</p>
     </section>
   )
 }

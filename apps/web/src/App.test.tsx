@@ -108,6 +108,23 @@ vi.mock('./components/MapboxCanvas', async () => {
   }
 })
 
+vi.mock('./accounting/accountingDataSource', async () => {
+  const actual = await vi.importActual<typeof import('./accounting/accountingDataSource')>(
+    './accounting/accountingDataSource',
+  )
+  const { ledgerAtlasDataset } = await import('./accounting/ledgerAtlasData')
+  return {
+    ...actual,
+    loadAccountingDataset: vi.fn(async () => ledgerAtlasDataset),
+    createAccountingTransaction: vi.fn(async (transaction) => transaction),
+    updateAccountingTransaction: vi.fn(async (_transactionId, transaction) => transaction),
+    updateAccountingAccount: vi.fn(async (accountId, patch) => ({
+      ...ledgerAtlasDataset.accounts.find((account) => account.id === accountId),
+      ...patch,
+    })),
+  }
+})
+
 const adminRegionSummaryFixture = {
   depth: 1 as const,
   visitedRegionIds: ['CN'],
@@ -1276,7 +1293,7 @@ describe('App', () => {
 
     const newDialog = screen.getByRole('dialog', { name: '新增流水' })
 
-    expect(within(newDialog).getByText('本地原型 · 本次会话有效')).toBeInTheDocument()
+    expect(within(newDialog).getByText('保存后将写入 EnRoute 本地记账数据库')).toBeInTheDocument()
     expect(within(newDialog).getByText('保存流水')).toBeInTheDocument()
 
     fireEvent.change(within(newDialog).getByLabelText('金额'), { target: { value: '12.34' } })
@@ -1287,7 +1304,9 @@ describe('App', () => {
     fireEvent.change(within(newDialog).getByLabelText('备注'), { target: { value: '会话新增流水' } })
     fireEvent.click(within(newDialog).getByRole('button', { name: '保存流水' }))
 
-    expect(screen.queryByRole('dialog', { name: '新增流水' })).not.toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: '新增流水' })).not.toBeInTheDocument()
+    })
     const createdRow = within(workspace).getByRole('button', { name: '查看流水 会话新增流水' })
     expect(createdRow).toHaveTextContent('青岛之行')
     expect(createdRow).toHaveTextContent('大学')
@@ -1300,7 +1319,9 @@ describe('App', () => {
     const editDialog = screen.getByRole('dialog', { name: '编辑流水' })
     fireEvent.change(within(editDialog).getByLabelText('金额'), { target: { value: '66.66' } })
     fireEvent.click(within(editDialog).getByRole('button', { name: '保存流水' }))
-    expect(within(workspace).getByRole('button', { name: '查看流水 会话新增流水' })).toHaveTextContent('-¥66.66')
+    await waitFor(() => {
+      expect(within(workspace).getByRole('button', { name: '查看流水 会话新增流水' })).toHaveTextContent('-¥66.66')
+    })
 
     const secondaryNav = screen.getByRole('navigation', { name: '二级导航' })
     fireEvent.click(within(secondaryNav).getByRole('button', { name: '账户' }))

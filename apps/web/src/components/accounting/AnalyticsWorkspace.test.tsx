@@ -33,7 +33,7 @@ describe('AnalyticsWorkspace', () => {
     expect(container.textContent).not.toMatch(/NaN|Infinity/)
     expect(screen.getByText('无可比数据')).toBeInTheDocument()
     expect(screen.getByRole('img', { name: '分类矩形树图' }).children).toHaveLength(0)
-    expect(screen.getByRole('table', { name: '标签树金额表' })).toBeInTheDocument()
+    expect(screen.getByLabelText('统计标签数据说明')).toHaveTextContent('原始账单未携带标签')
   })
 
   it('uses one control contract for trend, category hierarchy, and tag hierarchy', () => {
@@ -46,12 +46,13 @@ describe('AnalyticsWorkspace', () => {
       />,
     )
 
-    expect(screen.getByLabelText('统计工作区')).toBeInTheDocument()
+    expect(screen.getByLabelText('统计工作区')).toHaveAttribute('data-layout', 'trend-hierarchy-insights')
     expect(screen.getByText('最终粒度：日')).toBeInTheDocument()
     expect(screen.getByLabelText('分类层级分析')).toBeInTheDocument()
     expect(screen.getByLabelText('标签层级分析')).toBeInTheDocument()
     expect(screen.queryByText('标签 × 分类')).not.toBeInTheDocument()
     expect(screen.queryByRole('navigation', { name: /三级/ })).not.toBeInTheDocument()
+    expect(screen.getByLabelText('账户贡献排名')).toBeInTheDocument()
   })
 
   it('publishes a rich node focus and can clear it', () => {

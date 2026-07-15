@@ -44,4 +44,10 @@ describe('NetWorthPanel', () => {
     expect(panel).not.toHaveClass('is-danger')
     expect(within(panel).getAllByText('-¥500.00')).toHaveLength(2)
   })
+
+  it('states when net worth still depends on imported zero baselines', () => {
+    render(<NetWorthPanel summary={summary} baselineNote="7 / 7 个账户使用导入零基线" />)
+    expect(screen.getByLabelText('净资产口径')).toHaveTextContent('按已知期初与流水推算')
+    expect(screen.getByLabelText('净资产口径')).toHaveTextContent('7 / 7 个账户使用导入零基线')
+  })
 })

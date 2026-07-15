@@ -44,7 +44,7 @@ export function TransactionRow({
         <em title={accountLabel}>{accountLabel}</em>
         <small title={categoryPath}>{categoryPath}</small>
       </span>
-      <span className="ios-transaction-row__tags" title={tagPaths.join('、')}>
+      <span className={`ios-transaction-row__tags${tagPaths.length === 0 ? ' is-empty' : ''}`} title={tagPaths.join('、')}>
         {tagPaths.slice(0, 2).map((tagPath) => <i key={tagPath}>{tagPath}</i>)}
         {tagPaths.length > 2 ? <i>+{tagPaths.length - 2}</i> : null}
         {tagPaths.length === 0 ? <i>无标签</i> : null}

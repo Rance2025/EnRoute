@@ -15,6 +15,7 @@
     "lint": "npm --workspace apps/web run lint",
     "prepare:admin-regions": "python scripts/prepare_admin_regions.py",
     "prepare:footprints": "python scripts/import_footprints.py",
+    "prepare:accounting": "python scripts/import_accounting.py",
     "rebuild:footprints": "python scripts/rebuild_footprints_wgs84.py",
     "prepare:footprint-tiles": "python scripts/build_footprint_visual_tiles.py",
     "prepare:admin-region-tiles": "python scripts/build_admin_region_tiles.py",

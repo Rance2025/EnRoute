@@ -16,7 +16,7 @@ describe('TransactionDialog', () => {
     const dialog = screen.getByRole('dialog', { name: '流水详情' })
     expect(within(dialog).getByText('餐饮 / 饮品')).toBeInTheDocument()
     expect(within(dialog).getByText('主题 / 日常节律')).toBeInTheDocument()
-    expect(within(dialog).getByText('本地原型 · 本次会话有效')).toBeInTheDocument()
+    expect(within(dialog).getByText('已连接 EnRoute 本地记账数据库')).toBeInTheDocument()
 
     fireEvent.click(within(dialog).getByRole('button', { name: '编辑流水' }))
     expect(onModeChange).toHaveBeenCalledWith({ kind: 'edit', transactionId: 'tx-yogurt' })

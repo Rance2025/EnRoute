@@ -4,10 +4,18 @@ import type { PortfolioPeriodSummary } from '../../accounting/types'
 import { AccountingMetric } from './AccountingMetric'
 import { formatCurrency, formatSignedCurrency } from './formatting'
 
-export function NetWorthPanel({ summary }: { summary: PortfolioPeriodSummary }) {
+export function NetWorthPanel({
+  summary,
+  baselineNote,
+}: {
+  summary: PortfolioPeriodSummary
+  baselineNote?: string
+}) {
+  const chartAssets = Math.max(summary.closingAssetsInCents, 0)
+  const chartLiabilities = Math.max(summary.closingLiabilitiesInCents, 0)
   const maximumPosition = Math.max(
-    summary.closingAssetsInCents,
-    summary.closingLiabilitiesInCents,
+    chartAssets,
+    chartLiabilities,
     1,
   )
   const bridgeMaximum = Math.max(
@@ -34,6 +42,12 @@ export function NetWorthPanel({ summary }: { summary: PortfolioPeriodSummary }) 
           <span>全部账户 · 期末净资产</span>
           <strong>{formatCurrency(summary.closingNetWorthInCents)}</strong>
           <small>期间 {formatSignedCurrency(summary.netChangeInCents)}</small>
+          {baselineNote ? (
+            <div className="net-worth-panel__basis" aria-label="净资产口径">
+              <i>按已知期初与流水推算</i>
+              <span>{baselineNote}</span>
+            </div>
+          ) : null}
         </div>
         <div className="net-worth-panel__metrics">
           <AccountingMetric label="收入" value={formatCurrency(summary.incomeInCents)} tone="positive" />
@@ -45,13 +59,13 @@ export function NetWorthPanel({ summary }: { summary: PortfolioPeriodSummary }) 
         <div className="net-position__side net-position__side--liability">
           <span>负债</span>
           <strong>{formatCurrency(summary.closingLiabilitiesInCents)}</strong>
-          <i style={{ '--position-size': summary.closingLiabilitiesInCents / maximumPosition } as CSSProperties} />
+          <i style={{ '--position-size': chartLiabilities / maximumPosition } as CSSProperties} />
         </div>
         <span className="net-position__axis" aria-hidden="true" />
         <div className="net-position__side net-position__side--asset">
           <span>资产</span>
           <strong>{formatCurrency(summary.closingAssetsInCents)}</strong>
-          <i style={{ '--position-size': summary.closingAssetsInCents / maximumPosition } as CSSProperties} />
+          <i style={{ '--position-size': chartAssets / maximumPosition } as CSSProperties} />
         </div>
       </div>
 

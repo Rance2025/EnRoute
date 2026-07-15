@@ -122,6 +122,17 @@ vi.mock('./MapboxCanvas', async () => {
   }
 })
 
+vi.mock('../accounting/accountingDataSource', async () => {
+  const actual = await vi.importActual<typeof import('../accounting/accountingDataSource')>(
+    '../accounting/accountingDataSource',
+  )
+  const { ledgerAtlasDataset } = await import('../accounting/ledgerAtlasData')
+  return {
+    ...actual,
+    loadAccountingDataset: vi.fn(async () => ledgerAtlasDataset),
+  }
+})
+
 import App from '../App'
 
 const MAP_STYLE_LABEL = '\u5730\u56fe\u6837\u5f0f'

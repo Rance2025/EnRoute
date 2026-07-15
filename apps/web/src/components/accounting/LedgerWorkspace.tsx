@@ -25,7 +25,7 @@ import {
 } from './formatting'
 import { TransactionRow } from './TransactionRow'
 import { NetWorthPanel } from './NetWorthPanel'
-import { TagAmountTable } from './TagAmountTable'
+import { LedgerSupportingInsights } from './LedgerSupportingInsights'
 
 const typeLabels = {
   income: '收入',
@@ -101,10 +101,14 @@ export function LedgerWorkspace({
   onSelectTransaction,
   onCreateTransaction,
 }: LedgerWorkspaceProps) {
+  const zeroBaselineAccounts = dataset.accounts.filter(
+    (account) => account.openingBalanceSource === 'import-zero-baseline',
+  ).length
   return (
     <div
       className="accounting-workspace ios-account-ledger-workspace glass-panel glass-panel--solid"
       aria-label="账户与流水工作台"
+      data-ledger-ratio="41:59"
     >
       <section className="ios-ledger-main accounting-ledger-column">
         <header className="ios-ledger-toolbar">
@@ -144,13 +148,22 @@ export function LedgerWorkspace({
         </div>
       </section>
       <section className="accounting-insights-column" aria-label="流水关键洞察">
-        <NetWorthPanel summary={portfolio} />
+        <NetWorthPanel
+          summary={portfolio}
+          baselineNote={zeroBaselineAccounts > 0
+            ? `${zeroBaselineAccounts} / ${dataset.accounts.length} 个账户使用导入零基线`
+            : undefined}
+        />
         <div className="accounting-insights-column__lower">
           <CategoryStackedColumns
             income={categoryComposition.income}
             expense={categoryComposition.expense}
           />
-          <TagAmountTable tags={topTags} />
+          <LedgerSupportingInsights
+            dataset={dataset}
+            transactions={transactions}
+            topTags={topTags}
+          />
         </div>
       </section>
     </div>
