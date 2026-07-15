@@ -1,4 +1,8 @@
 import type { MapStylePreference } from './mapStyleOptions'
+import {
+  DEFAULT_ADMIN_REGION_FILL_OPACITY,
+  normalizeAdminRegionFillOpacity,
+} from './layers/adminRegionVectorTileSource'
 
 export type NavigationStyle = 'icon' | 'mixed'
 export type AppTheme = 'mist'
@@ -14,6 +18,7 @@ export const SHOW_ALL_ADMIN_REGIONS_STORAGE_KEY = 'enroute:show-all-admin-region
 export const SHOW_FOOTPRINTS_IN_REGION_MODE_STORAGE_KEY =
   'enroute:show-footprints-in-region-mode'
 export const ADMIN_REGION_LINES_VISIBLE_STORAGE_KEY = 'enroute:admin-region-lines-visible'
+export const ADMIN_REGION_FILL_OPACITY_STORAGE_KEY = 'enroute:admin-region-fill-opacity'
 export const APP_THEME_STORAGE_KEY = 'enroute:app-theme'
 export const MAP_PROJECTION_STORAGE_KEY = 'enroute:map-projection'
 export const MAP_STYLE_STORAGE_KEY = 'enroute:map-style'
@@ -199,6 +204,35 @@ export function writeAdminRegionLinesVisible(
   storage: Pick<Storage, 'setItem'> | undefined = getBrowserStorage(),
 ) {
   writeBooleanPreference(ADMIN_REGION_LINES_VISIBLE_STORAGE_KEY, visible, storage)
+}
+
+export function readAdminRegionFillOpacity(
+  storage: Pick<Storage, 'getItem'> | undefined = getBrowserStorage(),
+) {
+  try {
+    const storedValue = storage?.getItem(ADMIN_REGION_FILL_OPACITY_STORAGE_KEY)
+    if (storedValue === undefined || storedValue === null) {
+      return DEFAULT_ADMIN_REGION_FILL_OPACITY
+    }
+
+    return normalizeAdminRegionFillOpacity(Number(storedValue))
+  } catch {
+    return DEFAULT_ADMIN_REGION_FILL_OPACITY
+  }
+}
+
+export function writeAdminRegionFillOpacity(
+  opacity: number,
+  storage: Pick<Storage, 'setItem'> | undefined = getBrowserStorage(),
+) {
+  try {
+    storage?.setItem(
+      ADMIN_REGION_FILL_OPACITY_STORAGE_KEY,
+      normalizeAdminRegionFillOpacity(opacity).toString(),
+    )
+  } catch {
+    // Local preference writes should never block the UI.
+  }
 }
 
 export function readMapProjection(
