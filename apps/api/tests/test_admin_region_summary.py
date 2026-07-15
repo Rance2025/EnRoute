@@ -37,6 +37,17 @@ def assert_svg_path_within_viewbox(path: str) -> None:
     assert all(0 <= y <= 180 for y in coordinates[1::2])
 
 
+def svg_subpath_polygons(path: str) -> tuple[Polygon, ...]:
+    polygons = []
+    for subpath in re.findall(r"M[^M]+?Z", path):
+        coordinates = [
+            float(value)
+            for value in re.findall(r"-?\d+(?:\.\d+)?", subpath)
+        ]
+        polygons.append(Polygon(zip(coordinates[::2], coordinates[1::2])))
+    return tuple(polygons)
+
+
 @pytest.fixture
 def connection():
     connection = sqlite3.connect(":memory:")
@@ -425,6 +436,106 @@ def test_china_z1_base_preserves_disconnected_south_china_sea_components(
     assert len(base_path) <= thumbnail_module.MAX_THUMBNAIL_PATH_LENGTH
     assert_svg_path_within_viewbox(base_path)
 
+    path_components = svg_subpath_polygons(base_path)
+    mainland = max(path_components, key=lambda component: component.area)
+    islands = [component for component in path_components if component is not mainland]
+    taiwan = max(islands, key=lambda component: component.centroid.x)
+    hainan = max(
+        (component for component in islands if component is not taiwan),
+        key=lambda component: component.bounds[2] - component.bounds[0],
+    )
+    south_sea = [
+        component
+        for component in islands
+        if component not in {hainan, taiwan}
+    ]
+    south_sea_west, south_sea_east = sorted(
+        south_sea,
+        key=lambda component: component.centroid.x,
+    )
+
+    assert mainland.bounds == pytest.approx((93.8, 39.0, 199.1, 121.2), abs=0.8)
+    assert hainan.bounds == pytest.approx((169.5, 121.9, 177.6, 127.8), abs=0.8)
+    assert taiwan.bounds == pytest.approx((203.2, 104.8, 208.6, 114.8), abs=0.8)
+    assert south_sea_west.bounds == pytest.approx(
+        (178.9, 139.3, 181.6, 142.7),
+        abs=0.8,
+    )
+    assert south_sea_east.bounds == pytest.approx(
+        (188.3, 162.5, 191.1, 165.8),
+        abs=0.8,
+    )
+
+    assert (
+        mainland.centroid.x
+        < hainan.centroid.x
+        < south_sea_west.centroid.x
+        < south_sea_east.centroid.x
+        < taiwan.centroid.x
+    )
+    assert (
+        mainland.centroid.y
+        < taiwan.centroid.y
+        < hainan.centroid.y
+        < south_sea_west.centroid.y
+        < south_sea_east.centroid.y
+    )
+
+
+def test_china_z1_base_preserves_one_unit_island():
+    tile_content = encode(
+        [
+            {
+                "name": "admin_regions",
+                "features": [
+                    {
+                        "geometry": {
+                            "type": "Polygon",
+                            "coordinates": [
+                                rectangle_ring(1700, 2600, 2700, 3800),
+                            ],
+                        },
+                        "properties": {
+                            "region_id": "mainland",
+                            "level": 2,
+                            "kind": "fill",
+                        },
+                    },
+                    {
+                        "geometry": {
+                            "type": "Polygon",
+                            "coordinates": [
+                                rectangle_ring(3000, 3900, 3001, 3901),
+                            ],
+                        },
+                        "properties": {
+                            "region_id": "island",
+                            "level": 2,
+                            "kind": "fill",
+                        },
+                    },
+                ],
+            },
+        ],
+        default_options={"extents": 4096, "y_coord_down": True},
+    )
+    tile = thumbnail_module.AdminRegionThumbnailTile(1, 1, 0, tile_content)
+    decoded = thumbnail_module.decode_fill_geometries(tile_content)
+    assert set(decoded) == {"mainland", "island"}
+
+    thumbnail = thumbnail_module.create_admin_region_thumbnail_from_source(
+        thumbnail_module.AdminRegionThumbnailSource(
+            cache_key=("china-z1-one-unit-island",),
+            depth=2,
+            mode="tile",
+            tile=tile,
+        ),
+        visited_region_ids=set(),
+    )
+
+    assert thumbnail["basePath"].count("M") == 2
+    assert_svg_path_within_viewbox(thumbnail["basePath"])
+
 
 def test_bounded_path_simplification_preserves_disconnected_components(
     monkeypatch: pytest.MonkeyPatch,
@@ -685,6 +796,30 @@ def test_thumbnail_repairs_invalid_tile_polygon_before_clipping(
         included_region_ids={"310100"},
     )
 
+    invalid_ring = [
+        [2704, 3200],
+        [2764, 3280],
+        [2704, 3280],
+        [2764, 3200],
+        [2704, 3200],
+    ]
+    invalid_polygon = Polygon(invalid_ring)
+    assert not invalid_polygon.is_valid
+    assert not invalid_polygon.has_z
+
+    real_union_all = thumbnail_module.union_all
+    union_inputs = []
+
+    def union_valid_2d_geometries(geometries, *, grid_size: float):
+        resolved = tuple(geometries)
+        assert resolved
+        assert all(geometry.is_valid for geometry in resolved)
+        assert all(not geometry.has_z for geometry in resolved)
+        union_inputs.append(resolved)
+        return real_union_all(resolved, grid_size=grid_size)
+
+    monkeypatch.setattr(thumbnail_module, "union_all", union_valid_2d_geometries)
+
     def decode_invalid_tile(tile: bytes, *, default_options: dict[str, bool]):
         del tile
         assert default_options == {"y_coord_down": True}
@@ -694,15 +829,7 @@ def test_thumbnail_repairs_invalid_tile_polygon_before_clipping(
                     {
                         "geometry": {
                             "type": "Polygon",
-                            "coordinates": [
-                                [
-                                    [2704, 3200],
-                                    [2764, 3280],
-                                    [2704, 3280],
-                                    [2764, 3200],
-                                    [2704, 3200],
-                                ],
-                            ],
+                            "coordinates": [invalid_ring],
                         },
                         "properties": {
                             "region_id": "310115",
@@ -723,8 +850,11 @@ def test_thumbnail_repairs_invalid_tile_polygon_before_clipping(
         visited_region_ids={"310115"},
     )
 
-    assert thumbnail["basePath"].startswith("M")
-    assert thumbnail["visitedPath"].startswith("M")
+    assert union_inputs
+    assert thumbnail["basePath"].count("M") == 2
+    assert thumbnail["visitedPath"].count("M") == 2
+    assert_svg_path_within_viewbox(thumbnail["basePath"])
+    assert_svg_path_within_viewbox(thumbnail["visitedPath"])
 
 
 def test_thumbnail_visited_path_only_contains_requested_regions(

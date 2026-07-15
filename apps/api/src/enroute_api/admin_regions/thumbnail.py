@@ -482,7 +482,10 @@ def build_tile_base_path(
     if not base_geometries:
         return ""
 
-    base_geometry = safe_union(base_geometries, grid_size=TILE_UNION_GRID_UNITS)
+    base_geometry = safe_union(
+        base_geometries,
+        grid_size=TILE_UNION_GRID_UNITS if depth == 1 else 0.0,
+    )
     base_depth = 1 if depth == 1 else 2
     projected_base = clip_thumbnail_geometry(
         project_tile_geometry(
