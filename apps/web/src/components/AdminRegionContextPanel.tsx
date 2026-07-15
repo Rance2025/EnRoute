@@ -58,7 +58,7 @@ export function AdminRegionContextPanel({
         </div>
         <svg
           className="admin-region-atlas-card__thumbnail"
-          viewBox={summary?.thumbnail.viewBox ?? '0 0 320 150'}
+          viewBox={summary?.thumbnail.viewBox ?? '0 0 320 180'}
           preserveAspectRatio="xMidYMid meet"
           role="img"
           aria-label={thumbnailLabel}

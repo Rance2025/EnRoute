@@ -16,8 +16,8 @@ const citySummary: AdminRegionSummary = {
   visitedCount: 3,
   totalCount: 12,
   thumbnail: {
-    viewBox: '0 0 320 150',
-    basePath: 'M0 0L320 0L320 150L0 150Z',
+    viewBox: '0 0 320 180',
+    basePath: 'M0 0L320 0L320 180L0 180Z',
     visitedPath: 'M10 10L80 10L80 60L10 60Z',
   },
   rankings: [
@@ -145,6 +145,17 @@ describe('AdminRegionContextPanel', () => {
     fireEvent.click(within(depthControl).getByRole('button', { name: '区' }))
     expect(onDepthChange).toHaveBeenCalledWith(4)
   })
+
+  it.each(['loading', 'error'] as const)(
+    'uses the 16:9 fallback thumbnail while the %s summary is unavailable',
+    (status) => {
+      renderPanel({ status, summary: null })
+
+      const thumbnail = screen.getByLabelText('城市足迹缩略图')
+      expect(thumbnail).toHaveAttribute('viewBox', '0 0 320 180')
+      expect(thumbnail).toHaveAttribute('preserveAspectRatio', 'xMidYMid meet')
+    },
+  )
 
   it('changes the count unit with the selected administrative depth', () => {
     const countrySummary = { ...citySummary, depth: 1 as const, visitedCount: 2, totalCount: 200 }

@@ -113,7 +113,7 @@ const adminRegionSummaryFixture = {
   visitedRegionIds: ['CN'],
   visitedCount: 1,
   totalCount: 200,
-  thumbnail: { viewBox: '0 0 320 150', basePath: 'M0 0Z', visitedPath: 'M1 1Z' },
+  thumbnail: { viewBox: '0 0 320 180', basePath: 'M0 0Z', visitedPath: 'M1 1Z' },
   rankings: [{
     rank: 1,
     regionId: 'CN',
@@ -128,7 +128,7 @@ const provinceAdminRegionSummaryFixture = {
   visitedRegionIds: ['310000'],
   visitedCount: 1,
   totalCount: 34,
-  thumbnail: { viewBox: '0 0 320 150', basePath: 'M0 0Z', visitedPath: 'M2 2Z' },
+  thumbnail: { viewBox: '0 0 320 180', basePath: 'M0 0Z', visitedPath: 'M2 2Z' },
   rankings: [{
     rank: 1,
     regionId: '310000',

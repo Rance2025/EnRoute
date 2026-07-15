@@ -2024,7 +2024,7 @@ describe('map chrome layout', () => {
     expect(depthRule).toContain('background: transparent')
     expect(thumbnailRule).toContain('display: block')
     expect(thumbnailRule).toContain('width: 100%')
-    expect(thumbnailRule).toContain('aspect-ratio: 32 / 15')
+    expect(thumbnailRule).toContain('aspect-ratio: 16 / 9')
     expect(thumbnailRule).toContain('overflow: hidden')
     expect(thumbnailSourceIndex).toBeGreaterThanOrEqual(0)
     expect(depthControlSourceIndex).toBeGreaterThan(thumbnailSourceIndex)
