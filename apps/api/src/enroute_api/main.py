@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse, Response
 from .accounting.router import create_accounting_router
 from .accounting.store import AccountingStore
 from .admin_regions.preview import get_shanghai_preview_regions
+from .admin_regions.precompute import AdminRegionPrecomputeUnavailable
 from .config import Settings
 from .footprints.store import AdminRegionSummaryInputError, FootprintStore
 
@@ -178,6 +179,27 @@ def create_app(*, settings: Settings | None = None) -> FastAPI:
             )
         except AdminRegionSummaryInputError as error:
             raise HTTPException(status_code=400, detail=str(error)) from error
+        except AdminRegionPrecomputeUnavailable as error:
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "code": "admin_region_summary_precompute_unavailable",
+                    "message": str(error),
+                },
+            ) from error
+
+    @app.get("/api/admin-regions/thumbnail-bases")
+    def get_admin_region_thumbnail_bases() -> dict[str, object]:
+        try:
+            return store.get_admin_region_thumbnail_bases()
+        except AdminRegionPrecomputeUnavailable as error:
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "code": "admin_region_thumbnail_precompute_unavailable",
+                    "message": str(error),
+                },
+            ) from error
 
     @app.get("/api/admin-regions/preview/shanghai")
     def get_shanghai_admin_region_preview(source: str, level: int) -> dict[str, object]:

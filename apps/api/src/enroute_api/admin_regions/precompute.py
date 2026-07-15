@@ -6,6 +6,8 @@ import sqlite3
 import time
 from collections import Counter
 from dataclasses import dataclass
+from datetime import date
+from pathlib import Path
 
 from shapely.geometry import GeometryCollection, box
 from shapely.geometry.base import BaseGeometry
@@ -46,6 +48,10 @@ from .precompute_meta import (
 
 
 class AdminRegionPrecomputeSourceError(RuntimeError):
+    pass
+
+
+class AdminRegionPrecomputeUnavailable(RuntimeError):
     pass
 
 
@@ -685,3 +691,272 @@ def set_precompute_signature(
         """,
         (key, value),
     )
+
+
+def read_admin_region_thumbnail_bases(db_path: str | Path) -> dict[str, object]:
+    try:
+        with open_admin_region_readonly_connection(db_path) as connection:
+            expected_signature = create_admin_region_thumbnail_base_source_signature(connection)
+            require_precompute_signature(
+                connection,
+                key=THUMBNAIL_BASE_SIGNATURE_KEY,
+                expected=expected_signature,
+                label="thumbnail base",
+            )
+            rows = connection.execute(
+                """
+                SELECT
+                  scope,
+                  view_box,
+                  path,
+                  source_signature,
+                  algorithm_signature
+                FROM admin_region_thumbnail_bases
+                ORDER BY scope
+                """,
+            ).fetchall()
+            rows_by_scope = {str(row[0]): row for row in rows}
+            if set(rows_by_scope) != {"world", "china"}:
+                raise AdminRegionPrecomputeUnavailable("thumbnail bases are incomplete")
+            view_boxes = {str(row[1]) for row in rows}
+            if view_boxes != {"0 0 320 180"}:
+                raise AdminRegionPrecomputeUnavailable("thumbnail base viewBox is invalid")
+            for row in rows:
+                if str(row[3]) != expected_signature:
+                    raise AdminRegionPrecomputeUnavailable("thumbnail base row signature is stale")
+                if str(row[4]) != ADMIN_REGION_SUMMARY_ALGORITHM_SIGNATURE:
+                    raise AdminRegionPrecomputeUnavailable("thumbnail base algorithm is stale")
+                if not str(row[2]):
+                    raise AdminRegionPrecomputeUnavailable("thumbnail base path is empty")
+            return {
+                "viewBox": "0 0 320 180",
+                "signature": expected_signature,
+                "bases": {
+                    scope: {"path": str(rows_by_scope[scope][2])}
+                    for scope in ("world", "china")
+                },
+            }
+    except AdminRegionPrecomputeUnavailable:
+        raise
+    except (AdminRegionPrecomputeSourceError, sqlite3.Error) as error:
+        raise AdminRegionPrecomputeUnavailable(
+            f"thumbnail base precompute is unavailable: {error}",
+        ) from error
+
+
+def query_precomputed_admin_region_summary(
+    db_path: str | Path,
+    *,
+    depth: int,
+    start_day: int | None,
+    end_day: int | None,
+) -> dict[str, object]:
+    if depth not in {1, 2, 3, 4}:
+        raise ValueError("depth must be one of 1, 2, 3, or 4")
+    if (start_day is None) != (end_day is None):
+        raise ValueError("start_day and end_day must both be set or both be omitted")
+    try:
+        with open_admin_region_readonly_connection(db_path) as connection:
+            path_signature = create_admin_region_thumbnail_path_source_signature(connection)
+            daily_signature = create_admin_region_daily_stats_source_signature(connection)
+            require_precompute_signature(
+                connection,
+                key=THUMBNAIL_PATH_SIGNATURE_KEY,
+                expected=path_signature,
+                label="thumbnail path",
+            )
+            require_precompute_signature(
+                connection,
+                key=DAILY_STATS_SIGNATURE_KEY,
+                expected=daily_signature,
+                label="daily stats",
+            )
+            eligible_rows = query_eligible_admin_region_metadata(connection, depth=depth)
+            metadata_by_id = {str(row[0]): row for row in eligible_rows}
+            counts_by_id = query_admin_region_daily_counts(
+                connection,
+                depth=depth,
+                start_day=start_day,
+                end_day=end_day,
+            )
+            visited_ids = sorted(set(metadata_by_id) & set(counts_by_id))
+            path_by_id = query_precomputed_region_paths(
+                connection,
+                depth=depth,
+                region_ids=visited_ids,
+                expected_signature=path_signature,
+            )
+            ranking_ids = sorted(
+                visited_ids,
+                key=lambda region_id: (
+                    -counts_by_id[region_id],
+                    str(metadata_by_id[region_id][1]),
+                    region_id,
+                ),
+            )
+            return {
+                "depth": depth,
+                "visitedRegionIds": visited_ids,
+                "visitedCount": len(visited_ids),
+                "totalCount": len(metadata_by_id),
+                "visitedPath": "".join(path_by_id[region_id] for region_id in visited_ids),
+                "rankings": [
+                    format_precomputed_admin_region_ranking(
+                        metadata_by_id[region_id],
+                        rank=rank,
+                        footprint_count=counts_by_id[region_id],
+                    )
+                    for rank, region_id in enumerate(ranking_ids, start=1)
+                ],
+            }
+    except AdminRegionPrecomputeUnavailable:
+        raise
+    except (AdminRegionPrecomputeSourceError, sqlite3.Error) as error:
+        raise AdminRegionPrecomputeUnavailable(
+            f"admin-region summary precompute is unavailable: {error}",
+        ) from error
+
+
+def normalize_admin_region_summary_day_range(
+    *,
+    range_value: str | None,
+    start_date: str | None,
+    end_date: str | None,
+) -> tuple[int | None, int | None]:
+    if (range_value or "").strip().lower() == "all" or not (start_date and end_date):
+        return None, None
+    start = date.fromisoformat(start_date)
+    end = date.fromisoformat(end_date)
+    return encode_day(start), encode_day(end)
+
+
+def open_admin_region_readonly_connection(db_path: str | Path) -> sqlite3.Connection:
+    resolved_path = Path(db_path).resolve()
+    connection = sqlite3.connect(f"{resolved_path.as_uri()}?mode=ro", uri=True)
+    connection.row_factory = sqlite3.Row
+    connection.execute("PRAGMA query_only = ON")
+    return connection
+
+
+def require_precompute_signature(
+    connection: sqlite3.Connection,
+    *,
+    key: str,
+    expected: str,
+    label: str,
+) -> None:
+    row = connection.execute(
+        "SELECT value FROM footprint_meta WHERE key = ?",
+        (key,),
+    ).fetchone()
+    if row is None:
+        raise AdminRegionPrecomputeUnavailable(f"{label} signature is missing")
+    if str(row[0]) != expected:
+        raise AdminRegionPrecomputeUnavailable(f"{label} signature is stale")
+
+
+def query_eligible_admin_region_metadata(
+    connection: sqlite3.Connection,
+    *,
+    depth: int,
+) -> list[sqlite3.Row]:
+    country_filter = COUNTRY_SCOPE_FILTER if depth == 1 else ""
+    return list(
+        connection.execute(
+            f"""
+            SELECT id, name, min_lng, min_lat, max_lng, max_lat
+            FROM admin_regions
+            WHERE level = ?
+            {country_filter}
+            ORDER BY id
+            """,
+            (depth,),
+        ),
+    )
+
+
+def query_admin_region_daily_counts(
+    connection: sqlite3.Connection,
+    *,
+    depth: int,
+    start_day: int | None,
+    end_day: int | None,
+) -> dict[str, int]:
+    date_filter = ""
+    parameters: list[int] = [depth]
+    if start_day is not None and end_day is not None:
+        date_filter = "AND day BETWEEN ? AND ?"
+        parameters.extend((start_day, end_day))
+    return {
+        str(row[0]): int(row[1])
+        for row in connection.execute(
+            f"""
+            SELECT region_id, SUM(footprint_count) AS footprint_count
+            FROM admin_region_daily_stats
+            WHERE depth = ?
+              {date_filter}
+            GROUP BY region_id
+            HAVING SUM(footprint_count) > 0
+            """,
+            parameters,
+        )
+    }
+
+
+def query_precomputed_region_paths(
+    connection: sqlite3.Connection,
+    *,
+    depth: int,
+    region_ids: list[str],
+    expected_signature: str,
+) -> dict[str, str]:
+    if not region_ids:
+        return {}
+    rows = []
+    for offset in range(0, len(region_ids), 500):
+        chunk = region_ids[offset:offset + 500]
+        placeholders = ",".join("?" for _region_id in chunk)
+        rows.extend(
+            connection.execute(
+                f"""
+                SELECT region_id, path, source_signature, algorithm_signature
+                FROM admin_region_thumbnail_region_paths
+                WHERE depth = ?
+                  AND region_id IN ({placeholders})
+                ORDER BY region_id
+                """,
+                (depth, *chunk),
+            ),
+        )
+    path_by_id = {str(row[0]): str(row[1]) for row in rows}
+    missing_ids = sorted(set(region_ids) - set(path_by_id))
+    if missing_ids:
+        raise AdminRegionPrecomputeUnavailable(
+            f"thumbnail paths are incomplete: {', '.join(missing_ids)}",
+        )
+    for row in rows:
+        if str(row[2]) != expected_signature:
+            raise AdminRegionPrecomputeUnavailable("thumbnail path row signature is stale")
+        if str(row[3]) != ADMIN_REGION_SUMMARY_ALGORITHM_SIGNATURE:
+            raise AdminRegionPrecomputeUnavailable("thumbnail path algorithm is stale")
+    return path_by_id
+
+
+def format_precomputed_admin_region_ranking(
+    row: sqlite3.Row,
+    *,
+    rank: int,
+    footprint_count: int,
+) -> dict[str, object]:
+    return {
+        "rank": rank,
+        "regionId": str(row[0]),
+        "name": str(row[1]),
+        "footprintCount": footprint_count,
+        "bounds": {
+            "west": float(row[2]),
+            "south": float(row[3]),
+            "east": float(row[4]),
+            "north": float(row[5]),
+        },
+    }

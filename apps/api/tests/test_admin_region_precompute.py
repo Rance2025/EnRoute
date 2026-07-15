@@ -5,9 +5,11 @@ import json
 import math
 import sqlite3
 from datetime import datetime, timezone
+from pathlib import Path
 
 import pytest
 from mapbox_vector_tile import encode
+from fastapi.testclient import TestClient
 
 from enroute_api.admin_regions.precompute_meta import (
     DAILY_STATS_SIGNATURE_KEY,
@@ -19,6 +21,8 @@ from enroute_api.admin_regions.tiles import delete_admin_region_tile
 from enroute_api.admin_regions.thumbnail import AdminRegionThumbnailTile
 from enroute_api.footprints.store import initialize_schema
 from enroute_api.footprints.store import backfill_footprint_region_ids, insert_footprint_if_new
+from enroute_api.config import Settings
+from enroute_api.main import create_app
 
 
 def test_initialize_admin_region_summary_schema_creates_constrained_without_rowid_tables() -> None:
@@ -451,6 +455,203 @@ def test_build_admin_region_summary_precompute_rejects_empty_daily_stats() -> No
     assert snapshot_summary_precompute(connection) == previous_rows
 
 
+def test_read_thumbnail_bases_returns_persisted_world_and_china_without_geometry_work(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+    database = tmp_path / "footprints.sqlite"
+    connection = create_precompute_source_database(database)
+    precompute.build_admin_region_summary_precompute(connection, updated_at=123)
+    connection.close()
+    monkeypatch.setattr(
+        precompute,
+        "build_precomputed_admin_region_thumbnail_paths",
+        lambda *_args, **_kwargs: pytest.fail("request path rebuilt thumbnail geometry"),
+    )
+
+    payload = precompute.read_admin_region_thumbnail_bases(database)
+
+    assert payload["viewBox"] == "0 0 320 180"
+    assert payload["signature"]
+    assert set(payload["bases"]) == {"world", "china"}
+    assert payload["bases"]["world"]["path"]
+    assert payload["bases"]["china"]["path"]
+
+
+def test_query_precomputed_summary_reads_daily_stats_and_concatenates_region_paths(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+    from enroute_api.admin_regions import summary as summary_module
+    from enroute_api.admin_regions import thumbnail as thumbnail_module
+
+    database = tmp_path / "footprints.sqlite"
+    connection = create_precompute_source_database(database)
+    precompute.build_admin_region_summary_precompute(connection, updated_at=123)
+    expected_path = str(
+        connection.execute(
+            """
+            SELECT path
+            FROM admin_region_thumbnail_region_paths
+            WHERE depth = 4 AND region_id = 'district-a'
+            """,
+        ).fetchone()[0]
+    )
+    connection.close()
+    monkeypatch.setattr(
+        summary_module,
+        "query_admin_region_statistics",
+        lambda *_args, **_kwargs: pytest.fail("request read raw footprints recursively"),
+    )
+    monkeypatch.setattr(
+        thumbnail_module,
+        "read_admin_region_thumbnail_source",
+        lambda *_args, **_kwargs: pytest.fail("request decoded admin-region MVT"),
+    )
+
+    payload = precompute.query_precomputed_admin_region_summary(
+        database,
+        depth=4,
+        start_day=20260715,
+        end_day=20260715,
+    )
+
+    assert payload == {
+        "depth": 4,
+        "visitedRegionIds": ["district-a"],
+        "visitedCount": 1,
+        "totalCount": 1,
+        "visitedPath": expected_path,
+        "rankings": [
+            {
+                "rank": 1,
+                "regionId": "district-a",
+                "name": "district-a",
+                "footprintCount": 1,
+                "bounds": {
+                    "west": 0.0,
+                    "south": 0.0,
+                    "east": 1.0,
+                    "north": 1.0,
+                },
+            },
+        ],
+    }
+    empty_payload = precompute.query_precomputed_admin_region_summary(
+        database,
+        depth=4,
+        start_day=20260716,
+        end_day=20260716,
+    )
+    assert empty_payload["visitedRegionIds"] == []
+    assert empty_payload["visitedPath"] == ""
+    assert empty_payload["visitedCount"] == 0
+    assert empty_payload["totalCount"] == 1
+
+
+def test_precomputed_readers_reject_stale_or_missing_ready_signatures(tmp_path: Path) -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+    database = tmp_path / "footprints.sqlite"
+    connection = create_precompute_source_database(database)
+    precompute.build_admin_region_summary_precompute(connection, updated_at=123)
+    connection.execute(
+        """
+        UPDATE admin_region_tiles
+        SET updated_at = updated_at + 1
+        WHERE focus_region_id = 'world' AND depth = 2 AND z = 1 AND x = 1 AND y = 0
+        """,
+    )
+    connection.commit()
+    connection.close()
+
+    with pytest.raises(
+        precompute.AdminRegionPrecomputeUnavailable,
+        match="thumbnail base signature is stale",
+    ):
+        precompute.read_admin_region_thumbnail_bases(database)
+
+    connection = sqlite3.connect(database)
+    connection.execute(
+        """
+        UPDATE admin_region_tiles
+        SET updated_at = updated_at - 1
+        WHERE focus_region_id = 'world' AND depth = 2 AND z = 1 AND x = 1 AND y = 0
+        """,
+    )
+    connection.execute(
+        "DELETE FROM footprint_meta WHERE key = ?",
+        (DAILY_STATS_SIGNATURE_KEY,),
+    )
+    connection.commit()
+    connection.close()
+    with pytest.raises(
+        precompute.AdminRegionPrecomputeUnavailable,
+        match="daily stats signature is missing",
+    ):
+        precompute.query_precomputed_admin_region_summary(
+            database,
+            depth=4,
+            start_day=None,
+            end_day=None,
+        )
+
+
+def test_admin_region_precompute_api_separates_bases_from_dynamic_summary(tmp_path: Path) -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+    database = tmp_path / "footprints.sqlite"
+    connection = create_precompute_source_database(database)
+    precompute.build_admin_region_summary_precompute(connection, updated_at=123)
+    connection.close()
+    settings = Settings(
+        footprint_db_path=database,
+        footprint_data_path=tmp_path / "missing.csv",
+        admin_region_data_path=tmp_path / "missing-admin-regions.geojson",
+        accounting_db_path=tmp_path / "accounting.sqlite",
+    )
+    client = TestClient(create_app(settings=settings))
+
+    bases_response = client.get("/api/admin-regions/thumbnail-bases")
+    summary_response = client.get(
+        "/api/admin-regions/summary?depth=4&start=2026-07-15&end=2026-07-15",
+    )
+
+    assert bases_response.status_code == 200
+    assert set(bases_response.json()["bases"]) == {"world", "china"}
+    assert summary_response.status_code == 200
+    assert summary_response.json()["visitedRegionIds"] == ["district-a"]
+    assert summary_response.json()["visitedPath"]
+    assert "thumbnail" not in summary_response.json()
+
+
+def test_admin_region_precompute_api_returns_stable_503_without_fallback(tmp_path: Path) -> None:
+    database = tmp_path / "footprints.sqlite"
+    connection = create_precompute_source_database(database)
+    connection.close()
+    settings = Settings(
+        footprint_db_path=database,
+        footprint_data_path=tmp_path / "missing.csv",
+        admin_region_data_path=tmp_path / "missing-admin-regions.geojson",
+        accounting_db_path=tmp_path / "accounting.sqlite",
+    )
+    client = TestClient(create_app(settings=settings))
+
+    bases_response = client.get("/api/admin-regions/thumbnail-bases")
+    summary_response = client.get(
+        "/api/admin-regions/summary?depth=4&start=2026-07-15&end=2026-07-15",
+    )
+
+    assert bases_response.status_code == 503
+    assert bases_response.json()["detail"]["code"] == (
+        "admin_region_thumbnail_precompute_unavailable"
+    )
+    assert summary_response.status_code == 503
+    assert summary_response.json()["detail"]["code"] == (
+        "admin_region_summary_precompute_unavailable"
+    )
+
+
 def primary_key_columns(connection: sqlite3.Connection, table_name: str) -> list[str]:
     rows = connection.execute(f"PRAGMA table_info({table_name})").fetchall()
     return [str(row[1]) for row in sorted(rows, key=lambda row: int(row[5])) if int(row[5]) > 0]
@@ -596,8 +797,10 @@ def insert_raw_footprint(
     )
 
 
-def create_precompute_source_database() -> sqlite3.Connection:
-    connection = sqlite3.connect(":memory:")
+def create_precompute_source_database(
+    database: str | Path = ":memory:",
+) -> sqlite3.Connection:
+    connection = sqlite3.connect(database)
     connection.row_factory = sqlite3.Row
     initialize_schema(connection)
     for region_id, level, parent_id in (

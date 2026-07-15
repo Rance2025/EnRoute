@@ -14,6 +14,7 @@ from shapely.geometry import MultiPolygon, Polygon
 
 from enroute_api.admin_regions import tiles as admin_region_tiles_module
 from enroute_api.admin_regions import thumbnail as thumbnail_module
+from enroute_api.admin_regions.precompute import build_admin_region_summary_precompute
 from enroute_api.admin_regions.summary import query_admin_region_statistics
 from enroute_api.admin_regions.thumbnail import create_admin_region_thumbnail
 from enroute_api.config import Settings
@@ -1315,7 +1316,7 @@ def test_thumbnail_ignores_z_coordinates(connection: sqlite3.Connection):
     assert "80.0" not in thumbnail["visitedPath"]
 
 
-def test_admin_region_summary_api_returns_thumbnail_and_rankings_without_writes(
+def test_admin_region_summary_api_returns_precomputed_path_and_rankings_without_writes(
     tmp_path: Path,
 ):
     client, db_path = create_test_client_with_summary_fixture(tmp_path)
@@ -1359,43 +1360,39 @@ def test_admin_region_summary_api_returns_thumbnail_and_rankings_without_writes(
                 },
             },
         ],
-        "thumbnail": {
-            "viewBox": "0 0 320 180",
-            "basePath": ANY,
-            "visitedPath": ANY,
-        },
+        "visitedPath": ANY,
     }
-    assert response.json()["thumbnail"]["basePath"].startswith("M")
-    assert response.json()["thumbnail"]["visitedPath"].startswith("M")
+    assert response.json()["visitedPath"].startswith("M")
     assert after == before == {
         "footprints": 4,
         "visual_tiles": 0,
-        "admin_region_tiles": 0,
+        "admin_region_tiles": 4,
     }
 
 
-def test_admin_region_summary_api_uses_ranking_bounds_for_visited_regions_missing_from_tile(
+def test_admin_region_summary_api_rejects_missing_precomputed_path_without_bounds_fallback(
     tmp_path: Path,
 ):
     client, db_path = create_test_client_with_summary_fixture(tmp_path)
-    with sqlite3.connect(db_path) as connection:
-        insert_thumbnail_tile(
-            connection,
-            depth=3,
-            z=1,
-            x=1,
-            y=0,
-            included_region_ids={"310100"},
+    connection = sqlite3.connect(db_path)
+    try:
+        connection.execute(
+            """
+            DELETE FROM admin_region_thumbnail_region_paths
+            WHERE depth = 3 AND region_id = '330100'
+            """,
         )
+        connection.commit()
+    finally:
+        connection.close()
 
     response = client.get(
         "/api/admin-regions/summary",
         params={"depth": 3, "start": "2026-06-17", "end": "2026-06-17"},
     )
 
-    assert response.status_code == 200
-    assert response.json()["visitedRegionIds"] == ["330100"]
-    assert response.json()["thumbnail"]["visitedPath"].startswith("M")
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == "admin_region_summary_precompute_unavailable"
 
 
 def test_admin_region_summary_api_rejects_unknown_depth(tmp_path: Path):
@@ -1419,11 +1416,10 @@ def test_admin_region_summary_api_maps_invalid_dates_to_bad_request(tmp_path: Pa
     assert "detail" in response.json()
 
 
-def test_admin_region_summary_api_does_not_report_geometry_errors_as_bad_requests(
+def test_admin_region_summary_api_does_not_read_geometry_at_request_time(
     tmp_path: Path,
 ):
     client, db_path = create_test_client_with_summary_fixture(tmp_path)
-    client = TestClient(client.app, raise_server_exceptions=False)
     with sqlite3.connect(db_path) as connection:
         connection.execute(
             "UPDATE admin_regions SET geometry = 'not-json' WHERE id = '310100'",
@@ -1435,11 +1431,11 @@ def test_admin_region_summary_api_does_not_report_geometry_errors_as_bad_request
         params={"depth": 3, "start": "2026-06-16", "end": "2026-06-16"},
     )
 
-    assert response.status_code == 500
-    assert "error" in response.json()
+    assert response.status_code == 200
+    assert response.json()["visitedPath"].startswith("M")
 
 
-def test_admin_region_summary_api_returns_base_for_empty_range(tmp_path: Path):
+def test_admin_region_summary_api_returns_empty_dynamic_path_for_empty_range(tmp_path: Path):
     client, _ = create_test_client_with_summary_fixture(tmp_path)
 
     response = client.get(
@@ -1450,8 +1446,7 @@ def test_admin_region_summary_api_returns_base_for_empty_range(tmp_path: Path):
     assert response.status_code == 200
     assert response.json()["visitedCount"] == 0
     assert response.json()["rankings"] == []
-    assert response.json()["thumbnail"]["basePath"].startswith("M")
-    assert response.json()["thumbnail"]["visitedPath"] == ""
+    assert response.json()["visitedPath"] == ""
 
 
 def seed_admin_regions(connection: sqlite3.Connection) -> None:
@@ -1586,9 +1581,46 @@ def create_test_client_with_summary_fixture(tmp_path: Path) -> tuple[TestClient,
         ),
     )
     assert client.get("/api/footprints").status_code == 200
-    with sqlite3.connect(db_path) as connection:
+    connection = sqlite3.connect(db_path)
+    try:
         connection.row_factory = sqlite3.Row
         seed_admin_regions(connection)
+        insert_thumbnail_tile(
+            connection,
+            depth=1,
+            z=0,
+            x=0,
+            y=0,
+            region_ids=("cn", "cn"),
+            included_region_ids={"cn"},
+        )
+        insert_thumbnail_tile(
+            connection,
+            depth=2,
+            z=1,
+            x=1,
+            y=0,
+            region_ids=("310000", "330000"),
+        )
+        insert_thumbnail_tile(
+            connection,
+            depth=3,
+            z=1,
+            x=1,
+            y=0,
+            region_ids=("310100", "330100"),
+        )
+        insert_thumbnail_tile(
+            connection,
+            depth=4,
+            z=1,
+            x=1,
+            y=0,
+            region_ids=("310115", "330106"),
+        )
+        build_admin_region_summary_precompute(connection, updated_at=1)
+    finally:
+        connection.close()
     return client, db_path
 
 
