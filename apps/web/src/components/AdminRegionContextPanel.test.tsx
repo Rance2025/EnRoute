@@ -219,6 +219,27 @@ describe('AdminRegionContextPanel', () => {
     expect(onRegionSelect).toHaveBeenCalledWith(citySummary.rankings[1])
   })
 
+  it('renders ranking names, bars, and counts as direct single-row content', () => {
+    const longNameSummary: AdminRegionSummary = {
+      ...citySummary,
+      rankings: citySummary.rankings.map((ranking, index) => (
+        index === 0 ? { ...ranking, name: '呼和浩特市' } : ranking
+      )),
+    }
+    renderPanel({ summary: longNameSummary })
+
+    const row = screen.getByRole('button', { name: /第 1 名 呼和浩特市/ })
+    const rank = within(row).getByText('1')
+    const name = within(row).getByText('呼和浩特市')
+    const bar = row.querySelector('.admin-region-ranking-card__bar')
+    const count = within(row).getByText('12')
+
+    expect(name).toHaveAttribute('title', '呼和浩特市')
+    expect(row.querySelector('.admin-region-ranking-card__main')).not.toBeInTheDocument()
+    expect(bar).not.toBeNull()
+    expectElementsInDocumentOrder(rank, name, bar as Element, count)
+  })
+
   it('shows empty, loading, and error states without replacing depth controls', () => {
     const { onRetry } = renderPanel({
       status: 'error',
