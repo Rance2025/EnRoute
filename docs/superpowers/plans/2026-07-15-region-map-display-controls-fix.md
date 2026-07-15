@@ -48,7 +48,7 @@ expect(storage.setItem).toHaveBeenCalledWith(ADMIN_REGION_FILL_OPACITY_STORAGE_K
 Run:
 
 ```powershell
-npm run test:web -- apps/web/src/layers/adminRegionVectorTileSource.test.ts apps/web/src/navigationPreferences.test.ts
+npm run test:web -- src/layers/adminRegionVectorTileSource.test.ts src/navigationPreferences.test.ts
 ```
 
 Expected: FAIL because the opacity constants, normalizer, storage functions, and fill-layer parameter do not exist.
@@ -113,7 +113,7 @@ expect(mapRecords[0].layers.find(({ id }) => id === 'admin-regions-fill')?.paint
 - [ ] **Step 2: Run the focused Mapbox test and confirm RED**
 
 ```powershell
-npm run test:web -- apps/web/src/components/MapboxCanvas.test.tsx
+npm run test:web -- src/components/MapboxCanvas.test.tsx
 ```
 
 Expected: the line layer becomes visible after depth rebuild and the new opacity prop is unsupported.
@@ -201,7 +201,7 @@ Also assert the region opacity slider has `min="0.05"`, `max="1"`, `step="0.01"`
 - [ ] **Step 2: Run shell and App tests and confirm RED**
 
 ```powershell
-npm run test:web -- apps/web/src/components/mapShellLayout.test.tsx apps/web/src/App.test.tsx
+npm run test:web -- src/components/mapShellLayout.test.tsx src/App.test.tsx
 ```
 
 Expected: region controls appear on the footprint page, footprint controls appear in irrelevant modes, and the opacity slider is absent.
@@ -255,7 +255,7 @@ Assert the base path rule does not receive a stroke declaration.
 - [ ] **Step 2: Run the focused layout test and confirm RED**
 
 ```powershell
-npm run test:web -- apps/web/src/components/mapLayout.test.ts apps/web/src/components/AdminRegionContextPanel.test.tsx
+npm run test:web -- src/components/mapLayout.test.ts src/components/AdminRegionContextPanel.test.tsx
 ```
 
 Expected: FAIL because the visited path has fill only.
