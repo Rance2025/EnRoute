@@ -130,7 +130,7 @@ const adminRegionSummaryFixture = {
   visitedRegionIds: ['CN'],
   visitedCount: 1,
   totalCount: 200,
-  thumbnail: { viewBox: '0 0 320 180', basePath: 'M0 0Z', visitedPath: 'M1 1Z' },
+  visitedPath: 'M1 1Z',
   rankings: [{
     rank: 1,
     regionId: 'CN',
@@ -145,7 +145,7 @@ const provinceAdminRegionSummaryFixture = {
   visitedRegionIds: ['310000'],
   visitedCount: 1,
   totalCount: 34,
-  thumbnail: { viewBox: '0 0 320 180', basePath: 'M0 0Z', visitedPath: 'M2 2Z' },
+  visitedPath: 'M2 2Z',
   rankings: [{
     rank: 1,
     regionId: '310000',
@@ -153,6 +153,38 @@ const provinceAdminRegionSummaryFixture = {
     footprintCount: 120,
     bounds: { west: 120.8, south: 30.7, east: 122.2, north: 31.9 },
   }],
+}
+
+const cityAdminRegionSummaryFixture = {
+  ...provinceAdminRegionSummaryFixture,
+  depth: 3 as const,
+  visitedRegionIds: ['310100'],
+  totalCount: 300,
+  visitedPath: 'M3 3Z',
+}
+
+const districtAdminRegionSummaryFixture = {
+  ...provinceAdminRegionSummaryFixture,
+  depth: 4 as const,
+  visitedRegionIds: ['310101'],
+  totalCount: 2800,
+  visitedPath: 'M4 4Z',
+}
+
+const adminRegionSummaryFixtures = {
+  1: adminRegionSummaryFixture,
+  2: provinceAdminRegionSummaryFixture,
+  3: cityAdminRegionSummaryFixture,
+  4: districtAdminRegionSummaryFixture,
+}
+
+const adminRegionThumbnailBasesFixture = {
+  viewBox: '0 0 320 180',
+  signature: 'thumbnail-bases-signature',
+  bases: {
+    world: { path: 'M0 0L320 0L320 180Z' },
+    china: { path: 'M80 20L240 20L240 170Z' },
+  },
 }
 
 vi.mock('./layers/adminRegionSummaryDataSource', async () => {
@@ -165,8 +197,20 @@ vi.mock('./layers/adminRegionSummaryDataSource', async () => {
   }
 })
 
+vi.mock('./layers/adminRegionThumbnailBaseDataSource', async () => {
+  const actual = await vi.importActual<
+    typeof import('./layers/adminRegionThumbnailBaseDataSource')
+  >('./layers/adminRegionThumbnailBaseDataSource')
+  return {
+    ...actual,
+    loadAdminRegionThumbnailBases: vi.fn(async () => adminRegionThumbnailBasesFixture),
+  }
+})
+
 import App from './App'
 import { loadAdminRegionSummary } from './layers/adminRegionSummaryDataSource'
+import { clearAdminRegionSummaryCache } from './layers/adminRegionSummaryCache'
+import { loadAdminRegionThumbnailBases } from './layers/adminRegionThumbnailBaseDataSource'
 import {
   SECONDARY_NAV_RAIL_WIDTH,
   calculateAvailableMapShellWidth,
@@ -208,6 +252,13 @@ afterEach(() => {
 
 beforeEach(() => {
   window.localStorage.clear()
+  clearAdminRegionSummaryCache()
+  vi.mocked(loadAdminRegionSummary).mockReset()
+  vi.mocked(loadAdminRegionSummary).mockImplementation(async ({ depth }) => (
+    adminRegionSummaryFixtures[depth]
+  ))
+  vi.mocked(loadAdminRegionThumbnailBases).mockReset()
+  vi.mocked(loadAdminRegionThumbnailBases).mockResolvedValue(adminRegionThumbnailBasesFixture)
 })
 
 async function settleLazyImports() {
@@ -462,6 +513,7 @@ describe('App', () => {
   it('shows the region cards and uses visited ids by default in region mode', async () => {
     render(<App amapConfig={missingAmapConfig} />)
     await settleLazyImports()
+    await waitFor(() => expect(loadAdminRegionThumbnailBases).toHaveBeenCalledTimes(1))
 
     fireEvent.click(within(screen.getByRole('navigation', { name: '二级导航' }))
       .getByRole('button', { name: '区域' }))
@@ -474,17 +526,35 @@ describe('App', () => {
       'data-admin-region-visible-ids',
       adminRegionSummaryFixture.visitedRegionIds.join(','),
     ))
+    expect(vi.mocked(loadAdminRegionSummary).mock.calls.map(([options]) => options.depth))
+      .toEqual([1, 2, 3, 4])
     expect(screen.getByTestId('mapbox-canvas')).toHaveAttribute('data-footprints-visible', 'false')
-    expect(loadAdminRegionSummary).toHaveBeenCalledWith(expect.objectContaining({ depth: 1 }))
+    expect(document.querySelector('.admin-region-atlas-card__base')).toHaveAttribute(
+      'd',
+      adminRegionThumbnailBasesFixture.bases.world.path,
+    )
+
+    fireEvent.click(within(screen.getByRole('group', { name: '行政区层级' }))
+      .getByRole('button', { name: '省' }))
+
+    await waitFor(() => expect(screen.getByTestId('mapbox-canvas')).toHaveAttribute(
+      'data-admin-region-visible-ids',
+      '310000',
+    ))
+    expect(loadAdminRegionSummary).toHaveBeenCalledTimes(4)
+    expect(document.querySelector('.admin-region-atlas-card__base')).toHaveAttribute(
+      'd',
+      adminRegionThumbnailBasesFixture.bases.china.path,
+    )
   })
 
-  it('clears stale region summary data while a new depth is loading', async () => {
+  it('shows a completed current depth without waiting for a slower prefetched depth', async () => {
     let resolveProvinceSummary!: (summary: typeof provinceAdminRegionSummaryFixture) => void
     const provinceSummaryRequest = new Promise<typeof provinceAdminRegionSummaryFixture>((resolve) => {
       resolveProvinceSummary = resolve
     })
     vi.mocked(loadAdminRegionSummary).mockImplementation(async ({ depth }) => (
-      depth === 2 ? provinceSummaryRequest : adminRegionSummaryFixture
+      depth === 2 ? provinceSummaryRequest : adminRegionSummaryFixtures[depth]
     ))
 
     render(<App amapConfig={missingAmapConfig} />)
@@ -505,6 +575,10 @@ describe('App', () => {
       '',
     )
     expect(screen.getByText('-- / -- 省级行政区')).toBeInTheDocument()
+    expect(document.querySelector('.admin-region-atlas-card__base')).toHaveAttribute(
+      'd',
+      adminRegionThumbnailBasesFixture.bases.china.path,
+    )
 
     await act(async () => {
       resolveProvinceSummary(provinceAdminRegionSummaryFixture)
@@ -515,6 +589,7 @@ describe('App', () => {
       '310000',
     ))
     expect(screen.getByText('1 / 34 省级行政区')).toBeInTheDocument()
+    expect(loadAdminRegionSummary).toHaveBeenCalledTimes(4)
 
     fireEvent.click(within(screen.getByRole('group', { name: '行政区层级' }))
       .getByRole('button', { name: '省' }))
@@ -523,12 +598,19 @@ describe('App', () => {
   })
 
   it('hides stale region summary data immediately when the time range changes at the same depth', async () => {
-    let resolveYearSummary!: (summary: typeof adminRegionSummaryFixture) => void
-    const yearSummaryRequest = new Promise<typeof adminRegionSummaryFixture>((resolve) => {
+    const yearSummary = {
+      ...adminRegionSummaryFixture,
+      visitedRegionIds: ['CN-year'],
+      visitedPath: 'M9 9Z',
+    }
+    let resolveYearSummary!: (summary: typeof yearSummary) => void
+    const yearSummaryRequest = new Promise<typeof yearSummary>((resolve) => {
       resolveYearSummary = resolve
     })
-    vi.mocked(loadAdminRegionSummary).mockImplementation(async ({ timeRange }) => (
-      timeRange.mode === 'year' ? yearSummaryRequest : adminRegionSummaryFixture
+    vi.mocked(loadAdminRegionSummary).mockImplementation(async ({ depth, timeRange }) => (
+      timeRange.mode === 'year' && depth === 1
+        ? yearSummaryRequest
+        : adminRegionSummaryFixtures[depth]
     ))
 
     render(<App amapConfig={missingAmapConfig} />)
@@ -550,27 +632,92 @@ describe('App', () => {
     expect(screen.getByText('-- / -- 国家')).toBeInTheDocument()
     expect(document.querySelector('.admin-region-ranking-card__list')).not.toBeInTheDocument()
     expect(document.querySelector('.admin-region-atlas-card__visited')).toHaveAttribute('d', '')
+    expect(document.querySelector('.admin-region-atlas-card__base')).toHaveAttribute(
+      'd',
+      adminRegionThumbnailBasesFixture.bases.world.path,
+    )
 
     await act(async () => {
-      resolveYearSummary(adminRegionSummaryFixture)
+      resolveYearSummary(yearSummary)
     })
 
     await waitFor(() => expect(screen.getByTestId('mapbox-canvas')).toHaveAttribute(
       'data-admin-region-visible-ids',
-      'CN',
+      'CN-year',
     ))
   })
 
-  it('hides stale region summary data immediately when region mode is re-entered', async () => {
-    let resolveReloadedSummary!: (summary: typeof adminRegionSummaryFixture) => void
-    const reloadedSummaryRequest = new Promise<typeof adminRegionSummaryFixture>((resolve) => {
-      resolveReloadedSummary = resolve
+  it('does not let an older time-range response replace the current summary', async () => {
+    const yearSummary = {
+      ...adminRegionSummaryFixture,
+      visitedRegionIds: ['CN-year'],
+      visitedPath: 'M9 9Z',
+    }
+    let resolveOldSummary!: (summary: typeof adminRegionSummaryFixture) => void
+    const oldSummaryRequest = new Promise<typeof adminRegionSummaryFixture>((resolve) => {
+      resolveOldSummary = resolve
     })
-    let requestCount = 0
-    vi.mocked(loadAdminRegionSummary).mockImplementation(async () => {
-      requestCount += 1
-      return requestCount === 1 ? adminRegionSummaryFixture : reloadedSummaryRequest
+    vi.mocked(loadAdminRegionSummary).mockImplementation(async ({ depth, timeRange }) => {
+      if (depth === 1 && timeRange.mode !== 'year') return oldSummaryRequest
+      if (depth === 1 && timeRange.mode === 'year') return yearSummary
+      return adminRegionSummaryFixtures[depth]
     })
+
+    render(<App amapConfig={missingAmapConfig} />)
+    await settleLazyImports()
+    fireEvent.click(within(screen.getByRole('navigation', { name: '二级导航' }))
+      .getByRole('button', { name: '区域' }))
+    await waitFor(() => expect(loadAdminRegionSummary).toHaveBeenCalledTimes(4))
+
+    fireEvent.click(screen.getByRole('button', { name: '年' }))
+    await waitFor(() => expect(screen.getByTestId('mapbox-canvas')).toHaveAttribute(
+      'data-admin-region-visible-ids',
+      'CN-year',
+    ))
+
+    await act(async () => {
+      resolveOldSummary(adminRegionSummaryFixture)
+    })
+    expect(screen.getByTestId('mapbox-canvas')).toHaveAttribute(
+      'data-admin-region-visible-ids',
+      'CN-year',
+    )
+  })
+
+  it('aborts inflight summaries from the previous time range', async () => {
+    const oldSignals: AbortSignal[] = []
+    const oldRejectors: Array<(reason: unknown) => void> = []
+    vi.mocked(loadAdminRegionSummary).mockImplementation(({ depth, timeRange, signal }) => {
+      if (timeRange.mode === 'year') {
+        return Promise.resolve(adminRegionSummaryFixtures[depth])
+      }
+
+      return new Promise((_, reject) => {
+        oldSignals.push(signal)
+        oldRejectors.push(reject)
+        signal.addEventListener('abort', () => {
+          reject(new DOMException('The operation was aborted', 'AbortError'))
+        }, { once: true })
+      })
+    })
+
+    render(<App amapConfig={missingAmapConfig} />)
+    await settleLazyImports()
+    fireEvent.click(within(screen.getByRole('navigation', { name: '二级导航' }))
+      .getByRole('button', { name: '区域' }))
+    await waitFor(() => expect(oldSignals).toHaveLength(4))
+
+    fireEvent.click(screen.getByRole('button', { name: '年' }))
+    await waitFor(() => expect(loadAdminRegionSummary).toHaveBeenCalledTimes(8))
+    const everyOldSignalWasAborted = oldSignals.every((signal) => signal.aborted)
+    oldRejectors.forEach((reject) => {
+      reject(new DOMException('Test cleanup', 'AbortError'))
+    })
+
+    expect(everyOldSignalWasAborted).toBe(true)
+  })
+
+  it('reuses cached summaries when region mode is re-entered', async () => {
 
     render(<App amapConfig={missingAmapConfig} />)
     await settleLazyImports()
@@ -587,20 +734,9 @@ describe('App', () => {
 
     expect(screen.getByTestId('mapbox-canvas')).toHaveAttribute(
       'data-admin-region-visible-ids',
-      '',
-    )
-    expect(screen.getByText('-- / -- 国家')).toBeInTheDocument()
-    expect(document.querySelector('.admin-region-ranking-card__list')).not.toBeInTheDocument()
-    expect(document.querySelector('.admin-region-atlas-card__visited')).toHaveAttribute('d', '')
-
-    await act(async () => {
-      resolveReloadedSummary(adminRegionSummaryFixture)
-    })
-
-    await waitFor(() => expect(screen.getByTestId('mapbox-canvas')).toHaveAttribute(
-      'data-admin-region-visible-ids',
       'CN',
-    ))
+    )
+    expect(loadAdminRegionSummary).toHaveBeenCalledTimes(4)
   })
 
   it('switches an errored region summary to loading immediately when retrying', async () => {
@@ -608,10 +744,11 @@ describe('App', () => {
     const retriedSummaryRequest = new Promise<typeof adminRegionSummaryFixture>((resolve) => {
       resolveRetriedSummary = resolve
     })
-    let requestCount = 0
-    vi.mocked(loadAdminRegionSummary).mockImplementation(async () => {
-      requestCount += 1
-      if (requestCount === 1) throw new Error('summary unavailable')
+    let countryRequestCount = 0
+    vi.mocked(loadAdminRegionSummary).mockImplementation(async ({ depth }) => {
+      if (depth !== 1) return adminRegionSummaryFixtures[depth]
+      countryRequestCount += 1
+      if (countryRequestCount === 1) throw new Error('summary unavailable')
       return retriedSummaryRequest
     })
 
@@ -631,6 +768,10 @@ describe('App', () => {
     expect(screen.getByText('-- / -- 国家')).toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '重新加载区域摘要' })).not.toBeInTheDocument()
+    expect(document.querySelector('.admin-region-atlas-card__base')).toHaveAttribute(
+      'd',
+      adminRegionThumbnailBasesFixture.bases.world.path,
+    )
 
     await act(async () => {
       resolveRetriedSummary(adminRegionSummaryFixture)
@@ -640,6 +781,99 @@ describe('App', () => {
       'data-admin-region-visible-ids',
       'CN',
     ))
+    expect(loadAdminRegionSummary).toHaveBeenCalledTimes(5)
+  })
+
+  it('does not let an older retry replace the current time-range error state', async () => {
+    let resolveOldRetry!: (summary: typeof adminRegionSummaryFixture) => void
+    const oldRetry = new Promise<typeof adminRegionSummaryFixture>((resolve) => {
+      resolveOldRetry = resolve
+    })
+    let oldRangeCountryRequestCount = 0
+    vi.mocked(loadAdminRegionSummary).mockImplementation(async ({ depth, timeRange }) => {
+      if (depth !== 1) return adminRegionSummaryFixtures[depth]
+      if (timeRange.mode === 'year') throw new Error('year summary unavailable')
+
+      oldRangeCountryRequestCount += 1
+      if (oldRangeCountryRequestCount === 1) throw new Error('summary unavailable')
+      return oldRetry
+    })
+
+    render(<App amapConfig={missingAmapConfig} />)
+    await settleLazyImports()
+    fireEvent.click(within(screen.getByRole('navigation', { name: '二级导航' }))
+      .getByRole('button', { name: '区域' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('区域摘要加载失败')
+
+    fireEvent.click(screen.getByRole('button', { name: '重新加载区域摘要' }))
+    fireEvent.click(screen.getByRole('button', { name: '年' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('区域摘要加载失败')
+
+    await act(async () => {
+      resolveOldRetry(adminRegionSummaryFixture)
+    })
+
+    expect(screen.getByRole('alert')).toHaveTextContent('区域摘要加载失败')
+    expect(document.querySelector('.admin-region-context-panel__status')).not.toBeInTheDocument()
+  })
+
+  it('does not let a retry from an older region session mark a reentered range ready', async () => {
+    let resolveOldRetry!: (summary: typeof adminRegionSummaryFixture) => void
+    const oldRetry = new Promise<typeof adminRegionSummaryFixture>((resolve) => {
+      resolveOldRetry = resolve
+    })
+    let countryRequestCount = 0
+    vi.mocked(loadAdminRegionSummary).mockImplementation(({ depth, signal }) => {
+      if (depth !== 1) return Promise.resolve(adminRegionSummaryFixtures[depth])
+
+      countryRequestCount += 1
+      if (countryRequestCount === 1) return Promise.reject(new Error('summary unavailable'))
+      if (countryRequestCount === 2) return oldRetry
+      return new Promise((_, reject) => {
+        signal.addEventListener('abort', () => {
+          reject(new DOMException('The operation was aborted', 'AbortError'))
+        }, { once: true })
+      })
+    })
+
+    render(<App amapConfig={missingAmapConfig} />)
+    await settleLazyImports()
+    const secondaryNav = within(screen.getByRole('navigation', { name: '二级导航' }))
+    fireEvent.click(secondaryNav.getByRole('button', { name: '区域' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('区域摘要加载失败')
+
+    fireEvent.click(screen.getByRole('button', { name: '重新加载区域摘要' }))
+    fireEvent.click(secondaryNav.getByRole('button', { name: '足迹' }))
+    fireEvent.click(secondaryNav.getByRole('button', { name: '区域' }))
+    await waitFor(() => expect(countryRequestCount).toBe(3))
+    expect(document.querySelector('.admin-region-context-panel__status')).toHaveTextContent('加载中')
+
+    await act(async () => {
+      resolveOldRetry(adminRegionSummaryFixture)
+    })
+
+    expect(document.querySelector('.admin-region-context-panel__status')).toHaveTextContent('加载中')
+    expect(screen.getByTestId('mapbox-canvas')).toHaveAttribute(
+      'data-admin-region-visible-ids',
+      '',
+    )
+  })
+
+  it('keeps an aborted summary in loading state without showing an error', async () => {
+    const abortError = new DOMException('The operation was aborted', 'AbortError')
+    vi.mocked(loadAdminRegionSummary).mockImplementation(async ({ depth }) => {
+      if (depth === 1) throw abortError
+      return adminRegionSummaryFixtures[depth]
+    })
+
+    render(<App amapConfig={missingAmapConfig} />)
+    await settleLazyImports()
+    fireEvent.click(within(screen.getByRole('navigation', { name: '二级导航' }))
+      .getByRole('button', { name: '区域' }))
+
+    await waitFor(() => expect(loadAdminRegionSummary).toHaveBeenCalledTimes(4))
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(document.querySelector('.admin-region-context-panel__status')).toHaveTextContent('加载中')
   })
 
   it('moves region range and footprint switches into map settings', async () => {

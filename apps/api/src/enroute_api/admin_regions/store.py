@@ -10,6 +10,7 @@ from typing import Any, Iterable
 from enroute_api.footprints.coordinates import transform_gcj02_to_wgs84_coordinate
 
 from .geometry import BoundingBox, calculate_geometry_bbox, geometry_contains_point
+from .precompute_meta import invalidate_all_admin_region_summary_precompute
 from .scope import is_antarctica_admin_region_properties
 
 OSM_ADMIN_LEVEL_TO_ENROUTE_LEVEL = {
@@ -50,6 +51,8 @@ def initialize_admin_region_schema(connection: sqlite3.Connection) -> None:
           travel_distance_meters REAL NOT NULL DEFAULT 0
         );
         CREATE INDEX IF NOT EXISTS idx_admin_regions_level ON admin_regions(level);
+        CREATE INDEX IF NOT EXISTS idx_admin_regions_summary_metadata
+          ON admin_regions(level, id, name, min_lng, min_lat, max_lng, max_lat);
         CREATE INDEX IF NOT EXISTS idx_admin_regions_bbox
           ON admin_regions(min_lng, max_lng, min_lat, max_lat);
         CREATE TABLE IF NOT EXISTS admin_region_tree (
@@ -155,6 +158,7 @@ def load_admin_regions(connection: sqlite3.Connection, feature_collection: dict[
                     "INSERT INTO admin_region_tree (parent_id, child_id) VALUES (?, ?)",
                     (str(parent_id), str(child_id)),
                 )
+        invalidate_all_admin_region_summary_precompute(connection)
 
 
 def normalize_admin_region_features(feature_collection: dict[str, Any]) -> list[dict[str, Any]]:

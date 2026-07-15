@@ -18,11 +18,7 @@ function createPayload() {
     visitedRegionIds: ['310100', '330100'],
     visitedCount: 2,
     totalCount: 2,
-    thumbnail: {
-      viewBox: '0 0 320 180',
-      basePath: 'M0 0L10 0L10 10Z',
-      visitedPath: 'M1 1L5 1L5 5Z',
-    },
+    visitedPath: 'M1 1L5 1L5 5Z',
     rankings: [
       {
         rank: 1,
@@ -102,9 +98,9 @@ describe('loadAdminRegionSummary', () => {
     })],
     ['a negative visited count', () => ({ ...createPayload(), visitedCount: -1 })],
     ['a fractional total count', () => ({ ...createPayload(), totalCount: 1.5 })],
-    ['an incomplete thumbnail', () => ({
+    ['a missing visited path', () => ({
       ...createPayload(),
-      thumbnail: { viewBox: '0 0 320 180', basePath: 'M0 0Z' },
+      visitedPath: undefined,
     })],
     ['a zero ranking position', () => ({
       ...createPayload(),

@@ -914,6 +914,65 @@ describe('MapboxCanvas footprint vector tiles', () => {
     expect(getMockLayerVisibility(mapRecords[0], 'footprints-circle')).toBe('none')
   })
 
+  it('keeps rebuilt footprint layer hidden until visibility is explicitly restored', async () => {
+    const { mapRecords } = mockMapboxRuntime()
+    const { MapboxCanvas } = await import('./MapboxCanvas')
+    const nextRange: TimeRangeSelection = {
+      mode: 'day',
+      start: '2026-06-20',
+      end: '2026-06-20',
+      anchorDate: '2026-06-20',
+    }
+
+    const { rerender } = render(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        styleUrl="mapbox://styles/enroute/day"
+        timeRange={selectedRange}
+        adminRegionDepth={1}
+        footprintsVisible={false}
+      />,
+    )
+    act(() => mapRecords[0].emit('load'))
+    expect(getMockLayerVisibility(mapRecords[0], 'footprints-circle')).toBe('none')
+
+    rerender(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        styleUrl="mapbox://styles/enroute/day"
+        timeRange={nextRange}
+        adminRegionDepth={2}
+        footprintsVisible={false}
+      />,
+    )
+    expect(mapRecords[0].removedLayers).toContain('footprints-circle')
+    expect(getMockLayerVisibility(mapRecords[0], 'footprints-circle')).toBe('none')
+
+    rerender(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        styleUrl="mapbox://styles/enroute/day"
+        timeRange={nextRange}
+        adminRegionDepth={4}
+        footprintsVisible
+      />,
+    )
+    expect(getMockLayerVisibility(mapRecords[0], 'footprints-circle')).toBe('visible')
+
+    rerender(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        styleUrl="mapbox://styles/enroute/night"
+        timeRange={nextRange}
+        adminRegionDepth={1}
+        footprintsVisible={false}
+      />,
+    )
+    act(() => mapRecords[0].emit('style.load'))
+    act(() => mapRecords[0].emit('idle'))
+    expect(getMockLayerVisibility(mapRecords[0], 'footprints-circle')).toBe('none')
+  })
+
   it('highlights the selected admin region and fits its bounds', async () => {
     const { mapRecords } = mockMapboxRuntime()
     const { MapboxCanvas } = await import('./MapboxCanvas')

@@ -16,6 +16,11 @@ from shapely.ops import clip_by_rect
 
 from enroute_api.footprints.visual_tiles import MVT_EXTENT, tile_bounds
 from enroute_api.admin_regions.scope import is_antarctica_admin_region_properties
+from enroute_api.admin_regions.precompute_meta import (
+    invalidate_admin_region_thumbnail_bases,
+    invalidate_admin_region_thumbnail_paths,
+    invalidate_admin_region_thumbnail_tile,
+)
 
 ADMIN_REGION_TILE_LAYER_NAME = "admin_regions"
 ADMIN_REGION_WORLD_FOCUS_ID = "world"
@@ -412,6 +417,14 @@ def build_admin_region_tile_from_prepared_rows(
             updated_at,
         ),
     )
+    invalidate_admin_region_thumbnail_tile(
+        connection,
+        focus_region_id=focus_region_id,
+        depth=depth,
+        z=z,
+        x=x,
+        y=y,
+    )
     return True
 
 
@@ -748,10 +761,20 @@ def delete_admin_region_tile(
         """,
         (z, x, y, focus_region_id, depth),
     )
+    invalidate_admin_region_thumbnail_tile(
+        connection,
+        focus_region_id=focus_region_id,
+        depth=depth,
+        z=z,
+        x=x,
+        y=y,
+    )
 
 
 def clear_admin_region_tiles(connection: sqlite3.Connection) -> None:
     connection.execute("DELETE FROM admin_region_tiles")
+    invalidate_admin_region_thumbnail_bases(connection)
+    invalidate_admin_region_thumbnail_paths(connection)
 
 
 def prepare_admin_region_tile_rows(rows: list[sqlite3.Row]) -> list[PreparedAdminRegionTileRow]:
