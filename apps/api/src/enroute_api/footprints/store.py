@@ -20,6 +20,8 @@ from enroute_api.admin_regions.store import (
     load_admin_regions,
     query_admin_regions,
 )
+from enroute_api.admin_regions.precompute import initialize_admin_region_summary_schema
+from enroute_api.admin_regions.precompute_meta import invalidate_admin_region_daily_stats
 from enroute_api.admin_regions.summary import query_admin_region_statistics
 from enroute_api.admin_regions.thumbnail import (
     create_admin_region_thumbnail_from_source,
@@ -401,6 +403,7 @@ class FootprintStore:
 def initialize_schema(connection: sqlite3.Connection) -> None:
     initialize_admin_region_schema(connection)
     initialize_admin_region_tile_schema(connection)
+    initialize_admin_region_summary_schema(connection)
     connection.executescript(
         """
         CREATE TABLE IF NOT EXISTS footprint_meta (
@@ -687,6 +690,7 @@ def insert_footprint_if_new(
         ),
     )
     update_region_unlock_stats(connection, point, region_id)
+    invalidate_admin_region_daily_stats(connection)
     return True
 
 
@@ -748,6 +752,8 @@ def backfill_footprint_region_ids(
             updated_count += 1
 
         rebuild_admin_region_stats_from_footprints(connection)
+        if updated_count > 0:
+            invalidate_admin_region_daily_stats(connection)
 
     return {
         "total_count": total_count,
