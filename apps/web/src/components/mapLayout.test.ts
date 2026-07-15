@@ -2068,22 +2068,33 @@ describe('map chrome layout', () => {
     expect(depthControlSourceIndex).toBeGreaterThan(thumbnailSourceIndex)
   })
 
-  it('aligns administrative region rankings in one line without separators', () => {
+  it('renders administrative region rankings as a compact trackless bar chart', () => {
+    const cardRule = lastCssRule('.admin-region-ranking-card')
+    const listRule = cssRule('.admin-region-ranking-card__list')
     const rowRule = cssRule('.admin-region-ranking-card__row')
     const nameRule = cssRule('.admin-region-ranking-card__name')
     const barRule = cssRule('.admin-region-ranking-card__bar')
+    const fillRule = cssRule('.admin-region-ranking-card__bar span')
     const valueRule = cssRule('.admin-region-ranking-card__row strong')
 
+    expect(cardRule).toContain('--admin-region-rank-row-height: 24px')
+    expect(listRule).toContain(
+      'max-height: calc(var(--admin-region-rank-row-height) * 5)',
+    )
+    expect(rowRule).toContain('height: var(--admin-region-rank-row-height)')
     expect(rowRule).toContain('grid-template-columns: 22px 4em minmax(0, 1fr) auto')
+    expect(rowRule).toContain('padding: 0 2px')
     expect(rowRule).toContain('font-size: 12px')
     expect(rowRule).not.toContain('border-bottom')
     expect(nameRule).toContain('overflow: hidden')
     expect(nameRule).toContain('text-overflow: ellipsis')
     expect(nameRule).toContain('white-space: nowrap')
     expect(barRule).toContain('min-width: 0')
-    expect(cssRule('.admin-region-ranking-card__bar span')).toContain(
-      'transform-origin: left center',
-    )
+    expect(barRule).toContain('height: 12px')
+    expect(barRule).toContain('background: transparent')
+    expect(barRule).not.toMatch(/background: rgba\(/)
+    expect(fillRule).toContain('background: #2c8572')
+    expect(fillRule).toContain('transform-origin: left center')
     expect(valueRule).toContain('font-variant-numeric: tabular-nums')
   })
 

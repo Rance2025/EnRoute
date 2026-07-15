@@ -226,7 +226,7 @@ describe('AdminRegionContextPanel', () => {
         index === 0 ? { ...ranking, name: '呼和浩特市' } : ranking
       )),
     }
-    renderPanel({ summary: longNameSummary })
+    const { onRegionSelect } = renderPanel({ summary: longNameSummary })
 
     const row = screen.getByRole('button', { name: /第 1 名 呼和浩特市/ })
     const rank = within(row).getByText('1')
@@ -238,6 +238,9 @@ describe('AdminRegionContextPanel', () => {
     expect(row.querySelector('.admin-region-ranking-card__main')).not.toBeInTheDocument()
     expect(bar).not.toBeNull()
     expectElementsInDocumentOrder(rank, name, bar as Element, count)
+
+    fireEvent.click(bar as Element)
+    expect(onRegionSelect).toHaveBeenCalledWith(longNameSummary.rankings[0])
   })
 
   it('shows empty, loading, and error states without replacing depth controls', () => {
