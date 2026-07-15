@@ -678,6 +678,85 @@ describe('MapboxCanvas footprint vector tiles', () => {
     expect(activeRequestUrl.searchParams.get('end')).toBe('2026-06-19')
   })
 
+  it('does not reuse legacy active ids when rebuilding layers for a new depth', async () => {
+    const { mapRecords } = mockMapboxRuntime()
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes('/api/admin-regions/active')) {
+        const depth = new URL(url, window.location.origin).searchParams.get('depth')
+
+        return {
+          ok: true,
+          json: async () => ({
+            depth: Number(depth),
+            regionIds: depth === '1' ? ['CN'] : ['310000'],
+          }),
+        }
+      }
+
+      return {
+        ok: true,
+        json: async () => ({
+          selectedCount: 0,
+          totalDistanceMeters: 0,
+          averageDistanceMetersPerDay: 0,
+          selectedBounds: null,
+        }),
+      }
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const { MapboxCanvas } = await import('./MapboxCanvas')
+
+    const { rerender } = render(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        timeRange={selectedRange}
+        adminRegionUnlockEnabled
+        adminRegionActiveOnly
+        adminRegionDepth={1}
+      />,
+    )
+    act(() => mapRecords[0].emit('load'))
+
+    await waitFor(() => expect(mapRecords[0].setFilterCalls).toContainEqual([
+      'admin-regions-fill',
+      [
+        'all',
+        ['==', ['get', 'kind'], 'fill'],
+        ['in', ['geometry-type'], ['literal', ['Polygon', 'MultiPolygon']]],
+        ['in', ['get', 'region_id'], ['literal', ['CN']]],
+      ],
+    ]))
+
+    rerender(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        timeRange={selectedRange}
+        adminRegionUnlockEnabled
+        adminRegionActiveOnly
+        adminRegionDepth={2}
+      />,
+    )
+
+    expect(mapRecords[0].layers).toContainEqual(expect.objectContaining({
+      id: 'admin-regions-fill',
+      filter: [
+        'all',
+        ['==', ['get', 'kind'], 'fill'],
+        ['in', ['geometry-type'], ['literal', ['Polygon', 'MultiPolygon']]],
+        ['in', ['get', 'region_id'], ['literal', []]],
+      ],
+    }))
+    expect(mapRecords[0].layers).toContainEqual(expect.objectContaining({
+      id: 'admin-regions-line',
+      filter: [
+        'all',
+        ['==', ['get', 'kind'], 'line'],
+        ['in', ['geometry-type'], ['literal', ['LineString', 'MultiLineString']]],
+        ['any', ['in', ['get', 'region_id'], ['literal', []]]],
+      ],
+    }))
+  })
+
   it('uses externally supplied region ids without requesting the legacy active endpoint', async () => {
     const { mapRecords } = mockMapboxRuntime()
     const fetchMock = mockMetricsFetch({
@@ -718,6 +797,51 @@ describe('MapboxCanvas footprint vector tiles', () => {
     expect(fetchMock.mock.calls.map(([url]) => String(url))).not.toContain(
       expect.stringContaining('/api/admin-regions/active'),
     )
+  })
+
+  it('creates rebuilt admin-region layers with the latest empty id filter', async () => {
+    const { mapRecords } = mockMapboxRuntime()
+    const { MapboxCanvas } = await import('./MapboxCanvas')
+
+    const { rerender } = render(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        timeRange={selectedRange}
+        adminRegionUnlockEnabled
+        adminRegionVisibleIds={['CN']}
+        adminRegionDepth={1}
+      />,
+    )
+    act(() => mapRecords[0].emit('load'))
+
+    rerender(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        timeRange={selectedRange}
+        adminRegionUnlockEnabled
+        adminRegionVisibleIds={[]}
+        adminRegionDepth={2}
+      />,
+    )
+
+    expect(mapRecords[0].layers).toContainEqual(expect.objectContaining({
+      id: 'admin-regions-fill',
+      filter: [
+        'all',
+        ['==', ['get', 'kind'], 'fill'],
+        ['in', ['geometry-type'], ['literal', ['Polygon', 'MultiPolygon']]],
+        ['in', ['get', 'region_id'], ['literal', []]],
+      ],
+    }))
+    expect(mapRecords[0].layers).toContainEqual(expect.objectContaining({
+      id: 'admin-regions-line',
+      filter: [
+        'all',
+        ['==', ['get', 'kind'], 'line'],
+        ['in', ['geometry-type'], ['literal', ['LineString', 'MultiLineString']]],
+        ['any', ['in', ['get', 'region_id'], ['literal', []]]],
+      ],
+    }))
   })
 
   it('treats a null external region list as all regions without requesting the legacy active endpoint', async () => {

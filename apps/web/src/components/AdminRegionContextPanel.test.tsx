@@ -16,8 +16,8 @@ const citySummary: AdminRegionSummary = {
   visitedCount: 3,
   totalCount: 12,
   thumbnail: {
-    viewBox: '0 0 320 150',
-    basePath: 'M0 0L320 0L320 150L0 150Z',
+    viewBox: '0 0 320 180',
+    basePath: 'M0 0L320 0L320 180L0 180Z',
     visitedPath: 'M10 10L80 10L80 60L10 60Z',
   },
   rankings: [
@@ -95,12 +95,25 @@ function renderPanel({
   return { onDepthChange, onRegionSelect, onRetry }
 }
 
+function expectElementsInDocumentOrder(...elements: Element[]) {
+  elements.slice(1).forEach((element, index) => {
+    expect(
+      elements[index].compareDocumentPosition(element) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
+  })
+}
+
 describe('AdminRegionContextPanel', () => {
   it('renders the atlas card with one-row depth controls and dynamic city count', () => {
     const { onDepthChange } = renderPanel()
 
-    expect(screen.getByRole('heading', { name: '足迹版图' })).toBeInTheDocument()
-    expect(screen.getByText('3 / 12 城市')).toBeInTheDocument()
+    const heading = screen.getByRole('heading', { name: '足迹版图' })
+    const count = screen.getByText('3 / 12 城市')
+    const atlasHead = heading.closest('.admin-region-atlas-card__head')
+
+    expect(atlasHead).not.toBeNull()
+    expect(atlasHead).toContainElement(heading)
+    expect(atlasHead).toContainElement(count)
     expect(screen.queryByText('当前层级')).not.toBeInTheDocument()
     expect(screen.queryByText('累计距离')).not.toBeInTheDocument()
 
@@ -117,7 +130,9 @@ describe('AdminRegionContextPanel', () => {
     )
 
     const thumbnail = screen.getByLabelText('城市足迹缩略图')
+    expectElementsInDocumentOrder(atlasHead as Element, thumbnail, depthControl)
     expect(thumbnail).toHaveAttribute('viewBox', citySummary.thumbnail.viewBox)
+    expect(thumbnail).toHaveAttribute('preserveAspectRatio', 'xMidYMid meet')
     expect(thumbnail.querySelector('.admin-region-atlas-card__base')).toHaveAttribute(
       'd',
       citySummary.thumbnail.basePath,
@@ -130,6 +145,17 @@ describe('AdminRegionContextPanel', () => {
     fireEvent.click(within(depthControl).getByRole('button', { name: '区' }))
     expect(onDepthChange).toHaveBeenCalledWith(4)
   })
+
+  it.each(['loading', 'error'] as const)(
+    'uses the 16:9 fallback thumbnail while the %s summary is unavailable',
+    (status) => {
+      renderPanel({ status, summary: null })
+
+      const thumbnail = screen.getByLabelText('城市足迹缩略图')
+      expect(thumbnail).toHaveAttribute('viewBox', '0 0 320 180')
+      expect(thumbnail).toHaveAttribute('preserveAspectRatio', 'xMidYMid meet')
+    },
+  )
 
   it('changes the count unit with the selected administrative depth', () => {
     const countrySummary = { ...citySummary, depth: 1 as const, visitedCount: 2, totalCount: 200 }
@@ -198,8 +224,12 @@ describe('AdminRegionContextPanel', () => {
 
     cleanup()
     renderPanel({ status: 'loading', summary: null })
-    expect(screen.getByText('加载中')).toBeInTheDocument()
+    const loadingDepthControl = screen.getByRole('group', { name: '行政区层级' })
+    const loadingStatus = screen.getByRole('status')
+
+    expect(loadingStatus).toHaveTextContent('加载中')
     expect(screen.getByText('-- / -- 城市')).toBeInTheDocument()
+    expectElementsInDocumentOrder(loadingDepthControl, loadingStatus)
 
     cleanup()
     renderPanel({ summary: { ...citySummary, visitedCount: 0, rankings: [], visitedRegionIds: [] } })

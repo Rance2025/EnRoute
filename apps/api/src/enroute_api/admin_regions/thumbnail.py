@@ -2,30 +2,37 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import sqlite3
 from collections import OrderedDict, defaultdict
-from dataclasses import dataclass
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass, field
 from threading import Lock
 from typing import Iterable
 
 from mapbox_vector_tile import decode
-from shapely import force_2d, union_all
+from shapely import force_2d, make_valid, union_all
 from shapely.errors import GEOSException
-from shapely.geometry import GeometryCollection, MultiPolygon, Polygon, shape
+from shapely.geometry import GeometryCollection, MultiPolygon, Polygon, box, shape
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import transform
 
 VIEWBOX_WIDTH = 320.0
-VIEWBOX_HEIGHT = 150.0
-VIEWBOX = "0 0 320 150"
+VIEWBOX_HEIGHT = 180.0
+VIEWBOX_PADDING = 6.0
+VIEWBOX = "0 0 320 180"
 WORLD_BOUNDS = (-180.0, -58.0, 180.0, 85.0)
-CHINA_BOUNDS = (73.0, 17.0, 136.0, 55.0)
+CHINA_BOUNDS = (73.0, 4.0, 136.0, 55.0)
+STANDARD_PARALLEL_DEGREES = 35.0
+LONGITUDE_SCALE = math.cos(math.radians(STANDARD_PARALLEL_DEGREES))
 MVT_EXTENT = 4096.0
 TILE_SIMPLIFY_UNITS = 8.0
 TILE_UNION_GRID_UNITS = 4.0
 RAW_FALLBACK_MAX_GEOMETRY_BYTES = 2_000_000
 MAX_THUMBNAIL_PATH_LENGTH = 200_000
 THUMBNAIL_CACHE_MAXSIZE = 16
+WORLD_THUMBNAIL_TILE = (0, 0, 0)
+CHINA_THUMBNAIL_TILE = (1, 1, 0)
 
 COUNTRY_SCOPE_FILTER = """
   AND LOWER(TRIM(name)) NOT IN ('antarctica', '南极洲')
@@ -43,6 +50,7 @@ class AdminRegionThumbnailPath:
     path: str
     coarse_path: str
     bounds: tuple[float, float, float, float]
+    geometry: BaseGeometry | None = field(default=None, compare=False, repr=False)
 
 
 @dataclass(frozen=True)
@@ -52,11 +60,20 @@ class AdminRegionThumbnailPaths:
 
 
 @dataclass(frozen=True)
+class AdminRegionThumbnailTile:
+    z: int
+    x: int
+    y: int
+    content: bytes
+
+
+@dataclass(frozen=True)
 class AdminRegionThumbnailSource:
     cache_key: tuple[object, ...]
     depth: int
     mode: str
-    tile: bytes = b""
+    tile: AdminRegionThumbnailTile | None = None
+    china_base_tile: AdminRegionThumbnailTile | None = None
     geometry_rows: tuple[tuple[str, str], ...] = ()
     bounds_rows: tuple[tuple[str, float, float, float, float], ...] = ()
     cached_paths: AdminRegionThumbnailPaths | None = None
@@ -64,6 +81,35 @@ class AdminRegionThumbnailSource:
 
 _thumbnail_cache: OrderedDict[tuple[object, ...], AdminRegionThumbnailPaths] = OrderedDict()
 _thumbnail_cache_lock = Lock()
+
+
+def preferred_thumbnail_tile_key(depth: int) -> tuple[int, int, int]:
+    return WORLD_THUMBNAIL_TILE if depth == 1 else CHINA_THUMBNAIL_TILE
+
+
+def requested_thumbnail_tile_keys(depth: int) -> tuple[tuple[int, int, int, int], ...]:
+    keys = {(depth, *preferred_thumbnail_tile_key(depth))}
+    if depth > 1:
+        keys.update(
+            {
+                (2, *CHINA_THUMBNAIL_TILE),
+                (2, *WORLD_THUMBNAIL_TILE),
+            },
+        )
+    return tuple(sorted(keys))
+
+
+def exact_thumbnail_tile_predicate(
+    keys: Iterable[tuple[int, int, int, int]],
+) -> tuple[str, tuple[int, ...]]:
+    normalized_keys = tuple(sorted({tuple(int(value) for value in key) for key in keys}))
+    if not normalized_keys:
+        return "0", ()
+    predicate = " OR ".join(
+        "(depth = ? AND z = ? AND x = ? AND y = ?)" for _key in normalized_keys
+    )
+    parameters = tuple(value for key in normalized_keys for value in key)
+    return predicate, parameters
 
 
 def create_admin_region_thumbnail(
@@ -95,27 +141,55 @@ def read_admin_region_thumbnail_source(
 ) -> AdminRegionThumbnailSource:
     validate_thumbnail_depth(depth)
     connection_scope = connection
-    tile_row = connection.execute(
-        """
-        SELECT algorithm_signature, updated_at, feature_count, LENGTH(tile) AS tile_length
+    requested_tile_keys = requested_thumbnail_tile_keys(depth)
+    tile_predicate, tile_parameters = exact_thumbnail_tile_predicate(requested_tile_keys)
+    tile_rows = connection.execute(
+        f"""
+        SELECT depth, z, x, y, algorithm_signature, updated_at, feature_count,
+               LENGTH(tile) AS tile_length
         FROM admin_region_tiles
-        WHERE z = 0
-          AND x = 0
-          AND y = 0
-          AND focus_region_id = 'world'
-          AND depth = ?
+        WHERE focus_region_id = 'world'
+          AND ({tile_predicate})
+        ORDER BY depth, z, x, y
         """,
-        (depth,),
-    ).fetchone()
-    if tile_row is not None:
+        tile_parameters,
+    ).fetchall()
+    metadata_by_key = {
+        (
+            int(row_value(row, "depth", 0)),
+            int(row_value(row, "z", 1)),
+            int(row_value(row, "x", 2)),
+            int(row_value(row, "y", 3)),
+        ): (
+            str(row_value(row, "algorithm_signature", 4)),
+            int(row_value(row, "updated_at", 5)),
+            int(row_value(row, "feature_count", 6)),
+            int(row_value(row, "tile_length", 7)),
+        )
+        for row in tile_rows
+    }
+    metadata_key: tuple[object, ...] = tuple(
+        (requested_tile_key, metadata_by_key.get(requested_tile_key))
+        for requested_tile_key in requested_tile_keys
+    )
+    current_tile_key = (depth, *preferred_thumbnail_tile_key(depth))
+    china_base_tile_key = next(
+        (
+            candidate
+            for candidate in (
+                (2, *CHINA_THUMBNAIL_TILE),
+                (2, *WORLD_THUMBNAIL_TILE),
+            )
+            if depth > 1 and candidate in metadata_by_key
+        ),
+        None,
+    )
+    if current_tile_key in metadata_by_key:
         cache_key = (
             "tile",
             connection_scope,
             depth,
-            str(row_value(tile_row, "algorithm_signature", 0)),
-            int(row_value(tile_row, "updated_at", 1)),
-            int(row_value(tile_row, "feature_count", 2)),
-            int(row_value(tile_row, "tile_length", 3)),
+            metadata_key,
         )
         cached_paths = get_cached_thumbnail_paths(cache_key)
         if cached_paths is not None:
@@ -125,32 +199,70 @@ def read_admin_region_thumbnail_source(
                 mode="cached",
                 cached_paths=cached_paths,
             )
-        content_row = connection.execute(
-            """
-            SELECT tile
-            FROM admin_region_tiles
-            WHERE z = 0
-              AND x = 0
-              AND y = 0
-              AND focus_region_id = 'world'
-              AND depth = ?
-            """,
-            (depth,),
-        ).fetchone()
-        tile = b"" if content_row is None else bytes(row_value(content_row, "tile", 0))
-        if tile:
+        content_tile_keys = {current_tile_key}
+        if china_base_tile_key is not None:
+            content_tile_keys.add(china_base_tile_key)
+        tiles_by_key = read_admin_region_thumbnail_tiles(
+            connection,
+            keys=content_tile_keys,
+        )
+        tile = tiles_by_key.get(current_tile_key)
+        if tile is not None:
             return AdminRegionThumbnailSource(
                 cache_key=cache_key,
                 depth=depth,
                 mode="tile",
                 tile=tile,
+                china_base_tile=(
+                    tiles_by_key.get(china_base_tile_key)
+                    if china_base_tile_key is not None
+                    else None
+                ),
             )
 
     return read_raw_admin_region_thumbnail_source(
         connection,
         connection_scope=connection_scope,
         depth=depth,
+        tile_metadata_key=metadata_key,
+        china_base_tile_key=china_base_tile_key,
     )
+
+
+def read_admin_region_thumbnail_tiles(
+    connection: sqlite3.Connection,
+    *,
+    keys: Iterable[tuple[int, int, int, int]],
+) -> dict[tuple[int, int, int, int], AdminRegionThumbnailTile]:
+    requested_keys = tuple(sorted({tuple(int(value) for value in key) for key in keys}))
+    if not requested_keys:
+        return {}
+    tile_predicate, tile_parameters = exact_thumbnail_tile_predicate(requested_keys)
+    content_rows = connection.execute(
+        f"""
+        SELECT tile, depth, z, x, y
+        FROM admin_region_tiles
+        WHERE focus_region_id = 'world'
+          AND ({tile_predicate})
+        ORDER BY depth, z, x, y
+        """,
+        tile_parameters,
+    ).fetchall()
+    tiles_by_key: dict[tuple[int, int, int, int], AdminRegionThumbnailTile] = {}
+    for row in content_rows:
+        tile_value = row_value(row, "tile", 0)
+        if tile_value is not None:
+            depth = int(row_value(row, "depth", 1))
+            z = int(row_value(row, "z", 2))
+            x = int(row_value(row, "x", 3))
+            y = int(row_value(row, "y", 4))
+            tiles_by_key[(depth, z, x, y)] = AdminRegionThumbnailTile(
+                z=z,
+                x=x,
+                y=y,
+                content=bytes(tile_value),
+            )
+    return tiles_by_key
 
 
 def read_raw_admin_region_thumbnail_source(
@@ -158,6 +270,8 @@ def read_raw_admin_region_thumbnail_source(
     *,
     connection_scope: sqlite3.Connection,
     depth: int,
+    tile_metadata_key: tuple[object, ...] = (),
+    china_base_tile_key: tuple[int, int, int, int] | None = None,
 ) -> AdminRegionThumbnailSource:
     country_filter = COUNTRY_SCOPE_FILTER if depth == 1 else ""
     stats_row = connection.execute(
@@ -180,6 +294,7 @@ def read_raw_admin_region_thumbnail_source(
         "raw",
         connection_scope,
         depth,
+        tile_metadata_key,
         data_version,
         connection.total_changes,
         region_count,
@@ -195,12 +310,21 @@ def read_raw_admin_region_thumbnail_source(
             cached_paths=cached_paths,
         )
 
+    china_base_tile = None
+    if china_base_tile_key is not None:
+        tiles_by_key = read_admin_region_thumbnail_tiles(
+            connection,
+            keys=(china_base_tile_key,),
+        )
+        china_base_tile = tiles_by_key.get(china_base_tile_key)
+
     bounds_rows = query_region_bounds(connection, depth=depth)
     if geometry_bytes > RAW_FALLBACK_MAX_GEOMETRY_BYTES:
         return AdminRegionThumbnailSource(
             cache_key=cache_key,
             depth=depth,
             mode="bounds",
+            china_base_tile=china_base_tile,
             bounds_rows=bounds_rows,
         )
 
@@ -218,6 +342,7 @@ def read_raw_admin_region_thumbnail_source(
         cache_key=cache_key,
         depth=depth,
         mode="raw",
+        china_base_tile=china_base_tile,
         geometry_rows=tuple(
             (str(row_value(row, "id", 0)), str(row_value(row, "geometry", 1)))
             for row in rows
@@ -266,13 +391,14 @@ def create_admin_region_thumbnail_response(
                     path=coarse_path,
                     coarse_path=coarse_path,
                     bounds=viewbox_bounds,
+                    geometry=box(*viewbox_bounds),
                 )
         if region_path is not None:
             selected_paths.append(region_path)
     return {
         "viewBox": VIEWBOX,
         "basePath": paths.base_path,
-        "visitedPath": join_bounded_region_paths(selected_paths),
+        "visitedPath": merge_visited_region_paths(selected_paths),
     }
 
 
@@ -311,14 +437,12 @@ def build_thumbnail_paths(source: AdminRegionThumbnailSource) -> AdminRegionThum
     return build_bounds_thumbnail_paths(source)
 
 
-def build_tile_thumbnail_paths(
-    source: AdminRegionThumbnailSource,
-) -> AdminRegionThumbnailPaths:
-    decoded = decode(source.tile, default_options={"y_coord_down": True})
+def decode_fill_geometries(tile: bytes) -> dict[str, list[BaseGeometry]]:
+    decoded = decode(tile, default_options={"y_coord_down": True})
     layer = decoded.get("admin_regions")
     features = layer.get("features", []) if isinstance(layer, dict) else []
-    grouped_geometries: dict[str, list[BaseGeometry]] = defaultdict(list)
-    base_geometries: list[BaseGeometry] = []
+    decoded_geometries: list[tuple[str, BaseGeometry]] = []
+    repair_indices: list[int] = []
     for feature in features if isinstance(features, list) else []:
         if not isinstance(feature, dict):
             continue
@@ -334,12 +458,111 @@ def build_tile_thumbnail_paths(
         if region_id in {None, ""}:
             continue
         geometry = force_2d(shape(geometry_mapping))
-        if geometry.is_empty:
-            continue
-        grouped_geometries[str(region_id)].append(geometry)
-        simplified = geometry.simplify(TILE_SIMPLIFY_UNITS, preserve_topology=False)
-        if not simplified.is_empty:
-            base_geometries.append(simplified)
+        decoded_geometries.append((str(region_id), geometry))
+        if not (
+            isinstance(geometry, (Polygon, MultiPolygon))
+            and geometry.is_valid
+        ):
+            repair_indices.append(len(decoded_geometries) - 1)
+
+    # Keep small tiles serial and amortize startup across four repairs per worker.
+    repair_worker_count = min(
+        8,
+        os.cpu_count() or 1,
+        len(repair_indices) // 4,
+    )
+    geometries_to_repair = [
+        decoded_geometries[index][1]
+        for index in repair_indices
+    ]
+    if repair_worker_count > 1:
+        with ThreadPoolExecutor(max_workers=repair_worker_count) as executor:
+            repaired_geometries = executor.map(
+                repair_polygonal_geometry,
+                geometries_to_repair,
+            )
+            repaired_geometries = tuple(repaired_geometries)
+    else:
+        repaired_geometries = tuple(
+            repair_polygonal_geometry(geometry)
+            for geometry in geometries_to_repair
+        )
+    for index, geometry in zip(repair_indices, repaired_geometries, strict=True):
+        region_id = decoded_geometries[index][0]
+        decoded_geometries[index] = region_id, geometry
+
+    grouped_geometries: dict[str, list[BaseGeometry]] = defaultdict(list)
+    for region_id, geometry in decoded_geometries:
+        if not geometry.is_empty:
+            grouped_geometries[region_id].append(geometry)
+    return dict(grouped_geometries)
+
+
+def build_tile_base_path(
+    grouped_geometries: dict[str, list[BaseGeometry]],
+    *,
+    depth: int,
+    tile: AdminRegionThumbnailTile,
+) -> str:
+    base_geometries: list[BaseGeometry] = []
+    for geometries in grouped_geometries.values():
+        for geometry in geometries:
+            prepared = geometry
+            if prepared.is_empty:
+                continue
+            if depth == 1:
+                prepared = prepared.simplify(
+                    TILE_SIMPLIFY_UNITS,
+                    preserve_topology=False,
+                )
+                if not prepared.is_valid:
+                    prepared = repair_polygonal_geometry(prepared)
+            if not prepared.is_empty:
+                base_geometries.append(prepared)
+    if not base_geometries:
+        return ""
+
+    base_geometry = safe_union(
+        base_geometries,
+        grid_size=TILE_UNION_GRID_UNITS if depth == 1 else 0.0,
+    )
+    base_depth = 1 if depth == 1 else 2
+    projected_base = clip_thumbnail_geometry(
+        project_tile_geometry(
+            base_geometry,
+            depth=base_depth,
+            tile=tile,
+            simplify=False,
+        ),
+    )
+    if depth > 1:
+        projected_base = remove_polygon_holes(projected_base)
+    return bounded_geometry_path(
+        projected_base.simplify(0.6, preserve_topology=True),
+    )
+
+
+def build_china_base_tile_path(
+    tile: AdminRegionThumbnailTile | None,
+    *,
+    depth: int,
+) -> str:
+    if tile is None:
+        return ""
+    return build_tile_base_path(
+        decode_fill_geometries(tile.content),
+        depth=depth,
+        tile=tile,
+    )
+
+
+def build_tile_thumbnail_paths(
+    source: AdminRegionThumbnailSource,
+) -> AdminRegionThumbnailPaths:
+    tile = source.tile
+    if tile is None:
+        return AdminRegionThumbnailPaths(base_path="", region_paths=())
+    grouped_geometries = decode_fill_geometries(tile.content)
 
     coarse_by_id = create_coarse_paths(source.bounds_rows, depth=source.depth)
     region_paths: list[AdminRegionThumbnailPath] = []
@@ -348,27 +571,47 @@ def build_tile_thumbnail_paths(
         geometries = grouped_geometries.get(region_id, [])
         detailed_path = ""
         projected_bounds = coarse_bounds
+        projected_geometry: BaseGeometry | None = None
         if geometries:
             if not coarse_path:
                 coarse_bounds = project_tile_bounds(
                     combine_bounds(geometry.bounds for geometry in geometries),
                     depth=source.depth,
+                    tile=tile,
                 )
                 coarse_path = bounds_to_svg_path(coarse_bounds)
                 projected_bounds = coarse_bounds
             if source.depth == 1:
-                geometries = [
-                    geometry.simplify(TILE_SIMPLIFY_UNITS, preserve_topology=False)
-                    for geometry in geometries
-                ]
+                simplified_geometries = []
+                for geometry in geometries:
+                    simplified = geometry.simplify(
+                        TILE_SIMPLIFY_UNITS,
+                        preserve_topology=False,
+                    )
+                    if not simplified.is_valid:
+                        simplified = repair_polygonal_geometry(simplified)
+                    if not simplified.is_empty:
+                        simplified_geometries.append(simplified)
+                geometries = simplified_geometries
             region_geometry = safe_union(
                 geometries,
                 grid_size=TILE_UNION_GRID_UNITS if source.depth == 1 else 0.25,
             )
             if not region_geometry.is_empty:
-                projected = project_tile_geometry(region_geometry, depth=source.depth)
-                detailed_path = bounded_geometry_path(projected)
-                projected_bounds = normalize_bounds(projected.bounds)
+                projected = clip_thumbnail_geometry(
+                    project_tile_geometry(
+                        region_geometry,
+                        depth=source.depth,
+                        tile=tile,
+                        simplify=False,
+                    ),
+                )
+                if not projected.is_empty:
+                    projected_geometry = projected
+                    detailed_path = bounded_geometry_path(
+                        projected.simplify(0.6, preserve_topology=True),
+                    )
+                    projected_bounds = normalize_bounds(projected.bounds)
                 if not coarse_path:
                     coarse_path = bounds_to_svg_path(projected_bounds)
         if not detailed_path:
@@ -380,16 +623,25 @@ def build_tile_thumbnail_paths(
                     path=detailed_path,
                     coarse_path=coarse_path or detailed_path,
                     bounds=projected_bounds,
+                    geometry=(
+                        projected_geometry
+                        if projected_geometry is not None
+                        else box(*projected_bounds)
+                    ),
                 ),
             )
 
-    if base_geometries:
-        base_geometry = safe_union(base_geometries, grid_size=TILE_UNION_GRID_UNITS)
-        base_path = bounded_geometry_path(
-            project_tile_geometry(base_geometry, depth=source.depth),
-        )
-    else:
-        base_path = ""
+    base_tile = source.china_base_tile or tile
+    base_groups = (
+        grouped_geometries
+        if base_tile == tile
+        else decode_fill_geometries(base_tile.content)
+    )
+    base_path = build_tile_base_path(
+        base_groups,
+        depth=source.depth,
+        tile=base_tile,
+    )
     if not base_path:
         base_path = join_bounded_region_paths(region_paths)
     return AdminRegionThumbnailPaths(
@@ -408,14 +660,25 @@ def build_raw_thumbnail_paths(
         coarse_path, coarse_bounds = coarse_by_id.get(region_id, ("", (0.0, 0.0, 0.0, 0.0)))
         detailed_path = ""
         projected_bounds = coarse_bounds
+        projected_geometry: BaseGeometry | None = None
         geometry_json = geometry_by_id.get(region_id)
         if geometry_json is not None:
-            geometry = force_2d(shape(json.loads(geometry_json)))
-            projected = project_geographic_geometry(geometry, depth=source.depth)
-            detailed_path = bounded_geometry_path(projected)
-            projected_bounds = normalize_bounds(projected.bounds)
-            if not coarse_path:
-                coarse_path = bounds_to_svg_path(projected_bounds)
+            geometry = repair_polygonal_geometry(shape(json.loads(geometry_json)))
+            projected = clip_thumbnail_geometry(
+                project_geographic_geometry(
+                    geometry,
+                    depth=source.depth,
+                    simplify=False,
+                ),
+            )
+            if not projected.is_empty:
+                projected_geometry = projected
+                detailed_path = bounded_geometry_path(
+                    projected.simplify(0.6, preserve_topology=True),
+                )
+                projected_bounds = normalize_bounds(projected.bounds)
+                if not coarse_path:
+                    coarse_path = bounds_to_svg_path(projected_bounds)
         if not detailed_path:
             detailed_path = coarse_path
         if detailed_path:
@@ -425,10 +688,19 @@ def build_raw_thumbnail_paths(
                     path=detailed_path,
                     coarse_path=coarse_path or detailed_path,
                     bounds=projected_bounds,
+                    geometry=(
+                        projected_geometry
+                        if projected_geometry is not None
+                        else box(*projected_bounds)
+                    ),
                 ),
             )
+    fallback_base_path = join_bounded_region_paths(region_paths)
     return AdminRegionThumbnailPaths(
-        base_path=join_bounded_region_paths(region_paths),
+        base_path=(
+            build_china_base_tile_path(source.china_base_tile, depth=source.depth)
+            or fallback_base_path
+        ),
         region_paths=tuple(region_paths),
     )
 
@@ -443,12 +715,17 @@ def build_bounds_thumbnail_paths(
             path=path,
             coarse_path=path,
             bounds=bounds,
+            geometry=box(*bounds),
         )
         for region_id, (path, bounds) in sorted(coarse_by_id.items())
         if path
     )
+    fallback_base_path = join_bounded_region_paths(region_paths)
     return AdminRegionThumbnailPaths(
-        base_path=join_bounded_region_paths(region_paths),
+        base_path=(
+            build_china_base_tile_path(source.china_base_tile, depth=source.depth)
+            or fallback_base_path
+        ),
         region_paths=region_paths,
     )
 
@@ -538,52 +815,149 @@ def safe_union(
     non_empty = [geometry for geometry in geometries if not geometry.is_empty]
     if not non_empty:
         return GeometryCollection()
+    prepared = [
+        geometry
+        if (
+            isinstance(geometry, (Polygon, MultiPolygon))
+            and geometry.is_valid
+            and not geometry.has_z
+        )
+        else repair_polygonal_geometry(geometry)
+        for geometry in non_empty
+    ]
     try:
-        return union_all(non_empty, grid_size=grid_size)
+        return union_all(prepared, grid_size=grid_size)
     except GEOSException:
-        repaired = [geometry if geometry.is_valid else geometry.buffer(0) for geometry in non_empty]
-        return union_all(repaired, grid_size=grid_size)
+        unioned = union_all(
+            [repair_polygonal_geometry(geometry.buffer(0)) for geometry in prepared],
+            grid_size=grid_size,
+        )
+        return repair_polygonal_geometry(unioned)
 
 
-def project_geographic_geometry(geometry: BaseGeometry, *, depth: int) -> BaseGeometry:
+def repair_polygonal_geometry(geometry: BaseGeometry) -> BaseGeometry:
+    resolved = force_2d(geometry)
+    if isinstance(resolved, (Polygon, MultiPolygon)) and resolved.is_valid:
+        return resolved
+    if not resolved.is_valid:
+        resolved = make_valid(resolved)
+        if isinstance(resolved, (Polygon, MultiPolygon)) and resolved.is_valid:
+            return resolved
+    polygons = list(iter_polygons(resolved))
+    if not polygons:
+        return GeometryCollection()
+    if len(polygons) == 1:
+        return polygons[0]
+    try:
+        return union_all(polygons, grid_size=0.0)
+    except GEOSException:
+        return union_all([polygon.buffer(0) for polygon in polygons], grid_size=0.0)
+
+
+def clip_thumbnail_geometry(geometry: BaseGeometry) -> BaseGeometry:
+    frame = box(
+        VIEWBOX_PADDING,
+        VIEWBOX_PADDING,
+        VIEWBOX_WIDTH - VIEWBOX_PADDING,
+        VIEWBOX_HEIGHT - VIEWBOX_PADDING,
+    )
+
+    resolved = repair_polygonal_geometry(geometry)
+    try:
+        clipped = resolved.intersection(frame)
+    except GEOSException:
+        resolved = repair_polygonal_geometry(make_valid(resolved))
+        clipped = resolved.intersection(frame)
+    return repair_polygonal_geometry(clipped)
+
+
+def remove_polygon_holes(geometry: BaseGeometry) -> BaseGeometry:
+    shells = [Polygon(polygon.exterior) for polygon in iter_polygons(geometry)]
+    return safe_union(shells, grid_size=0.1) if shells else GeometryCollection()
+
+
+def project_geographic_position(
+    longitude: float,
+    latitude: float,
+    *,
+    depth: int,
+) -> tuple[float, float]:
     west, south, east, north = WORLD_BOUNDS if depth == 1 else CHINA_BOUNDS
+    available_width = VIEWBOX_WIDTH - VIEWBOX_PADDING * 2
+    available_height = VIEWBOX_HEIGHT - VIEWBOX_PADDING * 2
+    projected_width = (east - west) * LONGITUDE_SCALE
+    projected_height = north - south
+    scale = min(
+        available_width / projected_width,
+        available_height / projected_height,
+    )
+    content_width = projected_width * scale
+    content_height = projected_height * scale
+    offset_x = (VIEWBOX_WIDTH - content_width) / 2
+    offset_y = (VIEWBOX_HEIGHT - content_height) / 2
+    return (
+        offset_x + (longitude - west) * LONGITUDE_SCALE * scale,
+        offset_y + (north - latitude) * scale,
+    )
+
+
+def project_geographic_geometry(
+    geometry: BaseGeometry,
+    *,
+    depth: int,
+    simplify: bool = True,
+) -> BaseGeometry:
 
     def project(x, y, z=None):
         del z
-        projected_x = (x - west) / (east - west) * VIEWBOX_WIDTH
-        projected_y = (north - y) / (north - south) * VIEWBOX_HEIGHT
-        return projected_x, projected_y
+        return project_geographic_position(float(x), float(y), depth=depth)
 
-    return transform(project, force_2d(geometry)).simplify(0.6, preserve_topology=True)
+    projected = transform(project, force_2d(geometry))
+    return projected.simplify(0.6, preserve_topology=True) if simplify else projected
 
 
-def project_tile_geometry(geometry: BaseGeometry, *, depth: int) -> BaseGeometry:
+def project_tile_geometry(
+    geometry: BaseGeometry,
+    *,
+    depth: int,
+    tile: AdminRegionThumbnailTile,
+    simplify: bool = True,
+) -> BaseGeometry:
     def project(x, y, z=None):
         del z
-        return project_tile_position(float(x), float(y), depth=depth)
+        return project_tile_position(float(x), float(y), depth=depth, tile=tile)
 
-    return transform(project, force_2d(geometry)).simplify(0.6, preserve_topology=True)
+    projected = transform(project, force_2d(geometry))
+    return projected.simplify(0.6, preserve_topology=True) if simplify else projected
 
 
 def project_tile_bounds(
     bounds: tuple[float, float, float, float],
     *,
     depth: int,
+    tile: AdminRegionThumbnailTile,
 ) -> tuple[float, float, float, float]:
     west, north, east, south = normalize_bounds(bounds)
-    north_west = project_tile_position(west, north, depth=depth)
-    south_east = project_tile_position(east, south, depth=depth)
+    north_west = project_tile_position(west, north, depth=depth, tile=tile)
+    south_east = project_tile_position(east, south, depth=depth, tile=tile)
     return normalize_bounds((*north_west, *south_east))
 
 
-def project_tile_position(x: float, y: float, *, depth: int) -> tuple[float, float]:
-    west, south, east, north = WORLD_BOUNDS if depth == 1 else CHINA_BOUNDS
-    longitude = x / MVT_EXTENT * 360.0 - 180.0
-    mercator_y = math.pi - 2.0 * math.pi * y / MVT_EXTENT
+def project_tile_position(
+    x: float,
+    y: float,
+    *,
+    depth: int,
+    tile: AdminRegionThumbnailTile,
+) -> tuple[float, float]:
+    tile_count = 2**tile.z
+    world_extent = MVT_EXTENT * tile_count
+    global_x = tile.x * MVT_EXTENT + x
+    global_y = tile.y * MVT_EXTENT + y
+    longitude = global_x / world_extent * 360.0 - 180.0
+    mercator_y = math.pi - 2.0 * math.pi * global_y / world_extent
     latitude = math.degrees(math.atan(math.sinh(mercator_y)))
-    projected_x = (longitude - west) / (east - west) * VIEWBOX_WIDTH
-    projected_y = (north - latitude) / (north - south) * VIEWBOX_HEIGHT
-    return projected_x, projected_y
+    return project_geographic_position(longitude, latitude, depth=depth)
 
 
 def project_geographic_bounds(
@@ -594,14 +968,9 @@ def project_geographic_bounds(
     *,
     depth: int,
 ) -> tuple[float, float, float, float]:
-    frame_west, frame_south, frame_east, frame_north = (
-        WORLD_BOUNDS if depth == 1 else CHINA_BOUNDS
-    )
-    min_x = (west - frame_west) / (frame_east - frame_west) * VIEWBOX_WIDTH
-    max_x = (east - frame_west) / (frame_east - frame_west) * VIEWBOX_WIDTH
-    min_y = (frame_north - north) / (frame_north - frame_south) * VIEWBOX_HEIGHT
-    max_y = (frame_north - south) / (frame_north - frame_south) * VIEWBOX_HEIGHT
-    return normalize_bounds((min_x, min_y, max_x, max_y))
+    north_west = project_geographic_position(west, north, depth=depth)
+    south_east = project_geographic_position(east, south, depth=depth)
+    return normalize_bounds((*north_west, *south_east))
 
 
 def bounded_geometry_path(geometry: BaseGeometry) -> str:
@@ -609,7 +978,7 @@ def bounded_geometry_path(geometry: BaseGeometry) -> str:
     if len(path) <= MAX_THUMBNAIL_PATH_LENGTH:
         return path
     for tolerance in (1.2, 2.4, 4.8, 9.6):
-        simplified = geometry.simplify(tolerance, preserve_topology=False)
+        simplified = geometry.simplify(tolerance, preserve_topology=True)
         path = geometry_to_svg_path(simplified)
         if len(path) <= MAX_THUMBNAIL_PATH_LENGTH:
             return path
@@ -627,6 +996,23 @@ def join_bounded_region_paths(paths: Iterable[AdminRegionThumbnailPath]) -> str:
     if len(coarse) <= MAX_THUMBNAIL_PATH_LENGTH:
         return coarse
     return bounds_to_svg_path(combine_bounds(path.bounds for path in resolved_paths))
+
+
+def merge_visited_region_paths(paths: Iterable[AdminRegionThumbnailPath]) -> str:
+    resolved_paths = list(paths)
+    geometries: list[BaseGeometry] = []
+    for path in resolved_paths:
+        if path.geometry is not None and not path.geometry.is_empty:
+            geometries.append(path.geometry)
+    if geometries:
+        merged = safe_union(geometries, grid_size=0.1).simplify(
+            0.6,
+            preserve_topology=True,
+        )
+        detailed = bounded_geometry_path(merged)
+        if detailed:
+            return detailed
+    return join_bounded_region_paths(resolved_paths)
 
 
 def geometry_to_svg_path(geometry: object) -> str:

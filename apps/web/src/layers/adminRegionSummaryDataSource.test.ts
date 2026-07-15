@@ -19,7 +19,7 @@ function createPayload() {
     visitedCount: 2,
     totalCount: 2,
     thumbnail: {
-      viewBox: '0 0 320 150',
+      viewBox: '0 0 320 180',
       basePath: 'M0 0L10 0L10 10Z',
       visitedPath: 'M1 1L5 1L5 5Z',
     },
@@ -104,7 +104,7 @@ describe('loadAdminRegionSummary', () => {
     ['a fractional total count', () => ({ ...createPayload(), totalCount: 1.5 })],
     ['an incomplete thumbnail', () => ({
       ...createPayload(),
-      thumbnail: { viewBox: '0 0 320 150', basePath: 'M0 0Z' },
+      thumbnail: { viewBox: '0 0 320 180', basePath: 'M0 0Z' },
     })],
     ['a zero ranking position', () => ({
       ...createPayload(),
