@@ -2068,6 +2068,19 @@ describe('map chrome layout', () => {
     expect(depthControlSourceIndex).toBeGreaterThan(thumbnailSourceIndex)
   })
 
+  it('covers antialias seams only on visited administrative region paths', () => {
+    const baseRule = cssRule('.admin-region-atlas-card__base')
+    const visitedRule = cssRule('.admin-region-atlas-card__visited')
+
+    expect(baseRule).not.toContain('stroke:')
+    expect(visitedRule).toContain('fill: #2c8572')
+    expect(visitedRule).toContain('stroke: #2c8572')
+    expect(visitedRule).toContain('stroke-width: 0.6')
+    expect(visitedRule).toContain('stroke-linecap: round')
+    expect(visitedRule).toContain('stroke-linejoin: round')
+    expect(visitedRule).toContain('paint-order: stroke fill')
+  })
+
   it('places legacy AMap administrative region unlock controls as a separate map overlay above the toolbar', () => {
     const panelRule = cssRule('.admin-region-unlock-panel')
     const levelRule = cssRule('.admin-region-unlock-levels')
