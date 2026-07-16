@@ -246,6 +246,24 @@ describe('AdminRegionContextPanel', () => {
     expect(onRegionSelect).toHaveBeenCalledWith(longNameSummary.rankings[0])
   })
 
+  it('formats ranking counts with English thousands separators', () => {
+    const formattedSummary: AdminRegionSummary = {
+      ...citySummary,
+      rankings: [
+        {
+          ...citySummary.rankings[0],
+          footprintCount: 12120,
+        },
+      ],
+    }
+
+    renderPanel({ summary: formattedSummary })
+
+    const row = screen.getByRole('button', { name: /上海市/ })
+    expect(within(row).getByText('12,120')).toBeInTheDocument()
+    expect(row).toHaveAccessibleName('第 1 名 上海市，12,120 个足迹点')
+  })
+
   it('uses real ranking ratios with a two-percent floor only for positive values', () => {
     const ratioSummary: AdminRegionSummary = {
       ...citySummary,
