@@ -2131,8 +2131,8 @@ describe('map chrome layout', () => {
     expect(nameRule).toContain('overflow: hidden')
     expect(nameRule).toContain('text-overflow: ellipsis')
     expect(nameRule).toContain('white-space: nowrap')
-    expect(nameRule).toContain('color: rgba(23, 35, 31, 0.62)')
-    expect(nameRule).toContain('font-weight: 400')
+    expect(nameRule).toContain('color: rgba(23, 35, 31, 0.72)')
+    expect(nameRule).toContain('font-weight: 600')
     expect(barRule).toContain('min-width: 0')
     expect(barRule).toContain('height: 8px')
     expect(barRule).toContain('background: transparent')
@@ -2144,12 +2144,12 @@ describe('map chrome layout', () => {
     expect(hoverRule).toContain('background: transparent')
     expect(focusRule).toContain('outline: 1px solid #2c8572')
     expect(focusRule).not.toContain('background:')
-    expect(hoverNameRule).toContain('color: #17231f')
-    expect(selectedNameRule).toContain('color: #17231f')
+    expect(hoverNameRule).toContain('color: #101915')
+    expect(selectedNameRule).toContain('color: #101915')
     expect(hoverFillRule).toContain('background: #2c8572')
     expect(selectedFillRule).toContain('background: #2c8572')
     expect(valueRule).toContain(
-      'font-family: "Aptos Narrow", "Arial Narrow", "Roboto Condensed", "Helvetica Neue", sans-serif',
+      'font-family: "Bahnschrift", "Arial Narrow", "Roboto Condensed", "Helvetica Neue", sans-serif',
     )
     expect(valueRule).toContain('font-weight: 700')
     expect(valueRule).toContain('font-variant-numeric: tabular-nums')

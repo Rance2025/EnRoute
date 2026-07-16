@@ -2544,9 +2544,9 @@
 .admin-region-ranking-card__name {
   min-width: 0;
   overflow: hidden;
-  color: rgba(23, 35, 31, 0.62);
+  color: rgba(23, 35, 31, 0.72);
   font-size: 12px;
-  font-weight: 400;
+  font-weight: 600;
   line-height: 1.05;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2567,11 +2567,11 @@
 }
 
 .admin-region-ranking-card__row:hover .admin-region-ranking-card__name {
-  color: #17231f;
+  color: #101915;
 }
 
 .admin-region-ranking-card__row.is-selected .admin-region-ranking-card__name {
-  color: #17231f;
+  color: #101915;
 }
 
 .admin-region-ranking-card__row:hover .admin-region-ranking-card__bar span {
@@ -2584,7 +2584,7 @@
 
 .admin-region-ranking-card__row strong {
   color: #123f35;
-  font-family: "Aptos Narrow", "Arial Narrow", "Roboto Condensed", "Helvetica Neue", sans-serif;
+  font-family: "Bahnschrift", "Arial Narrow", "Roboto Condensed", "Helvetica Neue", sans-serif;
   font-size: 12px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;

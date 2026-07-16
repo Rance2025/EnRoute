@@ -22,6 +22,7 @@ export const ADMIN_REGION_FILL_OPACITY_MAX = 1
 export const ADMIN_REGION_FILL_OPACITY_STEP = 0.01
 
 const ADMIN_REGION_FILL_OPACITY_PRECISION = 100
+const ADMIN_REGION_SURFACE_COLOR = '#1f6f67'
 
 type AdminRegionLayerFilter = NonNullable<LayerSpecification['filter']>
 
@@ -94,7 +95,7 @@ export function createAdminRegionFillLayer(
     slot: 'top',
     filter: createAdminRegionFillFilter(activeRegionIds),
     paint: {
-      'fill-color': '#1f6f67',
+      'fill-color': ADMIN_REGION_SURFACE_COLOR,
       'fill-opacity': normalizeAdminRegionFillOpacity(opacity),
       'fill-antialias': false,
     },
@@ -110,7 +111,7 @@ export function createAdminRegionLineLayer(activeRegionIds?: string[]): LayerSpe
     slot: 'top',
     filter: createAdminRegionLineFilter(activeRegionIds),
     paint: {
-      'line-color': '#0b4f47',
+      'line-color': ADMIN_REGION_SURFACE_COLOR,
       'line-opacity': 0.92,
       'line-width': [
         'interpolate',
