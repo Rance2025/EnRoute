@@ -74,6 +74,13 @@ class AdminRegionDailyStat:
 
 
 @dataclass(frozen=True)
+class AdminRegionMetricTotals:
+    footprint_count: int
+    stay_duration_seconds: int
+    travel_distance_meters: float
+
+
+@dataclass(frozen=True)
 class AdminRegionIntervalDayShare:
     day: int
     duration_seconds: int
@@ -1179,26 +1186,23 @@ def query_precomputed_admin_region_summary(
             )
             eligible_rows = query_eligible_admin_region_metadata(connection, depth=depth)
             metadata_by_id = {str(row[0]): row for row in eligible_rows}
-            counts_by_id = query_admin_region_daily_counts(
+            metric_totals_by_id = query_admin_region_daily_metric_totals(
                 connection,
                 depth=depth,
                 start_day=start_day,
                 end_day=end_day,
             )
-            visited_ids = sorted(set(metadata_by_id) & set(counts_by_id))
+            metric_ids = sorted(set(metadata_by_id) & set(metric_totals_by_id))
+            visited_ids = [
+                region_id
+                for region_id in metric_ids
+                if metric_totals_by_id[region_id].footprint_count > 0
+            ]
             path_by_id = query_precomputed_region_paths(
                 connection,
                 depth=depth,
                 region_ids=visited_ids,
                 expected_signature=path_signature,
-            )
-            ranking_ids = sorted(
-                visited_ids,
-                key=lambda region_id: (
-                    -counts_by_id[region_id],
-                    str(metadata_by_id[region_id][1]),
-                    region_id,
-                ),
             )
             return {
                 "depth": depth,
@@ -1206,13 +1210,12 @@ def query_precomputed_admin_region_summary(
                 "visitedCount": len(visited_ids),
                 "totalCount": len(metadata_by_id),
                 "visitedPath": "".join(path_by_id[region_id] for region_id in visited_ids),
-                "rankings": [
-                    format_precomputed_admin_region_ranking(
+                "regionMetrics": [
+                    format_precomputed_admin_region_metric(
                         metadata_by_id[region_id],
-                        rank=rank,
-                        footprint_count=counts_by_id[region_id],
+                        totals=metric_totals_by_id[region_id],
                     )
-                    for rank, region_id in enumerate(ranking_ids, start=1)
+                    for region_id in metric_ids
                 ],
             }
     except AdminRegionPrecomputeUnavailable:
@@ -1281,32 +1284,76 @@ def query_eligible_admin_region_metadata(
     )
 
 
-def query_admin_region_daily_counts(
+def query_admin_region_daily_metric_totals(
     connection: sqlite3.Connection,
     *,
     depth: int,
     start_day: int | None,
     end_day: int | None,
-) -> dict[str, int]:
+) -> dict[str, AdminRegionMetricTotals]:
     date_filter = ""
     parameters: list[int] = [depth]
     if start_day is not None and end_day is not None:
         date_filter = "AND day BETWEEN ? AND ?"
         parameters.extend((start_day, end_day))
-    return {
-        str(row[0]): int(row[1])
-        for row in connection.execute(
-            f"""
-            SELECT region_id, SUM(footprint_count) AS footprint_count
-            FROM admin_region_daily_stats
-            WHERE depth = ?
-              {date_filter}
-            GROUP BY region_id
-            HAVING SUM(footprint_count) > 0
-            """,
-            parameters,
+    rows = connection.execute(
+        f"""
+        SELECT region_id,
+               SUM(footprint_count) AS footprint_count,
+               SUM(stay_duration_seconds) AS stay_duration_seconds,
+               SUM(travel_distance_meters) AS travel_distance_meters
+        FROM admin_region_daily_stats
+        WHERE depth = ?
+          {date_filter}
+        GROUP BY region_id
+        HAVING SUM(footprint_count) > 0
+            OR SUM(stay_duration_seconds) > 0
+            OR SUM(travel_distance_meters) > 0
+        ORDER BY region_id
+        """,
+        parameters,
+    ).fetchall()
+    totals_by_id: dict[str, AdminRegionMetricTotals] = {}
+    for row in rows:
+        footprint_count = require_nonnegative_metric_integer(
+            row[1],
+            label="footprint_count",
         )
-    }
+        stay_duration_seconds = require_nonnegative_metric_integer(
+            row[2],
+            label="stay_duration_seconds",
+        )
+        travel_distance_meters = require_nonnegative_finite_metric_number(
+            row[3],
+            label="travel_distance_meters",
+        )
+        totals_by_id[str(row[0])] = AdminRegionMetricTotals(
+            footprint_count=footprint_count,
+            stay_duration_seconds=stay_duration_seconds,
+            travel_distance_meters=travel_distance_meters,
+        )
+    return totals_by_id
+
+
+def require_nonnegative_metric_integer(value: object, *, label: str) -> int:
+    if type(value) is not int or value < 0:
+        raise AdminRegionPrecomputeSourceError(
+            f"aggregated {label} must be a non-negative integer",
+        )
+    return value
+
+
+def require_nonnegative_finite_metric_number(value: object, *, label: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise AdminRegionPrecomputeSourceError(
+            f"aggregated {label} must be a finite non-negative number",
+        )
+    result = float(value)
+    if not math.isfinite(result) or result < 0:
+        raise AdminRegionPrecomputeSourceError(
+            f"aggregated {label} must be a finite non-negative number",
+        )
+    return result
 
 
 def query_precomputed_region_paths(
@@ -1348,17 +1395,17 @@ def query_precomputed_region_paths(
     return path_by_id
 
 
-def format_precomputed_admin_region_ranking(
+def format_precomputed_admin_region_metric(
     row: sqlite3.Row,
     *,
-    rank: int,
-    footprint_count: int,
+    totals: AdminRegionMetricTotals,
 ) -> dict[str, object]:
     return {
-        "rank": rank,
         "regionId": str(row[0]),
         "name": str(row[1]),
-        "footprintCount": footprint_count,
+        "footprintCount": totals.footprint_count,
+        "stayDurationSeconds": totals.stay_duration_seconds,
+        "travelDistanceMeters": totals.travel_distance_meters,
         "bounds": {
             "west": float(row[2]),
             "south": float(row[3]),
