@@ -33,6 +33,7 @@ import {
   normalizeFootprintStyle,
   type FootprintStyle,
 } from '../layers/footprintStyle'
+import { measureMapFocusPadding } from '../config/mapFocusViewport'
 import { DEFAULT_MAPBOX_STYLE_URL, type MapStylePreference } from '../mapStyleOptions'
 import type {
   FootprintDistanceSeries,
@@ -92,6 +93,7 @@ type MapboxCanvasEnv = {
 type MapboxProjection = 'globe' | 'mercator'
 type MapboxLanguage = 'zh-Hans' | 'en'
 type MapboxLanguagePreference = 'auto' | MapboxLanguage
+type MapFocusBounds = [[number, number], [number, number]]
 type LanguageConfigurableMap = mapboxgl.Map & {
   setLanguage?: (language?: MapboxLanguage) => mapboxgl.Map
 }
@@ -190,9 +192,7 @@ const FLAT_WORLD_ZOOM = 1.5
 const GLOBE_ROTATION_STEP_DEGREES = 1.2
 const GLOBE_ROTATION_INTERVAL_MS = 1000
 const MAP_FIT_BOUNDS_DURATION_MS = 900
-const MAP_FIT_BOUNDS_PADDING_PX = 96
 const ADMIN_REGION_SELECTION_FIT_BOUNDS_DURATION_MS = 600
-const ADMIN_REGION_SELECTION_FIT_BOUNDS_PADDING_PX = 72
 const MAP_STYLE_MUTATION_READY_RETRY_INTERVAL_MS = 80
 const MAP_STYLE_MUTATION_READY_RETRY_LIMIT = 60
 const FOOTPRINT_STYLE_STORAGE_KEY = 'enroute.footprintStyle'
@@ -573,6 +573,20 @@ function MapboxCanvasComponent({
     clearPendingGlobeRotationStart(map)
     clearGlobeRotationTimer()
   }, [clearGlobeRotationTimer, clearPendingGlobeRotationStart])
+
+  const fitBoundsInVisibleViewport = useCallback((
+    bounds: MapFocusBounds,
+    duration: number,
+  ) => {
+    const map = mapRef.current
+    const mapNode = mapNodeRef.current
+    if (!map || !mapNode) return
+
+    map.fitBounds(bounds, {
+      padding: measureMapFocusPadding(mapNode),
+      duration,
+    })
+  }, [])
 
   const startGlobeRotation = useCallback(() => {
     const map = mapRef.current
@@ -1067,12 +1081,18 @@ function MapboxCanvasComponent({
     }
     if (selectedAdminRegion) {
       const { west, south, east, north } = selectedAdminRegion.bounds
-      map.fitBounds([[west, south], [east, north]], {
-        padding: ADMIN_REGION_SELECTION_FIT_BOUNDS_PADDING_PX,
-        duration: ADMIN_REGION_SELECTION_FIT_BOUNDS_DURATION_MS,
-      })
+      fitBoundsInVisibleViewport(
+        [[west, south], [east, north]],
+        ADMIN_REGION_SELECTION_FIT_BOUNDS_DURATION_MS,
+      )
     }
-  }, [selectedAdminRegion, status, styleLoadRevision, styleMutationReady])
+  }, [
+    fitBoundsInVisibleViewport,
+    selectedAdminRegion,
+    status,
+    styleLoadRevision,
+    styleMutationReady,
+  ])
 
   useEffect(() => {
     const map = mapRef.current
@@ -1251,14 +1271,11 @@ function MapboxCanvasComponent({
     if (!bounds) return
 
     stopGlobeRotation()
-    mapRef.current?.fitBounds(
+    fitBoundsInVisibleViewport(
       [bounds.southWest, bounds.northEast],
-      {
-        duration: MAP_FIT_BOUNDS_DURATION_MS,
-        padding: MAP_FIT_BOUNDS_PADDING_PX,
-      },
+      MAP_FIT_BOUNDS_DURATION_MS,
     )
-  }, [stopGlobeRotation])
+  }, [fitBoundsInVisibleViewport, stopGlobeRotation])
 
   const locate = useCallback(() => {
     if (!navigator.geolocation) return
