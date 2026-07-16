@@ -4,6 +4,7 @@ import importlib
 import json
 import math
 import sqlite3
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -998,6 +999,18 @@ def test_split_interval_by_shanghai_day_preserves_a_large_finite_distance() -> N
     assert all(math.isfinite(share_distance) for share_distance in share_distances)
     assert all(share_distance >= 0 for share_distance in share_distances)
     assert math.fsum(share_distances) == pytest.approx(distance)
+
+
+def test_split_interval_rejects_unrepresentable_max_float_distance_shares() -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+    start = int(datetime(2026, 7, 1, 0, 0, 58, tzinfo=timezone.utc).timestamp())
+    end = start + 48 * 24 * 60 * 60
+
+    with pytest.raises(
+        precompute.AdminRegionPrecomputeSourceError,
+        match=r"interval distance shares cannot be represented.*start=.*end=",
+    ):
+        precompute.split_interval_by_shanghai_day(start, end, sys.float_info.max)
 
 
 def test_daily_stats_wraps_distance_aggregation_overflow_with_key_context() -> None:
