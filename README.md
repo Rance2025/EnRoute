@@ -85,6 +85,22 @@ raw footprints in SQLite at `FOOTPRINT_DB_PATH=data/footprints.sqlite`.
 Footprint coordinates are stored canonically as WGS-84. The source export at
 `external/backUpData-all.csv` is treated as WGS-84 and can be used to rebuild
 `data/footprints.sqlite` with `python scripts/rebuild_footprints_wgs84.py`.
+The imported `distance` value is the distance in meters from the previous valid
+footprint to the current footprint. The external app resets some first records
+of an `Asia/Shanghai` day to zero; when that exact pattern has a previous
+footprint, EnRoute normalizes it to the WGS-84 Haversine distance before insert
+or conflict validation. Existing positive values, same-day zeros, the first
+record in the dataset, and identical coordinates remain unchanged. The source
+CSV remains raw evidence and is never rewritten by this compatibility rule.
+
+Use `npm run repair:daily-first-distances -- --database
+data/footprints.sqlite` to apply the same rule to an existing facts database.
+This explicit maintenance command creates and verifies a timestamped SQLite
+backup before opening a write transaction. It updates only matching
+`footprints.distance` facts and their administrative-region distance summaries;
+it does not write `footprint_spatial`, `visual_tiles`, or administrative-region
+tile data. Keep the generated backup until the repaired database and runtime
+queries have been verified.
 
 The Mapbox footprint layer does not request raw point arrays for rendering. It
 reads `/api/map/tiles/footprints/{z}/{x}/{y}.mvt`; the backend reads
