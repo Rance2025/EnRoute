@@ -492,7 +492,7 @@ describe('MapboxCanvas footprint vector tiles', () => {
     vi.stubEnv('VITE_MAPBOX_PROJECTION', 'mercator')
     const { MapboxCanvas } = await import('./MapboxCanvas')
 
-    const { container } = renderMapFocusShell(
+    render(
       <MapboxCanvas
         accessToken="test-mapbox-token"
         timeRange={selectedRange}
