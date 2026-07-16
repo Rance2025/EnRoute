@@ -2070,7 +2070,24 @@ describe('map chrome layout', () => {
 
   it('renders administrative region rankings as a compact trackless bar chart', () => {
     const cardRule = lastCssRule('.admin-region-ranking-card')
+    const rightPanelStackRule = cssRule('.right-context-panel__stack')
     const listRule = cssRule('.admin-region-ranking-card__list')
+    const firefoxScrollbarBlock = mediaBlock(
+      '@supports not selector(::-webkit-scrollbar)',
+    )
+    const scrollbarRule = cssRule('.admin-region-ranking-card__list::-webkit-scrollbar')
+    const scrollbarButtonRule = cssRule(
+      '.admin-region-ranking-card__list::-webkit-scrollbar-button',
+    )
+    const scrollbarTrackRule = cssRule(
+      '.admin-region-ranking-card__list::-webkit-scrollbar-track',
+    )
+    const scrollbarThumbRule = cssRule(
+      '.admin-region-ranking-card__list::-webkit-scrollbar-thumb',
+    )
+    const hoverScrollbarThumbRule = cssRule(
+      '.admin-region-ranking-card__list:hover::-webkit-scrollbar-thumb',
+    )
     const rowRule = cssRule('.admin-region-ranking-card__row')
     const nameRule = cssRule('.admin-region-ranking-card__name')
     const barRule = cssRule('.admin-region-ranking-card__bar')
@@ -2095,14 +2112,26 @@ describe('map chrome layout', () => {
     expect(listRule).toContain(
       'max-height: calc(var(--admin-region-rank-row-height) * 5)',
     )
+    expect(listRule).toContain('scrollbar-gutter: stable')
+    expect(listRule).not.toContain('scrollbar-width: thin')
+    expect(listRule).not.toContain('scrollbar-color:')
+    expect(rightPanelStackRule).not.toContain('scrollbar-width: thin')
+    expect(rightPanelStackRule).not.toContain('scrollbar-color:')
+    expect(firefoxScrollbarBlock).toContain('.right-context-panel__stack')
+    expect(firefoxScrollbarBlock).toContain('.admin-region-ranking-card__list')
+    expect(firefoxScrollbarBlock).toContain('scrollbar-width: thin')
+    expect(firefoxScrollbarBlock).toContain(
+      'scrollbar-color: rgba(23, 62, 53, 0.18) transparent',
+    )
     expect(rowRule).toContain('height: var(--admin-region-rank-row-height)')
     expect(rowRule).toContain('grid-template-columns: 22px 4em minmax(0, 1fr) auto')
-    expect(rowRule).toContain('padding: 0 2px')
+    expect(rowRule).toContain('padding: 0 10px 0 2px')
     expect(rowRule).toContain('font-size: 12px')
     expect(rowRule).not.toContain('border-bottom')
     expect(nameRule).toContain('overflow: hidden')
     expect(nameRule).toContain('text-overflow: ellipsis')
     expect(nameRule).toContain('white-space: nowrap')
+    expect(nameRule).toContain('color: rgba(23, 35, 31, 0.72)')
     expect(nameRule).toContain('font-weight: 600')
     expect(barRule).toContain('min-width: 0')
     expect(barRule).toContain('height: 8px')
@@ -2115,11 +2144,24 @@ describe('map chrome layout', () => {
     expect(hoverRule).toContain('background: transparent')
     expect(focusRule).toContain('outline: 1px solid #2c8572')
     expect(focusRule).not.toContain('background:')
-    expect(hoverNameRule).toContain('color: #2c8572')
-    expect(selectedNameRule).toContain('color: #2c8572')
+    expect(hoverNameRule).toContain('color: #101915')
+    expect(selectedNameRule).toContain('color: #101915')
     expect(hoverFillRule).toContain('background: #2c8572')
     expect(selectedFillRule).toContain('background: #2c8572')
+    expect(valueRule).toContain(
+      'font-family: "Bahnschrift", "Arial Narrow", "Roboto Condensed", "Helvetica Neue", sans-serif',
+    )
+    expect(valueRule).toContain('font-weight: 700')
     expect(valueRule).toContain('font-variant-numeric: tabular-nums')
+    expect(valueRule).toContain('letter-spacing: 0')
+    expect(valueRule).toContain('text-align: right')
+    expect(scrollbarRule).toContain('width: 4px')
+    expect(scrollbarButtonRule).toContain('display: none')
+    expect(scrollbarButtonRule).toContain('width: 0')
+    expect(scrollbarButtonRule).toContain('height: 0')
+    expect(scrollbarTrackRule).toContain('background: transparent')
+    expect(scrollbarThumbRule).toContain('background: rgba(23, 62, 53, 0.18)')
+    expect(hoverScrollbarThumbRule).toContain('background: rgba(23, 62, 53, 0.3)')
   })
 
   it('covers antialias seams only on visited administrative region paths', () => {

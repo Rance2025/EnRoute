@@ -1906,8 +1906,6 @@
   gap: 14px;
   padding: var(--right-panel-shadow-buffer);
   overflow: visible;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(23, 62, 53, 0.2) transparent;
 }
 
 .right-context-panel__glass {
@@ -2467,9 +2465,42 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(23, 62, 53, 0.2) transparent;
   list-style: none;
+}
+
+@supports not selector(::-webkit-scrollbar) {
+  .right-context-panel__stack {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(23, 62, 53, 0.2) transparent;
+  }
+
+  .admin-region-ranking-card__list {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(23, 62, 53, 0.18) transparent;
+  }
+}
+
+.admin-region-ranking-card__list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.admin-region-ranking-card__list::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.admin-region-ranking-card__list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.admin-region-ranking-card__list::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(23, 62, 53, 0.18);
+}
+
+.admin-region-ranking-card__list:hover::-webkit-scrollbar-thumb {
+  background: rgba(23, 62, 53, 0.3);
 }
 
 .admin-region-ranking-card__item {
@@ -2484,7 +2515,7 @@
   grid-template-columns: 22px 4em minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
-  padding: 0 2px;
+  padding: 0 10px 0 2px;
   border: 0;
   color: inherit;
   background: transparent;
@@ -2513,7 +2544,7 @@
 .admin-region-ranking-card__name {
   min-width: 0;
   overflow: hidden;
-  color: #17231f;
+  color: rgba(23, 35, 31, 0.72);
   font-size: 12px;
   font-weight: 600;
   line-height: 1.05;
@@ -2536,11 +2567,11 @@
 }
 
 .admin-region-ranking-card__row:hover .admin-region-ranking-card__name {
-  color: #2c8572;
+  color: #101915;
 }
 
 .admin-region-ranking-card__row.is-selected .admin-region-ranking-card__name {
-  color: #2c8572;
+  color: #101915;
 }
 
 .admin-region-ranking-card__row:hover .admin-region-ranking-card__bar span {
@@ -2553,9 +2584,12 @@
 
 .admin-region-ranking-card__row strong {
   color: #123f35;
+  font-family: "Bahnschrift", "Arial Narrow", "Roboto Condensed", "Helvetica Neue", sans-serif;
   font-size: 12px;
-  font-weight: 860;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  text-align: right;
   white-space: nowrap;
 }
 

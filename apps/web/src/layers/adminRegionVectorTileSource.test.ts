@@ -63,9 +63,10 @@ describe('adminRegionVectorTileSource', () => {
       ],
     })
     expect(lineLayer.paint).toMatchObject({
-      'line-color': '#0b4f47',
+      'line-color': '#1f6f67',
       'line-opacity': 0.92,
     })
+    expect(lineLayer.paint?.['line-color']).toBe(fillLayer.paint?.['fill-color'])
     expect(lineLayer.paint).toMatchObject({
       'line-width': [
         'interpolate',

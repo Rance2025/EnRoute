@@ -21,6 +21,8 @@ const DEPTH_OPTIONS: Array<{ value: AdminRegionDepth, label: string }> = [
   { value: 4, label: '区' },
 ]
 
+const FOOTPRINT_COUNT_FORMATTER = new Intl.NumberFormat('en-US')
+
 const DEPTH_UNITS: Record<AdminRegionDepth, string> = {
   1: '国家',
   2: '省级行政区',
@@ -159,13 +161,14 @@ function RankingRow({
   const ratio = maxFootprintCount <= 0 || ranking.footprintCount <= 0
     ? 0
     : Math.max(0.02, Math.min(1, ranking.footprintCount / maxFootprintCount))
+  const formattedFootprintCount = FOOTPRINT_COUNT_FORMATTER.format(ranking.footprintCount)
 
   return (
     <li className="admin-region-ranking-card__item">
       <button
         type="button"
         className={`admin-region-ranking-card__row${isSelected ? ' is-selected' : ''}`}
-        aria-label={`第 ${ranking.rank} 名 ${ranking.name}，${ranking.footprintCount} 个足迹点`}
+        aria-label={`第 ${ranking.rank} 名 ${ranking.name}，${formattedFootprintCount} 个足迹点`}
         aria-current={isSelected ? 'location' : undefined}
         onClick={() => onRegionSelect(ranking)}
       >
@@ -176,7 +179,7 @@ function RankingRow({
         <span className="admin-region-ranking-card__bar" aria-hidden="true">
           <span style={{ transform: `scaleX(${ratio})` }} />
         </span>
-        <strong>{ranking.footprintCount}</strong>
+        <strong>{formattedFootprintCount}</strong>
       </button>
     </li>
   )
