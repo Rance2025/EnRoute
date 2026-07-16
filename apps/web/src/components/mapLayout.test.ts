@@ -2076,6 +2076,20 @@ describe('map chrome layout', () => {
     const barRule = cssRule('.admin-region-ranking-card__bar')
     const fillRule = cssRule('.admin-region-ranking-card__bar span')
     const valueRule = cssRule('.admin-region-ranking-card__row strong')
+    const hoverRule = cssRule('.admin-region-ranking-card__row:hover')
+    const focusRule = cssRule('.admin-region-ranking-card__row:focus-visible')
+    const hoverNameRule = cssRule(
+      '.admin-region-ranking-card__row:hover .admin-region-ranking-card__name',
+    )
+    const selectedNameRule = cssRule(
+      '.admin-region-ranking-card__row.is-selected .admin-region-ranking-card__name',
+    )
+    const hoverFillRule = cssRule(
+      '.admin-region-ranking-card__row:hover .admin-region-ranking-card__bar span',
+    )
+    const selectedFillRule = cssRule(
+      '.admin-region-ranking-card__row.is-selected .admin-region-ranking-card__bar span',
+    )
 
     expect(cardRule).toContain('--admin-region-rank-row-height: 24px')
     expect(listRule).toContain(
@@ -2089,12 +2103,22 @@ describe('map chrome layout', () => {
     expect(nameRule).toContain('overflow: hidden')
     expect(nameRule).toContain('text-overflow: ellipsis')
     expect(nameRule).toContain('white-space: nowrap')
+    expect(nameRule).toContain('font-weight: 600')
     expect(barRule).toContain('min-width: 0')
-    expect(barRule).toContain('height: 12px')
+    expect(barRule).toContain('height: 8px')
     expect(barRule).toContain('background: transparent')
+    expect(barRule).not.toContain('border-radius')
     expect(barRule).not.toMatch(/background: rgba\(/)
-    expect(fillRule).toContain('background: #2c8572')
+    expect(fillRule).toContain('background: #3d8f7d')
+    expect(fillRule).not.toContain('border-radius')
     expect(fillRule).toContain('transform-origin: left center')
+    expect(hoverRule).toContain('background: transparent')
+    expect(focusRule).toContain('outline: 1px solid #2c8572')
+    expect(focusRule).not.toContain('background:')
+    expect(hoverNameRule).toContain('color: #2c8572')
+    expect(selectedNameRule).toContain('color: #2c8572')
+    expect(hoverFillRule).toContain('background: #2c8572')
+    expect(selectedFillRule).toContain('background: #2c8572')
     expect(valueRule).toContain('font-variant-numeric: tabular-nums')
   })
 
