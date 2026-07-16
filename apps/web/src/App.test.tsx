@@ -554,6 +554,24 @@ describe('App', () => {
     )
   })
 
+  it('keeps the map-selected administrative region selected in the ranking', async () => {
+    render(<App amapConfig={missingAmapConfig} />)
+    await settleLazyImports()
+
+    fireEvent.click(within(screen.getByRole('navigation', { name: '二级导航' }))
+      .getByRole('button', { name: '区域' }))
+
+    const rankingRow = await screen.findByRole('button', { name: /第 1 名 中国/ })
+    fireEvent.click(rankingRow)
+
+    expect(screen.getByTestId('mapbox-canvas')).toHaveAttribute(
+      'data-selected-admin-region-id',
+      'CN',
+    )
+    expect(rankingRow).toHaveClass('is-selected')
+    expect(rankingRow).toHaveAttribute('aria-current', 'location')
+  })
+
   it('shows a completed current depth without waiting for a slower prefetched depth', async () => {
     let resolveProvinceSummary!: (summary: typeof provinceAdminRegionSummaryFixture) => void
     const provinceSummaryRequest = new Promise<typeof provinceAdminRegionSummaryFixture>((resolve) => {
