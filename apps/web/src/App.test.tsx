@@ -2,6 +2,10 @@ import '@testing-library/jest-dom/vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+const { mockAdminRegionFocus } = vi.hoisted(() => ({
+  mockAdminRegionFocus: vi.fn(),
+}))
+
 vi.mock('./components/MapboxCanvas', async () => {
   const React = await import('react')
 
@@ -66,6 +70,10 @@ vi.mock('./components/MapboxCanvas', async () => {
           },
         })
       }, [onFootprintMetricsChange])
+
+      React.useEffect(() => {
+        if (selectedAdminRegion) mockAdminRegionFocus(selectedAdminRegion)
+      }, [selectedAdminRegion])
 
       return React.createElement(
         'section',
@@ -260,6 +268,7 @@ afterEach(() => {
 
 beforeEach(() => {
   window.localStorage.clear()
+  mockAdminRegionFocus.mockReset()
   clearAdminRegionSummaryCache()
   vi.mocked(loadAdminRegionSummary).mockReset()
   vi.mocked(loadAdminRegionSummary).mockImplementation(async ({ depth }) => (
@@ -607,6 +616,9 @@ describe('App', () => {
     fireEvent.click(within(screen.getByRole('navigation', { name: '二级导航' }))
       .getByRole('button', { name: '区域' }))
     fireEvent.click(await screen.findByRole('button', { name: /第 1 名，中国/ }))
+    await waitFor(() => expect(mockAdminRegionFocus).toHaveBeenCalledTimes(1))
+    const selectedRegionReference = mockAdminRegionFocus.mock.calls[0][0]
+
     fireEvent.click(within(screen.getByRole('group', { name: '排行依据' }))
       .getByRole('button', { name: '时间' }))
 
@@ -618,6 +630,8 @@ describe('App', () => {
       'CN',
     )
     expect(retainedRow).toHaveClass('is-selected')
+    expect(mockAdminRegionFocus).toHaveBeenCalledTimes(1)
+    expect(mockAdminRegionFocus.mock.calls[0][0]).toBe(selectedRegionReference)
   })
 
   it('clears a selected region when its value is zero in the new metric ranking', async () => {
@@ -627,12 +641,15 @@ describe('App', () => {
     fireEvent.click(within(screen.getByRole('navigation', { name: '二级导航' }))
       .getByRole('button', { name: '区域' }))
     fireEvent.click(await screen.findByRole('button', { name: /第 1 名，中国/ }))
+    await waitFor(() => expect(mockAdminRegionFocus).toHaveBeenCalledTimes(1))
+
     fireEvent.click(within(screen.getByRole('group', { name: '排行依据' }))
       .getByRole('button', { name: '距离' }))
 
     expect(screen.getByText('本期暂无距离数据')).toBeInTheDocument()
     expect(screen.getByTestId('mapbox-canvas'))
       .not.toHaveAttribute('data-selected-admin-region-id')
+    expect(mockAdminRegionFocus).toHaveBeenCalledTimes(1)
   })
 
   it('keeps the ranking metric while time range and depth select new summaries', async () => {

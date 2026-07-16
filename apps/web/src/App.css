@@ -2506,6 +2506,13 @@
   outline-offset: 2px;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .admin-region-ranking-card__metric-control button,
+  .admin-region-ranking-card__metric-control button::after {
+    transition: none;
+  }
+}
+
 .admin-region-ranking-card__retry {
   min-width: 0;
   height: 18px;
