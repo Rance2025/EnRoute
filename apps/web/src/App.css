@@ -2476,8 +2476,17 @@
 
   .admin-region-ranking-card__list {
     scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+  }
+
+  .admin-region-ranking-card:hover .admin-region-ranking-card__list {
     scrollbar-color: rgba(23, 62, 53, 0.18) transparent;
   }
+
+  .admin-region-ranking-card:focus-within .admin-region-ranking-card__list {
+    scrollbar-color: rgba(23, 62, 53, 0.18) transparent;
+  }
+
 }
 
 .admin-region-ranking-card__list::-webkit-scrollbar {
@@ -2496,11 +2505,15 @@
 
 .admin-region-ranking-card__list::-webkit-scrollbar-thumb {
   border-radius: 999px;
+  background: transparent;
+}
+
+.admin-region-ranking-card:hover .admin-region-ranking-card__list::-webkit-scrollbar-thumb {
   background: rgba(23, 62, 53, 0.18);
 }
 
-.admin-region-ranking-card__list:hover::-webkit-scrollbar-thumb {
-  background: rgba(23, 62, 53, 0.3);
+.admin-region-ranking-card:focus-within .admin-region-ranking-card__list::-webkit-scrollbar-thumb {
+  background: rgba(23, 62, 53, 0.18);
 }
 
 .admin-region-ranking-card__item {

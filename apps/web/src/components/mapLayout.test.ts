@@ -2085,8 +2085,11 @@ describe('map chrome layout', () => {
     const scrollbarThumbRule = cssRule(
       '.admin-region-ranking-card__list::-webkit-scrollbar-thumb',
     )
-    const hoverScrollbarThumbRule = cssRule(
-      '.admin-region-ranking-card__list:hover::-webkit-scrollbar-thumb',
+    const cardHoverScrollbarThumbRule = cssRule(
+      '.admin-region-ranking-card:hover .admin-region-ranking-card__list::-webkit-scrollbar-thumb',
+    )
+    const cardFocusScrollbarThumbRule = cssRule(
+      '.admin-region-ranking-card:focus-within .admin-region-ranking-card__list::-webkit-scrollbar-thumb',
     )
     const rowRule = cssRule('.admin-region-ranking-card__row')
     const nameRule = cssRule('.admin-region-ranking-card__name')
@@ -2121,8 +2124,16 @@ describe('map chrome layout', () => {
     expect(firefoxScrollbarBlock).toContain('.admin-region-ranking-card__list')
     expect(firefoxScrollbarBlock).toContain('scrollbar-width: thin')
     expect(firefoxScrollbarBlock).toContain(
-      'scrollbar-color: rgba(23, 62, 53, 0.18) transparent',
+      'scrollbar-color: transparent transparent',
     )
+    expect(cssRuleIn(
+      firefoxScrollbarBlock,
+      '.admin-region-ranking-card:hover .admin-region-ranking-card__list',
+    )).toContain('scrollbar-color: rgba(23, 62, 53, 0.18) transparent')
+    expect(cssRuleIn(
+      firefoxScrollbarBlock,
+      '.admin-region-ranking-card:focus-within .admin-region-ranking-card__list',
+    )).toContain('scrollbar-color: rgba(23, 62, 53, 0.18) transparent')
     expect(rowRule).toContain('height: var(--admin-region-rank-row-height)')
     expect(rowRule).toContain('grid-template-columns: 22px 4em minmax(0, 1fr) auto')
     expect(rowRule).toContain('padding: 0 10px 0 2px')
@@ -2160,8 +2171,13 @@ describe('map chrome layout', () => {
     expect(scrollbarButtonRule).toContain('width: 0')
     expect(scrollbarButtonRule).toContain('height: 0')
     expect(scrollbarTrackRule).toContain('background: transparent')
-    expect(scrollbarThumbRule).toContain('background: rgba(23, 62, 53, 0.18)')
-    expect(hoverScrollbarThumbRule).toContain('background: rgba(23, 62, 53, 0.3)')
+    expect(scrollbarThumbRule).toContain('background: transparent')
+    expect(cardHoverScrollbarThumbRule).toContain(
+      'background: rgba(23, 62, 53, 0.18)',
+    )
+    expect(cardFocusScrollbarThumbRule).toContain(
+      'background: rgba(23, 62, 53, 0.18)',
+    )
   })
 
   it('covers antialias seams only on visited administrative region paths', () => {
