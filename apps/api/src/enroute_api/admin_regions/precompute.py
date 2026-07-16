@@ -14,7 +14,7 @@ from shapely.geometry import GeometryCollection, MultiPolygon, Polygon, box, sha
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import transform
 
-from enroute_api.footprints.visual_tiles import encode_day, shanghai_date_from_timestamp
+from enroute_api.footprints.visual_tiles import encode_day
 
 from .thumbnail import (
     CHINA_BOUNDS,
@@ -60,6 +60,7 @@ CHINA_THUMBNAIL_SOUTH_BOUND = 17.5
 ADMIN_REGION_GEOMETRY_QUERY_BATCH_SIZE = 400
 _ADMIN_REGION_DAILY_STATS_TABLE = "admin_region_daily_stats"
 _ADMIN_REGION_DAILY_STATS_NEXT_TABLE = "admin_region_daily_stats_next"
+_SHANGHAI_TIME_ZONE = ZoneInfo("Asia/Shanghai")
 
 
 @dataclass(frozen=True, order=True)
@@ -442,23 +443,30 @@ def split_interval_by_shanghai_day(
             "footprint interval end timestamp must be after start timestamp",
         )
     resolved_distance = validate_footprint_distance(distance)
-    shanghai_time_zone = ZoneInfo("Asia/Shanghai")
     total_duration = end_timestamp - start_timestamp
     current_timestamp = start_timestamp
     allocated_distances: list[float] = []
     shares: list[AdminRegionIntervalDayShare] = []
     while current_timestamp < end_timestamp:
-        current_utc = datetime.fromtimestamp(current_timestamp, tz=timezone.utc)
-        current_shanghai = current_utc.astimezone(shanghai_time_zone)
-        next_midnight_shanghai = datetime.combine(
-            current_shanghai.date() + timedelta(days=1),
-            datetime_time.min,
-            tzinfo=shanghai_time_zone,
-        )
-        next_timestamp = min(
-            end_timestamp,
-            int(next_midnight_shanghai.astimezone(timezone.utc).timestamp()),
-        )
+        current_date = shanghai_date_from_precompute_timestamp(current_timestamp)
+        try:
+            next_midnight_shanghai = datetime.combine(
+                current_date + timedelta(days=1),
+                datetime_time.min,
+                tzinfo=_SHANGHAI_TIME_ZONE,
+            )
+            next_midnight_timestamp = int(
+                next_midnight_shanghai.astimezone(timezone.utc).timestamp(),
+            )
+        except (OSError, OverflowError, ValueError) as error:
+            raise AdminRegionPrecomputeSourceError(
+                f"failed to convert next Shanghai midnight after day {encode_day(current_date)}",
+            ) from error
+        next_timestamp = min(end_timestamp, next_midnight_timestamp)
+        if next_timestamp <= current_timestamp:
+            raise AdminRegionPrecomputeSourceError(
+                "next Shanghai midnight must advance the footprint interval cursor",
+            )
         duration_seconds = next_timestamp - current_timestamp
         if next_timestamp == end_timestamp:
             share_distance = resolved_distance - math.fsum(allocated_distances)
@@ -466,7 +474,7 @@ def split_interval_by_shanghai_day(
             share_distance = resolved_distance * (duration_seconds / total_duration)
         shares.append(
             AdminRegionIntervalDayShare(
-                day=encode_day(current_shanghai.date()),
+                day=encode_day(current_date),
                 duration_seconds=duration_seconds,
                 travel_distance_meters=share_distance,
             ),
@@ -474,6 +482,19 @@ def split_interval_by_shanghai_day(
         allocated_distances.append(share_distance)
         current_timestamp = next_timestamp
     return tuple(shares)
+
+
+def shanghai_date_from_precompute_timestamp(timestamp: int) -> date:
+    try:
+        return (
+            datetime.fromtimestamp(timestamp, tz=timezone.utc)
+            .astimezone(_SHANGHAI_TIME_ZONE)
+            .date()
+        )
+    except (OSError, OverflowError, ValueError) as error:
+        raise AdminRegionPrecomputeSourceError(
+            f"failed to convert footprint timestamp to Shanghai date: {timestamp}",
+        ) from error
 
 
 def validate_footprint_distance(distance: object) -> float:
@@ -488,6 +509,27 @@ def validate_footprint_distance(distance: object) -> float:
             "footprint distance must be a finite non-negative number",
         )
     return resolved_distance
+
+
+def accumulate_admin_region_travel_distance(
+    travel_distances: dict[tuple[int, int, str], float],
+    key: tuple[int, int, str],
+    distance: float,
+) -> None:
+    depth, day, region_id = key
+    try:
+        total_distance = math.fsum((travel_distances.get(key, 0.0), distance))
+    except OverflowError as error:
+        raise AdminRegionPrecomputeSourceError(
+            "admin-region travel distance overflow for "
+            f"depth={depth}, day={day}, region_id={region_id}",
+        ) from error
+    if not math.isfinite(total_distance):
+        raise AdminRegionPrecomputeSourceError(
+            "admin-region travel distance is not finite for "
+            f"depth={depth}, day={day}, region_id={region_id}",
+        )
+    travel_distances[key] = total_distance
 
 
 def build_admin_region_daily_stat_rows(
@@ -541,7 +583,7 @@ def build_admin_region_daily_stat_rows(
             else ()
         )
         if depth_regions:
-            footprint_day = encode_day(shanghai_date_from_timestamp(timestamp))
+            footprint_day = encode_day(shanghai_date_from_precompute_timestamp(timestamp))
             for depth, ancestor_id in depth_regions:
                 footprint_counts[(depth, footprint_day, ancestor_id)] += 1
         else:
@@ -561,11 +603,10 @@ def build_admin_region_daily_stat_rows(
                     for depth, ancestor_id in depth_regions:
                         key = (depth, share.day, ancestor_id)
                         stay_durations[key] += share.duration_seconds
-                        travel_distances[key] = math.fsum(
-                            (
-                                travel_distances.get(key, 0.0),
-                                share.travel_distance_meters,
-                            ),
+                        accumulate_admin_region_travel_distance(
+                            travel_distances,
+                            key,
+                            share.travel_distance_meters,
                         )
         previous_timestamp = timestamp
 

@@ -916,6 +916,46 @@ def test_daily_stats_splits_interval_at_shanghai_midnight() -> None:
     ]
 
 
+def test_daily_stats_uses_zoneinfo_for_1988_shanghai_dst_day_boundaries() -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+    connection = sqlite3.connect(":memory:")
+    connection.row_factory = sqlite3.Row
+    initialize_schema(connection)
+    insert_region(connection, region_id="country", level=1)
+    before_midnight = int(
+        datetime(1988, 6, 1, 14, 30, tzinfo=timezone.utc).timestamp()
+    )
+    after_midnight = int(
+        datetime(1988, 6, 1, 15, 30, tzinfo=timezone.utc).timestamp()
+    )
+    insert_raw_footprint(
+        connection,
+        timestamp_seconds=before_midnight,
+        region_id="country",
+    )
+    insert_raw_footprint(
+        connection,
+        timestamp_seconds=after_midnight,
+        region_id="country",
+        distance=60.0,
+    )
+
+    result = precompute.build_admin_region_daily_stat_rows(connection)
+
+    assert [
+        (
+            row.day,
+            row.footprint_count,
+            row.stay_duration_seconds,
+            row.travel_distance_meters,
+        )
+        for row in result.rows
+    ] == [
+        (19880601, 1, 1800, 30.0),
+        (19880602, 1, 1800, 30.0),
+    ]
+
+
 def test_daily_stats_keeps_zero_footprint_rows_for_full_intermediate_days() -> None:
     precompute = importlib.import_module("enroute_api.admin_regions.precompute")
     connection = sqlite3.connect(":memory:")
@@ -960,6 +1000,34 @@ def test_split_interval_by_shanghai_day_preserves_a_large_finite_distance() -> N
     assert math.fsum(share_distances) == pytest.approx(distance)
 
 
+def test_daily_stats_wraps_distance_aggregation_overflow_with_key_context() -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+    connection = sqlite3.connect(":memory:")
+    connection.row_factory = sqlite3.Row
+    initialize_schema(connection)
+    insert_region(connection, region_id="country", level=1)
+    start = int(datetime(2026, 7, 15, 0, 0, tzinfo=timezone.utc).timestamp())
+    insert_raw_footprint(connection, timestamp_seconds=start, region_id="country")
+    insert_raw_footprint(
+        connection,
+        timestamp_seconds=start + 1,
+        region_id="country",
+        distance=1e308,
+    )
+    insert_raw_footprint(
+        connection,
+        timestamp_seconds=start + 2,
+        region_id="country",
+        distance=1e308,
+    )
+
+    with pytest.raises(
+        precompute.AdminRegionPrecomputeSourceError,
+        match=r"depth=1.*day=20260715.*region_id=country",
+    ):
+        precompute.build_admin_region_daily_stat_rows(connection)
+
+
 @pytest.mark.parametrize(
     ("start_timestamp", "end_timestamp", "distance"),
     (
@@ -982,6 +1050,83 @@ def test_split_interval_by_shanghai_day_rejects_invalid_interval_inputs(
             end_timestamp,
             distance,
         )
+
+
+@pytest.mark.parametrize("error_type", (OSError, OverflowError, ValueError))
+def test_split_interval_wraps_current_timestamp_conversion_errors(
+    monkeypatch: pytest.MonkeyPatch,
+    error_type: type[Exception],
+) -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+
+    class InvalidTimestampDateTime:
+        @staticmethod
+        def fromtimestamp(*_args, **_kwargs):
+            raise error_type("invalid current timestamp")
+
+    monkeypatch.setattr(precompute, "datetime", InvalidTimestampDateTime)
+
+    with pytest.raises(precompute.AdminRegionPrecomputeSourceError, match="timestamp"):
+        precompute.split_interval_by_shanghai_day(100, 200, 0.0)
+
+
+@pytest.mark.parametrize("error_type", (OSError, OverflowError, ValueError))
+def test_split_interval_wraps_next_midnight_conversion_errors(
+    monkeypatch: pytest.MonkeyPatch,
+    error_type: type[Exception],
+) -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+
+    class InvalidMidnight:
+        def astimezone(self, _time_zone):
+            return self
+
+        def timestamp(self):
+            raise error_type("invalid next midnight")
+
+    class InvalidMidnightDateTime:
+        fromtimestamp = staticmethod(datetime.fromtimestamp)
+
+        @staticmethod
+        def combine(*_args, **_kwargs):
+            return InvalidMidnight()
+
+    monkeypatch.setattr(precompute, "datetime", InvalidMidnightDateTime)
+
+    with pytest.raises(precompute.AdminRegionPrecomputeSourceError, match="midnight"):
+        precompute.split_interval_by_shanghai_day(100, 200, 0.0)
+
+
+def test_split_interval_rejects_a_non_advancing_midnight_boundary(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+
+    class NonAdvancingMidnight:
+        call_count = 0
+
+        def astimezone(self, _time_zone):
+            return self
+
+        def timestamp(self):
+            self.call_count += 1
+            if self.call_count > 1:
+                raise AssertionError("split retried a non-advancing boundary")
+            return 100
+
+    midnight = NonAdvancingMidnight()
+
+    class NonAdvancingDateTime:
+        fromtimestamp = staticmethod(datetime.fromtimestamp)
+
+        @staticmethod
+        def combine(*_args, **_kwargs):
+            return midnight
+
+    monkeypatch.setattr(precompute, "datetime", NonAdvancingDateTime)
+
+    with pytest.raises(precompute.AdminRegionPrecomputeSourceError, match="advance"):
+        precompute.split_interval_by_shanghai_day(100, 200, 0.0)
 
 
 @pytest.mark.parametrize("distance", (-1.0, math.inf))
