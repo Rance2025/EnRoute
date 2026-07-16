@@ -481,21 +481,38 @@ def split_interval_by_shanghai_day(
         )
         allocated_distances.append(share_distance)
         current_timestamp = next_timestamp
+    validate_representable_interval_distance_shares(
+        shares,
+        start_timestamp=start_timestamp,
+        end_timestamp=end_timestamp,
+    )
+    return tuple(shares)
+
+
+def validate_representable_interval_distance_shares(
+    shares: list[AdminRegionIntervalDayShare],
+    *,
+    start_timestamp: int,
+    end_timestamp: int,
+) -> None:
+    error_message = (
+        "interval distance shares cannot be represented for "
+        f"start={start_timestamp}, end={end_timestamp}"
+    )
+    if any(
+        not math.isfinite(share.travel_distance_meters)
+        or share.travel_distance_meters < 0
+        for share in shares
+    ):
+        raise AdminRegionPrecomputeSourceError(error_message)
     try:
         recombined_distance = math.fsum(
             share.travel_distance_meters for share in shares
         )
     except OverflowError as error:
-        raise AdminRegionPrecomputeSourceError(
-            "interval distance shares cannot be represented for "
-            f"start={start_timestamp}, end={end_timestamp}",
-        ) from error
+        raise AdminRegionPrecomputeSourceError(error_message) from error
     if not math.isfinite(recombined_distance):
-        raise AdminRegionPrecomputeSourceError(
-            "interval distance shares cannot be represented for "
-            f"start={start_timestamp}, end={end_timestamp}",
-        )
-    return tuple(shares)
+        raise AdminRegionPrecomputeSourceError(error_message)
 
 
 def shanghai_date_from_precompute_timestamp(timestamp: int) -> date:

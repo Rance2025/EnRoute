@@ -1013,6 +1013,18 @@ def test_split_interval_rejects_unrepresentable_max_float_distance_shares() -> N
         precompute.split_interval_by_shanghai_day(start, end, sys.float_info.max)
 
 
+def test_split_interval_rejects_a_negative_subnormal_distance_share() -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+    start = 1577900272
+    end = 1609182539
+
+    with pytest.raises(
+        precompute.AdminRegionPrecomputeSourceError,
+        match=r"interval distance shares cannot be represented.*start=.*end=",
+    ):
+        precompute.split_interval_by_shanghai_day(start, end, 8.765e-321)
+
+
 def test_daily_stats_wraps_distance_aggregation_overflow_with_key_context() -> None:
     precompute = importlib.import_module("enroute_api.admin_regions.precompute")
     connection = sqlite3.connect(":memory:")
