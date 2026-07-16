@@ -572,6 +572,26 @@ describe('App', () => {
     expect(rankingRow).toHaveAttribute('aria-current', 'location')
   })
 
+  it('clears the selected administrative region when its ranking is clicked again', async () => {
+    render(<App amapConfig={missingAmapConfig} />)
+    await settleLazyImports()
+
+    fireEvent.click(within(screen.getByRole('navigation', { name: '二级导航' }))
+      .getByRole('button', { name: '区域' }))
+
+    const map = screen.getByTestId('mapbox-canvas')
+    const rankingRow = await screen.findByRole('button', { name: /第 1 名 中国/ })
+
+    fireEvent.click(rankingRow)
+    expect(map).toHaveAttribute('data-selected-admin-region-id', 'CN')
+
+    fireEvent.click(rankingRow)
+
+    expect(map).not.toHaveAttribute('data-selected-admin-region-id')
+    expect(rankingRow).not.toHaveClass('is-selected')
+    expect(rankingRow).not.toHaveAttribute('aria-current')
+  })
+
   it('shows a completed current depth without waiting for a slower prefetched depth', async () => {
     let resolveProvinceSummary!: (summary: typeof provinceAdminRegionSummaryFixture) => void
     const provinceSummaryRequest = new Promise<typeof provinceAdminRegionSummaryFixture>((resolve) => {
