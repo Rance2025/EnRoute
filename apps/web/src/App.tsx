@@ -482,6 +482,11 @@ function App(props: AppProps) {
       [view]: nextId,
     }))
   }, [secondaryNavSelection.map, view])
+  const handleAdminRegionSelect = useCallback((nextRegion: AdminRegionRanking) => {
+    setSelectedAdminRegion((currentRegion) => (
+      currentRegion?.regionId === nextRegion.regionId ? null : nextRegion
+    ))
+  }, [])
   const handleAdminRegionDepthChange = useCallback((nextDepth: AdminRegionDepth) => {
     if (nextDepth === adminRegionDepth) return
 
@@ -926,7 +931,7 @@ function App(props: AppProps) {
               status={currentAdminRegionSummaryStatus}
               selectedRegionId={selectedAdminRegion?.regionId}
               onDepthChange={handleAdminRegionDepthChange}
-              onRegionSelect={setSelectedAdminRegion}
+              onRegionSelect={handleAdminRegionSelect}
               onRetry={handleAdminRegionSummaryRetry}
             />
           ) : (
