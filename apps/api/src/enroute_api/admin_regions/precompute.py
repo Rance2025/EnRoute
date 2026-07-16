@@ -1307,6 +1307,12 @@ def query_admin_region_daily_metric_totals(
                    WHEN TYPEOF(footprint_count) != 'integer'
                      OR TYPEOF(stay_duration_seconds) != 'integer'
                      OR TYPEOF(travel_distance_meters) NOT IN ('integer', 'real')
+                     OR footprint_count IS NULL
+                     OR stay_duration_seconds IS NULL
+                     OR travel_distance_meters IS NULL
+                     OR footprint_count < 0
+                     OR stay_duration_seconds < 0
+                     OR travel_distance_meters < 0
                    THEN 1
                    ELSE 0
                  END
@@ -1331,29 +1337,35 @@ def query_admin_region_daily_metric_totals(
     ).fetchall()
     totals_by_id: dict[str, AdminRegionMetricTotals] = {}
     for row in rows:
+        region_id = str(row[0])
         if row[4] != 0:
             raise AdminRegionPrecomputeSourceError(
-                "aggregated admin-region metrics are invalid",
+                f"region {region_id} contains invalid daily metric values",
             )
-        footprint_count = require_nonnegative_metric_integer(
-            row[1],
-            label="footprint_count",
-        )
-        stay_duration_seconds = require_nonnegative_metric_integer(
-            row[2],
-            label="stay_duration_seconds",
-        )
-        travel_distance_meters = require_nonnegative_finite_metric_number(
-            row[3],
-            label="travel_distance_meters",
-        )
+        try:
+            footprint_count = require_nonnegative_metric_integer(
+                row[1],
+                label="footprint_count",
+            )
+            stay_duration_seconds = require_nonnegative_metric_integer(
+                row[2],
+                label="stay_duration_seconds",
+            )
+            travel_distance_meters = require_nonnegative_finite_metric_number(
+                row[3],
+                label="travel_distance_meters",
+            )
+        except AdminRegionPrecomputeSourceError as error:
+            raise AdminRegionPrecomputeSourceError(
+                f"region {region_id} has invalid aggregated metric values: {error}",
+            ) from error
         if not (
             footprint_count > 0
             or stay_duration_seconds > 0
             or travel_distance_meters > 0
         ):
             continue
-        totals_by_id[str(row[0])] = AdminRegionMetricTotals(
+        totals_by_id[region_id] = AdminRegionMetricTotals(
             footprint_count=footprint_count,
             stay_duration_seconds=stay_duration_seconds,
             travel_distance_meters=travel_distance_meters,
