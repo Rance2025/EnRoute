@@ -26,6 +26,7 @@ import type { AppView } from '../appLayout'
 import { SegmentedControl, type SegmentedOption } from './SegmentedControl'
 import {
   createCurrentSelection,
+  createTodayKey,
   formatTimeRangeDate,
   getCalendarLabel,
   getCurrentRangeActionLabel,
@@ -1305,6 +1306,7 @@ function CustomDatePicker({
     sequence: 0,
   })
   const days = getVisibleMonthDays(anchorDate)
+  const today = createTodayKey()
   const [anchorYear] = parseDateKey(anchorDate)
   const dialogLabel = boundary === 'start' ? '开始日期选择' : '结束日期选择'
   const isMonthPicker = pickerMode === 'month'
@@ -1399,6 +1401,7 @@ function CustomDatePicker({
                 <button
                   key={day.date}
                   type="button"
+                  disabled={boundary === 'end' && day.date > today}
                   className={[
                     day.date === selectedDate ? 'is-active' : null,
                     day.inCurrentMonth ? null : 'is-outside-month',
