@@ -6,14 +6,15 @@ import sqlite3
 import time
 from collections import Counter
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime, time as datetime_time, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from shapely.geometry import GeometryCollection, MultiPolygon, Polygon, box, shape
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import transform
 
-from enroute_api.footprints.visual_tiles import encode_day, shanghai_date_from_timestamp
+from enroute_api.footprints.visual_tiles import encode_day
 
 from .thumbnail import (
     CHINA_BOUNDS,
@@ -57,6 +58,9 @@ class AdminRegionPrecomputeUnavailable(RuntimeError):
 
 CHINA_THUMBNAIL_SOUTH_BOUND = 17.5
 ADMIN_REGION_GEOMETRY_QUERY_BATCH_SIZE = 400
+_ADMIN_REGION_DAILY_STATS_TABLE = "admin_region_daily_stats"
+_ADMIN_REGION_DAILY_STATS_NEXT_TABLE = "admin_region_daily_stats_next"
+_SHANGHAI_TIME_ZONE = ZoneInfo("Asia/Shanghai")
 
 
 @dataclass(frozen=True, order=True)
@@ -65,6 +69,28 @@ class AdminRegionDailyStat:
     day: int
     region_id: str
     footprint_count: int
+    stay_duration_seconds: int
+    travel_distance_meters: float
+
+
+@dataclass(frozen=True)
+class AdminRegionMetricTotals:
+    footprint_count: int
+    stay_duration_seconds: int
+    travel_distance_meters: float
+
+
+@dataclass(frozen=True)
+class AdminRegionIntervalDayShare:
+    day: int
+    duration_seconds: int
+    travel_distance_meters: float
+
+
+@dataclass(frozen=True)
+class AdminRegionDailyStatBuildResult:
+    rows: tuple[AdminRegionDailyStat, ...]
+    unresolved_footprint_count: int
 
 
 @dataclass(frozen=True)
@@ -95,6 +121,7 @@ class AdminRegionSummaryPrecomputeResult:
     thumbnail_base_count: int
     thumbnail_region_path_count: int
     daily_stat_count: int
+    unresolved_footprint_count: int
 
 
 def initialize_admin_region_summary_schema(connection: sqlite3.Connection) -> None:
@@ -124,15 +151,45 @@ def initialize_admin_region_summary_schema(connection: sqlite3.Connection) -> No
           CHECK (depth BETWEEN 1 AND 4)
         ) WITHOUT ROWID;
 
-        CREATE TABLE IF NOT EXISTS admin_region_daily_stats (
+        """,
+    )
+    _create_admin_region_daily_stats_table(connection, replacement=False)
+
+
+def _create_admin_region_daily_stats_table(
+    connection: sqlite3.Connection,
+    *,
+    replacement: bool,
+) -> None:
+    table_name = (
+        _ADMIN_REGION_DAILY_STATS_NEXT_TABLE
+        if replacement
+        else _ADMIN_REGION_DAILY_STATS_TABLE
+    )
+    if_not_exists = "" if replacement else "IF NOT EXISTS "
+    connection.execute(
+        f"""
+        CREATE TABLE {if_not_exists}{table_name} (
           depth INTEGER NOT NULL,
           day INTEGER NOT NULL,
           region_id TEXT NOT NULL,
           footprint_count INTEGER NOT NULL,
+          stay_duration_seconds INTEGER NOT NULL,
+          travel_distance_meters REAL NOT NULL,
           PRIMARY KEY (depth, day, region_id),
           CHECK (depth BETWEEN 1 AND 4),
-          CHECK (footprint_count > 0)
-        ) WITHOUT ROWID;
+          CHECK (typeof(footprint_count) = 'integer'),
+          CHECK (typeof(stay_duration_seconds) = 'integer'),
+          CHECK (typeof(travel_distance_meters) IN ('integer', 'real')),
+          CHECK (footprint_count >= 0),
+          CHECK (stay_duration_seconds >= 0),
+          CHECK (travel_distance_meters >= 0),
+          CHECK (
+            footprint_count > 0
+            OR stay_duration_seconds > 0
+            OR travel_distance_meters > 0
+          )
+        ) WITHOUT ROWID
         """,
     )
 
@@ -383,9 +440,139 @@ def precomputed_geographic_bounds(depth: int) -> tuple[float, float, float, floa
     return west, CHINA_THUMBNAIL_SOUTH_BOUND, east, north
 
 
+def split_interval_by_shanghai_day(
+    start_timestamp: int,
+    end_timestamp: int,
+    distance: float,
+) -> tuple[AdminRegionIntervalDayShare, ...]:
+    if end_timestamp <= start_timestamp:
+        raise AdminRegionPrecomputeSourceError(
+            "footprint interval end timestamp must be after start timestamp",
+        )
+    resolved_distance = validate_footprint_distance(distance)
+    total_duration = end_timestamp - start_timestamp
+    current_timestamp = start_timestamp
+    allocated_distances: list[float] = []
+    shares: list[AdminRegionIntervalDayShare] = []
+    while current_timestamp < end_timestamp:
+        current_date = shanghai_date_from_precompute_timestamp(current_timestamp)
+        try:
+            next_midnight_shanghai = datetime.combine(
+                current_date + timedelta(days=1),
+                datetime_time.min,
+                tzinfo=_SHANGHAI_TIME_ZONE,
+            )
+            next_midnight_timestamp = int(
+                next_midnight_shanghai.astimezone(timezone.utc).timestamp(),
+            )
+        except (OSError, OverflowError, ValueError) as error:
+            raise AdminRegionPrecomputeSourceError(
+                f"failed to convert next Shanghai midnight after day {encode_day(current_date)}",
+            ) from error
+        next_timestamp = min(end_timestamp, next_midnight_timestamp)
+        if next_timestamp <= current_timestamp:
+            raise AdminRegionPrecomputeSourceError(
+                "next Shanghai midnight must advance the footprint interval cursor",
+            )
+        duration_seconds = next_timestamp - current_timestamp
+        if next_timestamp == end_timestamp:
+            share_distance = resolved_distance - math.fsum(allocated_distances)
+        else:
+            share_distance = resolved_distance * (duration_seconds / total_duration)
+        shares.append(
+            AdminRegionIntervalDayShare(
+                day=encode_day(current_date),
+                duration_seconds=duration_seconds,
+                travel_distance_meters=share_distance,
+            ),
+        )
+        allocated_distances.append(share_distance)
+        current_timestamp = next_timestamp
+    validate_representable_interval_distance_shares(
+        shares,
+        start_timestamp=start_timestamp,
+        end_timestamp=end_timestamp,
+    )
+    return tuple(shares)
+
+
+def validate_representable_interval_distance_shares(
+    shares: list[AdminRegionIntervalDayShare],
+    *,
+    start_timestamp: int,
+    end_timestamp: int,
+) -> None:
+    error_message = (
+        "interval distance shares cannot be represented for "
+        f"start={start_timestamp}, end={end_timestamp}"
+    )
+    if any(
+        not math.isfinite(share.travel_distance_meters)
+        or share.travel_distance_meters < 0
+        for share in shares
+    ):
+        raise AdminRegionPrecomputeSourceError(error_message)
+    try:
+        recombined_distance = math.fsum(
+            share.travel_distance_meters for share in shares
+        )
+    except OverflowError as error:
+        raise AdminRegionPrecomputeSourceError(error_message) from error
+    if not math.isfinite(recombined_distance):
+        raise AdminRegionPrecomputeSourceError(error_message)
+
+
+def shanghai_date_from_precompute_timestamp(timestamp: int) -> date:
+    try:
+        return (
+            datetime.fromtimestamp(timestamp, tz=timezone.utc)
+            .astimezone(_SHANGHAI_TIME_ZONE)
+            .date()
+        )
+    except (OSError, OverflowError, ValueError) as error:
+        raise AdminRegionPrecomputeSourceError(
+            f"failed to convert footprint timestamp to Shanghai date: {timestamp}",
+        ) from error
+
+
+def validate_footprint_distance(distance: object) -> float:
+    try:
+        resolved_distance = float(distance)
+    except (TypeError, ValueError) as error:
+        raise AdminRegionPrecomputeSourceError(
+            "footprint distance must be a finite non-negative number",
+        ) from error
+    if not math.isfinite(resolved_distance) or resolved_distance < 0:
+        raise AdminRegionPrecomputeSourceError(
+            "footprint distance must be a finite non-negative number",
+        )
+    return resolved_distance
+
+
+def accumulate_admin_region_travel_distance(
+    travel_distances: dict[tuple[int, int, str], float],
+    key: tuple[int, int, str],
+    distance: float,
+) -> None:
+    depth, day, region_id = key
+    try:
+        total_distance = math.fsum((travel_distances.get(key, 0.0), distance))
+    except OverflowError as error:
+        raise AdminRegionPrecomputeSourceError(
+            "admin-region travel distance overflow for "
+            f"depth={depth}, day={day}, region_id={region_id}",
+        ) from error
+    if not math.isfinite(total_distance):
+        raise AdminRegionPrecomputeSourceError(
+            "admin-region travel distance is not finite for "
+            f"depth={depth}, day={day}, region_id={region_id}",
+        )
+    travel_distances[key] = total_distance
+
+
 def build_admin_region_daily_stat_rows(
     connection: sqlite3.Connection,
-) -> tuple[AdminRegionDailyStat, ...]:
+) -> AdminRegionDailyStatBuildResult:
     level_by_region = {
         str(row[0]): int(row[1])
         for row in connection.execute("SELECT id, level FROM admin_regions")
@@ -413,28 +600,68 @@ def build_admin_region_daily_stat_rows(
         chain_cache[region_id] = result
         return result
 
-    counts: Counter[tuple[int, int, str]] = Counter()
+    footprint_counts: Counter[tuple[int, int, str]] = Counter()
+    stay_durations: Counter[tuple[int, int, str]] = Counter()
+    travel_distances: dict[tuple[int, int, str], float] = {}
+    unresolved_footprint_count = 0
+    previous_timestamp: int | None = None
     for row in connection.execute(
         """
-        SELECT timestamp_seconds, region_id
+        SELECT timestamp_seconds, region_id, distance
         FROM footprints
-        WHERE region_id IS NOT NULL
-          AND TRIM(region_id) != ''
         ORDER BY timestamp_seconds
         """,
     ):
-        day = encode_day(shanghai_date_from_timestamp(int(row[0])))
-        for depth, ancestor_id in resolve_depth_regions(str(row[1])):
-            counts[(depth, day, ancestor_id)] += 1
-
-    return tuple(
-        AdminRegionDailyStat(
-            depth=depth,
-            day=day,
-            region_id=region_id,
-            footprint_count=count,
+        timestamp = int(row[0])
+        distance = validate_footprint_distance(row[2])
+        raw_region_id = row[1]
+        depth_regions = (
+            resolve_depth_regions(str(raw_region_id))
+            if raw_region_id is not None and str(raw_region_id).strip()
+            else ()
         )
-        for (depth, day, region_id), count in sorted(counts.items())
+        if depth_regions:
+            footprint_day = encode_day(shanghai_date_from_precompute_timestamp(timestamp))
+            for depth, ancestor_id in depth_regions:
+                footprint_counts[(depth, footprint_day, ancestor_id)] += 1
+        else:
+            unresolved_footprint_count += 1
+
+        if previous_timestamp is not None:
+            if timestamp <= previous_timestamp:
+                raise AdminRegionPrecomputeSourceError(
+                    "footprint timestamps must be strictly increasing",
+                )
+            if depth_regions:
+                for share in split_interval_by_shanghai_day(
+                    previous_timestamp,
+                    timestamp,
+                    distance,
+                ):
+                    for depth, ancestor_id in depth_regions:
+                        key = (depth, share.day, ancestor_id)
+                        stay_durations[key] += share.duration_seconds
+                        accumulate_admin_region_travel_distance(
+                            travel_distances,
+                            key,
+                            share.travel_distance_meters,
+                        )
+        previous_timestamp = timestamp
+
+    keys = set(footprint_counts) | set(stay_durations) | set(travel_distances)
+    return AdminRegionDailyStatBuildResult(
+        rows=tuple(
+            AdminRegionDailyStat(
+                depth=depth,
+                day=day,
+                region_id=region_id,
+                footprint_count=footprint_counts.get((depth, day, region_id), 0),
+                stay_duration_seconds=stay_durations.get((depth, day, region_id), 0),
+                travel_distance_meters=travel_distances.get((depth, day, region_id), 0.0),
+            )
+            for depth, day, region_id in sorted(keys)
+        ),
+        unresolved_footprint_count=unresolved_footprint_count,
     )
 
 
@@ -496,7 +723,8 @@ def build_admin_region_summary_precompute(
     )
     if not path_records:
         raise AdminRegionPrecomputeSourceError("admin-region thumbnail region paths are empty")
-    daily_stat_rows = build_admin_region_daily_stat_rows(connection)
+    daily_stat_result = build_admin_region_daily_stat_rows(connection)
+    daily_stat_rows = daily_stat_result.rows
     if not daily_stat_rows:
         raise AdminRegionPrecomputeSourceError("admin-region daily stats are empty")
     replace_admin_region_summary_precompute(
@@ -512,6 +740,7 @@ def build_admin_region_summary_precompute(
         thumbnail_base_count=len(base_records),
         thumbnail_region_path_count=len(path_records),
         daily_stat_count=len(daily_stat_rows),
+        unresolved_footprint_count=daily_stat_result.unresolved_footprint_count,
     )
 
 
@@ -768,10 +997,42 @@ def replace_admin_region_summary_precompute(
     path_source_signature: str,
     daily_source_signature: str,
 ) -> None:
+    connection.execute(
+        f"DROP TABLE IF EXISTS {_ADMIN_REGION_DAILY_STATS_NEXT_TABLE}",
+    )
+    connection.commit()
     with connection:
+        if not connection.in_transaction:
+            connection.execute("BEGIN")
+        _create_admin_region_daily_stats_table(connection, replacement=True)
+        connection.executemany(
+            f"""
+            INSERT INTO {_ADMIN_REGION_DAILY_STATS_NEXT_TABLE} (
+              depth, day, region_id, footprint_count,
+              stay_duration_seconds, travel_distance_meters
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                (
+                    row.depth,
+                    row.day,
+                    row.region_id,
+                    row.footprint_count,
+                    row.stay_duration_seconds,
+                    row.travel_distance_meters,
+                )
+                for row in daily_stat_rows
+            ),
+        )
+        connection.execute(f"DROP TABLE {_ADMIN_REGION_DAILY_STATS_TABLE}")
+        connection.execute(
+            f"""
+            ALTER TABLE {_ADMIN_REGION_DAILY_STATS_NEXT_TABLE}
+            RENAME TO {_ADMIN_REGION_DAILY_STATS_TABLE}
+            """,
+        )
         connection.execute("DELETE FROM admin_region_thumbnail_bases")
         connection.execute("DELETE FROM admin_region_thumbnail_region_paths")
-        connection.execute("DELETE FROM admin_region_daily_stats")
         connection.executemany(
             """
             INSERT INTO admin_region_thumbnail_bases (
@@ -810,17 +1071,6 @@ def replace_admin_region_summary_precompute(
                     record.algorithm_signature,
                 )
                 for record in path_records
-            ),
-        )
-        connection.executemany(
-            """
-            INSERT INTO admin_region_daily_stats (
-              depth, day, region_id, footprint_count
-            ) VALUES (?, ?, ?, ?)
-            """,
-            (
-                (row.depth, row.day, row.region_id, row.footprint_count)
-                for row in daily_stat_rows
             ),
         )
         set_precompute_signature(
@@ -936,26 +1186,23 @@ def query_precomputed_admin_region_summary(
             )
             eligible_rows = query_eligible_admin_region_metadata(connection, depth=depth)
             metadata_by_id = {str(row[0]): row for row in eligible_rows}
-            counts_by_id = query_admin_region_daily_counts(
+            metric_totals_by_id = query_admin_region_daily_metric_totals(
                 connection,
                 depth=depth,
                 start_day=start_day,
                 end_day=end_day,
             )
-            visited_ids = sorted(set(metadata_by_id) & set(counts_by_id))
+            metric_ids = sorted(set(metadata_by_id) & set(metric_totals_by_id))
+            visited_ids = [
+                region_id
+                for region_id in metric_ids
+                if metric_totals_by_id[region_id].footprint_count > 0
+            ]
             path_by_id = query_precomputed_region_paths(
                 connection,
                 depth=depth,
                 region_ids=visited_ids,
                 expected_signature=path_signature,
-            )
-            ranking_ids = sorted(
-                visited_ids,
-                key=lambda region_id: (
-                    -counts_by_id[region_id],
-                    str(metadata_by_id[region_id][1]),
-                    region_id,
-                ),
             )
             return {
                 "depth": depth,
@@ -963,13 +1210,12 @@ def query_precomputed_admin_region_summary(
                 "visitedCount": len(visited_ids),
                 "totalCount": len(metadata_by_id),
                 "visitedPath": "".join(path_by_id[region_id] for region_id in visited_ids),
-                "rankings": [
-                    format_precomputed_admin_region_ranking(
+                "regionMetrics": [
+                    format_precomputed_admin_region_metric(
                         metadata_by_id[region_id],
-                        rank=rank,
-                        footprint_count=counts_by_id[region_id],
+                        totals=metric_totals_by_id[region_id],
                     )
-                    for rank, region_id in enumerate(ranking_ids, start=1)
+                    for region_id in metric_ids
                 ],
             }
     except AdminRegionPrecomputeUnavailable:
@@ -1038,32 +1284,114 @@ def query_eligible_admin_region_metadata(
     )
 
 
-def query_admin_region_daily_counts(
+def query_admin_region_daily_metric_totals(
     connection: sqlite3.Connection,
     *,
     depth: int,
     start_day: int | None,
     end_day: int | None,
-) -> dict[str, int]:
+) -> dict[str, AdminRegionMetricTotals]:
     date_filter = ""
     parameters: list[int] = [depth]
     if start_day is not None and end_day is not None:
         date_filter = "AND day BETWEEN ? AND ?"
         parameters.extend((start_day, end_day))
-    return {
-        str(row[0]): int(row[1])
-        for row in connection.execute(
-            f"""
-            SELECT region_id, SUM(footprint_count) AS footprint_count
-            FROM admin_region_daily_stats
-            WHERE depth = ?
-              {date_filter}
-            GROUP BY region_id
-            HAVING SUM(footprint_count) > 0
-            """,
-            parameters,
+    rows = connection.execute(
+        f"""
+        SELECT region_id,
+               SUM(footprint_count) AS footprint_count,
+               SUM(stay_duration_seconds) AS stay_duration_seconds,
+               SUM(travel_distance_meters) AS travel_distance_meters,
+               MAX(
+                 CASE
+                   WHEN TYPEOF(footprint_count) != 'integer'
+                     OR TYPEOF(stay_duration_seconds) != 'integer'
+                     OR TYPEOF(travel_distance_meters) NOT IN ('integer', 'real')
+                     OR footprint_count IS NULL
+                     OR stay_duration_seconds IS NULL
+                     OR travel_distance_meters IS NULL
+                     OR footprint_count < 0
+                     OR stay_duration_seconds < 0
+                     OR travel_distance_meters < 0
+                   THEN 1
+                   ELSE 0
+                 END
+               ) AS invalid_metric_value
+        FROM admin_region_daily_stats
+        WHERE depth = ?
+          {date_filter}
+        GROUP BY region_id
+        HAVING SUM(footprint_count) > 0
+            OR SUM(stay_duration_seconds) > 0
+            OR SUM(travel_distance_meters) > 0
+            OR SUM(footprint_count) < 0
+            OR SUM(stay_duration_seconds) < 0
+            OR SUM(travel_distance_meters) < 0
+            OR SUM(footprint_count) IS NULL
+            OR SUM(stay_duration_seconds) IS NULL
+            OR SUM(travel_distance_meters) IS NULL
+            OR invalid_metric_value > 0
+        ORDER BY region_id
+        """,
+        parameters,
+    ).fetchall()
+    totals_by_id: dict[str, AdminRegionMetricTotals] = {}
+    for row in rows:
+        region_id = str(row[0])
+        if row[4] != 0:
+            raise AdminRegionPrecomputeSourceError(
+                f"region {region_id} contains invalid daily metric values",
+            )
+        try:
+            footprint_count = require_nonnegative_metric_integer(
+                row[1],
+                label="footprint_count",
+            )
+            stay_duration_seconds = require_nonnegative_metric_integer(
+                row[2],
+                label="stay_duration_seconds",
+            )
+            travel_distance_meters = require_nonnegative_finite_metric_number(
+                row[3],
+                label="travel_distance_meters",
+            )
+        except AdminRegionPrecomputeSourceError as error:
+            raise AdminRegionPrecomputeSourceError(
+                f"region {region_id} has invalid aggregated metric values: {error}",
+            ) from error
+        if not (
+            footprint_count > 0
+            or stay_duration_seconds > 0
+            or travel_distance_meters > 0
+        ):
+            continue
+        totals_by_id[region_id] = AdminRegionMetricTotals(
+            footprint_count=footprint_count,
+            stay_duration_seconds=stay_duration_seconds,
+            travel_distance_meters=travel_distance_meters,
         )
-    }
+    return totals_by_id
+
+
+def require_nonnegative_metric_integer(value: object, *, label: str) -> int:
+    if type(value) is not int or value < 0:
+        raise AdminRegionPrecomputeSourceError(
+            f"aggregated {label} must be a non-negative integer",
+        )
+    return value
+
+
+def require_nonnegative_finite_metric_number(value: object, *, label: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise AdminRegionPrecomputeSourceError(
+            f"aggregated {label} must be a finite non-negative number",
+        )
+    result = float(value)
+    if not math.isfinite(result) or result < 0:
+        raise AdminRegionPrecomputeSourceError(
+            f"aggregated {label} must be a finite non-negative number",
+        )
+    return result
 
 
 def query_precomputed_region_paths(
@@ -1105,17 +1433,17 @@ def query_precomputed_region_paths(
     return path_by_id
 
 
-def format_precomputed_admin_region_ranking(
+def format_precomputed_admin_region_metric(
     row: sqlite3.Row,
     *,
-    rank: int,
-    footprint_count: int,
+    totals: AdminRegionMetricTotals,
 ) -> dict[str, object]:
     return {
-        "rank": rank,
         "regionId": str(row[0]),
         "name": str(row[1]),
-        "footprintCount": footprint_count,
+        "footprintCount": totals.footprint_count,
+        "stayDurationSeconds": totals.stay_duration_seconds,
+        "travelDistanceMeters": totals.travel_distance_meters,
         "bounds": {
             "west": float(row[2]),
             "south": float(row[3]),

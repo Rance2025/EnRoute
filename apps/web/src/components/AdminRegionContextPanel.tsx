@@ -1,16 +1,23 @@
-import type { AdminRegionRanking, AdminRegionSummary } from '../layers/adminRegionSummaryDataSource'
+import type { AdminRegionSummary } from '../layers/adminRegionSummaryDataSource'
 import type { AdminRegionDepth } from '../layers/adminRegionVectorTileSource'
+import {
+  buildAdminRegionRanking,
+  type AdminRegionRankingMetric,
+  type AdminRegionRankingRow,
+} from './adminRegionRanking'
 
 type AdminRegionSummaryStatus = 'idle' | 'loading' | 'ready' | 'error'
 
 type AdminRegionContextPanelProps = {
   depth: AdminRegionDepth
   summary: AdminRegionSummary | null
+  metric: AdminRegionRankingMetric
   thumbnailBasePath: string
   status: AdminRegionSummaryStatus
   selectedRegionId?: string | null
   onDepthChange: (depth: AdminRegionDepth) => void
-  onRegionSelect: (ranking: AdminRegionRanking) => void
+  onMetricChange: (metric: AdminRegionRankingMetric) => void
+  onRegionSelect: (ranking: AdminRegionRankingRow) => void
   onRetry: () => void
 }
 
@@ -21,8 +28,6 @@ const DEPTH_OPTIONS: Array<{ value: AdminRegionDepth, label: string }> = [
   { value: 4, label: '区' },
 ]
 
-const FOOTPRINT_COUNT_FORMATTER = new Intl.NumberFormat('en-US')
-
 const DEPTH_UNITS: Record<AdminRegionDepth, string> = {
   1: '国家',
   2: '省级行政区',
@@ -30,13 +35,30 @@ const DEPTH_UNITS: Record<AdminRegionDepth, string> = {
   4: '区县',
 }
 
+const RANKING_METRIC_OPTIONS: Array<{
+  value: AdminRegionRankingMetric
+  label: string
+}> = [
+  { value: 'footprint', label: '足迹' },
+  { value: 'time', label: '时间' },
+  { value: 'distance', label: '距离' },
+]
+
+const RANKING_EMPTY_MESSAGES: Record<AdminRegionRankingMetric, string> = {
+  footprint: '本期暂无足迹数据',
+  time: '本期暂无时间数据',
+  distance: '本期暂无距离数据',
+}
+
 export function AdminRegionContextPanel({
   depth,
   summary,
+  metric,
   thumbnailBasePath,
   status,
   selectedRegionId = null,
   onDepthChange,
+  onMetricChange,
   onRegionSelect,
   onRetry,
 }: AdminRegionContextPanelProps) {
@@ -48,6 +70,7 @@ export function AdminRegionContextPanel({
     : `${visitedCount ?? 0} / ${totalCount ?? 0} ${unit}`
   const rankingTitle = `${unit}足迹排行`
   const thumbnailLabel = `${unit}足迹缩略图`
+  const rankings = buildAdminRegionRanking(summary?.regionMetrics ?? [], metric)
 
   return (
     <div className="admin-region-context-panel">
@@ -84,35 +107,37 @@ export function AdminRegionContextPanel({
         aria-label={rankingTitle}
       >
         <div className="admin-region-ranking-card__head">
-          <div>
-            <span className="right-context-panel__eyebrow">足迹点数量</span>
+          <div className="admin-region-ranking-card__title">
+            <span className="right-context-panel__eyebrow">排行依据</span>
             <h2>{rankingTitle}</h2>
           </div>
-          {status === 'error' ? (
-            <button
-              type="button"
-              className="admin-region-ranking-card__retry"
-              onClick={onRetry}
-            >
-              重新加载区域摘要
-            </button>
-          ) : null}
+          <div className="admin-region-ranking-card__actions">
+            <MetricControl metric={metric} onMetricChange={onMetricChange} />
+            {status === 'error' ? (
+              <button
+                type="button"
+                className="admin-region-ranking-card__retry"
+                onClick={onRetry}
+              >
+                重新加载区域摘要
+              </button>
+            ) : null}
+          </div>
         </div>
         {status === 'error' ? (
           <p className="admin-region-ranking-card__message" role="alert">
             区域摘要加载失败
           </p>
         ) : null}
-        {status !== 'error' && summary?.rankings.length === 0 ? (
-          <p className="admin-region-ranking-card__message">暂无到访区域</p>
+        {status !== 'error' && summary && rankings.length === 0 ? (
+          <p className="admin-region-ranking-card__message">{RANKING_EMPTY_MESSAGES[metric]}</p>
         ) : null}
-        {status !== 'error' && summary?.rankings.length ? (
+        {status !== 'error' && rankings.length ? (
           <ol className="admin-region-ranking-card__list" aria-label={rankingTitle}>
-            {summary.rankings.map((ranking) => (
+            {rankings.map((ranking) => (
               <RankingRow
                 key={ranking.regionId}
                 ranking={ranking}
-                maxFootprintCount={summary.rankings[0]?.footprintCount ?? ranking.footprintCount}
                 isSelected={ranking.regionId === selectedRegionId}
                 onRegionSelect={onRegionSelect}
               />
@@ -120,6 +145,29 @@ export function AdminRegionContextPanel({
           </ol>
         ) : null}
       </section>
+    </div>
+  )
+}
+
+function MetricControl({
+  metric,
+  onMetricChange,
+}: {
+  metric: AdminRegionRankingMetric
+  onMetricChange: (metric: AdminRegionRankingMetric) => void
+}) {
+  return (
+    <div className="admin-region-ranking-card__metric-control" role="group" aria-label="排行依据">
+      {RANKING_METRIC_OPTIONS.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          aria-pressed={option.value === metric}
+          onClick={() => onMetricChange(option.value)}
+        >
+          {option.label}
+        </button>
+      ))}
     </div>
   )
 }
@@ -149,26 +197,19 @@ function DepthControl({
 
 function RankingRow({
   ranking,
-  maxFootprintCount,
   isSelected,
   onRegionSelect,
 }: {
-  ranking: AdminRegionRanking
-  maxFootprintCount: number
+  ranking: AdminRegionRankingRow
   isSelected: boolean
-  onRegionSelect: (ranking: AdminRegionRanking) => void
+  onRegionSelect: (ranking: AdminRegionRankingRow) => void
 }) {
-  const ratio = maxFootprintCount <= 0 || ranking.footprintCount <= 0
-    ? 0
-    : Math.max(0.02, Math.min(1, ranking.footprintCount / maxFootprintCount))
-  const formattedFootprintCount = FOOTPRINT_COUNT_FORMATTER.format(ranking.footprintCount)
-
   return (
     <li className="admin-region-ranking-card__item">
       <button
         type="button"
         className={`admin-region-ranking-card__row${isSelected ? ' is-selected' : ''}`}
-        aria-label={`第 ${ranking.rank} 名 ${ranking.name}，${formattedFootprintCount} 个足迹点`}
+        aria-label={`第 ${ranking.rank} 名，${ranking.name}，${ranking.ariaValue}`}
         aria-current={isSelected ? 'location' : undefined}
         onClick={() => onRegionSelect(ranking)}
       >
@@ -177,9 +218,9 @@ function RankingRow({
           {ranking.name}
         </span>
         <span className="admin-region-ranking-card__bar" aria-hidden="true">
-          <span style={{ transform: `scaleX(${ratio})` }} />
+          <span style={{ transform: `scaleX(${ranking.ratio})` }} />
         </span>
-        <strong>{formattedFootprintCount}</strong>
+        <strong title={ranking.ariaValue}>{ranking.displayValue}</strong>
       </button>
     </li>
   )

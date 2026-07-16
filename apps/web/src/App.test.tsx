@@ -2,6 +2,10 @@ import '@testing-library/jest-dom/vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+const { mockAdminRegionFocus } = vi.hoisted(() => ({
+  mockAdminRegionFocus: vi.fn(),
+}))
+
 vi.mock('./components/MapboxCanvas', async () => {
   const React = await import('react')
 
@@ -66,6 +70,10 @@ vi.mock('./components/MapboxCanvas', async () => {
           },
         })
       }, [onFootprintMetricsChange])
+
+      React.useEffect(() => {
+        if (selectedAdminRegion) mockAdminRegionFocus(selectedAdminRegion)
+      }, [selectedAdminRegion])
 
       return React.createElement(
         'section',
@@ -137,11 +145,12 @@ const adminRegionSummaryFixture = {
   visitedCount: 1,
   totalCount: 200,
   visitedPath: 'M1 1Z',
-  rankings: [{
-    rank: 1,
+  regionMetrics: [{
     regionId: 'CN',
     name: '中国',
     footprintCount: 120,
+    stayDurationSeconds: 7_200,
+    travelDistanceMeters: 0,
     bounds: { west: 73, south: 18, east: 135, north: 54 },
   }],
 }
@@ -152,11 +161,12 @@ const provinceAdminRegionSummaryFixture = {
   visitedCount: 1,
   totalCount: 34,
   visitedPath: 'M2 2Z',
-  rankings: [{
-    rank: 1,
+  regionMetrics: [{
     regionId: '310000',
     name: '上海市',
     footprintCount: 120,
+    stayDurationSeconds: 3_600,
+    travelDistanceMeters: 1_250,
     bounds: { west: 120.8, south: 30.7, east: 122.2, north: 31.9 },
   }],
 }
@@ -258,6 +268,7 @@ afterEach(() => {
 
 beforeEach(() => {
   window.localStorage.clear()
+  mockAdminRegionFocus.mockReset()
   clearAdminRegionSummaryCache()
   vi.mocked(loadAdminRegionSummary).mockReset()
   vi.mocked(loadAdminRegionSummary).mockImplementation(async ({ depth }) => (
@@ -561,7 +572,7 @@ describe('App', () => {
     fireEvent.click(within(screen.getByRole('navigation', { name: '二级导航' }))
       .getByRole('button', { name: '区域' }))
 
-    const rankingRow = await screen.findByRole('button', { name: /第 1 名 中国/ })
+    const rankingRow = await screen.findByRole('button', { name: /第 1 名，中国/ })
     fireEvent.click(rankingRow)
 
     expect(screen.getByTestId('mapbox-canvas')).toHaveAttribute(
@@ -580,7 +591,7 @@ describe('App', () => {
       .getByRole('button', { name: '区域' }))
 
     const map = screen.getByTestId('mapbox-canvas')
-    const rankingRow = await screen.findByRole('button', { name: /第 1 名 中国/ })
+    const rankingRow = await screen.findByRole('button', { name: /第 1 名，中国/ })
 
     fireEvent.click(rankingRow)
     expect(map).toHaveAttribute('data-selected-admin-region-id', 'CN')
@@ -590,6 +601,101 @@ describe('App', () => {
     expect(map).not.toHaveAttribute('data-selected-admin-region-id')
     expect(rankingRow).not.toHaveClass('is-selected')
     expect(rankingRow).not.toHaveAttribute('aria-current')
+  })
+
+  it('switches ranking metrics without loading another summary', async () => {
+    render(<App amapConfig={missingAmapConfig} />)
+    await settleLazyImports()
+
+    fireEvent.click(within(screen.getByRole('navigation', { name: '二级导航' }))
+      .getByRole('button', { name: '区域' }))
+    await screen.findByRole('button', { name: /第 1 名，中国/ })
+    await waitFor(() => expect(loadAdminRegionSummary).toHaveBeenCalledTimes(4))
+
+    const initialCountryLoads = vi.mocked(loadAdminRegionSummary).mock.calls
+      .filter(([options]) => options.depth === 1)
+    expect(initialCountryLoads).toHaveLength(1)
+
+    const metricControl = screen.getByRole('group', { name: '排行依据' })
+    expect(within(metricControl).getByRole('button', { name: '足迹' }))
+      .toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(within(metricControl).getByRole('button', { name: '时间' }))
+
+    expect(await screen.findByRole('button', {
+      name: '第 1 名，中国，累计时间 7,200 秒',
+    })).toBeInTheDocument()
+    expect(vi.mocked(loadAdminRegionSummary).mock.calls
+      .filter(([options]) => options.depth === 1)).toHaveLength(1)
+    expect(loadAdminRegionSummary).toHaveBeenCalledTimes(4)
+  })
+
+  it('keeps a selected region when it remains in the new metric ranking', async () => {
+    render(<App amapConfig={missingAmapConfig} />)
+    await settleLazyImports()
+
+    fireEvent.click(within(screen.getByRole('navigation', { name: '二级导航' }))
+      .getByRole('button', { name: '区域' }))
+    fireEvent.click(await screen.findByRole('button', { name: /第 1 名，中国/ }))
+    await waitFor(() => expect(mockAdminRegionFocus).toHaveBeenCalledTimes(1))
+    const selectedRegionReference = mockAdminRegionFocus.mock.calls[0][0]
+
+    fireEvent.click(within(screen.getByRole('group', { name: '排行依据' }))
+      .getByRole('button', { name: '时间' }))
+
+    const retainedRow = await screen.findByRole('button', {
+      name: '第 1 名，中国，累计时间 7,200 秒',
+    })
+    expect(screen.getByTestId('mapbox-canvas')).toHaveAttribute(
+      'data-selected-admin-region-id',
+      'CN',
+    )
+    expect(retainedRow).toHaveClass('is-selected')
+    expect(mockAdminRegionFocus).toHaveBeenCalledTimes(1)
+    expect(mockAdminRegionFocus.mock.calls[0][0]).toBe(selectedRegionReference)
+  })
+
+  it('clears a selected region when its value is zero in the new metric ranking', async () => {
+    render(<App amapConfig={missingAmapConfig} />)
+    await settleLazyImports()
+
+    fireEvent.click(within(screen.getByRole('navigation', { name: '二级导航' }))
+      .getByRole('button', { name: '区域' }))
+    fireEvent.click(await screen.findByRole('button', { name: /第 1 名，中国/ }))
+    await waitFor(() => expect(mockAdminRegionFocus).toHaveBeenCalledTimes(1))
+
+    fireEvent.click(within(screen.getByRole('group', { name: '排行依据' }))
+      .getByRole('button', { name: '距离' }))
+
+    expect(screen.getByText('本期暂无距离数据')).toBeInTheDocument()
+    expect(screen.getByTestId('mapbox-canvas'))
+      .not.toHaveAttribute('data-selected-admin-region-id')
+    expect(mockAdminRegionFocus).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the ranking metric while time range and depth select new summaries', async () => {
+    render(<App amapConfig={missingAmapConfig} />)
+    await settleLazyImports()
+
+    fireEvent.click(within(screen.getByRole('navigation', { name: '二级导航' }))
+      .getByRole('button', { name: '区域' }))
+    await waitFor(() => expect(loadAdminRegionSummary).toHaveBeenCalledTimes(4))
+    fireEvent.click(within(screen.getByRole('group', { name: '排行依据' }))
+      .getByRole('button', { name: '时间' }))
+
+    fireEvent.click(screen.getByRole('button', { name: '年' }))
+    await waitFor(() => expect(loadAdminRegionSummary).toHaveBeenCalledTimes(8))
+    expect(within(screen.getByRole('group', { name: '排行依据' }))
+      .getByRole('button', { name: '时间' })).toHaveAttribute('aria-pressed', 'true')
+
+    fireEvent.click(within(screen.getByRole('group', { name: '行政区层级' }))
+      .getByRole('button', { name: '省' }))
+    expect(await screen.findByRole('heading', { name: '省级行政区足迹排行' }))
+      .toBeInTheDocument()
+    expect(within(screen.getByRole('group', { name: '排行依据' }))
+      .getByRole('button', { name: '时间' })).toHaveAttribute('aria-pressed', 'true')
+    expect(vi.mocked(loadAdminRegionSummary).mock.calls.some(([options]) => (
+      options.depth === 2 && options.timeRange.mode === 'year'
+    ))).toBe(true)
   })
 
   it('shows a completed current depth without waiting for a slower prefetched depth', async () => {

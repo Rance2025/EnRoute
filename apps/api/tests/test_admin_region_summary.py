@@ -1316,7 +1316,7 @@ def test_thumbnail_ignores_z_coordinates(connection: sqlite3.Connection):
     assert "80.0" not in thumbnail["visitedPath"]
 
 
-def test_admin_region_summary_api_returns_precomputed_path_and_rankings_without_writes(
+def test_admin_region_summary_api_returns_precomputed_path_and_metrics_without_writes(
     tmp_path: Path,
 ):
     client, db_path = create_test_client_with_summary_fixture(tmp_path)
@@ -1334,12 +1334,13 @@ def test_admin_region_summary_api_returns_precomputed_path_and_rankings_without_
         "totalCount": 2,
         "visitedCount": 2,
         "visitedRegionIds": ["310100", "330100"],
-        "rankings": [
+        "regionMetrics": [
             {
-                "rank": 1,
                 "regionId": "310100",
                 "name": "Shanghai",
                 "footprintCount": 2,
+                "stayDurationSeconds": 10,
+                "travelDistanceMeters": 0.0,
                 "bounds": {
                     "west": 120.85,
                     "south": 30.65,
@@ -1348,10 +1349,11 @@ def test_admin_region_summary_api_returns_precomputed_path_and_rankings_without_
                 },
             },
             {
-                "rank": 2,
                 "regionId": "330100",
                 "name": "Hangzhou",
                 "footprintCount": 1,
+                "stayDurationSeconds": 86380,
+                "travelDistanceMeters": 0.0,
                 "bounds": {
                     "west": 118.3,
                     "south": 29.1,
@@ -1445,7 +1447,7 @@ def test_admin_region_summary_api_returns_empty_dynamic_path_for_empty_range(tmp
 
     assert response.status_code == 200
     assert response.json()["visitedCount"] == 0
-    assert response.json()["rankings"] == []
+    assert response.json()["regionMetrics"] == []
     assert response.json()["visitedPath"] == ""
 
 

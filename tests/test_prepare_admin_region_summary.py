@@ -35,6 +35,7 @@ class PrepareAdminRegionSummaryTests(unittest.TestCase):
                     thumbnail_base_count=2,
                     thumbnail_region_path_count=3851,
                     daily_stat_count=1047,
+                    unresolved_footprint_count=23,
                 ),
             ) as build, redirect_stdout(stdout):
                 exit_code = module.main(
@@ -47,6 +48,7 @@ class PrepareAdminRegionSummaryTests(unittest.TestCase):
             self.assertIn("2 thumbnail bases", stdout.getvalue())
             self.assertIn("3851 region paths", stdout.getvalue())
             self.assertIn("1047 daily stats", stdout.getvalue())
+            self.assertIn("23 unresolved footprints", stdout.getvalue())
             connection = sqlite3.connect(database)
             try:
                 tables = {

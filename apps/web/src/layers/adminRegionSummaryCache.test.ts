@@ -31,7 +31,7 @@ function createSummary(depth: AdminRegionDepth, suffix = 'initial'): AdminRegion
     visitedCount: 1,
     totalCount: depth * 10,
     visitedPath: `M${depth} ${depth}Z`,
-    rankings: [],
+    regionMetrics: [],
   }
 }
 

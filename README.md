@@ -62,8 +62,9 @@ recreates the ignored SQLite database from the WGS-84 source CSV, and
 `npm run prepare:footprint-tiles` precomputes the footprint visual tile cells
 for `all`, `day`, `month`, and `year` buckets up to zoom 16.
 `npm run prepare:admin-region-summary` explicitly precomputes the static world
-and China thumbnail paths plus daily visit counts for all four administrative
-depths. It is a maintenance command, not part of API request handling.
+and China thumbnail paths plus daily footprint, stay-duration, and
+travel-distance metrics for all four administrative depths. It is a maintenance
+command, not part of API request handling.
 
 Mapbox map appearance is configured from `.env.local`. Use
 `VITE_MAPBOX_PROJECTION=globe` for the default spherical map, or
@@ -148,13 +149,23 @@ The region sidebar reads the static world and China thumbnail bases once per
 frontend session from `GET /api/admin-regions/thumbnail-bases`. It reads
 `GET /api/admin-regions/summary?depth=...&start=...&end=...` in parallel for
 depths 1-4 and uses the selected depth's precomputed visit path, counts,
-ranking rows, and map-focus bounds. Both endpoints use independent read-only
-SQLite connections. Missing or stale summary precompute returns 503; ordinary
-requests never rebuild it and never fall back to request-time footprint scans,
-MVT decoding, or geometry unions. Rebuild it intentionally with `npm run
-prepare:admin-region-summary`. That command atomically replaces only the three
-`admin_region_thumbnail_*` / `admin_region_daily_stats` tables and does not
-mutate `admin_region_tiles`, `visual_tiles`, or raw footprint rows.
+metric rows, and map-focus bounds. The frontend ranks those rows by the selected
+metric. Each `regionMetrics` row exposes `footprintCount`,
+`stayDurationSeconds`, and `travelDistanceMeters`. For each ordered footprint
+interval, the elapsed time and current row's distance are assigned entirely to
+the current row's region, with no gap threshold. Intervals that cross an IANA
+`Asia/Shanghai` day boundary are split in proportion to each day's duration,
+with the final slice receiving the floating-point distance residual so the
+pieces retain the original total.
+
+Both endpoints use independent read-only SQLite connections. Missing tables,
+legacy schemas, or stale source/algorithm signatures return 503; ordinary
+requests never rebuild the summary and never fall back to request-time
+footprint scans, MVT decoding, or geometry unions. Rebuild it intentionally
+with `npm run prepare:admin-region-summary`. That command atomically replaces
+only `admin_region_thumbnail_bases`, `admin_region_thumbnail_region_paths`, and
+`admin_region_daily_stats`; it does not write the `footprints` facts,
+`footprint_spatial`, `visual_tiles`, or `admin_region_tiles`.
 Per-region paths prefer the coarse Z0/Z1 visual-equivalent tiles and use
 canonical administrative geometry only during this explicit maintenance build
 to fill IDs that are missing or collapse at the coarse tile resolution.

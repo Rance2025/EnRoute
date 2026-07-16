@@ -4,6 +4,7 @@ import importlib
 import json
 import math
 import sqlite3
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -59,6 +60,14 @@ def test_initialize_admin_region_summary_schema_creates_constrained_without_rowi
         "day",
         "region_id",
     ]
+    assert table_columns(connection, "admin_region_daily_stats") == [
+        "depth",
+        "day",
+        "region_id",
+        "footprint_count",
+        "stay_duration_seconds",
+        "travel_distance_meters",
+    ]
 
     with pytest.raises(sqlite3.IntegrityError):
         connection.execute(
@@ -77,14 +86,109 @@ def test_initialize_admin_region_summary_schema_creates_constrained_without_rowi
             ) VALUES (5, 'region', 'M0 0Z', 'source', 'algorithm')
             """,
         )
+    connection.execute(
+        """
+        INSERT INTO admin_region_daily_stats (
+          depth, day, region_id, footprint_count,
+          stay_duration_seconds, travel_distance_meters
+        ) VALUES (4, 20260716, '310117', 0, 60, 12.5)
+        """,
+    )
+    assert connection.execute(
+        """
+        SELECT typeof(footprint_count), typeof(stay_duration_seconds),
+               typeof(travel_distance_meters)
+        FROM admin_region_daily_stats
+        WHERE region_id = '310117'
+        """,
+    ).fetchone() == ("integer", "integer", "real")
+    for footprint_count, stay_duration_seconds, travel_distance_meters in (
+        (0, 0, 0),
+        (-1, 0, 0),
+        (0, -1, 0),
+        (0, 0, -0.5),
+    ):
+        with pytest.raises(sqlite3.IntegrityError):
+            connection.execute(
+                """
+                INSERT INTO admin_region_daily_stats (
+                  depth, day, region_id, footprint_count,
+                  stay_duration_seconds, travel_distance_meters
+                ) VALUES (1, 20260715, ?, ?, ?, ?)
+                """,
+                (
+                    f"invalid-{footprint_count}-{stay_duration_seconds}-{travel_distance_meters}",
+                    footprint_count,
+                    stay_duration_seconds,
+                    travel_distance_meters,
+                ),
+            )
     with pytest.raises(sqlite3.IntegrityError):
         connection.execute(
             """
             INSERT INTO admin_region_daily_stats (
-              depth, day, region_id, footprint_count
-            ) VALUES (1, 20260715, 'CN', 0)
+              depth, day, region_id, footprint_count,
+              stay_duration_seconds, travel_distance_meters
+            ) VALUES (5, 20260715, 'invalid-depth', 1, 0, 0)
             """,
         )
+
+
+@pytest.mark.parametrize(
+    ("footprint_count", "stay_duration_seconds", "travel_distance_meters"),
+    (
+        ("not-a-number", 0, 0),
+        (0, "not-a-number", 0),
+        (0, 0, "not-a-number"),
+        (0, 1.5, 0),
+    ),
+)
+def test_admin_region_daily_stats_schema_rejects_invalid_metric_types(
+    footprint_count: object,
+    stay_duration_seconds: object,
+    travel_distance_meters: object,
+) -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+    connection = sqlite3.connect(":memory:")
+    precompute.initialize_admin_region_summary_schema(connection)
+
+    with pytest.raises(sqlite3.IntegrityError):
+        connection.execute(
+            """
+            INSERT INTO admin_region_daily_stats (
+              depth, day, region_id, footprint_count,
+              stay_duration_seconds, travel_distance_meters
+            ) VALUES (4, 20260716, 'invalid-types', ?, ?, ?)
+            """,
+            (footprint_count, stay_duration_seconds, travel_distance_meters),
+        )
+
+
+def test_initialize_admin_region_summary_schema_does_not_migrate_legacy_daily_stats() -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+    connection = sqlite3.connect(":memory:")
+    connection.execute(
+        """
+        CREATE TABLE admin_region_daily_stats (
+          depth INTEGER NOT NULL,
+          day INTEGER NOT NULL,
+          region_id TEXT NOT NULL,
+          footprint_count INTEGER NOT NULL,
+          PRIMARY KEY (depth, day, region_id),
+          CHECK (depth BETWEEN 1 AND 4),
+          CHECK (footprint_count > 0)
+        ) WITHOUT ROWID
+        """,
+    )
+
+    precompute.initialize_admin_region_summary_schema(connection)
+
+    assert table_columns(connection, "admin_region_daily_stats") == [
+        "depth",
+        "day",
+        "region_id",
+        "footprint_count",
+    ]
 
 
 def test_initialize_footprint_schema_includes_admin_region_summary_tables() -> None:
@@ -131,7 +235,7 @@ def test_thumbnail_source_signatures_cover_only_their_required_z0_and_z1_tiles()
         precompute.create_admin_region_thumbnail_path_source_signature(connection),
     )
 
-    assert precompute.ADMIN_REGION_SUMMARY_ALGORITHM_SIGNATURE == "admin-region-summary-v3"
+    assert precompute.ADMIN_REGION_SUMMARY_ALGORITHM_SIGNATURE == "admin-region-summary-v4"
     assert base_signature["algorithmSignature"] == precompute.ADMIN_REGION_SUMMARY_ALGORITHM_SIGNATURE
     assert [
         (row["depth"], row["z"], row["x"], row["y"], row["byteLength"])
@@ -687,11 +791,11 @@ def test_daily_stats_precompute_rolls_footprints_up_four_depths_in_shanghai_days
     insert_raw_footprint(connection, timestamp_seconds=after_midnight, region_id="310101")
     insert_raw_footprint(connection, timestamp_seconds=after_midnight + 1, region_id="310101")
 
-    rows = precompute.build_admin_region_daily_stat_rows(connection)
+    result = precompute.build_admin_region_daily_stat_rows(connection)
 
     assert [
         (row.depth, row.day, row.region_id, row.footprint_count)
-        for row in rows
+        for row in result.rows
     ] == [
         (1, 20260714, "CN", 1),
         (1, 20260715, "CN", 2),
@@ -702,6 +806,405 @@ def test_daily_stats_precompute_rolls_footprints_up_four_depths_in_shanghai_days
         (4, 20260714, "310101", 1),
         (4, 20260715, "310101", 2),
     ]
+    assert result.unresolved_footprint_count == 0
+
+
+def test_daily_stats_assigns_a_48_hour_interval_only_to_the_later_region_chain() -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+    connection = sqlite3.connect(":memory:")
+    connection.row_factory = sqlite3.Row
+    initialize_schema(connection)
+    for suffix in ("a", "b"):
+        insert_region(connection, region_id=f"country-{suffix}", level=1)
+        insert_region(
+            connection,
+            region_id=f"province-{suffix}",
+            level=2,
+            parent_id=f"country-{suffix}",
+        )
+        insert_region(
+            connection,
+            region_id=f"city-{suffix}",
+            level=3,
+            parent_id=f"province-{suffix}",
+        )
+        insert_region(
+            connection,
+            region_id=f"district-{suffix}",
+            level=4,
+            parent_id=f"city-{suffix}",
+        )
+    start = int(datetime(2026, 7, 14, 4, 0, tzinfo=timezone.utc).timestamp())
+    end = start + 48 * 60 * 60
+    insert_raw_footprint(
+        connection,
+        timestamp_seconds=start,
+        region_id="district-a",
+        distance=987.0,
+    )
+    insert_raw_footprint(
+        connection,
+        timestamp_seconds=end,
+        region_id="district-b",
+        distance=1200.0,
+    )
+
+    result = precompute.build_admin_region_daily_stat_rows(connection)
+
+    assert result.unresolved_footprint_count == 0
+    for depth, later_region_id in enumerate(
+        ("country-b", "province-b", "city-b", "district-b"),
+        start=1,
+    ):
+        later_rows = [
+            row
+            for row in result.rows
+            if row.depth == depth and row.region_id == later_region_id
+        ]
+        assert sum(row.footprint_count for row in later_rows) == 1
+        assert sum(row.stay_duration_seconds for row in later_rows) == 172800
+        assert math.fsum(row.travel_distance_meters for row in later_rows) == pytest.approx(
+            1200.0,
+        )
+    for earlier_region_id in ("country-a", "province-a", "city-a", "district-a"):
+        earlier_rows = [row for row in result.rows if row.region_id == earlier_region_id]
+        assert sum(row.footprint_count for row in earlier_rows) == 1
+        assert sum(row.stay_duration_seconds for row in earlier_rows) == 0
+        assert math.fsum(row.travel_distance_meters for row in earlier_rows) == 0.0
+
+
+def test_daily_stats_splits_interval_at_shanghai_midnight() -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+    connection = sqlite3.connect(":memory:")
+    connection.row_factory = sqlite3.Row
+    initialize_schema(connection)
+    insert_region(connection, region_id="country", level=1)
+    insert_region(connection, region_id="province", level=2, parent_id="country")
+    insert_region(connection, region_id="city", level=3, parent_id="province")
+    insert_region(connection, region_id="district", level=4, parent_id="city")
+    before_midnight = int(
+        datetime(2026, 7, 14, 15, 59, 30, tzinfo=timezone.utc).timestamp()
+    )
+    after_midnight = int(
+        datetime(2026, 7, 14, 16, 1, tzinfo=timezone.utc).timestamp()
+    )
+    insert_raw_footprint(
+        connection,
+        timestamp_seconds=before_midnight,
+        region_id="district",
+    )
+    insert_raw_footprint(
+        connection,
+        timestamp_seconds=after_midnight,
+        region_id="district",
+        distance=90.0,
+    )
+
+    result = precompute.build_admin_region_daily_stat_rows(connection)
+
+    district_rows = [row for row in result.rows if row.region_id == "district"]
+    assert [
+        (
+            row.day,
+            row.footprint_count,
+            row.stay_duration_seconds,
+            row.travel_distance_meters,
+        )
+        for row in district_rows
+    ] == [
+        (20260714, 1, 30, 30.0),
+        (20260715, 1, 60, 60.0),
+    ]
+
+
+def test_daily_stats_uses_zoneinfo_for_1988_shanghai_dst_day_boundaries() -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+    connection = sqlite3.connect(":memory:")
+    connection.row_factory = sqlite3.Row
+    initialize_schema(connection)
+    insert_region(connection, region_id="country", level=1)
+    before_midnight = int(
+        datetime(1988, 6, 1, 14, 30, tzinfo=timezone.utc).timestamp()
+    )
+    after_midnight = int(
+        datetime(1988, 6, 1, 15, 30, tzinfo=timezone.utc).timestamp()
+    )
+    insert_raw_footprint(
+        connection,
+        timestamp_seconds=before_midnight,
+        region_id="country",
+    )
+    insert_raw_footprint(
+        connection,
+        timestamp_seconds=after_midnight,
+        region_id="country",
+        distance=60.0,
+    )
+
+    result = precompute.build_admin_region_daily_stat_rows(connection)
+
+    assert [
+        (
+            row.day,
+            row.footprint_count,
+            row.stay_duration_seconds,
+            row.travel_distance_meters,
+        )
+        for row in result.rows
+    ] == [
+        (19880601, 1, 1800, 30.0),
+        (19880602, 1, 1800, 30.0),
+    ]
+
+
+def test_daily_stats_keeps_zero_footprint_rows_for_full_intermediate_days() -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+    connection = sqlite3.connect(":memory:")
+    connection.row_factory = sqlite3.Row
+    initialize_schema(connection)
+    insert_region(connection, region_id="country-a", level=1)
+    insert_region(connection, region_id="country-b", level=1)
+    start = int(datetime(2026, 7, 14, 15, 59, 30, tzinfo=timezone.utc).timestamp())
+    end = int(datetime(2026, 7, 16, 16, 0, 30, tzinfo=timezone.utc).timestamp())
+    distance = 777.7
+    insert_raw_footprint(connection, timestamp_seconds=start, region_id="country-a")
+    insert_raw_footprint(
+        connection,
+        timestamp_seconds=end,
+        region_id="country-b",
+        distance=distance,
+    )
+
+    result = precompute.build_admin_region_daily_stat_rows(connection)
+
+    later_rows = [row for row in result.rows if row.region_id == "country-b"]
+    assert [row.day for row in later_rows] == [20260714, 20260715, 20260716, 20260717]
+    assert [row.footprint_count for row in later_rows] == [0, 0, 0, 1]
+    assert [row.stay_duration_seconds for row in later_rows] == [30, 86400, 86400, 30]
+    assert sum(row.stay_duration_seconds for row in later_rows) == end - start
+    assert math.fsum(row.travel_distance_meters for row in later_rows) == pytest.approx(
+        distance,
+    )
+
+
+def test_split_interval_by_shanghai_day_preserves_a_large_finite_distance() -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+    start = int(datetime(2026, 7, 14, 15, 59, 30, tzinfo=timezone.utc).timestamp())
+    end = int(datetime(2026, 7, 16, 16, 0, 30, tzinfo=timezone.utc).timestamp())
+    distance = 1e308
+
+    shares = precompute.split_interval_by_shanghai_day(start, end, distance)
+
+    share_distances = [share.travel_distance_meters for share in shares]
+    assert all(math.isfinite(share_distance) for share_distance in share_distances)
+    assert all(share_distance >= 0 for share_distance in share_distances)
+    assert math.fsum(share_distances) == pytest.approx(distance)
+
+
+def test_split_interval_rejects_unrepresentable_max_float_distance_shares() -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+    start = int(datetime(2026, 7, 1, 0, 0, 58, tzinfo=timezone.utc).timestamp())
+    end = start + 48 * 24 * 60 * 60
+
+    with pytest.raises(
+        precompute.AdminRegionPrecomputeSourceError,
+        match=r"interval distance shares cannot be represented.*start=.*end=",
+    ):
+        precompute.split_interval_by_shanghai_day(start, end, sys.float_info.max)
+
+
+def test_split_interval_rejects_a_negative_subnormal_distance_share() -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+    start = 1577900272
+    end = 1609182539
+
+    with pytest.raises(
+        precompute.AdminRegionPrecomputeSourceError,
+        match=r"interval distance shares cannot be represented.*start=.*end=",
+    ):
+        precompute.split_interval_by_shanghai_day(start, end, 8.765e-321)
+
+
+def test_daily_stats_wraps_distance_aggregation_overflow_with_key_context() -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+    connection = sqlite3.connect(":memory:")
+    connection.row_factory = sqlite3.Row
+    initialize_schema(connection)
+    insert_region(connection, region_id="country", level=1)
+    start = int(datetime(2026, 7, 15, 0, 0, tzinfo=timezone.utc).timestamp())
+    insert_raw_footprint(connection, timestamp_seconds=start, region_id="country")
+    insert_raw_footprint(
+        connection,
+        timestamp_seconds=start + 1,
+        region_id="country",
+        distance=1e308,
+    )
+    insert_raw_footprint(
+        connection,
+        timestamp_seconds=start + 2,
+        region_id="country",
+        distance=1e308,
+    )
+
+    with pytest.raises(
+        precompute.AdminRegionPrecomputeSourceError,
+        match=r"depth=1.*day=20260715.*region_id=country",
+    ):
+        precompute.build_admin_region_daily_stat_rows(connection)
+
+
+@pytest.mark.parametrize(
+    ("start_timestamp", "end_timestamp", "distance"),
+    (
+        (100, 100, 0.0),
+        (101, 100, 0.0),
+        (100, 101, -0.1),
+        (100, 101, math.inf),
+    ),
+)
+def test_split_interval_by_shanghai_day_rejects_invalid_interval_inputs(
+    start_timestamp: int,
+    end_timestamp: int,
+    distance: float,
+) -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+
+    with pytest.raises(precompute.AdminRegionPrecomputeSourceError):
+        precompute.split_interval_by_shanghai_day(
+            start_timestamp,
+            end_timestamp,
+            distance,
+        )
+
+
+@pytest.mark.parametrize("error_type", (OSError, OverflowError, ValueError))
+def test_split_interval_wraps_current_timestamp_conversion_errors(
+    monkeypatch: pytest.MonkeyPatch,
+    error_type: type[Exception],
+) -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+
+    class InvalidTimestampDateTime:
+        @staticmethod
+        def fromtimestamp(*_args, **_kwargs):
+            raise error_type("invalid current timestamp")
+
+    monkeypatch.setattr(precompute, "datetime", InvalidTimestampDateTime)
+
+    with pytest.raises(precompute.AdminRegionPrecomputeSourceError, match="timestamp"):
+        precompute.split_interval_by_shanghai_day(100, 200, 0.0)
+
+
+@pytest.mark.parametrize("error_type", (OSError, OverflowError, ValueError))
+def test_split_interval_wraps_next_midnight_conversion_errors(
+    monkeypatch: pytest.MonkeyPatch,
+    error_type: type[Exception],
+) -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+
+    class InvalidMidnight:
+        def astimezone(self, _time_zone):
+            return self
+
+        def timestamp(self):
+            raise error_type("invalid next midnight")
+
+    class InvalidMidnightDateTime:
+        fromtimestamp = staticmethod(datetime.fromtimestamp)
+
+        @staticmethod
+        def combine(*_args, **_kwargs):
+            return InvalidMidnight()
+
+    monkeypatch.setattr(precompute, "datetime", InvalidMidnightDateTime)
+
+    with pytest.raises(precompute.AdminRegionPrecomputeSourceError, match="midnight"):
+        precompute.split_interval_by_shanghai_day(100, 200, 0.0)
+
+
+def test_split_interval_rejects_a_non_advancing_midnight_boundary(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+
+    class NonAdvancingMidnight:
+        call_count = 0
+
+        def astimezone(self, _time_zone):
+            return self
+
+        def timestamp(self):
+            self.call_count += 1
+            if self.call_count > 1:
+                raise AssertionError("split retried a non-advancing boundary")
+            return 100
+
+    midnight = NonAdvancingMidnight()
+
+    class NonAdvancingDateTime:
+        fromtimestamp = staticmethod(datetime.fromtimestamp)
+
+        @staticmethod
+        def combine(*_args, **_kwargs):
+            return midnight
+
+    monkeypatch.setattr(precompute, "datetime", NonAdvancingDateTime)
+
+    with pytest.raises(precompute.AdminRegionPrecomputeSourceError, match="advance"):
+        precompute.split_interval_by_shanghai_day(100, 200, 0.0)
+
+
+@pytest.mark.parametrize("distance", (-1.0, math.inf))
+def test_daily_stats_rejects_invalid_distance_on_the_first_footprint(distance: float) -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+    connection = sqlite3.connect(":memory:")
+    connection.row_factory = sqlite3.Row
+    initialize_schema(connection)
+    insert_region(connection, region_id="country", level=1)
+    insert_raw_footprint(
+        connection,
+        timestamp_seconds=100,
+        region_id="country",
+        distance=distance,
+    )
+
+    with pytest.raises(precompute.AdminRegionPrecomputeSourceError, match="distance"):
+        precompute.build_admin_region_daily_stat_rows(connection)
+
+
+def test_daily_stats_counts_unresolved_regions_without_fabricating_metrics() -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+    connection = sqlite3.connect(":memory:")
+    connection.row_factory = sqlite3.Row
+    initialize_schema(connection)
+    insert_region(connection, region_id="country", level=1)
+    insert_raw_footprint(connection, timestamp_seconds=100, region_id="country")
+    insert_raw_footprint(
+        connection,
+        timestamp_seconds=110,
+        region_id="missing-region",
+        distance=9.0,
+    )
+    insert_raw_footprint(
+        connection,
+        timestamp_seconds=120,
+        region_id="country",
+        distance=12.0,
+    )
+
+    result = precompute.build_admin_region_daily_stat_rows(connection)
+
+    assert result.unresolved_footprint_count == 1
+    assert all(row.region_id != "missing-region" for row in result.rows)
+    assert [
+        (
+            row.region_id,
+            row.footprint_count,
+            row.stay_duration_seconds,
+            row.travel_distance_meters,
+        )
+        for row in result.rows
+    ] == [("country", 2, 10, 12.0)]
 
 
 def test_build_admin_region_summary_precompute_atomically_populates_only_new_tables() -> None:
@@ -746,16 +1249,17 @@ def test_build_admin_region_summary_precompute_atomically_populates_only_new_tab
         tuple(row)
         for row in connection.execute(
             """
-            SELECT depth, day, region_id, footprint_count
+            SELECT depth, day, region_id, footprint_count,
+                   stay_duration_seconds, travel_distance_meters
             FROM admin_region_daily_stats
             ORDER BY depth, day, region_id
             """,
         )
     ] == [
-        (1, 20260715, "country-a", 1),
-        (2, 20260715, "province-a", 1),
-        (3, 20260715, "city-a", 1),
-        (4, 20260715, "district-a", 1),
+        (1, 20260715, "country-a", 1, 0, 0.0),
+        (2, 20260715, "province-a", 1, 0, 0.0),
+        (3, 20260715, "city-a", 1, 0, 0.0),
+        (4, 20260715, "district-a", 1, 0, 0.0),
     ]
     assert read_ready_signature_keys(connection) == {
         THUMBNAIL_BASE_SIGNATURE_KEY,
@@ -763,6 +1267,63 @@ def test_build_admin_region_summary_precompute_atomically_populates_only_new_tab
         DAILY_STATS_SIGNATURE_KEY,
     }
     assert snapshot_protected_tiles(connection) == protected_before
+
+
+def test_build_admin_region_summary_precompute_migrates_legacy_daily_stats_table() -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+    connection = create_precompute_source_database()
+    connection.executescript(
+        """
+        DROP TABLE admin_region_daily_stats;
+        CREATE TABLE admin_region_daily_stats (
+          depth INTEGER NOT NULL,
+          day INTEGER NOT NULL,
+          region_id TEXT NOT NULL,
+          footprint_count INTEGER NOT NULL,
+          PRIMARY KEY (depth, day, region_id),
+          CHECK (depth BETWEEN 1 AND 4),
+          CHECK (footprint_count > 0)
+        ) WITHOUT ROWID;
+        INSERT INTO admin_region_daily_stats (
+          depth, day, region_id, footprint_count
+        ) VALUES (1, 20260714, 'legacy-country', 99);
+        """,
+    )
+    connection.commit()
+
+    precompute.build_admin_region_summary_precompute(connection, updated_at=123)
+
+    assert table_columns(connection, "admin_region_daily_stats") == [
+        "depth",
+        "day",
+        "region_id",
+        "footprint_count",
+        "stay_duration_seconds",
+        "travel_distance_meters",
+    ]
+    assert [
+        tuple(row)
+        for row in connection.execute(
+            """
+            SELECT depth, day, region_id, footprint_count,
+                   stay_duration_seconds, travel_distance_meters
+            FROM admin_region_daily_stats
+            ORDER BY depth, day, region_id
+            """,
+        )
+    ] == [
+        (1, 20260715, "country-a", 1, 0, 0.0),
+        (2, 20260715, "province-a", 1, 0, 0.0),
+        (3, 20260715, "city-a", 1, 0, 0.0),
+        (4, 20260715, "district-a", 1, 0, 0.0),
+    ]
+    assert connection.execute(
+        """
+        SELECT 1
+        FROM sqlite_master
+        WHERE type = 'table' AND name = 'admin_region_daily_stats_next'
+        """,
+    ).fetchone() is None
 
 
 def test_build_admin_region_summary_precompute_fills_partial_tile_coverage_from_geometry() -> None:
@@ -883,20 +1444,190 @@ def test_build_admin_region_summary_precompute_rolls_back_to_previous_complete_r
     connection = create_precompute_source_database()
     precompute.build_admin_region_summary_precompute(connection, updated_at=123)
     previous_rows = snapshot_summary_precompute(connection)
-    connection.execute(
+    with pytest.raises(sqlite3.IntegrityError, match="CHECK constraint failed"):
+        precompute.replace_admin_region_summary_precompute(
+            connection,
+            base_records=(),
+            path_records=(),
+            daily_stat_rows=(
+                precompute.AdminRegionDailyStat(
+                    depth=4,
+                    day=20260716,
+                    region_id="invalid-daily-stat",
+                    footprint_count=0,
+                    stay_duration_seconds=0,
+                    travel_distance_meters=0,
+                ),
+            ),
+            base_source_signature="replacement-base-signature",
+            path_source_signature="replacement-path-signature",
+            daily_source_signature="replacement-daily-signature",
+        )
+
+    assert snapshot_summary_precompute(connection) == previous_rows
+    assert connection.execute(
         """
-        CREATE TRIGGER reject_new_daily_stats
-        BEFORE INSERT ON admin_region_daily_stats
+        SELECT 1
+        FROM sqlite_master
+        WHERE type = 'table' AND name = 'admin_region_daily_stats_next'
+        """,
+    ).fetchone() is None
+
+
+def test_replace_admin_region_summary_precompute_cleans_stale_next_after_rollback() -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+    connection = create_precompute_source_database()
+    precompute.build_admin_region_summary_precompute(connection, updated_at=123)
+    previous_rows = snapshot_summary_precompute(connection)
+    connection.executescript(
+        """
+        CREATE TABLE admin_region_daily_stats_next (
+          marker TEXT NOT NULL
+        );
+        INSERT INTO admin_region_daily_stats_next (marker) VALUES ('stale');
+        """,
+    )
+    connection.commit()
+
+    with pytest.raises(sqlite3.IntegrityError, match="CHECK constraint failed"):
+        precompute.replace_admin_region_summary_precompute(
+            connection,
+            base_records=(),
+            path_records=(),
+            daily_stat_rows=(
+                precompute.AdminRegionDailyStat(
+                    depth=4,
+                    day=20260716,
+                    region_id="invalid-daily-stat",
+                    footprint_count=0,
+                    stay_duration_seconds=0,
+                    travel_distance_meters=0,
+                ),
+            ),
+            base_source_signature="replacement-base-signature",
+            path_source_signature="replacement-path-signature",
+            daily_source_signature="replacement-daily-signature",
+        )
+
+    assert snapshot_summary_precompute(connection) == previous_rows
+    assert connection.execute(
+        """
+        SELECT 1
+        FROM sqlite_master
+        WHERE type = 'table' AND name = 'admin_region_daily_stats_next'
+        """,
+    ).fetchone() is None
+
+
+def test_replace_admin_region_summary_precompute_preserves_original_failure(
+    tmp_path: Path,
+) -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+    database = tmp_path / "footprints.sqlite"
+    setup_connection = create_precompute_source_database(database)
+    precompute.build_admin_region_summary_precompute(setup_connection, updated_at=123)
+    setup_connection.executescript(
+        """
+        CREATE TABLE admin_region_daily_stats_next (
+          marker TEXT NOT NULL
+        );
+        INSERT INTO admin_region_daily_stats_next (marker) VALUES ('stale');
+        """,
+    )
+    setup_connection.commit()
+    setup_connection.close()
+
+    class FailSecondNextDropConnection(sqlite3.Connection):
+        next_drop_count = 0
+
+        def execute(self, sql: str, parameters=(), /):
+            if sql.strip().startswith("DROP TABLE IF EXISTS admin_region_daily_stats_next"):
+                self.next_drop_count += 1
+                if self.next_drop_count == 2:
+                    raise sqlite3.OperationalError("forced cleanup failure")
+            return super().execute(sql, parameters)
+
+    connection = sqlite3.connect(database, factory=FailSecondNextDropConnection)
+    connection.row_factory = sqlite3.Row
+
+    with pytest.raises(sqlite3.IntegrityError, match="CHECK constraint failed"):
+        precompute.replace_admin_region_summary_precompute(
+            connection,
+            base_records=(),
+            path_records=(),
+            daily_stat_rows=(
+                precompute.AdminRegionDailyStat(
+                    depth=4,
+                    day=20260716,
+                    region_id="invalid-daily-stat",
+                    footprint_count=0,
+                    stay_duration_seconds=0,
+                    travel_distance_meters=0,
+                ),
+            ),
+            base_source_signature="replacement-base-signature",
+            path_source_signature="replacement-path-signature",
+            daily_source_signature="replacement-daily-signature",
+        )
+
+    assert connection.next_drop_count == 1
+    assert connection.execute(
+        """
+        SELECT 1
+        FROM sqlite_master
+        WHERE type = 'table' AND name = 'admin_region_daily_stats_next'
+        """,
+    ).fetchone() is None
+
+
+def test_replace_admin_region_summary_precompute_rolls_back_post_swap_failure() -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+    connection = create_precompute_source_database()
+    precompute.build_admin_region_summary_precompute(connection, updated_at=123)
+    previous_rows = snapshot_summary_precompute(connection)
+    connection.execute(
+        f"""
+        CREATE TRIGGER reject_daily_signature_update
+        BEFORE UPDATE OF value ON footprint_meta
+        WHEN OLD.key = '{DAILY_STATS_SIGNATURE_KEY}'
         BEGIN
-          SELECT RAISE(ABORT, 'forced summary precompute failure');
+          SELECT RAISE(ABORT, 'forced post-swap signature failure');
         END
         """,
     )
+    connection.commit()
 
-    with pytest.raises(sqlite3.IntegrityError, match="forced summary precompute failure"):
-        precompute.build_admin_region_summary_precompute(connection, updated_at=456)
+    with pytest.raises(
+        sqlite3.IntegrityError,
+        match="forced post-swap signature failure",
+    ):
+        precompute.replace_admin_region_summary_precompute(
+            connection,
+            base_records=(),
+            path_records=(),
+            daily_stat_rows=(
+                precompute.AdminRegionDailyStat(
+                    depth=4,
+                    day=20260716,
+                    region_id="valid-replacement",
+                    footprint_count=1,
+                    stay_duration_seconds=0,
+                    travel_distance_meters=0,
+                ),
+            ),
+            base_source_signature="replacement-base-signature",
+            path_source_signature="replacement-path-signature",
+            daily_source_signature="replacement-daily-signature",
+        )
 
     assert snapshot_summary_precompute(connection) == previous_rows
+    assert connection.execute(
+        """
+        SELECT 1
+        FROM sqlite_master
+        WHERE type = 'table' AND name = 'admin_region_daily_stats_next'
+        """,
+    ).fetchone() is None
 
 
 def test_build_admin_region_summary_precompute_rejects_empty_canonical_region_depth() -> None:
@@ -982,7 +1713,7 @@ def test_read_thumbnail_bases_returns_persisted_world_and_china_without_geometry
     assert payload["bases"]["china"]["path"]
 
 
-def test_query_precomputed_summary_reads_daily_stats_and_concatenates_region_paths(
+def test_query_precomputed_summary_returns_all_region_metrics_for_closed_day_range(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -991,8 +1722,7 @@ def test_query_precomputed_summary_reads_daily_stats_and_concatenates_region_pat
     from enroute_api.admin_regions import thumbnail as thumbnail_module
 
     database = tmp_path / "footprints.sqlite"
-    connection = create_precompute_source_database(database)
-    precompute.build_admin_region_summary_precompute(connection, updated_at=123)
+    connection = create_precomputed_summary_metrics_fixture(database)
     expected_path = str(
         connection.execute(
             """
@@ -1002,6 +1732,19 @@ def test_query_precomputed_summary_reads_daily_stats_and_concatenates_region_pat
             """,
         ).fetchone()[0]
     )
+    connection.execute(
+        "DELETE FROM admin_region_thumbnail_region_paths "
+        "WHERE depth = 4 AND region_id = 'district-b'",
+    )
+    connection.execute(
+        """
+        INSERT INTO admin_region_daily_stats (
+          depth, day, region_id, footprint_count,
+          stay_duration_seconds, travel_distance_meters
+        ) VALUES (4, 20260715, 'missing-metadata', 9, 900, 90.0)
+        """,
+    )
+    connection.commit()
     connection.close()
     monkeypatch.setattr(
         summary_module,
@@ -1013,26 +1756,37 @@ def test_query_precomputed_summary_reads_daily_stats_and_concatenates_region_pat
         "read_admin_region_thumbnail_source",
         lambda *_args, **_kwargs: pytest.fail("request decoded admin-region MVT"),
     )
+    monkeypatch.setattr(
+        precompute,
+        "build_admin_region_summary_precompute",
+        lambda *_args, **_kwargs: pytest.fail("request rebuilt summary precompute"),
+    )
+    monkeypatch.setattr(
+        precompute,
+        "initialize_admin_region_summary_schema",
+        lambda *_args, **_kwargs: pytest.fail("request migrated summary schema"),
+    )
 
     payload = precompute.query_precomputed_admin_region_summary(
         database,
         depth=4,
         start_day=20260715,
-        end_day=20260715,
+        end_day=20260716,
     )
 
     assert payload == {
         "depth": 4,
         "visitedRegionIds": ["district-a"],
         "visitedCount": 1,
-        "totalCount": 1,
+        "totalCount": 2,
         "visitedPath": expected_path,
-        "rankings": [
+        "regionMetrics": [
             {
-                "rank": 1,
                 "regionId": "district-a",
                 "name": "district-a",
                 "footprintCount": 1,
+                "stayDurationSeconds": 180,
+                "travelDistanceMeters": 6.0,
                 "bounds": {
                     "west": 0.0,
                     "south": 0.0,
@@ -1040,18 +1794,327 @@ def test_query_precomputed_summary_reads_daily_stats_and_concatenates_region_pat
                     "north": 1.0,
                 },
             },
+            {
+                "regionId": "district-b",
+                "name": "District B",
+                "footprintCount": 0,
+                "stayDurationSeconds": 300,
+                "travelDistanceMeters": 12.25,
+                "bounds": {
+                    "west": 121.0,
+                    "south": 30.9,
+                    "east": 121.4,
+                    "north": 31.3,
+                },
+            },
         ],
     }
+    assert payload["visitedRegionIds"] == ["district-a"]
+    assert "rankings" not in payload
+    assert all("rank" not in metric for metric in payload["regionMetrics"])
+
+    all_days_payload = precompute.query_precomputed_admin_region_summary(
+        database,
+        depth=4,
+        start_day=None,
+        end_day=None,
+    )
+    assert all_days_payload["regionMetrics"] == [
+        {
+            "regionId": "district-a",
+            "name": "district-a",
+            "footprintCount": 7,
+            "stayDurationSeconds": 230,
+            "travelDistanceMeters": 11.0,
+            "bounds": {
+                "west": 0.0,
+                "south": 0.0,
+                "east": 1.0,
+                "north": 1.0,
+            },
+        },
+        {
+            "regionId": "district-b",
+            "name": "District B",
+            "footprintCount": 0,
+            "stayDurationSeconds": 320,
+            "travelDistanceMeters": 13.5,
+            "bounds": {
+                "west": 121.0,
+                "south": 30.9,
+                "east": 121.4,
+                "north": 31.3,
+            },
+        },
+    ]
     empty_payload = precompute.query_precomputed_admin_region_summary(
         database,
         depth=4,
-        start_day=20260716,
-        end_day=20260716,
+        start_day=20260717,
+        end_day=20260717,
     )
     assert empty_payload["visitedRegionIds"] == []
     assert empty_payload["visitedPath"] == ""
     assert empty_payload["visitedCount"] == 0
-    assert empty_payload["totalCount"] == 1
+    assert empty_payload["totalCount"] == 2
+    assert empty_payload["regionMetrics"] == []
+
+
+def test_query_precomputed_summary_uses_one_grouped_metrics_query() -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+    connection = create_precomputed_summary_metrics_fixture()
+    connection.execute("PRAGMA ignore_check_constraints = ON")
+    connection.execute(
+        """
+        INSERT INTO admin_region_daily_stats (
+          depth, day, region_id, footprint_count,
+          stay_duration_seconds, travel_distance_meters
+        ) VALUES (4, 20260715, 'all-zero', 0, 0, 0.0)
+        """,
+    )
+    connection.commit()
+    statements: list[str] = []
+    connection.set_trace_callback(statements.append)
+
+    totals_by_id = precompute.query_admin_region_daily_metric_totals(
+        connection,
+        depth=4,
+        start_day=20260715,
+        end_day=20260716,
+    )
+    connection.set_trace_callback(None)
+
+    assert totals_by_id == {
+        "district-a": precompute.AdminRegionMetricTotals(
+            footprint_count=1,
+            stay_duration_seconds=180,
+            travel_distance_meters=6.0,
+        ),
+        "district-b": precompute.AdminRegionMetricTotals(
+            footprint_count=0,
+            stay_duration_seconds=300,
+            travel_distance_meters=12.25,
+        ),
+    }
+    daily_queries = [
+        " ".join(statement.lower().split())
+        for statement in statements
+        if "from admin_region_daily_stats" in statement.lower()
+    ]
+    assert len(daily_queries) == 1
+    assert daily_queries[0].startswith("select region_id,")
+    assert "from admin_region_daily_stats" in daily_queries[0]
+    assert "where depth = 4 and day between 20260715 and 20260716" in daily_queries[0]
+    assert "group by region_id" in daily_queries[0]
+    assert "having" in daily_queries[0]
+    assert daily_queries[0].endswith("order by region_id")
+
+
+def test_query_precomputed_summary_is_readonly_for_persisted_source_and_tile_data(
+    tmp_path: Path,
+) -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+    database = tmp_path / "footprints.sqlite"
+    connection = create_precomputed_summary_metrics_fixture(database)
+    before = snapshot_summary_reader_protected_data(connection)
+    connection.close()
+
+    precompute.query_precomputed_admin_region_summary(
+        database,
+        depth=4,
+        start_day=20260715,
+        end_day=20260716,
+    )
+
+    connection = sqlite3.connect(database)
+    after = snapshot_summary_reader_protected_data(connection)
+    connection.close()
+    assert after == before
+
+
+@pytest.mark.parametrize(
+    ("column", "value"),
+    (
+        ("footprint_count", 1.5),
+        ("stay_duration_seconds", -1000),
+        ("travel_distance_meters", float("inf")),
+    ),
+)
+def test_query_precomputed_summary_rejects_invalid_aggregated_metrics(
+    tmp_path: Path,
+    column: str,
+    value: float,
+) -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+    database = tmp_path / f"invalid-{column}.sqlite"
+    connection = create_precomputed_summary_metrics_fixture(database)
+    connection.execute("PRAGMA ignore_check_constraints = ON")
+    connection.execute(
+        f"UPDATE admin_region_daily_stats SET {column} = ? "
+        "WHERE depth = 4 AND day = 20260715 AND region_id = 'district-a'",
+        (value,),
+    )
+    connection.commit()
+    connection.close()
+
+    with pytest.raises(
+        precompute.AdminRegionPrecomputeUnavailable,
+        match="district-a",
+    ):
+        precompute.query_precomputed_admin_region_summary(
+            database,
+            depth=4,
+            start_day=None,
+            end_day=None,
+        )
+
+
+def test_query_precomputed_summary_wraps_sqlite_sum_overflow_as_unavailable(
+    tmp_path: Path,
+) -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+    database = tmp_path / "overflow.sqlite"
+    connection = create_precomputed_summary_metrics_fixture(database)
+    connection.execute("PRAGMA ignore_check_constraints = ON")
+    connection.execute(
+        "UPDATE admin_region_daily_stats SET footprint_count = ? "
+        "WHERE depth = 4 AND day = 20260714 AND region_id = 'district-a'",
+        (2**63 - 1,),
+    )
+    connection.commit()
+    connection.close()
+
+    with pytest.raises(
+        precompute.AdminRegionPrecomputeUnavailable,
+        match="integer overflow",
+    ):
+        precompute.query_precomputed_admin_region_summary(
+            database,
+            depth=4,
+            start_day=None,
+            end_day=None,
+        )
+
+
+@pytest.mark.parametrize(
+    ("footprint_count", "stay_duration_seconds", "travel_distance_meters"),
+    (
+        (-1, -2, -3.0),
+        (0, 0, float("-inf")),
+    ),
+)
+def test_query_precomputed_summary_rejects_invalid_groups_hidden_by_positive_having(
+    tmp_path: Path,
+    footprint_count: int,
+    stay_duration_seconds: int,
+    travel_distance_meters: float,
+) -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+    database = tmp_path / "invalid-hidden-group.sqlite"
+    connection = create_precomputed_summary_metrics_fixture(database)
+    connection.execute("PRAGMA ignore_check_constraints = ON")
+    connection.execute("DELETE FROM admin_region_daily_stats WHERE depth = 4")
+    connection.execute(
+        """
+        INSERT INTO admin_region_daily_stats (
+          depth, day, region_id, footprint_count,
+          stay_duration_seconds, travel_distance_meters
+        ) VALUES (4, 20260715, 'district-a', ?, ?, ?)
+        """,
+        (footprint_count, stay_duration_seconds, travel_distance_meters),
+    )
+    connection.commit()
+    connection.close()
+
+    with pytest.raises(
+        precompute.AdminRegionPrecomputeUnavailable,
+        match="district-a",
+    ):
+        precompute.query_precomputed_admin_region_summary(
+            database,
+            depth=4,
+            start_day=None,
+            end_day=None,
+        )
+
+
+@pytest.mark.parametrize(
+    ("footprint_count", "stay_duration_seconds", "travel_distance_meters"),
+    (
+        ("not-a-number", 0, 0.0),
+        (0, 0, None),
+    ),
+)
+def test_query_precomputed_summary_metric_totals_rejects_hidden_type_or_null_groups(
+    footprint_count: object,
+    stay_duration_seconds: object,
+    travel_distance_meters: object,
+) -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+    connection = sqlite3.connect(":memory:")
+    connection.execute(
+        """
+        CREATE TABLE admin_region_daily_stats (
+          depth,
+          day,
+          region_id,
+          footprint_count,
+          stay_duration_seconds,
+          travel_distance_meters
+        )
+        """,
+    )
+    connection.execute(
+        "INSERT INTO admin_region_daily_stats VALUES (4, 20260715, 'invalid', ?, ?, ?)",
+        (footprint_count, stay_duration_seconds, travel_distance_meters),
+    )
+
+    with pytest.raises(
+        precompute.AdminRegionPrecomputeSourceError,
+        match="region invalid contains invalid daily metric values",
+    ):
+        precompute.query_admin_region_daily_metric_totals(
+            connection,
+            depth=4,
+            start_day=None,
+            end_day=None,
+        )
+
+
+def test_query_precomputed_summary_rejects_negative_daily_values_cancelled_by_later_days(
+) -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+    connection = sqlite3.connect(":memory:")
+    connection.execute(
+        """
+        CREATE TABLE admin_region_daily_stats (
+          depth,
+          day,
+          region_id,
+          footprint_count,
+          stay_duration_seconds,
+          travel_distance_meters
+        )
+        """,
+    )
+    connection.executemany(
+        "INSERT INTO admin_region_daily_stats VALUES (4, ?, 'cancelled-region', ?, ?, ?)",
+        (
+            (20260715, -5, -20, -3.5),
+            (20260716, 10, 30, 5.0),
+        ),
+    )
+
+    with pytest.raises(
+        precompute.AdminRegionPrecomputeSourceError,
+        match="region cancelled-region contains invalid daily metric values",
+    ):
+        precompute.query_admin_region_daily_metric_totals(
+            connection,
+            depth=4,
+            start_day=None,
+            end_day=None,
+        )
 
 
 def test_precomputed_readers_reject_stale_or_missing_ready_signatures(tmp_path: Path) -> None:
@@ -1092,6 +2155,40 @@ def test_precomputed_readers_reject_stale_or_missing_ready_signatures(tmp_path: 
     with pytest.raises(
         precompute.AdminRegionPrecomputeUnavailable,
         match="daily stats signature is missing",
+    ):
+        precompute.query_precomputed_admin_region_summary(
+            database,
+            depth=4,
+            start_day=None,
+            end_day=None,
+        )
+
+
+def test_precomputed_summary_rejects_v3_daily_stats_signature(tmp_path: Path) -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+    database = tmp_path / "footprints.sqlite"
+    connection = create_precompute_source_database(database)
+    precompute.build_admin_region_summary_precompute(connection, updated_at=123)
+    signature = json.loads(
+        connection.execute(
+            "SELECT value FROM footprint_meta WHERE key = ?",
+            (DAILY_STATS_SIGNATURE_KEY,),
+        ).fetchone()[0],
+    )
+    signature["algorithmSignature"] = "admin-region-summary-v3"
+    connection.execute(
+        "UPDATE footprint_meta SET value = ? WHERE key = ?",
+        (
+            json.dumps(signature, ensure_ascii=True, separators=(",", ":"), sort_keys=True),
+            DAILY_STATS_SIGNATURE_KEY,
+        ),
+    )
+    connection.commit()
+    connection.close()
+
+    with pytest.raises(
+        precompute.AdminRegionPrecomputeUnavailable,
+        match="daily stats signature is stale",
     ):
         precompute.query_precomputed_admin_region_summary(
             database,
@@ -1153,6 +2250,62 @@ def test_admin_region_precompute_api_returns_stable_503_without_fallback(tmp_pat
     assert summary_response.json()["detail"]["code"] == (
         "admin_region_summary_precompute_unavailable"
     )
+
+
+def test_admin_region_precompute_api_returns_503_for_unavailable_legacy_daily_schema(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "legacy-daily-stats.sqlite"
+    connection = create_precomputed_summary_metrics_fixture(database)
+    connection.executescript(
+        """
+        DROP TABLE admin_region_daily_stats;
+        CREATE TABLE admin_region_daily_stats (
+          depth INTEGER NOT NULL,
+          day INTEGER NOT NULL,
+          region_id TEXT NOT NULL,
+          footprint_count INTEGER NOT NULL,
+          PRIMARY KEY (depth, day, region_id)
+        ) WITHOUT ROWID;
+        INSERT INTO admin_region_daily_stats (
+          depth, day, region_id, footprint_count
+        ) VALUES (4, 20260715, 'district-a', 1);
+        """,
+    )
+    connection.commit()
+    before = snapshot_summary_reader_protected_data(connection)
+    assert table_columns(connection, "admin_region_daily_stats") == [
+        "depth",
+        "day",
+        "region_id",
+        "footprint_count",
+    ]
+    connection.close()
+    settings = Settings(
+        footprint_db_path=database,
+        footprint_data_path=tmp_path / "missing.csv",
+        admin_region_data_path=tmp_path / "missing-admin-regions.geojson",
+        accounting_db_path=tmp_path / "accounting.sqlite",
+    )
+    client = TestClient(create_app(settings=settings))
+
+    response = client.get(
+        "/api/admin-regions/summary?depth=4&start=2026-07-15&end=2026-07-15",
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == (
+        "admin_region_summary_precompute_unavailable"
+    )
+    connection = sqlite3.connect(database)
+    assert table_columns(connection, "admin_region_daily_stats") == [
+        "depth",
+        "day",
+        "region_id",
+        "footprint_count",
+    ]
+    assert snapshot_summary_reader_protected_data(connection) == before
+    connection.close()
 
 
 def primary_key_columns(connection: sqlite3.Connection, table_name: str) -> list[str]:
@@ -1288,15 +2441,16 @@ def insert_raw_footprint(
     *,
     timestamp_seconds: int,
     region_id: str | None,
+    distance: float = 0.0,
 ) -> None:
     connection.execute(
         """
         INSERT INTO footprints (
           timestamp_seconds, longitude, latitude, accuracy, speed,
           distance, heading, altitude, region_id
-        ) VALUES (?, 121.47, 31.23, 5, 0, 0, 0, 3, ?)
+        ) VALUES (?, 121.47, 31.23, 5, 0, ?, 0, 3, ?)
         """,
-        (timestamp_seconds, region_id),
+        (timestamp_seconds, distance, region_id),
     )
 
 
@@ -1364,6 +2518,137 @@ def create_precompute_source_database(
     return connection
 
 
+def create_precomputed_summary_metrics_fixture(
+    database: str | Path = ":memory:",
+) -> sqlite3.Connection:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+    connection = create_precompute_source_database(database)
+    insert_region(
+        connection,
+        region_id="district-b",
+        level=4,
+        parent_id="city-a",
+    )
+    connection.execute(
+        """
+        UPDATE admin_regions
+        SET name = 'District B',
+            min_lng = 121.0,
+            min_lat = 30.9,
+            max_lng = 121.4,
+            max_lat = 31.3
+        WHERE id = 'district-b'
+        """,
+    )
+    tile = encode_geographic_admin_region_tile(
+        depth=4,
+        components={
+            "district-a": (109.0, 23.0, 111.0, 27.0),
+            "district-b": (121.0, 30.9, 121.4, 31.3),
+        },
+    )
+    connection.execute(
+        """
+        UPDATE admin_region_tiles
+        SET tile = ?, feature_count = 2, updated_at = updated_at + 10
+        WHERE focus_region_id = 'world'
+          AND depth = 4 AND z = 1 AND x = 1 AND y = 0
+        """,
+        (tile,),
+    )
+    connection.commit()
+    precompute.build_admin_region_summary_precompute(connection, updated_at=123)
+    connection.execute("DELETE FROM admin_region_daily_stats WHERE depth = 4")
+    connection.executemany(
+        """
+        INSERT INTO admin_region_daily_stats (
+          depth, day, region_id, footprint_count,
+          stay_duration_seconds, travel_distance_meters
+        ) VALUES (4, ?, ?, ?, ?, ?)
+        """,
+        (
+            (20260714, "district-a", 2, 10, 1.0),
+            (20260715, "district-a", 1, 60, 2.5),
+            (20260716, "district-a", 0, 120, 3.5),
+            (20260718, "district-a", 4, 40, 4.0),
+            (20260716, "district-b", 0, 300, 12.25),
+            (20260719, "district-b", 0, 20, 1.25),
+        ),
+    )
+    connection.commit()
+    return connection
+
+
+def snapshot_summary_reader_protected_data(
+    connection: sqlite3.Connection,
+) -> dict[str, list[tuple[object, ...]]]:
+    snapshots = {
+        "footprints": [
+            tuple(row)
+            for row in connection.execute(
+                "SELECT * FROM footprints ORDER BY timestamp_seconds",
+            )
+        ],
+        "visual_tiles": [
+            tuple(row)
+            for row in connection.execute(
+                "SELECT * FROM visual_tiles ORDER BY z, x, y, t_type, t",
+            )
+        ],
+        "admin_region_tiles": [
+            tuple(row)
+            for row in connection.execute(
+                """
+                SELECT * FROM admin_region_tiles
+                ORDER BY z, x, y, focus_region_id, depth
+                """,
+            )
+        ],
+        "footprint_meta": [
+            tuple(row)
+            for row in connection.execute(
+                "SELECT * FROM footprint_meta ORDER BY key",
+            )
+        ],
+        "admin_region_daily_stats": [
+            tuple(row)
+            for row in connection.execute(
+                "SELECT * FROM admin_region_daily_stats ORDER BY depth, day, region_id",
+            )
+        ],
+        "admin_region_thumbnail_bases": [
+            tuple(row)
+            for row in connection.execute(
+                "SELECT * FROM admin_region_thumbnail_bases ORDER BY scope",
+            )
+        ],
+        "admin_region_thumbnail_region_paths": [
+            tuple(row)
+            for row in connection.execute(
+                """
+                SELECT * FROM admin_region_thumbnail_region_paths
+                ORDER BY depth, region_id
+                """,
+            )
+        ],
+    }
+    spatial_table = connection.execute(
+        """
+        SELECT 1
+        FROM sqlite_master
+        WHERE type = 'table' AND name = 'footprint_spatial'
+        """,
+    ).fetchone()
+    if spatial_table is not None:
+        snapshots["footprint_spatial"] = [
+            tuple(row)
+            for row in connection.execute(
+                "SELECT * FROM footprint_spatial ORDER BY footprint_rowid",
+            )
+        ]
+    return snapshots
+
+
 def snapshot_protected_tiles(connection: sqlite3.Connection) -> dict[str, list[tuple[object, ...]]]:
     return {
         "visual_tiles": [
@@ -1419,3 +2704,7 @@ def snapshot_summary_precompute(connection: sqlite3.Connection) -> dict[str, lis
             )
         ],
     }
+
+
+def table_columns(connection: sqlite3.Connection, table_name: str) -> list[str]:
+    return [str(row[1]) for row in connection.execute(f"PRAGMA table_info({table_name})")]
