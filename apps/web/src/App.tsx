@@ -36,7 +36,7 @@ import {
 } from './accounting/shell'
 import type { AdminRegionDepth } from './layers/adminRegionVectorTileSource'
 import type {
-  AdminRegionRanking,
+  AdminRegionMetric,
 } from './layers/adminRegionSummaryDataSource'
 import {
   cancelAdminRegionSummaryRequests,
@@ -49,6 +49,10 @@ import {
   type AdminRegionThumbnailBases,
 } from './layers/adminRegionThumbnailBaseDataSource'
 import { AdminRegionContextPanel } from './components/AdminRegionContextPanel'
+import {
+  buildAdminRegionRanking,
+  type AdminRegionRankingMetric,
+} from './components/adminRegionRanking'
 import { AccountingRightContextPanel } from './components/accounting/AccountingRightContextPanel'
 import { WorkspaceLoadBoundary } from './components/WorkspaceLoadBoundary'
 import {
@@ -379,12 +383,14 @@ function App(props: AppProps) {
   const [adminRegionDepth, setAdminRegionDepth] = useState<AdminRegionDepth>(
     DEFAULT_ADMIN_REGION_DEPTH,
   )
+  const [adminRegionRankingMetric, setAdminRegionRankingMetric] =
+    useState<AdminRegionRankingMetric>('footprint')
   const [adminRegionThumbnailBases, setAdminRegionThumbnailBases] =
     useState<AdminRegionThumbnailBases | null>(null)
   const [adminRegionSummaryLoadState, setAdminRegionSummaryLoadState] =
     useState<AdminRegionSummaryLoadState | null>(null)
   const adminRegionSummaryLifecycleRef = useRef(0)
-  const [selectedAdminRegion, setSelectedAdminRegion] = useState<AdminRegionRanking | null>(null)
+  const [selectedAdminRegion, setSelectedAdminRegion] = useState<AdminRegionMetric | null>(null)
   const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRangeSelection>(
     createTodaySelection,
   )
@@ -693,6 +699,18 @@ function App(props: AppProps) {
   const footprintsVisible = !isRegionMode || showFootprintsInRegionMode
   const footprintStyleControlsVisible = activeSecondaryNavId === 'footprints'
     || (isRegionMode && showFootprintsInRegionMode)
+  const handleAdminRegionRankingMetricChange = useCallback((nextMetric: AdminRegionRankingMetric) => {
+    setAdminRegionRankingMetric(nextMetric)
+
+    if (!selectedAdminRegion || !currentAdminRegionSummary) return
+
+    const selectedRegionRemainsRanked = buildAdminRegionRanking(
+      currentAdminRegionSummary.regionMetrics,
+      nextMetric,
+    ).some((ranking) => ranking.regionId === selectedAdminRegion.regionId)
+
+    if (!selectedRegionRemainsRanked) setSelectedAdminRegion(null)
+  }, [currentAdminRegionSummary, selectedAdminRegion])
 
   useEffect(() => {
     let active = true
@@ -922,10 +940,12 @@ function App(props: AppProps) {
             <AdminRegionContextPanel
               depth={adminRegionDepth}
               summary={currentAdminRegionSummary}
+              metric={adminRegionRankingMetric}
               thumbnailBasePath={adminRegionThumbnailBasePath}
               status={currentAdminRegionSummaryStatus}
               selectedRegionId={selectedAdminRegion?.regionId}
               onDepthChange={handleAdminRegionDepthChange}
+              onMetricChange={handleAdminRegionRankingMetricChange}
               onRegionSelect={setSelectedAdminRegion}
               onRetry={handleAdminRegionSummaryRetry}
             />

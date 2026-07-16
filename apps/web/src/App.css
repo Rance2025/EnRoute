@@ -2344,7 +2344,7 @@
 }
 
 .admin-region-atlas-card__title,
-.admin-region-ranking-card__head > div {
+.admin-region-ranking-card__title {
   display: grid;
   gap: 5px;
   min-width: 0;
@@ -2443,19 +2443,91 @@
   min-height: 0;
 }
 
+.admin-region-ranking-card__actions {
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+  min-width: 0;
+}
+
+.admin-region-ranking-card__metric-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.admin-region-ranking-card__metric-control button {
+  position: relative;
+  min-width: 0;
+  height: 23px;
+  padding: 0 1px 3px;
+  border: 0;
+  border-radius: 0;
+  color: rgba(23, 35, 31, 0.5);
+  background: transparent;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 120ms ease;
+}
+
+.admin-region-ranking-card__metric-control button::after {
+  position: absolute;
+  right: 25%;
+  bottom: 0;
+  left: 25%;
+  height: 2px;
+  border-radius: 1px;
+  background: #2c8572;
+  content: '';
+  opacity: 0;
+  transform: scaleX(0.45);
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.admin-region-ranking-card__metric-control button:hover {
+  color: rgba(15, 106, 92, 0.82);
+}
+
+.admin-region-ranking-card__metric-control button[aria-pressed='true'] {
+  color: #0f6a5c;
+  font-weight: 840;
+}
+
+.admin-region-ranking-card__metric-control button[aria-pressed='true']::after {
+  opacity: 1;
+  transform: scaleX(1);
+}
+
+.admin-region-ranking-card__metric-control button:focus-visible {
+  outline: 2px solid #2c8572;
+  outline-offset: 2px;
+}
+
 .admin-region-ranking-card__retry {
   min-width: 0;
-  height: 26px;
-  padding: 0 10px;
-  border: 1px solid rgba(15, 106, 92, 0.18);
-  border-radius: 999px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
   color: #0f6a5c;
-  background: rgba(255, 255, 255, 0.62);
+  background: transparent;
   font: inherit;
   font-size: 11px;
   font-weight: 820;
   white-space: nowrap;
   cursor: pointer;
+}
+
+.admin-region-ranking-card__retry:hover {
+  color: #123f35;
+}
+
+.admin-region-ranking-card__retry:focus-visible {
+  outline: 2px solid #2c8572;
+  outline-offset: 2px;
 }
 
 .admin-region-ranking-card__list {
