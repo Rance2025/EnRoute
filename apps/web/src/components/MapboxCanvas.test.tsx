@@ -2285,7 +2285,7 @@ describe('MapboxCanvas footprint vector tiles', () => {
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
-      '/api/footprints/metrics?range=all',
+      '/api/footprints/metrics?start=2022-03-01&end=2026-06-19',
       expect.objectContaining({ method: 'GET' }),
     )
     expect(fetchMock).toHaveBeenNthCalledWith(
