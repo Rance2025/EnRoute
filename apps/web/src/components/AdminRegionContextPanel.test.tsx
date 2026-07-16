@@ -67,6 +67,7 @@ function renderPanel({
   status = 'ready',
   summary = citySummary,
   thumbnailBasePath = 'M0 0L320 0L320 180L0 180Z',
+  selectedRegionId = null,
   onDepthChange = vi.fn(),
   onRegionSelect = vi.fn(),
   onRetry = vi.fn(),
@@ -75,6 +76,7 @@ function renderPanel({
   status?: 'idle' | 'loading' | 'ready' | 'error'
   summary?: AdminRegionSummary | null
   thumbnailBasePath?: string
+  selectedRegionId?: string | null
   onDepthChange?: (depth: AdminRegionDepth) => void
   onRegionSelect?: (ranking: AdminRegionSummary['rankings'][number]) => void
   onRetry?: () => void
@@ -85,6 +87,7 @@ function renderPanel({
       status={status}
       summary={summary}
       thumbnailBasePath={thumbnailBasePath}
+      selectedRegionId={selectedRegionId}
       onDepthChange={onDepthChange}
       onRegionSelect={onRegionSelect}
       onRetry={onRetry}
@@ -241,6 +244,40 @@ describe('AdminRegionContextPanel', () => {
 
     fireEvent.click(bar as Element)
     expect(onRegionSelect).toHaveBeenCalledWith(longNameSummary.rankings[0])
+  })
+
+  it('uses real ranking ratios with a two-percent floor only for positive values', () => {
+    const ratioSummary: AdminRegionSummary = {
+      ...citySummary,
+      rankings: citySummary.rankings.slice(0, 4).map((ranking, index) => ({
+        ...ranking,
+        footprintCount: [1000, 500, 1, 0][index],
+      })),
+    }
+
+    renderPanel({ summary: ratioSummary })
+
+    const ratios = ratioSummary.rankings.map((ranking) => {
+      const row = screen.getByRole('button', { name: new RegExp(ranking.name) })
+      return row.querySelector('.admin-region-ranking-card__bar span')
+    })
+
+    expect(ratios[0]).toHaveStyle({ transform: 'scaleX(1)' })
+    expect(ratios[1]).toHaveStyle({ transform: 'scaleX(0.5)' })
+    expect(ratios[2]).toHaveStyle({ transform: 'scaleX(0.02)' })
+    expect(ratios[3]).toHaveStyle({ transform: 'scaleX(0)' })
+  })
+
+  it('marks only the selected ranking as the current location', () => {
+    renderPanel({ selectedRegionId: '330100' })
+
+    const selectedRow = screen.getByRole('button', { name: /第 2 名 杭州市/ })
+    const otherRow = screen.getByRole('button', { name: /第 1 名 上海市/ })
+
+    expect(selectedRow).toHaveClass('is-selected')
+    expect(selectedRow).toHaveAttribute('aria-current', 'location')
+    expect(otherRow).not.toHaveClass('is-selected')
+    expect(otherRow).not.toHaveAttribute('aria-current')
   })
 
   it('shows empty, loading, and error states without replacing depth controls', () => {
