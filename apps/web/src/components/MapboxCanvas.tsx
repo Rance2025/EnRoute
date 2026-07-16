@@ -94,6 +94,11 @@ type MapboxProjection = 'globe' | 'mercator'
 type MapboxLanguage = 'zh-Hans' | 'en'
 type MapboxLanguagePreference = 'auto' | MapboxLanguage
 type MapFocusBounds = [[number, number], [number, number]]
+type MapPointFocusOptions = {
+  center: [number, number]
+  zoom: number
+  duration?: number
+}
 type LanguageConfigurableMap = mapboxgl.Map & {
   setLanguage?: (language?: MapboxLanguage) => mapboxgl.Map
 }
@@ -585,6 +590,24 @@ function MapboxCanvasComponent({
     map.fitBounds(bounds, {
       padding: measureMapFocusPadding(mapNode),
       duration,
+    })
+  }, [])
+
+  const flyToPointInVisibleViewport = useCallback(({
+    center,
+    zoom,
+    duration,
+  }: MapPointFocusOptions) => {
+    const map = mapRef.current
+    const mapNode = mapNodeRef.current
+    if (!map || !mapNode) return
+
+    map.flyTo({
+      center,
+      zoom,
+      ...(duration === undefined ? {} : { duration }),
+      padding: measureMapFocusPadding(mapNode),
+      retainPadding: false,
     })
   }, [])
 
@@ -1282,12 +1305,12 @@ function MapboxCanvasComponent({
 
     stopGlobeRotation()
     navigator.geolocation.getCurrentPosition((position) => {
-      mapRef.current?.flyTo({
+      flyToPointInVisibleViewport({
         center: [position.coords.longitude, position.coords.latitude],
         zoom: 14,
       })
     })
-  }, [stopGlobeRotation])
+  }, [flyToPointInVisibleViewport, stopGlobeRotation])
 
   const zoomIn = useCallback(() => {
     stopGlobeRotation()

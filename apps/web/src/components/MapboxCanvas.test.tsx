@@ -1599,6 +1599,47 @@ describe('MapboxCanvas footprint vector tiles', () => {
     ])
   })
 
+  it('keeps the located point inside the visible viewport without retaining camera padding', async () => {
+    const { mapRecords } = mockMapboxRuntime()
+    const getCurrentPosition = vi.fn((success: PositionCallback) => {
+      success({
+        coords: {
+          latitude: 31.23,
+          longitude: 121.47,
+          accuracy: 10,
+          altitude: null,
+          altitudeAccuracy: null,
+          heading: null,
+          speed: null,
+        },
+        timestamp: 0,
+      })
+    })
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      geolocation: { getCurrentPosition },
+    })
+    const { MapboxCanvas } = await import('./MapboxCanvas')
+
+    const { container } = renderMapFocusShell(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        timeRange={selectedRange}
+      />,
+    )
+    mockMapFocusShellRects(container)
+
+    fireEvent.click(screen.getByRole('button', { name: '定位当前位置' }))
+
+    expect(getCurrentPosition).toHaveBeenCalledTimes(1)
+    expect(mapRecords[0].flyToCalls).toEqual([{
+      center: [121.47, 31.23],
+      zoom: 14,
+      padding: { top: 64, right: 384, bottom: 64, left: 384 },
+      retainPadding: false,
+    }])
+  })
+
   it('zooms the globe out to zoom 1.75 while keeping the current center before starting slow rotation', async () => {
     const { mapRecords } = mockMapboxRuntime()
     const { MapboxCanvas } = await import('./MapboxCanvas')
