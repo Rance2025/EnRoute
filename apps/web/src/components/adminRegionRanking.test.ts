@@ -123,11 +123,25 @@ describe('buildAdminRegionRanking', () => {
         { regionId: 'lower', displayValue: '1.3 公里', ratio: 1_250 / 1_251 },
       ])
   })
+
+  it('keeps a positive sub-meter distance visible in the ranking', () => {
+    const rows = buildAdminRegionRanking([
+      createMetric('sub-meter', '亚米距离', 1, 1, 0.49),
+    ], 'distance')
+
+    expect(rows.map(({ metricValue, displayValue, ratio }) => ({
+      metricValue,
+      displayValue,
+      ratio,
+    }))).toEqual([
+      { metricValue: 0.49, displayValue: '1 米', ratio: 1 },
+    ])
+  })
 })
 
 describe('formatAdminRegionRankingValue', () => {
   it('formats footprint counts as zh-CN integers without a suffix', () => {
-    expect(formatAdminRegionRankingValue(12_120, 'footprint')).toBe('12,120')
+    expect(formatAdminRegionRankingValue('footprint', 12_120)).toBe('12,120')
   })
 
   it.each([
@@ -138,15 +152,16 @@ describe('formatAdminRegionRankingValue', () => {
     [24 * 60 * 60, '1 天'],
     [36 * 60 * 60, '1.5 天'],
   ])('formats %i seconds as %s', (value, expected) => {
-    expect(formatAdminRegionRankingValue(value, 'time')).toBe(expected)
+    expect(formatAdminRegionRankingValue('time', value)).toBe(expected)
   })
 
   it.each([
     [999, '999 米'],
+    [999.6, '1,000 米'],
     [1_000, '1 公里'],
     [1_250, '1.3 公里'],
-  ])('formats %i meters as %s', (value, expected) => {
-    expect(formatAdminRegionRankingValue(value, 'distance')).toBe(expected)
+  ])('formats %s meters as %s', (value, expected) => {
+    expect(formatAdminRegionRankingValue('distance', value)).toBe(expected)
   })
 })
 
@@ -155,7 +170,9 @@ describe('formatAdminRegionRankingAriaValue', () => {
     ['footprint', 12_120, '足迹点 12,120 个'],
     ['time', 5_400, '累计时间 5,400 秒'],
     ['distance', 1_250, '移动距离 1,250 米'],
+    ['distance', 0.1 + 0.2, '移动距离 0.3 米'],
+    ['distance', 0.0009, '移动距离 小于 0.001 米'],
   ] as const)('formats %s with its full base unit', (metric, value, expected) => {
-    expect(formatAdminRegionRankingAriaValue(value, metric)).toBe(expected)
+    expect(formatAdminRegionRankingAriaValue(metric, value)).toBe(expected)
   })
 })

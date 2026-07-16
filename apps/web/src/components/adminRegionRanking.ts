@@ -18,8 +18,8 @@ const DECIMAL_FORMATTER = new Intl.NumberFormat('zh-CN', {
   maximumFractionDigits: 1,
 })
 
-const FULL_VALUE_FORMATTER = new Intl.NumberFormat('zh-CN', {
-  maximumFractionDigits: 20,
+const ARIA_VALUE_FORMATTER = new Intl.NumberFormat('zh-CN', {
+  maximumFractionDigits: 3,
 })
 
 const METRIC_VALUE_SELECTORS: Record<
@@ -64,15 +64,15 @@ export function buildAdminRegionRanking(
     ...regionMetric,
     rank: index + 1,
     metricValue,
-    displayValue: formatAdminRegionRankingValue(metricValue, metric),
-    ariaValue: formatAdminRegionRankingAriaValue(metricValue, metric),
+    displayValue: formatAdminRegionRankingValue(metric, metricValue),
+    ariaValue: formatAdminRegionRankingAriaValue(metric, metricValue),
     ratio: Math.min(1, Math.max(0.02, metricValue / maxValue)),
   }))
 }
 
 export function formatAdminRegionRankingValue(
-  value: number,
   metric: AdminRegionRankingMetric,
+  value: number,
 ): string {
   if (metric === 'footprint') {
     return INTEGER_FORMATTER.format(value)
@@ -89,16 +89,21 @@ export function formatAdminRegionRankingValue(
   }
 
   if (value < 1_000) {
-    return `${INTEGER_FORMATTER.format(value)} 米`
+    const visibleMeters = value > 0 ? Math.max(1, value) : value
+    return `${INTEGER_FORMATTER.format(visibleMeters)} 米`
   }
   return `${DECIMAL_FORMATTER.format(value / 1_000)} 公里`
 }
 
 export function formatAdminRegionRankingAriaValue(
-  value: number,
   metric: AdminRegionRankingMetric,
+  value: number,
 ): string {
-  const formattedValue = FULL_VALUE_FORMATTER.format(value)
+  if (metric === 'distance' && value > 0 && value < 0.001) {
+    return '移动距离 小于 0.001 米'
+  }
+
+  const formattedValue = ARIA_VALUE_FORMATTER.format(value)
   if (metric === 'footprint') return `足迹点 ${formattedValue} 个`
   if (metric === 'time') return `累计时间 ${formattedValue} 秒`
   return `移动距离 ${formattedValue} 米`
