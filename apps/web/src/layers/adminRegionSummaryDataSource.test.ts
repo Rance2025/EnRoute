@@ -19,17 +19,31 @@ function createPayload() {
     visitedCount: 2,
     totalCount: 2,
     visitedPath: 'M1 1L5 1L5 5Z',
-    rankings: [
+    regionMetrics: [
       {
-        rank: 1,
         regionId: '310100',
         name: 'Shanghai',
         footprintCount: 4,
+        stayDurationSeconds: 3_600,
+        travelDistanceMeters: 12_345.67,
         bounds: {
           west: 120.85,
           south: 30.65,
           east: 122.15,
           north: 31.9,
+        },
+      },
+      {
+        regionId: '330100',
+        name: 'Hangzhou',
+        footprintCount: 0,
+        stayDurationSeconds: 1_800,
+        travelDistanceMeters: 1_250.5,
+        bounds: {
+          west: 119.35,
+          south: 29.18,
+          east: 120.72,
+          north: 30.57,
         },
       },
     ],
@@ -102,24 +116,87 @@ describe('loadAdminRegionSummary', () => {
       ...createPayload(),
       visitedPath: undefined,
     })],
-    ['a zero ranking position', () => ({
+    ['a legacy rankings-only payload', () => {
+      const payload = createPayload()
+      return {
+        depth: payload.depth,
+        visitedRegionIds: payload.visitedRegionIds,
+        visitedCount: payload.visitedCount,
+        totalCount: payload.totalCount,
+        visitedPath: payload.visitedPath,
+        rankings: [{
+          rank: 1,
+          regionId: '310100',
+          name: 'Shanghai',
+          footprintCount: 4,
+          bounds: createPayload().regionMetrics[0].bounds,
+        }],
+      }
+    }],
+    ['a missing stay duration', () => ({
       ...createPayload(),
-      rankings: [{ ...createPayload().rankings[0], rank: 0 }],
+      regionMetrics: [{
+        ...createPayload().regionMetrics[0],
+        stayDurationSeconds: undefined,
+      }],
+    })],
+    ['a missing travel distance', () => ({
+      ...createPayload(),
+      regionMetrics: [{
+        ...createPayload().regionMetrics[0],
+        travelDistanceMeters: undefined,
+      }],
     })],
     ['a negative footprint count', () => ({
       ...createPayload(),
-      rankings: [{ ...createPayload().rankings[0], footprintCount: -1 }],
+      regionMetrics: [{ ...createPayload().regionMetrics[0], footprintCount: -1 }],
     })],
-    ['a non-finite ranking bound', () => ({
+    ['a fractional footprint count', () => ({
       ...createPayload(),
-      rankings: [{
-        ...createPayload().rankings[0],
-        bounds: { ...createPayload().rankings[0].bounds, east: Number.POSITIVE_INFINITY },
+      regionMetrics: [{ ...createPayload().regionMetrics[0], footprintCount: 1.5 }],
+    })],
+    ['a negative stay duration', () => ({
+      ...createPayload(),
+      regionMetrics: [{ ...createPayload().regionMetrics[0], stayDurationSeconds: -1 }],
+    })],
+    ['a fractional stay duration', () => ({
+      ...createPayload(),
+      regionMetrics: [{ ...createPayload().regionMetrics[0], stayDurationSeconds: 1.5 }],
+    })],
+    ['a negative travel distance', () => ({
+      ...createPayload(),
+      regionMetrics: [{ ...createPayload().regionMetrics[0], travelDistanceMeters: -1 }],
+    })],
+    ['an infinite travel distance', () => ({
+      ...createPayload(),
+      regionMetrics: [{
+        ...createPayload().regionMetrics[0],
+        travelDistanceMeters: Number.POSITIVE_INFINITY,
       }],
     })],
-    ['an array instead of ranking bounds', () => ({
+    ['a NaN travel distance', () => ({
       ...createPayload(),
-      rankings: [{ ...createPayload().rankings[0], bounds: [120, 30, 122, 32] }],
+      regionMetrics: [{
+        ...createPayload().regionMetrics[0],
+        travelDistanceMeters: Number.NaN,
+      }],
+    })],
+    ['a non-finite metric bound', () => ({
+      ...createPayload(),
+      regionMetrics: [{
+        ...createPayload().regionMetrics[0],
+        bounds: {
+          ...createPayload().regionMetrics[0].bounds,
+          east: Number.POSITIVE_INFINITY,
+        },
+      }],
+    })],
+    ['an array instead of metric bounds', () => ({
+      ...createPayload(),
+      regionMetrics: [{
+        ...createPayload().regionMetrics[0],
+        bounds: [120, 30, 122, 32],
+      }],
     })],
   ])('rejects malformed payloads with %s', async (_description, createInvalidPayload) => {
     const fetcher = vi.fn(async () => createJsonResponse(createInvalidPayload()))

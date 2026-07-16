@@ -8,11 +8,12 @@ export type AdminRegionBounds = {
   north: number
 }
 
-export type AdminRegionRanking = {
-  rank: number
+export type AdminRegionMetric = {
   regionId: string
   name: string
   footprintCount: number
+  stayDurationSeconds: number
+  travelDistanceMeters: number
   bounds: AdminRegionBounds
 }
 
@@ -22,7 +23,7 @@ export type AdminRegionSummary = {
   visitedCount: number
   totalCount: number
   visitedPath: string
-  rankings: AdminRegionRanking[]
+  regionMetrics: AdminRegionMetric[]
 }
 
 type LoadAdminRegionSummaryOptions = {
@@ -67,8 +68,8 @@ function isAdminRegionSummary(value: unknown): value is AdminRegionSummary {
     isNonNegativeInteger(value.visitedCount) &&
     isNonNegativeInteger(value.totalCount) &&
     typeof value.visitedPath === 'string' &&
-    Array.isArray(value.rankings) &&
-    value.rankings.every(isAdminRegionRanking)
+    Array.isArray(value.regionMetrics) &&
+    value.regionMetrics.every(isAdminRegionMetric)
   )
 }
 
@@ -76,13 +77,14 @@ function isAdminRegionDepth(value: unknown): value is AdminRegionDepth {
   return value === 1 || value === 2 || value === 3 || value === 4
 }
 
-function isAdminRegionRanking(value: unknown): value is AdminRegionRanking {
+function isAdminRegionMetric(value: unknown): value is AdminRegionMetric {
   return (
     isRecord(value) &&
-    isPositiveInteger(value.rank) &&
     typeof value.regionId === 'string' &&
     typeof value.name === 'string' &&
     isNonNegativeInteger(value.footprintCount) &&
+    isNonNegativeInteger(value.stayDurationSeconds) &&
+    isNonNegativeFiniteNumber(value.travelDistanceMeters) &&
     isAdminRegionBounds(value.bounds)
   )
 }
@@ -101,12 +103,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-function isPositiveInteger(value: unknown): value is number {
-  return typeof value === 'number' && Number.isInteger(value) && value > 0
-}
-
 function isNonNegativeInteger(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value >= 0
+}
+
+function isNonNegativeFiniteNumber(value: unknown): value is number {
+  return isFiniteNumber(value) && value >= 0
 }
 
 function isFiniteNumber(value: unknown): value is number {
