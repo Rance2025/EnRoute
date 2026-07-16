@@ -2158,7 +2158,7 @@ describe('map chrome layout', () => {
     expect(hoverNameRule).toContain('color: #101915')
     expect(selectedNameRule).toContain('color: #101915')
     expect(hoverFillRule).toContain('background: #2c8572')
-    expect(selectedFillRule).toContain('background: #123f35')
+    expect(selectedFillRule).toContain('background: #2c8572')
     expect(valueRule).toContain(
       'font-family: "Bahnschrift", "Arial Narrow", "Roboto Condensed", "Helvetica Neue", sans-serif',
     )
