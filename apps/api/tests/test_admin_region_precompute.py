@@ -93,6 +93,14 @@ def test_initialize_admin_region_summary_schema_creates_constrained_without_rowi
         ) VALUES (4, 20260716, '310117', 0, 60, 12.5)
         """,
     )
+    assert connection.execute(
+        """
+        SELECT typeof(footprint_count), typeof(stay_duration_seconds),
+               typeof(travel_distance_meters)
+        FROM admin_region_daily_stats
+        WHERE region_id = '310117'
+        """,
+    ).fetchone() == ("integer", "integer", "real")
     for footprint_count, stay_duration_seconds, travel_distance_meters in (
         (0, 0, 0),
         (-1, 0, 0),
@@ -122,6 +130,36 @@ def test_initialize_admin_region_summary_schema_creates_constrained_without_rowi
               stay_duration_seconds, travel_distance_meters
             ) VALUES (5, 20260715, 'invalid-depth', 1, 0, 0)
             """,
+        )
+
+
+@pytest.mark.parametrize(
+    ("footprint_count", "stay_duration_seconds", "travel_distance_meters"),
+    (
+        ("not-a-number", 0, 0),
+        (0, "not-a-number", 0),
+        (0, 0, "not-a-number"),
+        (0, 1.5, 0),
+    ),
+)
+def test_admin_region_daily_stats_schema_rejects_invalid_metric_types(
+    footprint_count: object,
+    stay_duration_seconds: object,
+    travel_distance_meters: object,
+) -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+    connection = sqlite3.connect(":memory:")
+    precompute.initialize_admin_region_summary_schema(connection)
+
+    with pytest.raises(sqlite3.IntegrityError):
+        connection.execute(
+            """
+            INSERT INTO admin_region_daily_stats (
+              depth, day, region_id, footprint_count,
+              stay_duration_seconds, travel_distance_meters
+            ) VALUES (4, 20260716, 'invalid-types', ?, ?, ?)
+            """,
+            (footprint_count, stay_duration_seconds, travel_distance_meters),
         )
 
 
@@ -1062,6 +1100,117 @@ def test_replace_admin_region_summary_precompute_cleans_stale_next_after_rollbac
                     day=20260716,
                     region_id="invalid-daily-stat",
                     footprint_count=0,
+                    stay_duration_seconds=0,
+                    travel_distance_meters=0,
+                ),
+            ),
+            base_source_signature="replacement-base-signature",
+            path_source_signature="replacement-path-signature",
+            daily_source_signature="replacement-daily-signature",
+        )
+
+    assert snapshot_summary_precompute(connection) == previous_rows
+    assert connection.execute(
+        """
+        SELECT 1
+        FROM sqlite_master
+        WHERE type = 'table' AND name = 'admin_region_daily_stats_next'
+        """,
+    ).fetchone() is None
+
+
+def test_replace_admin_region_summary_precompute_preserves_original_failure(
+    tmp_path: Path,
+) -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+    database = tmp_path / "footprints.sqlite"
+    setup_connection = create_precompute_source_database(database)
+    precompute.build_admin_region_summary_precompute(setup_connection, updated_at=123)
+    setup_connection.executescript(
+        """
+        CREATE TABLE admin_region_daily_stats_next (
+          marker TEXT NOT NULL
+        );
+        INSERT INTO admin_region_daily_stats_next (marker) VALUES ('stale');
+        """,
+    )
+    setup_connection.commit()
+    setup_connection.close()
+
+    class FailSecondNextDropConnection(sqlite3.Connection):
+        next_drop_count = 0
+
+        def execute(self, sql: str, parameters=(), /):
+            if sql.strip().startswith("DROP TABLE IF EXISTS admin_region_daily_stats_next"):
+                self.next_drop_count += 1
+                if self.next_drop_count == 2:
+                    raise sqlite3.OperationalError("forced cleanup failure")
+            return super().execute(sql, parameters)
+
+    connection = sqlite3.connect(database, factory=FailSecondNextDropConnection)
+    connection.row_factory = sqlite3.Row
+
+    with pytest.raises(sqlite3.IntegrityError, match="CHECK constraint failed"):
+        precompute.replace_admin_region_summary_precompute(
+            connection,
+            base_records=(),
+            path_records=(),
+            daily_stat_rows=(
+                precompute.AdminRegionDailyStat(
+                    depth=4,
+                    day=20260716,
+                    region_id="invalid-daily-stat",
+                    footprint_count=0,
+                    stay_duration_seconds=0,
+                    travel_distance_meters=0,
+                ),
+            ),
+            base_source_signature="replacement-base-signature",
+            path_source_signature="replacement-path-signature",
+            daily_source_signature="replacement-daily-signature",
+        )
+
+    assert connection.next_drop_count == 1
+    assert connection.execute(
+        """
+        SELECT 1
+        FROM sqlite_master
+        WHERE type = 'table' AND name = 'admin_region_daily_stats_next'
+        """,
+    ).fetchone() is None
+
+
+def test_replace_admin_region_summary_precompute_rolls_back_post_swap_failure() -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+    connection = create_precompute_source_database()
+    precompute.build_admin_region_summary_precompute(connection, updated_at=123)
+    previous_rows = snapshot_summary_precompute(connection)
+    connection.execute(
+        f"""
+        CREATE TRIGGER reject_daily_signature_update
+        BEFORE UPDATE OF value ON footprint_meta
+        WHEN OLD.key = '{DAILY_STATS_SIGNATURE_KEY}'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced post-swap signature failure');
+        END
+        """,
+    )
+    connection.commit()
+
+    with pytest.raises(
+        sqlite3.IntegrityError,
+        match="forced post-swap signature failure",
+    ):
+        precompute.replace_admin_region_summary_precompute(
+            connection,
+            base_records=(),
+            path_records=(),
+            daily_stat_rows=(
+                precompute.AdminRegionDailyStat(
+                    depth=4,
+                    day=20260716,
+                    region_id="valid-replacement",
+                    footprint_count=1,
                     stay_duration_seconds=0,
                     travel_distance_meters=0,
                 ),

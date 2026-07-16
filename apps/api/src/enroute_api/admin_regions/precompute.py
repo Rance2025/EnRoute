@@ -5,7 +5,6 @@ import math
 import sqlite3
 import time
 from collections import Counter
-from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -156,6 +155,9 @@ def _create_admin_region_daily_stats_table(
           travel_distance_meters REAL NOT NULL,
           PRIMARY KEY (depth, day, region_id),
           CHECK (depth BETWEEN 1 AND 4),
+          CHECK (typeof(footprint_count) = 'integer'),
+          CHECK (typeof(stay_duration_seconds) = 'integer'),
+          CHECK (typeof(travel_distance_meters) IN ('integer', 'real')),
           CHECK (footprint_count >= 0),
           CHECK (stay_duration_seconds >= 0),
           CHECK (travel_distance_meters >= 0),
@@ -802,12 +804,13 @@ def replace_admin_region_summary_precompute(
     path_source_signature: str,
     daily_source_signature: str,
 ) -> None:
-    with _clean_admin_region_daily_stats_next_after_failure(connection), connection:
+    connection.execute(
+        f"DROP TABLE IF EXISTS {_ADMIN_REGION_DAILY_STATS_NEXT_TABLE}",
+    )
+    connection.commit()
+    with connection:
         if not connection.in_transaction:
             connection.execute("BEGIN")
-        connection.execute(
-            f"DROP TABLE IF EXISTS {_ADMIN_REGION_DAILY_STATS_NEXT_TABLE}",
-        )
         _create_admin_region_daily_stats_table(connection, replacement=True)
         connection.executemany(
             f"""
@@ -892,20 +895,6 @@ def replace_admin_region_summary_precompute(
             key=DAILY_STATS_SIGNATURE_KEY,
             value=daily_source_signature,
         )
-
-
-@contextmanager
-def _clean_admin_region_daily_stats_next_after_failure(
-    connection: sqlite3.Connection,
-):
-    try:
-        yield
-    except Exception:
-        connection.execute(
-            f"DROP TABLE IF EXISTS {_ADMIN_REGION_DAILY_STATS_NEXT_TABLE}",
-        )
-        connection.commit()
-        raise
 
 
 def set_precompute_signature(
