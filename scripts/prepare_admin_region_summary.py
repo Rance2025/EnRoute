@@ -33,7 +33,8 @@ def main(argv: Sequence[str] | None = None, *, root_dir: Path | str | None = Non
     print(
         f"Built {result.thumbnail_base_count} thumbnail bases, "
         f"{result.thumbnail_region_path_count} region paths, and "
-        f"{result.daily_stat_count} daily stats into {db_path}",
+        f"{result.daily_stat_count} daily stats with "
+        f"{result.unresolved_footprint_count} unresolved footprints into {db_path}",
     )
     return 0
 

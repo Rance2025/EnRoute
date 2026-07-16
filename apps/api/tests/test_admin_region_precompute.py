@@ -790,11 +790,11 @@ def test_daily_stats_precompute_rolls_footprints_up_four_depths_in_shanghai_days
     insert_raw_footprint(connection, timestamp_seconds=after_midnight, region_id="310101")
     insert_raw_footprint(connection, timestamp_seconds=after_midnight + 1, region_id="310101")
 
-    rows = precompute.build_admin_region_daily_stat_rows(connection)
+    result = precompute.build_admin_region_daily_stat_rows(connection)
 
     assert [
         (row.depth, row.day, row.region_id, row.footprint_count)
-        for row in rows
+        for row in result.rows
     ] == [
         (1, 20260714, "CN", 1),
         (1, 20260715, "CN", 2),
@@ -805,6 +805,222 @@ def test_daily_stats_precompute_rolls_footprints_up_four_depths_in_shanghai_days
         (4, 20260714, "310101", 1),
         (4, 20260715, "310101", 2),
     ]
+    assert result.unresolved_footprint_count == 0
+
+
+def test_daily_stats_assigns_a_48_hour_interval_only_to_the_later_region_chain() -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+    connection = sqlite3.connect(":memory:")
+    connection.row_factory = sqlite3.Row
+    initialize_schema(connection)
+    for suffix in ("a", "b"):
+        insert_region(connection, region_id=f"country-{suffix}", level=1)
+        insert_region(
+            connection,
+            region_id=f"province-{suffix}",
+            level=2,
+            parent_id=f"country-{suffix}",
+        )
+        insert_region(
+            connection,
+            region_id=f"city-{suffix}",
+            level=3,
+            parent_id=f"province-{suffix}",
+        )
+        insert_region(
+            connection,
+            region_id=f"district-{suffix}",
+            level=4,
+            parent_id=f"city-{suffix}",
+        )
+    start = int(datetime(2026, 7, 14, 4, 0, tzinfo=timezone.utc).timestamp())
+    end = start + 48 * 60 * 60
+    insert_raw_footprint(
+        connection,
+        timestamp_seconds=start,
+        region_id="district-a",
+        distance=987.0,
+    )
+    insert_raw_footprint(
+        connection,
+        timestamp_seconds=end,
+        region_id="district-b",
+        distance=1200.0,
+    )
+
+    result = precompute.build_admin_region_daily_stat_rows(connection)
+
+    assert result.unresolved_footprint_count == 0
+    for depth, later_region_id in enumerate(
+        ("country-b", "province-b", "city-b", "district-b"),
+        start=1,
+    ):
+        later_rows = [
+            row
+            for row in result.rows
+            if row.depth == depth and row.region_id == later_region_id
+        ]
+        assert sum(row.footprint_count for row in later_rows) == 1
+        assert sum(row.stay_duration_seconds for row in later_rows) == 172800
+        assert math.fsum(row.travel_distance_meters for row in later_rows) == pytest.approx(
+            1200.0,
+        )
+    for earlier_region_id in ("country-a", "province-a", "city-a", "district-a"):
+        earlier_rows = [row for row in result.rows if row.region_id == earlier_region_id]
+        assert sum(row.footprint_count for row in earlier_rows) == 1
+        assert sum(row.stay_duration_seconds for row in earlier_rows) == 0
+        assert math.fsum(row.travel_distance_meters for row in earlier_rows) == 0.0
+
+
+def test_daily_stats_splits_interval_at_shanghai_midnight() -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+    connection = sqlite3.connect(":memory:")
+    connection.row_factory = sqlite3.Row
+    initialize_schema(connection)
+    insert_region(connection, region_id="country", level=1)
+    insert_region(connection, region_id="province", level=2, parent_id="country")
+    insert_region(connection, region_id="city", level=3, parent_id="province")
+    insert_region(connection, region_id="district", level=4, parent_id="city")
+    before_midnight = int(
+        datetime(2026, 7, 14, 15, 59, 30, tzinfo=timezone.utc).timestamp()
+    )
+    after_midnight = int(
+        datetime(2026, 7, 14, 16, 1, tzinfo=timezone.utc).timestamp()
+    )
+    insert_raw_footprint(
+        connection,
+        timestamp_seconds=before_midnight,
+        region_id="district",
+    )
+    insert_raw_footprint(
+        connection,
+        timestamp_seconds=after_midnight,
+        region_id="district",
+        distance=90.0,
+    )
+
+    result = precompute.build_admin_region_daily_stat_rows(connection)
+
+    district_rows = [row for row in result.rows if row.region_id == "district"]
+    assert [
+        (
+            row.day,
+            row.footprint_count,
+            row.stay_duration_seconds,
+            row.travel_distance_meters,
+        )
+        for row in district_rows
+    ] == [
+        (20260714, 1, 30, 30.0),
+        (20260715, 1, 60, 60.0),
+    ]
+
+
+def test_daily_stats_keeps_zero_footprint_rows_for_full_intermediate_days() -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+    connection = sqlite3.connect(":memory:")
+    connection.row_factory = sqlite3.Row
+    initialize_schema(connection)
+    insert_region(connection, region_id="country-a", level=1)
+    insert_region(connection, region_id="country-b", level=1)
+    start = int(datetime(2026, 7, 14, 15, 59, 30, tzinfo=timezone.utc).timestamp())
+    end = int(datetime(2026, 7, 16, 16, 0, 30, tzinfo=timezone.utc).timestamp())
+    distance = 777.7
+    insert_raw_footprint(connection, timestamp_seconds=start, region_id="country-a")
+    insert_raw_footprint(
+        connection,
+        timestamp_seconds=end,
+        region_id="country-b",
+        distance=distance,
+    )
+
+    result = precompute.build_admin_region_daily_stat_rows(connection)
+
+    later_rows = [row for row in result.rows if row.region_id == "country-b"]
+    assert [row.day for row in later_rows] == [20260714, 20260715, 20260716, 20260717]
+    assert [row.footprint_count for row in later_rows] == [0, 0, 0, 1]
+    assert [row.stay_duration_seconds for row in later_rows] == [30, 86400, 86400, 30]
+    assert sum(row.stay_duration_seconds for row in later_rows) == end - start
+    assert math.fsum(row.travel_distance_meters for row in later_rows) == pytest.approx(
+        distance,
+    )
+
+
+@pytest.mark.parametrize(
+    ("start_timestamp", "end_timestamp", "distance"),
+    (
+        (100, 100, 0.0),
+        (101, 100, 0.0),
+        (100, 101, -0.1),
+        (100, 101, math.inf),
+    ),
+)
+def test_split_interval_by_shanghai_day_rejects_invalid_interval_inputs(
+    start_timestamp: int,
+    end_timestamp: int,
+    distance: float,
+) -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+
+    with pytest.raises(precompute.AdminRegionPrecomputeSourceError):
+        precompute.split_interval_by_shanghai_day(
+            start_timestamp,
+            end_timestamp,
+            distance,
+        )
+
+
+@pytest.mark.parametrize("distance", (-1.0, math.inf))
+def test_daily_stats_rejects_invalid_distance_on_the_first_footprint(distance: float) -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+    connection = sqlite3.connect(":memory:")
+    connection.row_factory = sqlite3.Row
+    initialize_schema(connection)
+    insert_region(connection, region_id="country", level=1)
+    insert_raw_footprint(
+        connection,
+        timestamp_seconds=100,
+        region_id="country",
+        distance=distance,
+    )
+
+    with pytest.raises(precompute.AdminRegionPrecomputeSourceError, match="distance"):
+        precompute.build_admin_region_daily_stat_rows(connection)
+
+
+def test_daily_stats_counts_unresolved_regions_without_fabricating_metrics() -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+    connection = sqlite3.connect(":memory:")
+    connection.row_factory = sqlite3.Row
+    initialize_schema(connection)
+    insert_region(connection, region_id="country", level=1)
+    insert_raw_footprint(connection, timestamp_seconds=100, region_id="country")
+    insert_raw_footprint(
+        connection,
+        timestamp_seconds=110,
+        region_id="missing-region",
+        distance=9.0,
+    )
+    insert_raw_footprint(
+        connection,
+        timestamp_seconds=120,
+        region_id="country",
+        distance=12.0,
+    )
+
+    result = precompute.build_admin_region_daily_stat_rows(connection)
+
+    assert result.unresolved_footprint_count == 1
+    assert all(row.region_id != "missing-region" for row in result.rows)
+    assert [
+        (
+            row.region_id,
+            row.footprint_count,
+            row.stay_duration_seconds,
+            row.travel_distance_meters,
+        )
+        for row in result.rows
+    ] == [("country", 2, 10, 12.0)]
 
 
 def test_build_admin_region_summary_precompute_atomically_populates_only_new_tables() -> None:
@@ -1653,15 +1869,16 @@ def insert_raw_footprint(
     *,
     timestamp_seconds: int,
     region_id: str | None,
+    distance: float = 0.0,
 ) -> None:
     connection.execute(
         """
         INSERT INTO footprints (
           timestamp_seconds, longitude, latitude, accuracy, speed,
           distance, heading, altitude, region_id
-        ) VALUES (?, 121.47, 31.23, 5, 0, 0, 0, 3, ?)
+        ) VALUES (?, 121.47, 31.23, 5, 0, ?, 0, 3, ?)
         """,
-        (timestamp_seconds, region_id),
+        (timestamp_seconds, distance, region_id),
     )
 
 

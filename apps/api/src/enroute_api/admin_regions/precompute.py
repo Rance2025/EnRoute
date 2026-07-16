@@ -6,8 +6,9 @@ import sqlite3
 import time
 from collections import Counter
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime, time as datetime_time, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from shapely.geometry import GeometryCollection, MultiPolygon, Polygon, box, shape
 from shapely.geometry.base import BaseGeometry
@@ -72,6 +73,19 @@ class AdminRegionDailyStat:
 
 
 @dataclass(frozen=True)
+class AdminRegionIntervalDayShare:
+    day: int
+    duration_seconds: int
+    travel_distance_meters: float
+
+
+@dataclass(frozen=True)
+class AdminRegionDailyStatBuildResult:
+    rows: tuple[AdminRegionDailyStat, ...]
+    unresolved_footprint_count: int
+
+
+@dataclass(frozen=True)
 class AdminRegionThumbnailBaseRecord:
     scope: str
     view_box: str
@@ -99,6 +113,7 @@ class AdminRegionSummaryPrecomputeResult:
     thumbnail_base_count: int
     thumbnail_region_path_count: int
     daily_stat_count: int
+    unresolved_footprint_count: int
 
 
 def initialize_admin_region_summary_schema(connection: sqlite3.Connection) -> None:
@@ -417,9 +432,67 @@ def precomputed_geographic_bounds(depth: int) -> tuple[float, float, float, floa
     return west, CHINA_THUMBNAIL_SOUTH_BOUND, east, north
 
 
+def split_interval_by_shanghai_day(
+    start_timestamp: int,
+    end_timestamp: int,
+    distance: float,
+) -> tuple[AdminRegionIntervalDayShare, ...]:
+    if end_timestamp <= start_timestamp:
+        raise AdminRegionPrecomputeSourceError(
+            "footprint interval end timestamp must be after start timestamp",
+        )
+    resolved_distance = validate_footprint_distance(distance)
+    shanghai_time_zone = ZoneInfo("Asia/Shanghai")
+    total_duration = end_timestamp - start_timestamp
+    current_timestamp = start_timestamp
+    allocated_distances: list[float] = []
+    shares: list[AdminRegionIntervalDayShare] = []
+    while current_timestamp < end_timestamp:
+        current_utc = datetime.fromtimestamp(current_timestamp, tz=timezone.utc)
+        current_shanghai = current_utc.astimezone(shanghai_time_zone)
+        next_midnight_shanghai = datetime.combine(
+            current_shanghai.date() + timedelta(days=1),
+            datetime_time.min,
+            tzinfo=shanghai_time_zone,
+        )
+        next_timestamp = min(
+            end_timestamp,
+            int(next_midnight_shanghai.astimezone(timezone.utc).timestamp()),
+        )
+        duration_seconds = next_timestamp - current_timestamp
+        if next_timestamp == end_timestamp:
+            share_distance = resolved_distance - math.fsum(allocated_distances)
+        else:
+            share_distance = resolved_distance * duration_seconds / total_duration
+        shares.append(
+            AdminRegionIntervalDayShare(
+                day=encode_day(current_shanghai.date()),
+                duration_seconds=duration_seconds,
+                travel_distance_meters=share_distance,
+            ),
+        )
+        allocated_distances.append(share_distance)
+        current_timestamp = next_timestamp
+    return tuple(shares)
+
+
+def validate_footprint_distance(distance: object) -> float:
+    try:
+        resolved_distance = float(distance)
+    except (TypeError, ValueError) as error:
+        raise AdminRegionPrecomputeSourceError(
+            "footprint distance must be a finite non-negative number",
+        ) from error
+    if not math.isfinite(resolved_distance) or resolved_distance < 0:
+        raise AdminRegionPrecomputeSourceError(
+            "footprint distance must be a finite non-negative number",
+        )
+    return resolved_distance
+
+
 def build_admin_region_daily_stat_rows(
     connection: sqlite3.Connection,
-) -> tuple[AdminRegionDailyStat, ...]:
+) -> AdminRegionDailyStatBuildResult:
     level_by_region = {
         str(row[0]): int(row[1])
         for row in connection.execute("SELECT id, level FROM admin_regions")
@@ -447,30 +520,69 @@ def build_admin_region_daily_stat_rows(
         chain_cache[region_id] = result
         return result
 
-    counts: Counter[tuple[int, int, str]] = Counter()
+    footprint_counts: Counter[tuple[int, int, str]] = Counter()
+    stay_durations: Counter[tuple[int, int, str]] = Counter()
+    travel_distances: dict[tuple[int, int, str], float] = {}
+    unresolved_footprint_count = 0
+    previous_timestamp: int | None = None
     for row in connection.execute(
         """
-        SELECT timestamp_seconds, region_id
+        SELECT timestamp_seconds, region_id, distance
         FROM footprints
-        WHERE region_id IS NOT NULL
-          AND TRIM(region_id) != ''
         ORDER BY timestamp_seconds
         """,
     ):
-        day = encode_day(shanghai_date_from_timestamp(int(row[0])))
-        for depth, ancestor_id in resolve_depth_regions(str(row[1])):
-            counts[(depth, day, ancestor_id)] += 1
-
-    return tuple(
-        AdminRegionDailyStat(
-            depth=depth,
-            day=day,
-            region_id=region_id,
-            footprint_count=count,
-            stay_duration_seconds=0,
-            travel_distance_meters=0.0,
+        timestamp = int(row[0])
+        distance = validate_footprint_distance(row[2])
+        raw_region_id = row[1]
+        depth_regions = (
+            resolve_depth_regions(str(raw_region_id))
+            if raw_region_id is not None and str(raw_region_id).strip()
+            else ()
         )
-        for (depth, day, region_id), count in sorted(counts.items())
+        if depth_regions:
+            footprint_day = encode_day(shanghai_date_from_timestamp(timestamp))
+            for depth, ancestor_id in depth_regions:
+                footprint_counts[(depth, footprint_day, ancestor_id)] += 1
+        else:
+            unresolved_footprint_count += 1
+
+        if previous_timestamp is not None:
+            if timestamp <= previous_timestamp:
+                raise AdminRegionPrecomputeSourceError(
+                    "footprint timestamps must be strictly increasing",
+                )
+            if depth_regions:
+                for share in split_interval_by_shanghai_day(
+                    previous_timestamp,
+                    timestamp,
+                    distance,
+                ):
+                    for depth, ancestor_id in depth_regions:
+                        key = (depth, share.day, ancestor_id)
+                        stay_durations[key] += share.duration_seconds
+                        travel_distances[key] = math.fsum(
+                            (
+                                travel_distances.get(key, 0.0),
+                                share.travel_distance_meters,
+                            ),
+                        )
+        previous_timestamp = timestamp
+
+    keys = set(footprint_counts) | set(stay_durations) | set(travel_distances)
+    return AdminRegionDailyStatBuildResult(
+        rows=tuple(
+            AdminRegionDailyStat(
+                depth=depth,
+                day=day,
+                region_id=region_id,
+                footprint_count=footprint_counts.get((depth, day, region_id), 0),
+                stay_duration_seconds=stay_durations.get((depth, day, region_id), 0),
+                travel_distance_meters=travel_distances.get((depth, day, region_id), 0.0),
+            )
+            for depth, day, region_id in sorted(keys)
+        ),
+        unresolved_footprint_count=unresolved_footprint_count,
     )
 
 
@@ -532,7 +644,8 @@ def build_admin_region_summary_precompute(
     )
     if not path_records:
         raise AdminRegionPrecomputeSourceError("admin-region thumbnail region paths are empty")
-    daily_stat_rows = build_admin_region_daily_stat_rows(connection)
+    daily_stat_result = build_admin_region_daily_stat_rows(connection)
+    daily_stat_rows = daily_stat_result.rows
     if not daily_stat_rows:
         raise AdminRegionPrecomputeSourceError("admin-region daily stats are empty")
     replace_admin_region_summary_precompute(
@@ -548,6 +661,7 @@ def build_admin_region_summary_precompute(
         thumbnail_base_count=len(base_records),
         thumbnail_region_path_count=len(path_records),
         daily_stat_count=len(daily_stat_rows),
+        unresolved_footprint_count=daily_stat_result.unresolved_footprint_count,
     )
 
 
