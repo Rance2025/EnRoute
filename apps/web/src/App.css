@@ -1906,8 +1906,6 @@
   gap: 14px;
   padding: var(--right-panel-shadow-buffer);
   overflow: visible;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(23, 62, 53, 0.2) transparent;
 }
 
 .right-context-panel__glass {
@@ -2467,9 +2465,19 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(23, 62, 53, 0.18) transparent;
   list-style: none;
+}
+
+@supports not selector(::-webkit-scrollbar) {
+  .right-context-panel__stack {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(23, 62, 53, 0.2) transparent;
+  }
+
+  .admin-region-ranking-card__list {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(23, 62, 53, 0.18) transparent;
+  }
 }
 
 .admin-region-ranking-card__list::-webkit-scrollbar {

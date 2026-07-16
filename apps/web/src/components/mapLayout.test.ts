@@ -2070,7 +2070,11 @@ describe('map chrome layout', () => {
 
   it('renders administrative region rankings as a compact trackless bar chart', () => {
     const cardRule = lastCssRule('.admin-region-ranking-card')
+    const rightPanelStackRule = cssRule('.right-context-panel__stack')
     const listRule = cssRule('.admin-region-ranking-card__list')
+    const firefoxScrollbarBlock = mediaBlock(
+      '@supports not selector(::-webkit-scrollbar)',
+    )
     const scrollbarRule = cssRule('.admin-region-ranking-card__list::-webkit-scrollbar')
     const scrollbarButtonRule = cssRule(
       '.admin-region-ranking-card__list::-webkit-scrollbar-button',
@@ -2109,8 +2113,16 @@ describe('map chrome layout', () => {
       'max-height: calc(var(--admin-region-rank-row-height) * 5)',
     )
     expect(listRule).toContain('scrollbar-gutter: stable')
-    expect(listRule).toContain('scrollbar-width: thin')
-    expect(listRule).toContain('scrollbar-color: rgba(23, 62, 53, 0.18) transparent')
+    expect(listRule).not.toContain('scrollbar-width: thin')
+    expect(listRule).not.toContain('scrollbar-color:')
+    expect(rightPanelStackRule).not.toContain('scrollbar-width: thin')
+    expect(rightPanelStackRule).not.toContain('scrollbar-color:')
+    expect(firefoxScrollbarBlock).toContain('.right-context-panel__stack')
+    expect(firefoxScrollbarBlock).toContain('.admin-region-ranking-card__list')
+    expect(firefoxScrollbarBlock).toContain('scrollbar-width: thin')
+    expect(firefoxScrollbarBlock).toContain(
+      'scrollbar-color: rgba(23, 62, 53, 0.18) transparent',
+    )
     expect(rowRule).toContain('height: var(--admin-region-rank-row-height)')
     expect(rowRule).toContain('grid-template-columns: 22px 4em minmax(0, 1fr) auto')
     expect(rowRule).toContain('padding: 0 10px 0 2px')
