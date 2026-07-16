@@ -70,7 +70,7 @@ describe('time range selection model', () => {
       })
       expect(selectPresetRange('quarter')).toMatchObject({
         start: '2026-07-01',
-        end: '2026-09-30',
+        end: '2026-08-03',
         anchorDate: '2026-08-03',
       })
     } finally {
@@ -448,8 +448,8 @@ describe('time range selection model', () => {
     expect(customRange).toMatchObject({
       mode: 'custom',
       start: '2026-06-14',
-      end: '2026-06-20',
-      anchorDate: '2026-06-20',
+      end: '2026-06-19',
+      anchorDate: '2026-06-19',
       label: '自定义',
     })
 
@@ -470,8 +470,28 @@ describe('time range selection model', () => {
     })
     expect(createTimeRangeTimestamps(customRange)).toEqual({
       startTimestampSeconds: 1781366400,
-      endTimestampSeconds: 1781971199,
-      dayCount: 7,
+      endTimestampSeconds: 1781884799,
+      dayCount: 6,
+    })
+  })
+
+  it('clamps editable custom range ends to today', () => {
+    expect(setCustomDateRange('2026-06-10', '2026-06-25')).toMatchObject({
+      start: '2026-06-10',
+      end: '2026-06-19',
+      anchorDate: '2026-06-19',
+    })
+
+    const current = setCustomDateRange('2026-06-10', '2026-06-18')
+    expect(updateCustomDateBoundary(current, 'end', '2026-06-25')).toMatchObject({
+      start: '2026-06-10',
+      end: '2026-06-19',
+      anchorDate: '2026-06-19',
+    })
+
+    expect(selectPresetRange('quarter')).toMatchObject({
+      start: '2026-04-01',
+      end: '2026-06-19',
     })
   })
 

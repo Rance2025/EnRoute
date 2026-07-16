@@ -213,7 +213,10 @@ export function selectPresetRange(preset: TimePresetKey): TimeRangeSelection {
   const currentDate = parseDate(today)
   const quarterStartMonth = Math.floor(currentDate.getMonth() / 3) * 3
   const start = formatDateKey(new Date(currentDate.getFullYear(), quarterStartMonth, 1))
-  const end = formatDateKey(new Date(currentDate.getFullYear(), quarterStartMonth + 3, 0))
+  const end = minDateKey(
+    formatDateKey(new Date(currentDate.getFullYear(), quarterStartMonth + 3, 0)),
+    today,
+  )
 
   return {
     mode: 'custom',
@@ -521,22 +524,17 @@ function getYearPickerPage(selection: TimeRangeSelection): PickerPage {
 }
 
 function normalizeCustomSelection(selection: TimeRangeSelection): TimeRangeSelection {
-  if (selection.start <= selection.end) {
-    return {
-      ...selection,
-      mode: 'custom',
-      anchorDate: selection.end,
-      label: '自定义',
-      isOpenEnded: false,
-    }
-  }
+  const orderedStart = minDateKey(selection.start, selection.end)
+  const orderedEnd = selection.start <= selection.end ? selection.end : selection.start
+  const end = minDateKey(orderedEnd, createTodayKey())
+  const start = minDateKey(orderedStart, end)
 
   return {
     ...selection,
     mode: 'custom',
-    start: selection.end,
-    end: selection.start,
-    anchorDate: selection.start,
+    start,
+    end,
+    anchorDate: end,
     label: '自定义',
     isOpenEnded: false,
   }

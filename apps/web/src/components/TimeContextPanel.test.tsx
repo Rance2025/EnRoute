@@ -148,6 +148,21 @@ describe('TimeContextPanel', () => {
     )
   })
 
+  it('disables future days when choosing a custom end date', () => {
+    render(
+      <TimeContextPanel
+        view="map"
+        selection={setCustomDateRange('2026-06-10', '2026-06-20')}
+        onSelectionChange={vi.fn()}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /打开结束日期选择器/ }))
+
+    const picker = screen.getByRole('dialog', { name: '结束日期选择' })
+    expect(within(picker).getByRole('button', { name: '21' })).toBeDisabled()
+  })
+
   it('renders a historical day as 96 interactive quarter-hour columns', () => {
     const { container } = render(
       <TimeContextPanel
@@ -453,6 +468,8 @@ describe('TimeContextPanel', () => {
   })
 
   it('shows the grouping toggle for custom ranges only after the range exceeds 200 days', () => {
+    vi.setSystemTime(new Date('2026-07-20T10:20:30+08:00'))
+
     const twoHundredDays: FootprintDistanceSeries = {
       granularity: 'day',
       unit: 'day',

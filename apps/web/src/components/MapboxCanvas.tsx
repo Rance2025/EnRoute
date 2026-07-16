@@ -628,7 +628,7 @@ function MapboxCanvasComponent({
   useEffect(() => {
     const abortController = new AbortController()
 
-    fetch(createFootprintMetricsUrl(resolvedMetricsUrl, footprintTileRange), {
+    fetch(createFootprintMetricsUrl(resolvedMetricsUrl, timeRange), {
       method: 'GET',
       signal: abortController.signal,
     })
@@ -655,7 +655,7 @@ function MapboxCanvasComponent({
     return () => {
       abortController.abort()
     }
-  }, [footprintTileRange, onFootprintMetricsChange, resolvedMetricsUrl])
+  }, [onFootprintMetricsChange, resolvedMetricsUrl, timeRange])
 
   useEffect(() => {
     if (!resolvedAccessToken || !mapNodeRef.current) {
@@ -1357,16 +1357,11 @@ function createFootprintTileRange(timeRange: TimeRangeSelection): FootprintVecto
 
 function createFootprintMetricsUrl(
   metricsUrl: string,
-  range: FootprintVectorTileRange,
+  timeRange: TimeRangeSelection,
 ) {
   const params = new URLSearchParams()
-
-  if (range.range === 'all') {
-    params.set('range', 'all')
-  } else {
-    params.set('start', range.start)
-    params.set('end', range.end)
-  }
+  params.set('start', timeRange.start)
+  params.set('end', timeRange.end)
 
   return `${metricsUrl}?${params.toString()}`
 }
