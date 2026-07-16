@@ -45,7 +45,7 @@ it('formats ranking counts with English thousands separators', () => {
 Run:
 
 ```powershell
-npm --workspace apps/web exec vitest run src/components/AdminRegionContextPanel.test.tsx -t "formats ranking counts with English thousands separators"
+npm --workspace apps/web exec -- vitest run src/components/AdminRegionContextPanel.test.tsx -t "formats ranking counts with English thousands separators"
 ```
 
 Expected: FAIL。当前可见数字仍为 `12120`，按钮无障碍名称也没有千分位。
@@ -90,7 +90,7 @@ return (
 Run:
 
 ```powershell
-npm --workspace apps/web exec vitest run src/components/AdminRegionContextPanel.test.tsx
+npm --workspace apps/web exec -- vitest run src/components/AdminRegionContextPanel.test.tsx
 ```
 
 Expected: PASS，组件测试全部通过。
@@ -162,7 +162,7 @@ expect(hoverScrollbarThumbRule).toContain('background: rgba(23, 62, 53, 0.3)')
 Run:
 
 ```powershell
-npm --workspace apps/web exec vitest run src/components/mapLayout.test.ts -t "renders administrative region rankings as a compact trackless bar chart"
+npm --workspace apps/web exec -- vitest run src/components/mapLayout.test.ts -t "renders administrative region rankings as a compact trackless bar chart"
 ```
 
 Expected: FAIL。当前名称仍为 `600` 和深色常态，hover/选中仍为绿色，数字仍为 `860` 且没有窄体字体，WebKit 滚动条规则尚不存在。
@@ -267,7 +267,7 @@ Expected: FAIL。当前名称仍为 `600` 和深色常态，hover/选中仍为�
 Run:
 
 ```powershell
-npm --workspace apps/web exec vitest run src/components/AdminRegionContextPanel.test.tsx src/components/mapLayout.test.ts
+npm --workspace apps/web exec -- vitest run src/components/AdminRegionContextPanel.test.tsx src/components/mapLayout.test.ts
 ```
 
 Expected: PASS，两个相关测试文件全部通过。
