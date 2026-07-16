@@ -5,6 +5,7 @@ import math
 import sqlite3
 import time
 from collections import Counter
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -801,7 +802,7 @@ def replace_admin_region_summary_precompute(
     path_source_signature: str,
     daily_source_signature: str,
 ) -> None:
-    with connection:
+    with _clean_admin_region_daily_stats_next_after_failure(connection), connection:
         if not connection.in_transaction:
             connection.execute("BEGIN")
         connection.execute(
@@ -891,6 +892,20 @@ def replace_admin_region_summary_precompute(
             key=DAILY_STATS_SIGNATURE_KEY,
             value=daily_source_signature,
         )
+
+
+@contextmanager
+def _clean_admin_region_daily_stats_next_after_failure(
+    connection: sqlite3.Connection,
+):
+    try:
+        yield
+    except Exception:
+        connection.execute(
+            f"DROP TABLE IF EXISTS {_ADMIN_REGION_DAILY_STATS_NEXT_TABLE}",
+        )
+        connection.commit()
+        raise
 
 
 def set_precompute_signature(

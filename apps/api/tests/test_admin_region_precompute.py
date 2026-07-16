@@ -1036,6 +1036,51 @@ def test_build_admin_region_summary_precompute_rolls_back_to_previous_complete_r
     ).fetchone() is None
 
 
+def test_replace_admin_region_summary_precompute_cleans_stale_next_after_rollback() -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+    connection = create_precompute_source_database()
+    precompute.build_admin_region_summary_precompute(connection, updated_at=123)
+    previous_rows = snapshot_summary_precompute(connection)
+    connection.executescript(
+        """
+        CREATE TABLE admin_region_daily_stats_next (
+          marker TEXT NOT NULL
+        );
+        INSERT INTO admin_region_daily_stats_next (marker) VALUES ('stale');
+        """,
+    )
+    connection.commit()
+
+    with pytest.raises(sqlite3.IntegrityError, match="CHECK constraint failed"):
+        precompute.replace_admin_region_summary_precompute(
+            connection,
+            base_records=(),
+            path_records=(),
+            daily_stat_rows=(
+                precompute.AdminRegionDailyStat(
+                    depth=4,
+                    day=20260716,
+                    region_id="invalid-daily-stat",
+                    footprint_count=0,
+                    stay_duration_seconds=0,
+                    travel_distance_meters=0,
+                ),
+            ),
+            base_source_signature="replacement-base-signature",
+            path_source_signature="replacement-path-signature",
+            daily_source_signature="replacement-daily-signature",
+        )
+
+    assert snapshot_summary_precompute(connection) == previous_rows
+    assert connection.execute(
+        """
+        SELECT 1
+        FROM sqlite_master
+        WHERE type = 'table' AND name = 'admin_region_daily_stats_next'
+        """,
+    ).fetchone() is None
+
+
 def test_build_admin_region_summary_precompute_rejects_empty_canonical_region_depth() -> None:
     precompute = importlib.import_module("enroute_api.admin_regions.precompute")
     connection = create_precompute_source_database()
