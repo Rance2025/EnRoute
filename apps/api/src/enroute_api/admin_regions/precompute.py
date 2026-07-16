@@ -1301,7 +1301,16 @@ def query_admin_region_daily_metric_totals(
         SELECT region_id,
                SUM(footprint_count) AS footprint_count,
                SUM(stay_duration_seconds) AS stay_duration_seconds,
-               SUM(travel_distance_meters) AS travel_distance_meters
+               SUM(travel_distance_meters) AS travel_distance_meters,
+               MAX(
+                 CASE
+                   WHEN TYPEOF(footprint_count) != 'integer'
+                     OR TYPEOF(stay_duration_seconds) != 'integer'
+                     OR TYPEOF(travel_distance_meters) NOT IN ('integer', 'real')
+                   THEN 1
+                   ELSE 0
+                 END
+               ) AS invalid_metric_value
         FROM admin_region_daily_stats
         WHERE depth = ?
           {date_filter}
@@ -1309,12 +1318,23 @@ def query_admin_region_daily_metric_totals(
         HAVING SUM(footprint_count) > 0
             OR SUM(stay_duration_seconds) > 0
             OR SUM(travel_distance_meters) > 0
+            OR SUM(footprint_count) < 0
+            OR SUM(stay_duration_seconds) < 0
+            OR SUM(travel_distance_meters) < 0
+            OR SUM(footprint_count) IS NULL
+            OR SUM(stay_duration_seconds) IS NULL
+            OR SUM(travel_distance_meters) IS NULL
+            OR invalid_metric_value > 0
         ORDER BY region_id
         """,
         parameters,
     ).fetchall()
     totals_by_id: dict[str, AdminRegionMetricTotals] = {}
     for row in rows:
+        if row[4] != 0:
+            raise AdminRegionPrecomputeSourceError(
+                "aggregated admin-region metrics are invalid",
+            )
         footprint_count = require_nonnegative_metric_integer(
             row[1],
             label="footprint_count",
@@ -1327,6 +1347,12 @@ def query_admin_region_daily_metric_totals(
             row[3],
             label="travel_distance_meters",
         )
+        if not (
+            footprint_count > 0
+            or stay_duration_seconds > 0
+            or travel_distance_meters > 0
+        ):
+            continue
         totals_by_id[str(row[0])] = AdminRegionMetricTotals(
             footprint_count=footprint_count,
             stay_duration_seconds=stay_duration_seconds,

@@ -1863,6 +1863,16 @@ def test_query_precomputed_summary_returns_all_region_metrics_for_closed_day_ran
 def test_query_precomputed_summary_uses_one_grouped_metrics_query() -> None:
     precompute = importlib.import_module("enroute_api.admin_regions.precompute")
     connection = create_precomputed_summary_metrics_fixture()
+    connection.execute("PRAGMA ignore_check_constraints = ON")
+    connection.execute(
+        """
+        INSERT INTO admin_region_daily_stats (
+          depth, day, region_id, footprint_count,
+          stay_duration_seconds, travel_distance_meters
+        ) VALUES (4, 20260715, 'all-zero', 0, 0, 0.0)
+        """,
+    )
+    connection.commit()
     statements: list[str] = []
     connection.set_trace_callback(statements.append)
 
@@ -1895,14 +1905,24 @@ def test_query_precomputed_summary_uses_one_grouped_metrics_query() -> None:
     assert daily_queries[0].startswith(
         "select region_id, sum(footprint_count) as footprint_count, "
         "sum(stay_duration_seconds) as stay_duration_seconds, "
-        "sum(travel_distance_meters) as travel_distance_meters "
-        "from admin_region_daily_stats",
+        "sum(travel_distance_meters) as travel_distance_meters,",
     )
+    assert "typeof(footprint_count) != 'integer'" in daily_queries[0]
+    assert "typeof(stay_duration_seconds) != 'integer'" in daily_queries[0]
+    assert "typeof(travel_distance_meters) not in ('integer', 'real')" in daily_queries[0]
+    assert "as invalid_metric_value from admin_region_daily_stats" in daily_queries[0]
     assert "where depth = 4 and day between 20260715 and 20260716" in daily_queries[0]
     assert "group by region_id" in daily_queries[0]
     assert "having sum(footprint_count) > 0" in daily_queries[0]
     assert "or sum(stay_duration_seconds) > 0" in daily_queries[0]
     assert "or sum(travel_distance_meters) > 0" in daily_queries[0]
+    assert "or sum(footprint_count) < 0" in daily_queries[0]
+    assert "or sum(stay_duration_seconds) < 0" in daily_queries[0]
+    assert "or sum(travel_distance_meters) < 0" in daily_queries[0]
+    assert "or sum(footprint_count) is null" in daily_queries[0]
+    assert "or sum(stay_duration_seconds) is null" in daily_queries[0]
+    assert "or sum(travel_distance_meters) is null" in daily_queries[0]
+    assert "invalid_metric_value" in daily_queries[0]
     assert daily_queries[0].endswith("order by region_id")
 
 
@@ -1986,6 +2006,91 @@ def test_query_precomputed_summary_wraps_sqlite_sum_overflow_as_unavailable(
     ):
         precompute.query_precomputed_admin_region_summary(
             database,
+            depth=4,
+            start_day=None,
+            end_day=None,
+        )
+
+
+@pytest.mark.parametrize(
+    ("footprint_count", "stay_duration_seconds", "travel_distance_meters"),
+    (
+        (-1, -2, -3.0),
+        (0, 0, float("-inf")),
+    ),
+)
+def test_query_precomputed_summary_rejects_invalid_groups_hidden_by_positive_having(
+    tmp_path: Path,
+    footprint_count: int,
+    stay_duration_seconds: int,
+    travel_distance_meters: float,
+) -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+    database = tmp_path / "invalid-hidden-group.sqlite"
+    connection = create_precomputed_summary_metrics_fixture(database)
+    connection.execute("PRAGMA ignore_check_constraints = ON")
+    connection.execute("DELETE FROM admin_region_daily_stats WHERE depth = 4")
+    connection.execute(
+        """
+        INSERT INTO admin_region_daily_stats (
+          depth, day, region_id, footprint_count,
+          stay_duration_seconds, travel_distance_meters
+        ) VALUES (4, 20260715, 'district-a', ?, ?, ?)
+        """,
+        (footprint_count, stay_duration_seconds, travel_distance_meters),
+    )
+    connection.commit()
+    connection.close()
+
+    with pytest.raises(
+        precompute.AdminRegionPrecomputeUnavailable,
+        match="admin-region summary precompute is unavailable",
+    ):
+        precompute.query_precomputed_admin_region_summary(
+            database,
+            depth=4,
+            start_day=None,
+            end_day=None,
+        )
+
+
+@pytest.mark.parametrize(
+    ("footprint_count", "stay_duration_seconds", "travel_distance_meters"),
+    (
+        ("not-a-number", 0, 0.0),
+        (0, 0, None),
+    ),
+)
+def test_query_precomputed_summary_metric_totals_rejects_hidden_type_or_null_groups(
+    footprint_count: object,
+    stay_duration_seconds: object,
+    travel_distance_meters: object,
+) -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+    connection = sqlite3.connect(":memory:")
+    connection.execute(
+        """
+        CREATE TABLE admin_region_daily_stats (
+          depth,
+          day,
+          region_id,
+          footprint_count,
+          stay_duration_seconds,
+          travel_distance_meters
+        )
+        """,
+    )
+    connection.execute(
+        "INSERT INTO admin_region_daily_stats VALUES (4, 20260715, 'invalid', ?, ?, ?)",
+        (footprint_count, stay_duration_seconds, travel_distance_meters),
+    )
+
+    with pytest.raises(
+        precompute.AdminRegionPrecomputeSourceError,
+        match="aggregated admin-region metrics are invalid",
+    ):
+        precompute.query_admin_region_daily_metric_totals(
+            connection,
             depth=4,
             start_day=None,
             end_day=None,
