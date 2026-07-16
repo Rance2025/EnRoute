@@ -2494,10 +2494,13 @@
   cursor: pointer;
 }
 
-.admin-region-ranking-card__row:hover,
+.admin-region-ranking-card__row:hover {
+  background: transparent;
+}
+
 .admin-region-ranking-card__row:focus-visible {
-  background: rgba(23, 35, 31, 0.035);
-  outline: none;
+  outline: 1px solid #2c8572;
+  outline-offset: -1px;
 }
 
 .admin-region-ranking-card__rank {
@@ -2512,7 +2515,7 @@
   overflow: hidden;
   color: #17231f;
   font-size: 12px;
-  font-weight: 820;
+  font-weight: 600;
   line-height: 1.05;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2520,18 +2523,32 @@
 
 .admin-region-ranking-card__bar {
   min-width: 0;
-  height: 12px;
+  height: 8px;
   overflow: hidden;
-  border-radius: 1px 3px 3px 1px;
   background: transparent;
 }
 
 .admin-region-ranking-card__bar span {
   display: block;
   height: 100%;
-  border-radius: inherit;
-  background: #2c8572;
+  background: #3d8f7d;
   transform-origin: left center;
+}
+
+.admin-region-ranking-card__row:hover .admin-region-ranking-card__name {
+  color: #2c8572;
+}
+
+.admin-region-ranking-card__row.is-selected .admin-region-ranking-card__name {
+  color: #2c8572;
+}
+
+.admin-region-ranking-card__row:hover .admin-region-ranking-card__bar span {
+  background: #2c8572;
+}
+
+.admin-region-ranking-card__row.is-selected .admin-region-ranking-card__bar span {
+  background: #2c8572;
 }
 
 .admin-region-ranking-card__row strong {

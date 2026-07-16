@@ -924,6 +924,7 @@ function App(props: AppProps) {
               summary={currentAdminRegionSummary}
               thumbnailBasePath={adminRegionThumbnailBasePath}
               status={currentAdminRegionSummaryStatus}
+              selectedRegionId={selectedAdminRegion?.regionId}
               onDepthChange={handleAdminRegionDepthChange}
               onRegionSelect={setSelectedAdminRegion}
               onRetry={handleAdminRegionSummaryRetry}

@@ -8,6 +8,7 @@ type AdminRegionContextPanelProps = {
   summary: AdminRegionSummary | null
   thumbnailBasePath: string
   status: AdminRegionSummaryStatus
+  selectedRegionId?: string | null
   onDepthChange: (depth: AdminRegionDepth) => void
   onRegionSelect: (ranking: AdminRegionRanking) => void
   onRetry: () => void
@@ -32,6 +33,7 @@ export function AdminRegionContextPanel({
   summary,
   thumbnailBasePath,
   status,
+  selectedRegionId = null,
   onDepthChange,
   onRegionSelect,
   onRetry,
@@ -109,6 +111,7 @@ export function AdminRegionContextPanel({
                 key={ranking.regionId}
                 ranking={ranking}
                 maxFootprintCount={summary.rankings[0]?.footprintCount ?? ranking.footprintCount}
+                isSelected={ranking.regionId === selectedRegionId}
                 onRegionSelect={onRegionSelect}
               />
             ))}
@@ -145,22 +148,25 @@ function DepthControl({
 function RankingRow({
   ranking,
   maxFootprintCount,
+  isSelected,
   onRegionSelect,
 }: {
   ranking: AdminRegionRanking
   maxFootprintCount: number
+  isSelected: boolean
   onRegionSelect: (ranking: AdminRegionRanking) => void
 }) {
-  const ratio = maxFootprintCount > 0
-    ? Math.max(0.08, Math.min(1, ranking.footprintCount / maxFootprintCount))
-    : 0
+  const ratio = maxFootprintCount <= 0 || ranking.footprintCount <= 0
+    ? 0
+    : Math.max(0.02, Math.min(1, ranking.footprintCount / maxFootprintCount))
 
   return (
     <li className="admin-region-ranking-card__item">
       <button
         type="button"
-        className="admin-region-ranking-card__row"
+        className={`admin-region-ranking-card__row${isSelected ? ' is-selected' : ''}`}
         aria-label={`第 ${ranking.rank} 名 ${ranking.name}，${ranking.footprintCount} 个足迹点`}
+        aria-current={isSelected ? 'location' : undefined}
         onClick={() => onRegionSelect(ranking)}
       >
         <span className="admin-region-ranking-card__rank">{ranking.rank}</span>
