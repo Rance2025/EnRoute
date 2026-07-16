@@ -463,7 +463,7 @@ def split_interval_by_shanghai_day(
         if next_timestamp == end_timestamp:
             share_distance = resolved_distance - math.fsum(allocated_distances)
         else:
-            share_distance = resolved_distance * duration_seconds / total_duration
+            share_distance = resolved_distance * (duration_seconds / total_duration)
         shares.append(
             AdminRegionIntervalDayShare(
                 day=encode_day(current_shanghai.date()),

@@ -946,6 +946,20 @@ def test_daily_stats_keeps_zero_footprint_rows_for_full_intermediate_days() -> N
     )
 
 
+def test_split_interval_by_shanghai_day_preserves_a_large_finite_distance() -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+    start = int(datetime(2026, 7, 14, 15, 59, 30, tzinfo=timezone.utc).timestamp())
+    end = int(datetime(2026, 7, 16, 16, 0, 30, tzinfo=timezone.utc).timestamp())
+    distance = 1e308
+
+    shares = precompute.split_interval_by_shanghai_day(start, end, distance)
+
+    share_distances = [share.travel_distance_meters for share in shares]
+    assert all(math.isfinite(share_distance) for share_distance in share_distances)
+    assert all(share_distance >= 0 for share_distance in share_distances)
+    assert math.fsum(share_distances) == pytest.approx(distance)
+
+
 @pytest.mark.parametrize(
     ("start_timestamp", "end_timestamp", "distance"),
     (
