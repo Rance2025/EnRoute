@@ -57,6 +57,8 @@ class AdminRegionPrecomputeUnavailable(RuntimeError):
 
 CHINA_THUMBNAIL_SOUTH_BOUND = 17.5
 ADMIN_REGION_GEOMETRY_QUERY_BATCH_SIZE = 400
+_ADMIN_REGION_DAILY_STATS_TABLE = "admin_region_daily_stats"
+_ADMIN_REGION_DAILY_STATS_NEXT_TABLE = "admin_region_daily_stats_next"
 
 
 @dataclass(frozen=True, order=True)
@@ -65,6 +67,8 @@ class AdminRegionDailyStat:
     day: int
     region_id: str
     footprint_count: int
+    stay_duration_seconds: int
+    travel_distance_meters: float
 
 
 @dataclass(frozen=True)
@@ -124,15 +128,42 @@ def initialize_admin_region_summary_schema(connection: sqlite3.Connection) -> No
           CHECK (depth BETWEEN 1 AND 4)
         ) WITHOUT ROWID;
 
-        CREATE TABLE IF NOT EXISTS admin_region_daily_stats (
+        """,
+    )
+    _create_admin_region_daily_stats_table(connection, replacement=False)
+
+
+def _create_admin_region_daily_stats_table(
+    connection: sqlite3.Connection,
+    *,
+    replacement: bool,
+) -> None:
+    table_name = (
+        _ADMIN_REGION_DAILY_STATS_NEXT_TABLE
+        if replacement
+        else _ADMIN_REGION_DAILY_STATS_TABLE
+    )
+    if_not_exists = "" if replacement else "IF NOT EXISTS "
+    connection.execute(
+        f"""
+        CREATE TABLE {if_not_exists}{table_name} (
           depth INTEGER NOT NULL,
           day INTEGER NOT NULL,
           region_id TEXT NOT NULL,
           footprint_count INTEGER NOT NULL,
+          stay_duration_seconds INTEGER NOT NULL,
+          travel_distance_meters REAL NOT NULL,
           PRIMARY KEY (depth, day, region_id),
           CHECK (depth BETWEEN 1 AND 4),
-          CHECK (footprint_count > 0)
-        ) WITHOUT ROWID;
+          CHECK (footprint_count >= 0),
+          CHECK (stay_duration_seconds >= 0),
+          CHECK (travel_distance_meters >= 0),
+          CHECK (
+            footprint_count > 0
+            OR stay_duration_seconds > 0
+            OR travel_distance_meters > 0
+          )
+        ) WITHOUT ROWID
         """,
     )
 
@@ -433,6 +464,8 @@ def build_admin_region_daily_stat_rows(
             day=day,
             region_id=region_id,
             footprint_count=count,
+            stay_duration_seconds=0,
+            travel_distance_meters=0.0,
         )
         for (depth, day, region_id), count in sorted(counts.items())
     )
@@ -769,9 +802,40 @@ def replace_admin_region_summary_precompute(
     daily_source_signature: str,
 ) -> None:
     with connection:
+        if not connection.in_transaction:
+            connection.execute("BEGIN")
+        connection.execute(
+            f"DROP TABLE IF EXISTS {_ADMIN_REGION_DAILY_STATS_NEXT_TABLE}",
+        )
+        _create_admin_region_daily_stats_table(connection, replacement=True)
+        connection.executemany(
+            f"""
+            INSERT INTO {_ADMIN_REGION_DAILY_STATS_NEXT_TABLE} (
+              depth, day, region_id, footprint_count,
+              stay_duration_seconds, travel_distance_meters
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                (
+                    row.depth,
+                    row.day,
+                    row.region_id,
+                    row.footprint_count,
+                    row.stay_duration_seconds,
+                    row.travel_distance_meters,
+                )
+                for row in daily_stat_rows
+            ),
+        )
+        connection.execute(f"DROP TABLE {_ADMIN_REGION_DAILY_STATS_TABLE}")
+        connection.execute(
+            f"""
+            ALTER TABLE {_ADMIN_REGION_DAILY_STATS_NEXT_TABLE}
+            RENAME TO {_ADMIN_REGION_DAILY_STATS_TABLE}
+            """,
+        )
         connection.execute("DELETE FROM admin_region_thumbnail_bases")
         connection.execute("DELETE FROM admin_region_thumbnail_region_paths")
-        connection.execute("DELETE FROM admin_region_daily_stats")
         connection.executemany(
             """
             INSERT INTO admin_region_thumbnail_bases (
@@ -810,17 +874,6 @@ def replace_admin_region_summary_precompute(
                     record.algorithm_signature,
                 )
                 for record in path_records
-            ),
-        )
-        connection.executemany(
-            """
-            INSERT INTO admin_region_daily_stats (
-              depth, day, region_id, footprint_count
-            ) VALUES (?, ?, ?, ?)
-            """,
-            (
-                (row.depth, row.day, row.region_id, row.footprint_count)
-                for row in daily_stat_rows
             ),
         )
         set_precompute_signature(
