@@ -20,6 +20,7 @@
     "prepare:footprint-tiles": "python scripts/build_footprint_visual_tiles.py",
     "prepare:admin-region-tiles": "python scripts/build_admin_region_tiles.py",
     "prepare:admin-region-summary": "python scripts/prepare_admin_region_summary.py",
+    "repair:daily-first-distances": "python scripts/repair_daily_first_distances.py",
     "test": "npm run test:web && npm run test:api && npm run test:repo",
     "test:web": "node scripts/run-web-tests.mjs",
     "test:api": "python scripts/run_api_tests.py",

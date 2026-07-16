@@ -1,4 +1,5 @@
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -287,6 +288,159 @@ def test_import_preserves_existing_rows_and_visual_tiles_when_signature_is_missi
     ]
     assert visual_tile_count == (1,)
     assert compatibility_signature is not None
+
+
+def test_incremental_import_normalizes_first_zero_distance_across_shanghai_days(
+    tmp_path: Path,
+) -> None:
+    previous_timestamp = int(
+        datetime.fromisoformat("2026-06-11T23:55:00+08:00")
+        .astimezone(timezone.utc)
+        .timestamp(),
+    )
+    current_timestamp = int(
+        datetime.fromisoformat("2026-06-12T00:05:00+08:00")
+        .astimezone(timezone.utc)
+        .timestamp(),
+    )
+    header = (
+        "dataTime,locType,longitude,latitude,heading,accuracy,speed,distance,"
+        "isBackForeground,stepType,altitude"
+    )
+    data_path = write_csv(
+        tmp_path,
+        f"{header}\n{previous_timestamp},1,0,0,0,5,-1,12,1,0,0",
+    )
+    db_path = tmp_path / "footprints.sqlite"
+    with sqlite3.connect(db_path) as connection:
+        connection.row_factory = sqlite3.Row
+        initialize_schema(connection)
+        ensure_imported(
+            connection,
+            data_path=data_path,
+            coordinate_system="wgs84",
+            admin_region_data_path=tmp_path / "missing-admin-regions.geojson",
+        )
+        data_path.write_text(
+            f"{header}\n{current_timestamp},1,1,0,0,1000,-1,0,1,0,0",
+            encoding="utf-8",
+        )
+
+        result = ensure_imported(
+            connection,
+            data_path=data_path,
+            coordinate_system="wgs84",
+            admin_region_data_path=tmp_path / "missing-admin-regions.geojson",
+        )
+        stored_distance = float(
+            connection.execute(
+                "SELECT distance FROM footprints WHERE timestamp_seconds = ?",
+                (current_timestamp,),
+            ).fetchone()[0],
+        )
+        spatial_count = int(
+            connection.execute("SELECT COUNT(*) FROM footprint_spatial").fetchone()[0],
+        )
+        visual_tile_count = int(
+            connection.execute("SELECT COUNT(*) FROM visual_tiles").fetchone()[0],
+        )
+
+    assert result["new_count"] == 1
+    assert stored_distance == pytest.approx(111_195, rel=0.001)
+    assert spatial_count == 2
+    assert visual_tile_count == 0
+
+
+def test_import_validates_raw_zero_against_normalized_existing_distance(
+    tmp_path: Path,
+) -> None:
+    previous_timestamp = int(
+        datetime.fromisoformat("2026-06-11T23:55:00+08:00")
+        .astimezone(timezone.utc)
+        .timestamp(),
+    )
+    current_timestamp = int(
+        datetime.fromisoformat("2026-06-12T00:05:00+08:00")
+        .astimezone(timezone.utc)
+        .timestamp(),
+    )
+    data_path = write_csv(
+        tmp_path,
+        "\n".join(
+            [
+                "dataTime,locType,longitude,latitude,heading,accuracy,speed,distance,isBackForeground,stepType,altitude",
+                f"{previous_timestamp},1,0,0,0,5,-1,12,1,0,0",
+                f"{current_timestamp},1,1,0,0,1000,-1,0,1,0,0",
+            ],
+        ),
+    )
+    db_path = tmp_path / "footprints.sqlite"
+    with sqlite3.connect(db_path) as connection:
+        connection.row_factory = sqlite3.Row
+        initialize_schema(connection)
+        ensure_imported(
+            connection,
+            data_path=data_path,
+            coordinate_system="wgs84",
+            admin_region_data_path=tmp_path / "missing-admin-regions.geojson",
+        )
+        original_distance = float(
+            connection.execute(
+                "SELECT distance FROM footprints WHERE timestamp_seconds = ?",
+                (current_timestamp,),
+            ).fetchone()[0],
+        )
+        connection.execute("DELETE FROM footprint_meta WHERE key = 'sourceSignature'")
+        connection.commit()
+
+        result = ensure_imported(
+            connection,
+            data_path=data_path,
+            coordinate_system="wgs84",
+            admin_region_data_path=tmp_path / "missing-admin-regions.geojson",
+        )
+        validated_distance = float(
+            connection.execute(
+                "SELECT distance FROM footprints WHERE timestamp_seconds = ?",
+                (current_timestamp,),
+            ).fetchone()[0],
+        )
+
+    assert result["new_count"] == 0
+    assert validated_distance == original_distance
+    assert validated_distance == pytest.approx(111_195, rel=0.001)
+
+
+def test_import_rolls_back_csv_with_decreasing_timestamps(tmp_path: Path) -> None:
+    data_path = write_csv(
+        tmp_path,
+        "\n".join(
+            [
+                "dataTime,locType,longitude,latitude,heading,accuracy,speed,distance,isBackForeground,stepType,altitude",
+                "200,1,1,1,0,5,-1,12,1,0,0",
+                "100,1,2,2,0,5,-1,12,1,0,0",
+            ],
+        ),
+    )
+    db_path = tmp_path / "footprints.sqlite"
+    with sqlite3.connect(db_path) as connection:
+        connection.row_factory = sqlite3.Row
+        initialize_schema(connection)
+
+        with pytest.raises(ValueError, match="strictly increasing"):
+            ensure_imported(
+                connection,
+                data_path=data_path,
+                coordinate_system="wgs84",
+                admin_region_data_path=tmp_path / "missing-admin-regions.geojson",
+            )
+
+        assert connection.execute("SELECT COUNT(*) FROM footprints").fetchone()[0] == 0
+        assert connection.execute("SELECT COUNT(*) FROM footprint_spatial").fetchone()[0] == 0
+        assert connection.execute("SELECT COUNT(*) FROM visual_tiles").fetchone()[0] == 0
+        assert connection.execute(
+            "SELECT value FROM footprint_meta WHERE key = 'sourceSignature'",
+        ).fetchone() is None
 
 
 def test_import_preserves_visual_tiles_when_algorithm_signature_is_stale(tmp_path: Path):

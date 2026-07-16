@@ -665,6 +665,39 @@ def build_admin_region_daily_stat_rows(
     )
 
 
+def replace_admin_region_daily_stats(
+    connection: sqlite3.Connection,
+    build_result: AdminRegionDailyStatBuildResult,
+) -> None:
+    if not build_result.rows:
+        raise AdminRegionPrecomputeSourceError("admin-region daily stats are empty")
+    connection.execute("DELETE FROM admin_region_daily_stats")
+    connection.executemany(
+        """
+        INSERT INTO admin_region_daily_stats (
+          depth, day, region_id, footprint_count,
+          stay_duration_seconds, travel_distance_meters
+        ) VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (
+            (
+                row.depth,
+                row.day,
+                row.region_id,
+                row.footprint_count,
+                row.stay_duration_seconds,
+                row.travel_distance_meters,
+            )
+            for row in build_result.rows
+        ),
+    )
+    set_precompute_signature(
+        connection,
+        key=DAILY_STATS_SIGNATURE_KEY,
+        value=create_admin_region_daily_stats_source_signature(connection),
+    )
+
+
 def build_admin_region_summary_precompute(
     connection: sqlite3.Connection,
     *,

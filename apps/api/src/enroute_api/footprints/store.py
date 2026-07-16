@@ -30,6 +30,7 @@ from enroute_api.admin_regions.precompute_meta import invalidate_admin_region_da
 from enroute_api.admin_regions.tiles import initialize_admin_region_tile_schema, read_admin_region_tile
 
 from .csv_loader import iter_footprint_points
+from .distance import FootprintDistancePoint, normalize_daily_first_distance
 from .visual_tiles import (
     MAX_VISUAL_TILE_ZOOM,
     TIME_BUCKET_ALL,
@@ -595,10 +596,23 @@ def import_footprints(
             )
         region_matcher = create_region_matcher(connection)
         new_count = 0
+        previous_source_timestamp: int | None = None
         for point in iter_footprint_points(data_path=data_path, coordinate_system=coordinate_system):
-            if insert_footprint_if_new(connection, point, region_matcher=region_matcher):
+            timestamp_seconds = int(point["timestampSeconds"])
+            if (
+                previous_source_timestamp is not None
+                and timestamp_seconds <= previous_source_timestamp
+            ):
+                raise ValueError("footprint CSV timestamps must be strictly increasing")
+            previous_source_timestamp = timestamp_seconds
+            normalized_point = normalize_import_point_distance(connection, point)
+            if insert_footprint_if_new(
+                connection,
+                normalized_point,
+                region_matcher=region_matcher,
+            ):
                 new_count += 1
-                mark_affected_visual_tiles_dirty(connection, point)
+                mark_affected_visual_tiles_dirty(connection, normalized_point)
 
         set_meta_value(connection, "sourceSignature", source_signature)
         set_meta_value(connection, "importCompatibilitySignature", compatibility_signature)
@@ -607,6 +621,43 @@ def import_footprints(
         set_meta_value(connection, "rowCount", str(stored_count + new_count))
 
     return get_import_result(connection, new_count=new_count)
+
+
+def normalize_import_point_distance(
+    connection: sqlite3.Connection,
+    point: dict[str, Any],
+) -> dict[str, Any]:
+    row = connection.execute(
+        """
+        SELECT timestamp_seconds, longitude, latitude, distance
+        FROM footprints
+        WHERE timestamp_seconds < ?
+        ORDER BY timestamp_seconds DESC
+        LIMIT 1
+        """,
+        (int(point["timestampSeconds"]),),
+    ).fetchone()
+    previous = (
+        None
+        if row is None
+        else FootprintDistancePoint(
+            timestamp_seconds=int(row[0]),
+            longitude=float(row[1]),
+            latitude=float(row[2]),
+            distance=float(row[3]),
+        )
+    )
+    current = FootprintDistancePoint(
+        timestamp_seconds=int(point["timestampSeconds"]),
+        longitude=float(point["longitude"]),
+        latitude=float(point["latitude"]),
+        distance=float(point["distance"]),
+    )
+    normalized_distance = normalize_daily_first_distance(
+        previous=previous,
+        current=current,
+    )
+    return {**point, "distance": normalized_distance}
 
 
 def insert_footprint_if_new(
