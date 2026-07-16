@@ -1,5 +1,6 @@
 import '@testing-library/jest-dom/vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import type { ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { TimeRangeSelection } from '../time/timeRange'
@@ -58,6 +59,41 @@ const allRange: TimeRangeSelection = {
   anchorDate: '2026-06-19',
   label: 'All',
   isOpenEnded: true,
+}
+
+function domRect(left: number, top: number, right: number, bottom: number): DOMRect {
+  return {
+    x: left,
+    y: top,
+    left,
+    top,
+    right,
+    bottom,
+    width: right - left,
+    height: bottom - top,
+    toJSON: () => ({}),
+  }
+}
+
+function renderMapFocusShell(children: ReactNode) {
+  return render(
+    <main className="app-shell">
+      <aside className="time-context-panel" />
+      <aside className="right-context-panel" />
+      {children}
+    </main>,
+  )
+}
+
+function mockMapFocusShellRects(container: HTMLElement) {
+  const mapNode = container.querySelector<HTMLElement>('.mapbox-surface')
+  const leftPanel = container.querySelector<HTMLElement>('.time-context-panel')
+  const rightPanel = container.querySelector<HTMLElement>('.right-context-panel')
+  if (!mapNode || !leftPanel || !rightPanel) throw new Error('map focus shell is incomplete')
+
+  vi.spyOn(mapNode, 'getBoundingClientRect').mockReturnValue(domRect(0, 0, 1440, 900))
+  vi.spyOn(leftPanel, 'getBoundingClientRect').mockReturnValue(domRect(20, 16, 320, 884))
+  vi.spyOn(rightPanel, 'getBoundingClientRect').mockReturnValue(domRect(1120, 16, 1420, 884))
 }
 
 afterEach(() => {
@@ -1067,7 +1103,7 @@ describe('MapboxCanvas footprint vector tiles', () => {
     const { mapRecords } = mockMapboxRuntime()
     const { MapboxCanvas } = await import('./MapboxCanvas')
 
-    render(
+    const { container } = renderMapFocusShell(
       <MapboxCanvas
         accessToken="test-mapbox-token"
         timeRange={selectedRange}
@@ -1078,6 +1114,7 @@ describe('MapboxCanvas footprint vector tiles', () => {
         }}
       />,
     )
+    mockMapFocusShellRects(container)
     act(() => mapRecords[0].emit('load'))
 
     expect(mapRecords[0].setFilterCalls).toContainEqual([
@@ -1091,7 +1128,10 @@ describe('MapboxCanvas footprint vector tiles', () => {
     ])
     expect(mapRecords[0].fitBoundsCalls).toContainEqual([
       [[121.4, 31.1], [121.8, 31.4]],
-      { padding: 72, duration: 600 },
+      {
+        padding: { top: 64, right: 384, bottom: 64, left: 384 },
+        duration: 600,
+      },
     ])
   })
 
@@ -1533,12 +1573,13 @@ describe('MapboxCanvas footprint vector tiles', () => {
     })
     const { MapboxCanvas } = await import('./MapboxCanvas')
 
-    render(
+    const { container } = renderMapFocusShell(
       <MapboxCanvas
         accessToken="test-mapbox-token"
         timeRange={selectedRange}
       />,
     )
+    mockMapFocusShellRects(container)
 
     act(() => mapRecords[0].emit('load'))
     await act(async () => {})
@@ -1550,9 +1591,53 @@ describe('MapboxCanvas footprint vector tiles', () => {
           [118, 30],
           [121.5, 31.3],
         ],
-        { duration: 900, padding: 96 },
+        {
+          duration: 900,
+          padding: { top: 64, right: 384, bottom: 64, left: 384 },
+        },
       ],
     ])
+  })
+
+  it('keeps the located point inside the visible viewport without retaining camera padding', async () => {
+    const { mapRecords } = mockMapboxRuntime()
+    const getCurrentPosition = vi.fn((success: PositionCallback) => {
+      success({
+        coords: {
+          latitude: 31.23,
+          longitude: 121.47,
+          accuracy: 10,
+          altitude: null,
+          altitudeAccuracy: null,
+          heading: null,
+          speed: null,
+        },
+        timestamp: 0,
+      })
+    })
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      geolocation: { getCurrentPosition },
+    })
+    const { MapboxCanvas } = await import('./MapboxCanvas')
+
+    const { container } = renderMapFocusShell(
+      <MapboxCanvas
+        accessToken="test-mapbox-token"
+        timeRange={selectedRange}
+      />,
+    )
+    mockMapFocusShellRects(container)
+
+    fireEvent.click(screen.getByRole('button', { name: '定位当前位置' }))
+
+    expect(getCurrentPosition).toHaveBeenCalledTimes(1)
+    expect(mapRecords[0].flyToCalls).toEqual([{
+      center: [121.47, 31.23],
+      zoom: 14,
+      padding: { top: 64, right: 384, bottom: 64, left: 384 },
+      retainPadding: false,
+    }])
   })
 
   it('zooms the globe out to zoom 1.75 while keeping the current center before starting slow rotation', async () => {
