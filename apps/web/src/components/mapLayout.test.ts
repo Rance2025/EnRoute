@@ -2046,6 +2046,7 @@ describe('map chrome layout', () => {
   it('places administrative region depth controls inside the right context panel', () => {
     const bodyRule = cssRule('.admin-region-atlas-card__body')
     const depthRule = cssRule('.admin-region-atlas-card__depth-control')
+    const depthButtonRule = cssRule('.admin-region-atlas-card__depth-control button')
     const thumbnailRule = cssRule('.admin-region-atlas-card__thumbnail')
     const thumbnailSourceIndex = adminRegionContextPanelSource.indexOf(
       'className="admin-region-atlas-card__thumbnail"',
@@ -2059,11 +2060,18 @@ describe('map chrome layout', () => {
     expect(bodyRule).toContain('grid-template-columns: minmax(0, 1fr) auto')
     expect(bodyRule).toContain('align-items: stretch')
     expect(depthRule).toContain('display: grid')
-    expect(depthRule).toContain('width: 32px')
+    expect(depthRule).toContain('--segmented-padding: 3px')
+    expect(depthRule).toContain('width: 34px')
     expect(depthRule).toContain('align-self: stretch')
+    expect(depthRule).toContain('border: 1px solid rgba(18, 63, 53, 0.08)')
+    expect(depthRule).toContain('background: rgba(18, 63, 53, 0.07)')
+    expect(depthButtonRule).toContain('border-radius: 0')
+    expect(depthButtonRule).toContain('background: transparent')
+    expect(depthButtonRule).not.toContain('background: rgba(23, 35, 31, 0.06)')
     expect(thumbnailRule).toContain('display: block')
     expect(thumbnailRule).toContain('width: 100%')
     expect(thumbnailRule).toContain('height: auto')
+    expect(thumbnailRule).toContain('aspect-ratio: 32 / 15')
     expect(thumbnailRule).not.toContain('aspect-ratio: 16 / 9')
     expect(thumbnailRule).toContain('overflow: hidden')
     expect(thumbnailSourceIndex).toBeGreaterThanOrEqual(0)
