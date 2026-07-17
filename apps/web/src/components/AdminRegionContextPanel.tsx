@@ -5,6 +5,10 @@ import type { TimeRangeSelection } from '../time/timeRange'
 import { AdminRegionTreemapCard } from './AdminRegionTreemapCard'
 import { SegmentedControl } from './SegmentedControl'
 import {
+  DEFAULT_ADMIN_REGION_THUMBNAIL_VIEW_BOX,
+  fitAdminRegionThumbnailViewBox,
+} from './adminRegionThumbnailViewBox'
+import {
   buildAdminRegionRanking,
   type AdminRegionRankingMetric,
   type AdminRegionRankingRow,
@@ -62,8 +66,6 @@ const RANKING_EMPTY_MESSAGES: Record<AdminRegionRankingMetric, string> = {
   distance: '本期暂无距离数据',
 }
 
-const DEFAULT_THUMBNAIL_VIEW_BOX = '0 0 320 180'
-
 export function AdminRegionContextPanel({
   depth,
   summary,
@@ -81,7 +83,9 @@ export function AdminRegionContextPanel({
   onTreemapRetry,
 }: AdminRegionContextPanelProps) {
   const thumbnailBaseRef = useRef<SVGPathElement>(null)
-  const [thumbnailViewBox, setThumbnailViewBox] = useState(DEFAULT_THUMBNAIL_VIEW_BOX)
+  const [thumbnailViewBox, setThumbnailViewBox] = useState(
+    DEFAULT_ADMIN_REGION_THUMBNAIL_VIEW_BOX,
+  )
   const unit = DEPTH_UNITS[depth]
   const visitedCount = summary?.visitedCount
   const totalCount = summary?.totalCount
@@ -110,21 +114,14 @@ export function AdminRegionContextPanel({
     const basePath = thumbnailBaseRef.current
 
     if (!thumbnailBasePath || !basePath || typeof basePath.getBBox !== 'function') {
-      setThumbnailViewBox(DEFAULT_THUMBNAIL_VIEW_BOX)
+      setThumbnailViewBox(DEFAULT_ADMIN_REGION_THUMBNAIL_VIEW_BOX)
       return
     }
 
     try {
-      const bounds = basePath.getBBox()
-      const values = [bounds.x, bounds.y, bounds.width, bounds.height]
-
-      if (values.every(Number.isFinite) && bounds.width > 0 && bounds.height > 0) {
-        setThumbnailViewBox(values.join(' '))
-      } else {
-        setThumbnailViewBox(DEFAULT_THUMBNAIL_VIEW_BOX)
-      }
+      setThumbnailViewBox(fitAdminRegionThumbnailViewBox(basePath.getBBox()))
     } catch {
-      setThumbnailViewBox(DEFAULT_THUMBNAIL_VIEW_BOX)
+      setThumbnailViewBox(DEFAULT_ADMIN_REGION_THUMBNAIL_VIEW_BOX)
     }
   }, [thumbnailBasePath])
 

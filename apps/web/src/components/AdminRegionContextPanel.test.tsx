@@ -14,15 +14,15 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-function mockThumbnailBaseBounds() {
+function mockThumbnailBaseBounds(bounds = {
+  x: 12,
+  y: 18,
+  width: 296,
+  height: 150,
+}) {
   Object.defineProperty(SVGElement.prototype, 'getBBox', {
     configurable: true,
-    value: vi.fn(() => ({
-      x: 12,
-      y: 18,
-      width: 296,
-      height: 150,
-    })),
+    value: vi.fn(() => bounds),
   })
 }
 
@@ -248,7 +248,7 @@ describe('AdminRegionContextPanel', () => {
     expect(atlasBody).toContainElement(thumbnail)
     expect(atlasBody).toContainElement(depthControl)
     expect(depthControl).toHaveClass('segmented-control--vertical')
-    expect(thumbnail).toHaveAttribute('viewBox', '12 18 296 150')
+    expect(thumbnail).toHaveAttribute('viewBox', '0 18 320 150')
     expect(thumbnail.querySelector('.admin-region-atlas-card__base')).toHaveAttribute(
       'd',
       'M0 0L320 0L320 180L0 180Z',
@@ -260,6 +260,25 @@ describe('AdminRegionContextPanel', () => {
 
     fireEvent.click(within(depthControl).getByRole('button', { name: '区' }))
     expect(onDepthChange).toHaveBeenCalledWith(4)
+  })
+
+  it('keeps world and China thumbnail view boxes at the same frame ratio', () => {
+    mockThumbnailBaseBounds({ x: 6, y: 16.8, width: 308, height: 144.7 })
+    renderPanel()
+
+    expect(screen.getByLabelText('城市足迹缩略图')).toHaveAttribute(
+      'viewBox',
+      '5.653 16.8 308.693 144.7',
+    )
+
+    cleanup()
+    mockThumbnailBaseBounds({ x: 46.2, y: 12.4, width: 225.9, height: 158.5 })
+    renderPanel()
+
+    expect(screen.getByLabelText('城市足迹缩略图')).toHaveAttribute(
+      'viewBox',
+      '-9.917 12.4 338.133 158.5',
+    )
   })
 
   it('renders footprint as the selected metric and reports metric changes', () => {
