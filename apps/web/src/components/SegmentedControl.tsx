@@ -1,23 +1,25 @@
 import { useRef, useState, type CSSProperties, type PointerEvent, type KeyboardEvent } from 'react'
 
-export type SegmentedOption<Value extends string> = {
+export type SegmentedOption<Value extends string | number> = {
   value: Value
   label: string
   disabled?: boolean
 }
 
-type SegmentedControlProps<Value extends string> = {
+type SegmentedControlProps<Value extends string | number> = {
   ariaLabel: string
   className?: string
   options: Array<SegmentedOption<Value>>
+  orientation?: 'horizontal' | 'vertical'
   value: Value
   onChange: (value: Value) => void
 }
 
-export function SegmentedControl<Value extends string>({
+export function SegmentedControl<Value extends string | number>({
   ariaLabel,
   className,
   options,
+  orientation = 'horizontal',
   value,
   onChange,
 }: SegmentedControlProps<Value>) {
@@ -40,12 +42,15 @@ export function SegmentedControl<Value extends string>({
     }
   }
 
-  function getPointerPosition(clientX: number) {
+  function getPointerPosition(clientX: number, clientY: number) {
     const rect = controlRef.current?.getBoundingClientRect()
+    const start = orientation === 'vertical' ? rect?.top : rect?.left
+    const size = orientation === 'vertical' ? rect?.height : rect?.width
+    const pointer = orientation === 'vertical' ? clientY : clientX
 
-    if (!rect || rect.width <= 0) return undefined
+    if (start === undefined || !size || size <= 0) return undefined
 
-    const boundedRatio = Math.min(Math.max((clientX - rect.left) / rect.width, 0), 1)
+    const boundedRatio = Math.min(Math.max((pointer - start) / size, 0), 1)
     const previewIndex = boundedRatio * options.length - 0.5
     const index = Math.min(
       Math.max(Math.round(previewIndex), 0),
@@ -58,16 +63,16 @@ export function SegmentedControl<Value extends string>({
     }
   }
 
-  function previewPointerPosition(clientX: number) {
-    const position = getPointerPosition(clientX)
+  function previewPointerPosition(clientX: number, clientY: number) {
+    const position = getPointerPosition(clientX, clientY)
 
     if (!position) return
 
     setDragIndex(position.previewIndex)
   }
 
-  function commitPointerPosition(clientX: number) {
-    const position = getPointerPosition(clientX)
+  function commitPointerPosition(clientX: number, clientY: number) {
+    const position = getPointerPosition(clientX, clientY)
 
     if (!position) return
 
@@ -78,17 +83,17 @@ export function SegmentedControl<Value extends string>({
     isDraggingRef.current = true
     setIsDragging(true)
     controlRef.current?.setPointerCapture?.(event.pointerId)
-    previewPointerPosition(event.clientX)
+    previewPointerPosition(event.clientX, event.clientY)
   }
 
   function handlePointerMove(event: PointerEvent<HTMLDivElement>) {
     if (!isDraggingRef.current) return
-    previewPointerPosition(event.clientX)
+    previewPointerPosition(event.clientX, event.clientY)
   }
 
   function endDrag(event: PointerEvent<HTMLDivElement | HTMLSpanElement>) {
     if (isDraggingRef.current) {
-      commitPointerPosition(event.clientX)
+      commitPointerPosition(event.clientX, event.clientY)
     }
 
     isDraggingRef.current = false
@@ -135,7 +140,12 @@ export function SegmentedControl<Value extends string>({
   return (
     <div
       ref={controlRef}
-      className={['segmented-control', isDragging ? 'is-dragging' : null, className]
+      className={[
+        'segmented-control',
+        `segmented-control--${orientation}`,
+        isDragging ? 'is-dragging' : null,
+        className,
+      ]
         .filter(Boolean)
         .join(' ')}
       role="group"
@@ -160,6 +170,7 @@ export function SegmentedControl<Value extends string>({
         aria-valuemax={Math.max(options.length - 1, 0)}
         aria-valuenow={selectedIndex}
         aria-valuetext={selectedOption?.label}
+        aria-orientation={orientation}
         onPointerDown={handlePointerDown}
         onKeyDown={handleKeyDown}
       >
@@ -183,7 +194,7 @@ export function SegmentedControl<Value extends string>({
   )
 }
 
-function getClosestEnabledOption<Value extends string>(
+function getClosestEnabledOption<Value extends string | number>(
   options: Array<SegmentedOption<Value>>,
   targetIndex: number,
 ) {

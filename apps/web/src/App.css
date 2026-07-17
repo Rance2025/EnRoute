@@ -447,6 +447,51 @@
   pointer-events: none;
 }
 
+.segmented-control--vertical {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: repeat(var(--segment-count), minmax(0, 1fr));
+}
+
+.segmented-control--vertical .segmented-control__thumb {
+  top: calc(
+      var(--segmented-padding) +
+      (100% - var(--segmented-padding) * 2) / var(--segment-count) *
+      var(--segment-thumb-index, var(--segment-index))
+  );
+  right: var(--segmented-padding);
+  bottom: auto;
+  left: var(--segmented-padding);
+  width: auto;
+  height: calc((100% - var(--segmented-padding) * 2) / var(--segment-count));
+  transition:
+    top 190ms ease,
+    height 190ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.segmented-control--vertical .segmented-control__thumb.is-dragging {
+  transition:
+    background 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.segmented-control--vertical .segmented-control__active-labels {
+  inset: 0 0 auto;
+  width: 100%;
+  height: calc(100% * var(--segment-count));
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: repeat(var(--segment-count), minmax(0, 1fr));
+  transform: translateY(
+    calc(
+      -100% / var(--segment-count) *
+      var(--segment-thumb-index, var(--segment-index))
+    )
+  );
+}
+
 .time-context-panel {
   position: absolute;
   inset:
@@ -2381,19 +2426,36 @@
   white-space: nowrap;
 }
 
-.admin-region-atlas-card__depth-control {
+.admin-region-atlas-card__body {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 6px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
+  gap: 10px;
+  min-width: 0;
+}
+
+.admin-region-atlas-card__depth-control {
+  --segmented-padding: 2px;
+  --segmented-thumb-bg: #123f35;
+  --segmented-thumb-shadow: 0 7px 16px rgba(18, 63, 53, 0.16);
+  --segmented-label-color: rgba(23, 35, 31, 0.58);
+  --segmented-active-label-color: #f8fbfa;
+  --segmented-label-font-size: 11px;
+  --segmented-label-font-weight: 780;
+
+  display: grid;
+  align-self: stretch;
+  width: 32px;
+  min-height: 112px;
   padding: 0;
-  border-radius: 0;
-  background: transparent;
+  border-radius: 999px;
+  background: rgba(18, 63, 53, 0.07);
 }
 
 .admin-region-atlas-card__depth-control button {
   min-width: 0;
-  height: 28px;
-  padding: 0 8px;
+  height: auto;
+  padding: 0;
   overflow: hidden;
   border: 0;
   border-radius: 999px;
@@ -2408,15 +2470,17 @@
 }
 
 .admin-region-atlas-card__depth-control button[aria-pressed='true'] {
-  color: #f8fbfa;
-  background: #123f35;
-  box-shadow: 0 7px 16px rgba(18, 63, 53, 0.16);
+  color: var(--segmented-label-color);
+  background: transparent;
+  box-shadow: none;
 }
 
 .admin-region-atlas-card__thumbnail {
   display: block;
   width: 100%;
-  aspect-ratio: 16 / 9;
+  height: auto;
+  min-width: 0;
+  align-self: center;
   overflow: hidden;
 }
 

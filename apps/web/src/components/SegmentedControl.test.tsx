@@ -29,6 +29,20 @@ function DemoSegmentedControl() {
   )
 }
 
+function VerticalDemoSegmentedControl() {
+  const [value, setValue] = useState<'overview' | 'map' | 'schedule' | 'accounting'>('map')
+
+  return (
+    <SegmentedControl
+      ariaLabel="Vertical pages"
+      options={pageOptions}
+      orientation="vertical"
+      value={value}
+      onChange={setValue}
+    />
+  )
+}
+
 function mockControlRect() {
   const control = screen.getByRole('group', { name: '页面' })
 
@@ -175,6 +189,37 @@ describe('SegmentedControl', () => {
     fireEvent.keyDown(slider, { key: 'ArrowLeft' })
 
     expect(screen.getByRole('button', { name: '地图' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+  })
+
+  it('uses the vertical axis for a vertical segmented slider', () => {
+    render(<VerticalDemoSegmentedControl />)
+
+    const control = screen.getByRole('group', { name: 'Vertical pages' })
+    const slider = screen.getByRole('slider', { name: 'Vertical pages滑块' })
+
+    vi.spyOn(control, 'getBoundingClientRect').mockReturnValue({
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      right: 40,
+      bottom: 160,
+      width: 40,
+      height: 160,
+      toJSON: () => ({}),
+    } as DOMRect)
+
+    expect(control).toHaveClass('segmented-control--vertical')
+    expect(slider).toHaveAttribute('aria-orientation', 'vertical')
+
+    fireEvent.pointerDown(slider, { clientX: 20, clientY: 60, pointerId: 1 })
+    fireEvent.pointerMove(slider, { clientX: 20, clientY: 140, pointerId: 1 })
+    fireEvent.pointerUp(slider, { clientX: 20, clientY: 140, pointerId: 1 })
+
+    expect(screen.getByRole('button', { name: '记账' })).toHaveAttribute(
       'aria-pressed',
       'true',
     )
