@@ -2063,21 +2063,20 @@ describe('map chrome layout', () => {
     expect(depthRule).toContain('--segmented-padding: 2px')
     expect(depthRule).toContain('--segmented-thumb-bg: #123f35')
     expect(depthRule).toContain(
-      '--segmented-label-color: rgba(21, 48, 42, 0.66)',
+      '--segmented-thumb-shadow: 0 4px 10px rgba(18, 63, 53, 0.14)',
+    )
+    expect(depthRule).toContain(
+      '--segmented-label-color: rgba(23, 35, 31, 0.58)',
     )
     expect(depthRule).toContain('--segmented-active-label-color: #f8fbfa')
     expect(depthRule).toContain('width: 34px')
     expect(depthRule).toContain('align-self: stretch')
     expect(depthRule).toContain('padding: 2px 0')
-    expect(depthRule).not.toContain('border:')
-    expect(depthRule).toContain('background: rgba(255, 255, 255, 0.76)')
-    expect(depthRule).toContain(
-      'box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.58)',
-    )
-    expect(depthRule).not.toContain('--segmented-thumb-shadow')
+    expect(depthRule).toContain('border: 1px solid rgba(18, 63, 53, 0.08)')
+    expect(depthRule).toContain('background: rgba(18, 63, 53, 0.07)')
+    expect(depthRule).not.toContain('background: rgba(255, 255, 255, 0.76)')
     expect(depthButtonRule).toContain('border-radius: 0')
-    expect(depthButtonRule).toContain('color: var(--segmented-label-color)')
-    expect(depthButtonRule).not.toContain('color: rgba(23, 35, 31, 0.66)')
+    expect(depthButtonRule).toContain('color: rgba(23, 35, 31, 0.66)')
     expect(depthButtonRule).toContain('background: transparent')
     expect(depthButtonRule).not.toContain('background: rgba(23, 35, 31, 0.06)')
     expect(thumbnailRule).toContain('display: block')
