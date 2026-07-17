@@ -119,6 +119,28 @@ describe('buildAdminRegionTreemapModel', () => {
     expect(usModel.items.map((item) => item.region.regionId)).toEqual(['CN', 'US'])
   })
 
+  it('recognizes China by its localized name when the persisted country id is a UUID', () => {
+    const uuidChina = createMetric({
+      ...china,
+      regionId: 'fb68fc73-3ac6-41c9-a692-22fcf20cb5be',
+    })
+    const uuidJiangsu = createMetric({
+      ...jiangsu,
+      parentRegionId: uuidChina.regionId,
+    })
+
+    const model = buildAdminRegionTreemapModel({
+      depth: 1,
+      currentSummary: createSummary(1, [uuidChina, unitedStates]),
+      nextSummary: createSummary(2, [uuidJiangsu]),
+      selectedRegion: uuidChina,
+      metric: 'footprint',
+    })
+
+    expect(model).toMatchObject({ dataDepth: 2, title: '中国各省' })
+    expect(model.items.map((item) => item.region.regionId)).toEqual(['320000'])
+  })
+
   it('focuses a selected province into direct cities and a selected city into direct districts', () => {
     const provinceModel = buildAdminRegionTreemapModel({
       depth: 2,

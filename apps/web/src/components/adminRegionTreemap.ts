@@ -36,6 +36,12 @@ type BuildAdminRegionTreemapModelOptions = {
 }
 
 const CHINA_COUNTRY_IDS = new Set(['cn', 'chn', '156'])
+const CHINA_COUNTRY_NAMES = new Set([
+  '中国',
+  '中华人民共和国',
+  'china',
+  "people's republic of china",
+])
 
 const BASE_TITLES: Record<AdminRegionDepth, string> = {
   1: '各国',
@@ -132,7 +138,7 @@ export function resolveAdminRegionTreemapDataDepth(
   selectedRegion: AdminRegionMetric | null,
 ): AdminRegionDepth {
   if (!selectedRegion || depth === 4) return depth
-  if (depth === 1 && !isChinaCountry(selectedRegion.regionId)) return depth
+  if (depth === 1 && !isChinaCountry(selectedRegion)) return depth
   return (depth + 1) as AdminRegionDepth
 }
 
@@ -169,8 +175,9 @@ function resolveTreemapScope({
   }
 }
 
-function isChinaCountry(regionId: string): boolean {
-  return CHINA_COUNTRY_IDS.has(regionId.toLowerCase())
+function isChinaCountry(region: AdminRegionMetric): boolean {
+  return CHINA_COUNTRY_IDS.has(region.regionId.toLowerCase())
+    || CHINA_COUNTRY_NAMES.has(region.name.trim().toLowerCase())
 }
 
 function compareValuedRegions(

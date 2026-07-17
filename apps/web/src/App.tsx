@@ -954,7 +954,10 @@ function App(props: AppProps) {
             </button>
           </div>
         </nav>
-        <div className="right-context-panel__stack" aria-label="右侧信息面板">
+        <div
+          className={`right-context-panel__stack${isRegionMode ? ' right-context-panel__stack--admin-region' : ''}`}
+          aria-label="右侧信息面板"
+        >
           {isRegionMode ? (
             <AdminRegionContextPanel
               depth={adminRegionDepth}
