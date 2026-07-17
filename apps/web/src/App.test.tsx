@@ -147,6 +147,7 @@ const adminRegionSummaryFixture = {
   visitedPath: 'M1 1Z',
   regionMetrics: [{
     regionId: 'CN',
+    parentRegionId: null,
     name: '中国',
     footprintCount: 120,
     stayDurationSeconds: 7_200,
@@ -163,6 +164,7 @@ const provinceAdminRegionSummaryFixture = {
   visitedPath: 'M2 2Z',
   regionMetrics: [{
     regionId: '310000',
+    parentRegionId: 'CN',
     name: '上海市',
     footprintCount: 120,
     stayDurationSeconds: 3_600,
@@ -177,6 +179,11 @@ const cityAdminRegionSummaryFixture = {
   visitedRegionIds: ['310100'],
   totalCount: 300,
   visitedPath: 'M3 3Z',
+  regionMetrics: [{
+    ...provinceAdminRegionSummaryFixture.regionMetrics[0],
+    regionId: '310100',
+    parentRegionId: '310000',
+  }],
 }
 
 const districtAdminRegionSummaryFixture = {
@@ -185,6 +192,11 @@ const districtAdminRegionSummaryFixture = {
   visitedRegionIds: ['310101'],
   totalCount: 2800,
   visitedPath: 'M4 4Z',
+  regionMetrics: [{
+    ...provinceAdminRegionSummaryFixture.regionMetrics[0],
+    regionId: '310101',
+    parentRegionId: '310100',
+  }],
 }
 
 const adminRegionSummaryFixtures = {

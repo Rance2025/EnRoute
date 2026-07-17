@@ -10,6 +10,7 @@ export type AdminRegionBounds = {
 
 export type AdminRegionMetric = {
   regionId: string
+  parentRegionId: string | null
   name: string
   footprintCount: number
   stayDurationSeconds: number
@@ -81,6 +82,7 @@ function isAdminRegionMetric(value: unknown): value is AdminRegionMetric {
   return (
     isRecord(value) &&
     typeof value.regionId === 'string' &&
+    (value.parentRegionId === null || typeof value.parentRegionId === 'string') &&
     typeof value.name === 'string' &&
     isNonNegativeInteger(value.footprintCount) &&
     isNonNegativeInteger(value.stayDurationSeconds) &&

@@ -14,6 +14,7 @@ afterEach(() => {
 const cityRegionMetrics: AdminRegionMetric[] = [
   {
     regionId: '440100',
+    parentRegionId: '440000',
     name: '广州市',
     footprintCount: 4,
     stayDurationSeconds: 1_800,
@@ -22,6 +23,7 @@ const cityRegionMetrics: AdminRegionMetric[] = [
   },
   {
     regionId: '310100',
+    parentRegionId: '310000',
     name: '上海市',
     footprintCount: 12,
     stayDurationSeconds: 3_600,
@@ -30,6 +32,7 @@ const cityRegionMetrics: AdminRegionMetric[] = [
   },
   {
     regionId: '510100',
+    parentRegionId: '510000',
     name: '成都市',
     footprintCount: 3,
     stayDurationSeconds: 5_400,
@@ -38,6 +41,7 @@ const cityRegionMetrics: AdminRegionMetric[] = [
   },
   {
     regionId: '330100',
+    parentRegionId: '330000',
     name: '杭州市',
     footprintCount: 8,
     stayDurationSeconds: 7_200,
@@ -46,6 +50,7 @@ const cityRegionMetrics: AdminRegionMetric[] = [
   },
   {
     regionId: '110100',
+    parentRegionId: '110000',
     name: '北京市',
     footprintCount: 2,
     stayDurationSeconds: 900,
@@ -54,6 +59,7 @@ const cityRegionMetrics: AdminRegionMetric[] = [
   },
   {
     regionId: '320500',
+    parentRegionId: '320000',
     name: '苏州市',
     footprintCount: 1,
     stayDurationSeconds: 2_700,
