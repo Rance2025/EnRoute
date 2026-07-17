@@ -2435,10 +2435,9 @@
 }
 
 .admin-region-atlas-card__depth-control {
-  --segmented-padding: 3px;
+  --segmented-padding: 2px;
   --segmented-thumb-bg: #123f35;
-  --segmented-thumb-shadow: 0 4px 10px rgba(18, 63, 53, 0.14);
-  --segmented-label-color: rgba(23, 35, 31, 0.58);
+  --segmented-label-color: rgba(21, 48, 42, 0.66);
   --segmented-active-label-color: #f8fbfa;
   --segmented-label-font-size: 11px;
   --segmented-label-font-weight: 780;
@@ -2447,10 +2446,10 @@
   align-self: stretch;
   width: 34px;
   min-height: 112px;
-  padding: 0;
-  border: 1px solid rgba(18, 63, 53, 0.08);
+  padding: 2px 0;
   border-radius: 999px;
-  background: rgba(18, 63, 53, 0.07);
+  background: rgba(255, 255, 255, 0.76);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.58);
 }
 
 .admin-region-atlas-card__depth-control button {
@@ -2460,7 +2459,7 @@
   overflow: hidden;
   border: 0;
   border-radius: 0;
-  color: rgba(23, 35, 31, 0.66);
+  color: var(--segmented-label-color);
   background: transparent;
   font: inherit;
   font-size: 12px;
