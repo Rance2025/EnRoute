@@ -4,7 +4,6 @@ import type {
 } from '../layers/adminRegionSummaryDataSource'
 import type { AdminRegionDepth } from '../layers/adminRegionVectorTileSource'
 import {
-  formatAdminRegionRankingAriaValue,
   formatAdminRegionRankingValue,
   type AdminRegionRankingMetric,
 } from './adminRegionRanking'
@@ -102,18 +101,18 @@ export function buildAdminRegionTreemapModel({
     .sort(compareValuedRegions)
   const totalValue = valuedRegions.reduce((total, item) => total + item.metricValue, 0)
   const maxMetricValue = valuedRegions[0]?.metricValue ?? 0
+  const metricLabel = METRIC_LABELS[metric]
 
   return {
     dataDepth: scope.dataDepth,
     title: scope.title,
-    metricLabel: METRIC_LABELS[metric],
+    metricLabel,
     totalValue,
     selectedRegionId: scope.focused ? null : selectedRegion?.regionId ?? null,
     items: valuedRegions.map(({ region, metricValue }) => {
       const share = totalValue > 0 ? metricValue / totalValue : 0
       const color = selectColor(maxMetricValue > 0 ? metricValue / maxMetricValue : 0)
       const displayValue = formatAdminRegionRankingValue(metric, metricValue)
-      const ariaValue = formatAdminRegionRankingAriaValue(metric, metricValue)
 
       return {
         region,
@@ -122,7 +121,7 @@ export function buildAdminRegionTreemapModel({
         fill: color.fill,
         textColor: color.textColor,
         displayValue,
-        ariaLabel: `${region.name}，${ariaValue}，占比 ${PERCENT_FORMATTER.format(share)}`,
+        ariaLabel: `${region.name}，${metricLabel} ${displayValue}，占比 ${PERCENT_FORMATTER.format(share)}`,
       }
     }),
   }
