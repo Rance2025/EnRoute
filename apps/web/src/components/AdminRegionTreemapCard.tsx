@@ -56,7 +56,7 @@ export function AdminRegionTreemapCard({
 
   useLayoutEffect(() => {
     const body = bodyRef.current
-    if (!body) return
+    if (!body || typeof ResizeObserver === 'undefined') return
 
     const observer = new ResizeObserver(([entry]) => {
       if (!entry) return

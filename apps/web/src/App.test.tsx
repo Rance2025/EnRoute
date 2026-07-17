@@ -296,6 +296,11 @@ async function settleLazyImports() {
   })
 }
 
+async function findAdminRegionSummaryAlert() {
+  const rankingCard = await screen.findByLabelText(/足迹排行$/)
+  return within(rankingCard).findByRole('alert')
+}
+
 describe('App', () => {
   it('calculates symmetric side panels and leaves the map workspace between them', () => {
     const dataPanelWidth = calculateUnifiedDataPanelWidth({
@@ -593,6 +598,58 @@ describe('App', () => {
     )
     expect(rankingRow).toHaveClass('is-selected')
     expect(rankingRow).toHaveAttribute('aria-current', 'location')
+  })
+
+  it('uses the prefetched province summary when selected China focuses the treemap', async () => {
+    render(<App amapConfig={missingAmapConfig} />)
+    await settleLazyImports()
+
+    fireEvent.click(within(screen.getByRole('navigation', { name: '二级导航' }))
+      .getByRole('button', { name: '区域' }))
+    fireEvent.click(await screen.findByRole('button', { name: /第 1 名，中国/ }))
+
+    expect(await screen.findByRole('heading', { name: '中国各省' })).toBeInTheDocument()
+    expect(loadAdminRegionSummary).toHaveBeenCalledTimes(4)
+  })
+
+  it('retries only the focused child depth without clearing the selected province', async () => {
+    let resolveRetriedCitySummary!: (summary: typeof cityAdminRegionSummaryFixture) => void
+    const retriedCitySummary = new Promise<typeof cityAdminRegionSummaryFixture>((resolve) => {
+      resolveRetriedCitySummary = resolve
+    })
+    let cityRequestCount = 0
+    vi.mocked(loadAdminRegionSummary).mockImplementation(({ depth }) => {
+      if (depth !== 3) return Promise.resolve(adminRegionSummaryFixtures[depth])
+      cityRequestCount += 1
+      return cityRequestCount === 1
+        ? Promise.reject(new Error('city summary unavailable'))
+        : retriedCitySummary
+    })
+
+    render(<App amapConfig={missingAmapConfig} />)
+    await settleLazyImports()
+    fireEvent.click(within(screen.getByRole('navigation', { name: '二级导航' }))
+      .getByRole('button', { name: '区域' }))
+    fireEvent.click(within(screen.getByRole('group', { name: '行政区层级' }))
+      .getByRole('button', { name: '省' }))
+    fireEvent.click(await screen.findByRole('button', { name: /第 1 名，上海市/ }))
+
+    fireEvent.click(await screen.findByRole('button', { name: '重新加载区域拼图' }))
+
+    expect(screen.getByTestId('mapbox-canvas')).toHaveAttribute(
+      'data-selected-admin-region-id',
+      '310000',
+    )
+    expect(vi.mocked(loadAdminRegionSummary).mock.calls
+      .filter(([options]) => options.depth === 3)).toHaveLength(2)
+    expect(vi.mocked(loadAdminRegionSummary).mock.calls
+      .filter(([options]) => options.depth === 2)).toHaveLength(1)
+
+    await act(async () => {
+      resolveRetriedCitySummary(cityAdminRegionSummaryFixture)
+    })
+
+    expect(await screen.findByRole('heading', { name: '上海市各市' })).toBeInTheDocument()
   })
 
   it('clears the selected administrative region when its ranking is clicked again', async () => {
@@ -919,7 +976,7 @@ describe('App', () => {
 
     fireEvent.click(within(screen.getByRole('navigation', { name: '二级导航' }))
       .getByRole('button', { name: '区域' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent('区域摘要加载失败')
+    expect(await findAdminRegionSummaryAlert()).toHaveTextContent('区域摘要加载失败')
 
     fireEvent.click(screen.getByRole('button', { name: '重新加载区域摘要' }))
 
@@ -965,17 +1022,17 @@ describe('App', () => {
     await settleLazyImports()
     fireEvent.click(within(screen.getByRole('navigation', { name: '二级导航' }))
       .getByRole('button', { name: '区域' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent('区域摘要加载失败')
+    expect(await findAdminRegionSummaryAlert()).toHaveTextContent('区域摘要加载失败')
 
     fireEvent.click(screen.getByRole('button', { name: '重新加载区域摘要' }))
     fireEvent.click(screen.getByRole('button', { name: '年' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent('区域摘要加载失败')
+    expect(await findAdminRegionSummaryAlert()).toHaveTextContent('区域摘要加载失败')
 
     await act(async () => {
       resolveOldRetry(adminRegionSummaryFixture)
     })
 
-    expect(screen.getByRole('alert')).toHaveTextContent('区域摘要加载失败')
+    expect(await findAdminRegionSummaryAlert()).toHaveTextContent('区域摘要加载失败')
     expect(document.querySelector('.admin-region-context-panel__status')).not.toBeInTheDocument()
   })
 
@@ -1002,7 +1059,7 @@ describe('App', () => {
     await settleLazyImports()
     const secondaryNav = within(screen.getByRole('navigation', { name: '二级导航' }))
     fireEvent.click(secondaryNav.getByRole('button', { name: '区域' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent('区域摘要加载失败')
+    expect(await findAdminRegionSummaryAlert()).toHaveTextContent('区域摘要加载失败')
 
     fireEvent.click(screen.getByRole('button', { name: '重新加载区域摘要' }))
     fireEvent.click(secondaryNav.getByRole('button', { name: '足迹' }))

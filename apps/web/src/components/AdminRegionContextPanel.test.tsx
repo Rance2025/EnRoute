@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { AdminRegionMetric, AdminRegionSummary } from '../layers/adminRegionSummaryDataSource'
 import type { AdminRegionDepth } from '../layers/adminRegionVectorTileSource'
+import type { TimeRangeSelection } from '../time/timeRange'
 import type { AdminRegionRankingMetric, AdminRegionRankingRow } from './adminRegionRanking'
 import { AdminRegionContextPanel } from './AdminRegionContextPanel'
 
@@ -77,6 +78,69 @@ const citySummary: AdminRegionSummary = {
   regionMetrics: cityRegionMetrics,
 }
 
+const provinceSummary: AdminRegionSummary = {
+  depth: 2,
+  visitedRegionIds: ['320000', '330000'],
+  visitedCount: 2,
+  totalCount: 34,
+  visitedPath: '',
+  regionMetrics: [
+    {
+      regionId: '320000',
+      parentRegionId: 'CN',
+      name: '江苏',
+      footprintCount: 20,
+      stayDurationSeconds: 5_400,
+      travelDistanceMeters: 300,
+      bounds: { west: 116, south: 30, east: 122, north: 35 },
+    },
+    {
+      regionId: '330000',
+      parentRegionId: 'CN',
+      name: '浙江',
+      footprintCount: 10,
+      stayDurationSeconds: 3_600,
+      travelDistanceMeters: 200,
+      bounds: { west: 118, south: 27, east: 123, north: 32 },
+    },
+  ],
+}
+
+const selectedProvinceCitySummary: AdminRegionSummary = {
+  depth: 3,
+  visitedRegionIds: ['320100', '320500'],
+  visitedCount: 2,
+  totalCount: 300,
+  visitedPath: '',
+  regionMetrics: [
+    {
+      regionId: '320100',
+      parentRegionId: '320000',
+      name: '南京',
+      footprintCount: 12,
+      stayDurationSeconds: 3_600,
+      travelDistanceMeters: 180,
+      bounds: { west: 118, south: 31, east: 119, north: 33 },
+    },
+    {
+      regionId: '320500',
+      parentRegionId: '320000',
+      name: '苏州',
+      footprintCount: 8,
+      stayDurationSeconds: 1_800,
+      travelDistanceMeters: 120,
+      bounds: { west: 120, south: 30, east: 122, north: 32 },
+    },
+  ],
+}
+
+const selectedTimeRange: TimeRangeSelection = {
+  mode: 'custom',
+  start: '2026-04-01',
+  end: '2026-04-30',
+  anchorDate: '2026-04-30',
+}
+
 function renderPanel({
   depth = 3,
   status = 'ready',
@@ -84,10 +148,14 @@ function renderPanel({
   metric = 'footprint',
   thumbnailBasePath = 'M0 0L320 0L320 180L0 180Z',
   selectedRegionId = null,
+  nextSummary = null,
+  nextStatus = 'ready',
+  timeRange = selectedTimeRange,
   onDepthChange = vi.fn(),
   onMetricChange = vi.fn(),
   onRegionSelect = vi.fn(),
   onRetry = vi.fn(),
+  onTreemapRetry = vi.fn(),
 }: {
   depth?: AdminRegionDepth
   status?: 'idle' | 'loading' | 'ready' | 'error'
@@ -95,10 +163,14 @@ function renderPanel({
   metric?: AdminRegionRankingMetric
   thumbnailBasePath?: string
   selectedRegionId?: string | null
+  nextSummary?: AdminRegionSummary | null
+  nextStatus?: 'idle' | 'loading' | 'ready' | 'error'
+  timeRange?: TimeRangeSelection
   onDepthChange?: (depth: AdminRegionDepth) => void
   onMetricChange?: (metric: AdminRegionRankingMetric) => void
   onRegionSelect?: (ranking: AdminRegionRankingRow) => void
   onRetry?: () => void
+  onTreemapRetry?: (depth: AdminRegionDepth) => void
 } = {}) {
   render(
     <AdminRegionContextPanel
@@ -108,14 +180,18 @@ function renderPanel({
       metric={metric}
       thumbnailBasePath={thumbnailBasePath}
       selectedRegionId={selectedRegionId}
+      nextSummary={nextSummary}
+      nextStatus={nextStatus}
+      timeRange={timeRange}
       onDepthChange={onDepthChange}
       onMetricChange={onMetricChange}
       onRegionSelect={onRegionSelect}
       onRetry={onRetry}
+      onTreemapRetry={onTreemapRetry}
     />,
   )
 
-  return { onDepthChange, onMetricChange, onRegionSelect, onRetry }
+  return { onDepthChange, onMetricChange, onRegionSelect, onRetry, onTreemapRetry }
 }
 
 function expectElementsInDocumentOrder(...elements: Element[]) {
@@ -284,7 +360,8 @@ describe('AdminRegionContextPanel', () => {
     expect(actions).toContainElement(retry)
     expect(within(metricControl).getByRole('button', { name: '时间' }))
       .toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByRole('alert')).toHaveTextContent('区域摘要加载失败')
+    expect(within(screen.getByLabelText('城市足迹排行')).getByRole('alert'))
+      .toHaveTextContent('区域摘要加载失败')
 
     fireEvent.click(retry)
     expect(onRetry).toHaveBeenCalledTimes(1)
@@ -294,9 +371,52 @@ describe('AdminRegionContextPanel', () => {
     renderPanel({ status: 'loading', summary: null })
 
     expect(screen.getByRole('group', { name: '行政区层级' })).toBeInTheDocument()
-    expect(screen.getByRole('status')).toHaveTextContent('加载中')
+    expect(within(screen.getByLabelText('足迹版图')).getByRole('status'))
+      .toHaveTextContent('加载中')
     expect(screen.getByText('-- / -- 城市')).toBeInTheDocument()
     expect(screen.getByLabelText('城市足迹缩略图')
       .querySelector('.admin-region-atlas-card__visited')).toHaveAttribute('d', '')
+  })
+
+  it('places a current-range treemap after the atlas and ranking cards', () => {
+    renderPanel()
+
+    const atlas = document.querySelector('.admin-region-atlas-card')
+    const ranking = document.querySelector('.admin-region-ranking-card')
+    const treemapHeading = screen.getByRole('heading', { name: '全国各市' })
+    const treemap = treemapHeading.closest('.admin-region-treemap-card')
+
+    expect(atlas).not.toBeNull()
+    expect(ranking).not.toBeNull()
+    expect(treemap).not.toBeNull()
+    expectElementsInDocumentOrder(atlas as Element, ranking as Element, treemap as Element)
+    expect(screen.getByText('2026-04-01 - 2026-04-30')).toBeInTheDocument()
+  })
+
+  it('focuses a selected province into cached cities without changing the depth control', () => {
+    renderPanel({
+      depth: 2,
+      summary: provinceSummary,
+      nextSummary: selectedProvinceCitySummary,
+      selectedRegionId: '320000',
+      metric: 'time',
+    })
+
+    expect(screen.getByRole('heading', { name: '江苏各市' })).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: /行政区层级/ })
+      .querySelectorAll('button')[1]).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('retries only the child depth when focused treemap data fails', () => {
+    const { onTreemapRetry } = renderPanel({
+      depth: 2,
+      summary: provinceSummary,
+      nextSummary: null,
+      nextStatus: 'error',
+      selectedRegionId: '320000',
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: '重新加载区域拼图' }))
+    expect(onTreemapRetry).toHaveBeenCalledWith(3)
   })
 })

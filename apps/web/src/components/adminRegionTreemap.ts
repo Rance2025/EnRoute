@@ -127,6 +127,15 @@ export function buildAdminRegionTreemapModel({
   }
 }
 
+export function resolveAdminRegionTreemapDataDepth(
+  depth: AdminRegionDepth,
+  selectedRegion: AdminRegionMetric | null,
+): AdminRegionDepth {
+  if (!selectedRegion || depth === 4) return depth
+  if (depth === 1 && !isChinaCountry(selectedRegion.regionId)) return depth
+  return (depth + 1) as AdminRegionDepth
+}
+
 function resolveTreemapScope({
   depth,
   currentSummary,
@@ -138,9 +147,8 @@ function resolveTreemapScope({
   regions: AdminRegionMetric[]
   focused: boolean
 } {
-  const canFocus = selectedRegion !== null && nextSummary !== null && (
-    (depth === 1 && isChinaCountry(selectedRegion.regionId)) || depth === 2 || depth === 3
-  )
+  const dataDepth = resolveAdminRegionTreemapDataDepth(depth, selectedRegion)
+  const canFocus = dataDepth !== depth && nextSummary !== null
   if (!canFocus || selectedRegion === null || nextSummary === null) {
     return {
       dataDepth: depth,
