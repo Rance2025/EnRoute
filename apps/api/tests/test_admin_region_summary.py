@@ -1337,6 +1337,7 @@ def test_admin_region_summary_api_returns_precomputed_path_and_metrics_without_w
         "regionMetrics": [
             {
                 "regionId": "310100",
+                "parentRegionId": "310000",
                 "name": "Shanghai",
                 "footprintCount": 2,
                 "stayDurationSeconds": 10,
@@ -1350,6 +1351,7 @@ def test_admin_region_summary_api_returns_precomputed_path_and_metrics_without_w
             },
             {
                 "regionId": "330100",
+                "parentRegionId": "330000",
                 "name": "Hangzhou",
                 "footprintCount": 1,
                 "stayDurationSeconds": 86380,
