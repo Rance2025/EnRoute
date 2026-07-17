@@ -2044,6 +2044,7 @@ describe('map chrome layout', () => {
   })
 
   it('places administrative region depth controls inside the right context panel', () => {
+    const bodyRule = cssRule('.admin-region-atlas-card__body')
     const depthRule = cssRule('.admin-region-atlas-card__depth-control')
     const thumbnailRule = cssRule('.admin-region-atlas-card__thumbnail')
     const thumbnailSourceIndex = adminRegionContextPanelSource.indexOf(
@@ -2052,17 +2053,18 @@ describe('map chrome layout', () => {
     const depthControlSourceIndex = adminRegionContextPanelSource.indexOf('<DepthControl')
 
     expect(appSource).toContain('<AdminRegionContextPanel')
-    expect(adminRegionContextPanelSource).toContain('aria-label="行政区层级"')
+    expect(adminRegionContextPanelSource).toContain('ariaLabel="行政区层级"')
     expect(mapboxCanvasSource).not.toContain('<AdminRegionContextPanel')
+    expect(bodyRule).toContain('display: grid')
+    expect(bodyRule).toContain('grid-template-columns: minmax(0, 1fr) auto')
+    expect(bodyRule).toContain('align-items: stretch')
     expect(depthRule).toContain('display: grid')
-    expect(depthRule).toContain('grid-template-columns: repeat(4, minmax(0, 1fr))')
-    expect(depthRule).toContain('gap: 6px')
-    expect(depthRule).toContain('padding: 0')
-    expect(depthRule).toContain('border-radius: 0')
-    expect(depthRule).toContain('background: transparent')
+    expect(depthRule).toContain('width: 32px')
+    expect(depthRule).toContain('align-self: stretch')
     expect(thumbnailRule).toContain('display: block')
     expect(thumbnailRule).toContain('width: 100%')
-    expect(thumbnailRule).toContain('aspect-ratio: 16 / 9')
+    expect(thumbnailRule).toContain('height: auto')
+    expect(thumbnailRule).not.toContain('aspect-ratio: 16 / 9')
     expect(thumbnailRule).toContain('overflow: hidden')
     expect(thumbnailSourceIndex).toBeGreaterThanOrEqual(0)
     expect(depthControlSourceIndex).toBeGreaterThan(thumbnailSourceIndex)

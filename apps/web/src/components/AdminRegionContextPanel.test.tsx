@@ -10,7 +10,21 @@ import { AdminRegionContextPanel } from './AdminRegionContextPanel'
 
 afterEach(() => {
   cleanup()
+  delete (SVGElement.prototype as SVGElement & { getBBox?: () => DOMRect }).getBBox
+  vi.restoreAllMocks()
 })
+
+function mockThumbnailBaseBounds() {
+  Object.defineProperty(SVGElement.prototype, 'getBBox', {
+    configurable: true,
+    value: vi.fn(() => ({
+      x: 12,
+      y: 18,
+      width: 296,
+      height: 150,
+    })),
+  })
+}
 
 const cityRegionMetrics: AdminRegionMetric[] = [
   {
@@ -203,7 +217,8 @@ function expectElementsInDocumentOrder(...elements: Element[]) {
 }
 
 describe('AdminRegionContextPanel', () => {
-  it('renders the atlas card with one-row depth controls and dynamic city count', () => {
+  it('renders the atlas card with vertical depth controls and dynamic city count', () => {
+    mockThumbnailBaseBounds()
     const { onDepthChange } = renderPanel()
 
     const heading = screen.getByRole('heading', { name: '足迹版图' })
@@ -227,8 +242,13 @@ describe('AdminRegionContextPanel', () => {
     )
 
     const thumbnail = screen.getByLabelText('城市足迹缩略图')
+    const atlasBody = thumbnail.closest('.admin-region-atlas-card__body')
     expectElementsInDocumentOrder(atlasHead as Element, thumbnail, depthControl)
-    expect(thumbnail).toHaveAttribute('viewBox', '0 0 320 180')
+    expect(atlasBody).not.toBeNull()
+    expect(atlasBody).toContainElement(thumbnail)
+    expect(atlasBody).toContainElement(depthControl)
+    expect(depthControl).toHaveClass('segmented-control--vertical')
+    expect(thumbnail).toHaveAttribute('viewBox', '12 18 296 150')
     expect(thumbnail.querySelector('.admin-region-atlas-card__base')).toHaveAttribute(
       'd',
       'M0 0L320 0L320 180L0 180Z',

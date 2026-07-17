@@ -1,7 +1,9 @@
+import { useLayoutEffect, useRef, useState } from 'react'
 import type { AdminRegionSummary } from '../layers/adminRegionSummaryDataSource'
 import type { AdminRegionDepth } from '../layers/adminRegionVectorTileSource'
 import type { TimeRangeSelection } from '../time/timeRange'
 import { AdminRegionTreemapCard } from './AdminRegionTreemapCard'
+import { SegmentedControl } from './SegmentedControl'
 import {
   buildAdminRegionRanking,
   type AdminRegionRankingMetric,
@@ -60,6 +62,8 @@ const RANKING_EMPTY_MESSAGES: Record<AdminRegionRankingMetric, string> = {
   distance: '本期暂无距离数据',
 }
 
+const DEFAULT_THUMBNAIL_VIEW_BOX = '0 0 320 180'
+
 export function AdminRegionContextPanel({
   depth,
   summary,
@@ -76,6 +80,8 @@ export function AdminRegionContextPanel({
   onRetry,
   onTreemapRetry,
 }: AdminRegionContextPanelProps) {
+  const thumbnailBaseRef = useRef<SVGPathElement>(null)
+  const [thumbnailViewBox, setThumbnailViewBox] = useState(DEFAULT_THUMBNAIL_VIEW_BOX)
   const unit = DEPTH_UNITS[depth]
   const visitedCount = summary?.visitedCount
   const totalCount = summary?.totalCount
@@ -100,6 +106,28 @@ export function AdminRegionContextPanel({
       })
     : null
 
+  useLayoutEffect(() => {
+    const basePath = thumbnailBaseRef.current
+
+    if (!thumbnailBasePath || !basePath || typeof basePath.getBBox !== 'function') {
+      setThumbnailViewBox(DEFAULT_THUMBNAIL_VIEW_BOX)
+      return
+    }
+
+    try {
+      const bounds = basePath.getBBox()
+      const values = [bounds.x, bounds.y, bounds.width, bounds.height]
+
+      if (values.every(Number.isFinite) && bounds.width > 0 && bounds.height > 0) {
+        setThumbnailViewBox(values.join(' '))
+      } else {
+        setThumbnailViewBox(DEFAULT_THUMBNAIL_VIEW_BOX)
+      }
+    } catch {
+      setThumbnailViewBox(DEFAULT_THUMBNAIL_VIEW_BOX)
+    }
+  }, [thumbnailBasePath])
+
   return (
     <div className="admin-region-context-panel">
       <section
@@ -113,18 +141,24 @@ export function AdminRegionContextPanel({
           </div>
           <strong className="admin-region-atlas-card__count">{countLabel}</strong>
         </div>
-        <svg
-          className="admin-region-atlas-card__thumbnail"
-          viewBox="0 0 320 180"
-          preserveAspectRatio="xMidYMid meet"
-          role="img"
-          aria-label={thumbnailLabel}
-          focusable="false"
-        >
-          <path className="admin-region-atlas-card__base" d={thumbnailBasePath} />
-          <path className="admin-region-atlas-card__visited" d={summary?.visitedPath ?? ''} />
-        </svg>
-        <DepthControl depth={depth} onDepthChange={onDepthChange} />
+        <div className="admin-region-atlas-card__body">
+          <svg
+            className="admin-region-atlas-card__thumbnail"
+            viewBox={thumbnailViewBox}
+            preserveAspectRatio="xMidYMid meet"
+            role="img"
+            aria-label={thumbnailLabel}
+            focusable="false"
+          >
+            <path
+              ref={thumbnailBaseRef}
+              className="admin-region-atlas-card__base"
+              d={thumbnailBasePath}
+            />
+            <path className="admin-region-atlas-card__visited" d={summary?.visitedPath ?? ''} />
+          </svg>
+          <DepthControl depth={depth} onDepthChange={onDepthChange} />
+        </div>
         {status === 'loading' ? (
           <span className="admin-region-context-panel__status" role="status">加载中</span>
         ) : null}
@@ -217,18 +251,14 @@ function DepthControl({
   onDepthChange: (depth: AdminRegionDepth) => void
 }) {
   return (
-    <div className="admin-region-atlas-card__depth-control" role="group" aria-label="行政区层级">
-      {DEPTH_OPTIONS.map((option) => (
-        <button
-          key={option.value}
-          type="button"
-          aria-pressed={option.value === depth}
-          onClick={() => onDepthChange(option.value)}
-        >
-          {option.label}
-        </button>
-      ))}
-    </div>
+    <SegmentedControl
+      ariaLabel="行政区层级"
+      className="admin-region-atlas-card__depth-control"
+      options={DEPTH_OPTIONS}
+      orientation="vertical"
+      value={depth}
+      onChange={onDepthChange}
+    />
   )
 }
 
