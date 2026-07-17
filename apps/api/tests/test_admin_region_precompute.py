@@ -1783,6 +1783,7 @@ def test_query_precomputed_summary_returns_all_region_metrics_for_closed_day_ran
         "regionMetrics": [
             {
                 "regionId": "district-a",
+                "parentRegionId": "city-a",
                 "name": "district-a",
                 "footprintCount": 1,
                 "stayDurationSeconds": 180,
@@ -1796,6 +1797,7 @@ def test_query_precomputed_summary_returns_all_region_metrics_for_closed_day_ran
             },
             {
                 "regionId": "district-b",
+                "parentRegionId": "city-a",
                 "name": "District B",
                 "footprintCount": 0,
                 "stayDurationSeconds": 300,
@@ -1822,6 +1824,7 @@ def test_query_precomputed_summary_returns_all_region_metrics_for_closed_day_ran
     assert all_days_payload["regionMetrics"] == [
         {
             "regionId": "district-a",
+            "parentRegionId": "city-a",
             "name": "district-a",
             "footprintCount": 7,
             "stayDurationSeconds": 230,
@@ -1835,6 +1838,7 @@ def test_query_precomputed_summary_returns_all_region_metrics_for_closed_day_ran
         },
         {
             "regionId": "district-b",
+            "parentRegionId": "city-a",
             "name": "District B",
             "footprintCount": 0,
             "stayDurationSeconds": 320,
@@ -1858,6 +1862,16 @@ def test_query_precomputed_summary_returns_all_region_metrics_for_closed_day_ran
     assert empty_payload["visitedCount"] == 0
     assert empty_payload["totalCount"] == 2
     assert empty_payload["regionMetrics"] == []
+
+
+def test_eligible_admin_region_metadata_returns_nullable_parent() -> None:
+    precompute = importlib.import_module("enroute_api.admin_regions.precompute")
+    connection = create_precomputed_summary_metrics_fixture()
+
+    rows = precompute.query_eligible_admin_region_metadata(connection, depth=1)
+
+    country = next(row for row in rows if row["id"] == "country-a")
+    assert country["parent_id"] is None
 
 
 def test_query_precomputed_summary_uses_one_grouped_metrics_query() -> None:

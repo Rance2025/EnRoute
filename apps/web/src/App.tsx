@@ -694,6 +694,17 @@ function App(props: AppProps) {
     : adminRegionSummaryLoadState?.timeRangeKey === adminRegionSummaryTimeRangeKey
       ? adminRegionSummaryLoadState.statuses[adminRegionDepth]
       : 'loading'
+  const nextAdminRegionDepth = adminRegionDepth < 4
+    ? ((adminRegionDepth + 1) as AdminRegionDepth)
+    : null
+  const nextAdminRegionSummary = nextAdminRegionDepth === null
+    ? null
+    : getCachedAdminRegionSummary(selectedTimeRange, nextAdminRegionDepth)
+  const nextAdminRegionSummaryStatus = nextAdminRegionDepth === null || nextAdminRegionSummary
+    ? 'ready'
+    : adminRegionSummaryLoadState?.timeRangeKey === adminRegionSummaryTimeRangeKey
+      ? adminRegionSummaryLoadState.statuses[nextAdminRegionDepth]
+      : 'loading'
   const thumbnailBaseScope = adminRegionDepth === 1 ? 'world' : 'china'
   const adminRegionThumbnailBasePath =
     adminRegionThumbnailBases?.bases[thumbnailBaseScope].path ?? ''
@@ -768,7 +779,10 @@ function App(props: AppProps) {
     }
   }, [isRegionMode, selectedTimeRange])
 
-  const handleAdminRegionSummaryRetry = useCallback(() => {
+  const handleAdminRegionSummaryRetry = useCallback((
+    targetDepth: AdminRegionDepth,
+    clearSelection = false,
+  ) => {
     const lifecycleId = adminRegionSummaryLifecycleRef.current
     const timeRangeKey = createAdminRegionSummaryTimeRangeKey(selectedTimeRange)
     const updateStatus = (status: AdminRegionSummaryLoadStatus) => {
@@ -782,23 +796,23 @@ function App(props: AppProps) {
           timeRangeKey,
           statuses: {
             ...current.statuses,
-            [adminRegionDepth]: status,
+            [targetDepth]: status,
           },
         }
       })
     }
 
-    setSelectedAdminRegion(null)
+    if (clearSelection) setSelectedAdminRegion(null)
     updateStatus('loading')
     retryAdminRegionSummary({
-      depth: adminRegionDepth,
+      depth: targetDepth,
       timeRange: selectedTimeRange,
     }).then(() => {
       updateStatus('ready')
     }).catch((error: unknown) => {
       if (!isAbortError(error)) updateStatus('error')
     })
-  }, [adminRegionDepth, selectedTimeRange])
+  }, [selectedTimeRange])
 
   return (
     <main
@@ -940,7 +954,10 @@ function App(props: AppProps) {
             </button>
           </div>
         </nav>
-        <div className="right-context-panel__stack" aria-label="右侧信息面板">
+        <div
+          className={`right-context-panel__stack${isRegionMode ? ' right-context-panel__stack--admin-region' : ''}`}
+          aria-label="右侧信息面板"
+        >
           {isRegionMode ? (
             <AdminRegionContextPanel
               depth={adminRegionDepth}
@@ -949,10 +966,14 @@ function App(props: AppProps) {
               thumbnailBasePath={adminRegionThumbnailBasePath}
               status={currentAdminRegionSummaryStatus}
               selectedRegionId={selectedAdminRegion?.regionId}
+              nextSummary={nextAdminRegionSummary}
+              nextStatus={nextAdminRegionSummaryStatus}
+              timeRange={selectedTimeRange}
               onDepthChange={handleAdminRegionDepthChange}
               onMetricChange={handleAdminRegionRankingMetricChange}
               onRegionSelect={handleAdminRegionSelect}
-              onRetry={handleAdminRegionSummaryRetry}
+              onRetry={() => handleAdminRegionSummaryRetry(adminRegionDepth, true)}
+              onTreemapRetry={handleAdminRegionSummaryRetry}
             />
           ) : (
             <DefaultRightContextCards

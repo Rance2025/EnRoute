@@ -16,6 +16,7 @@ function createMetric(
 ): AdminRegionMetric {
   return {
     regionId,
+    parentRegionId: null,
     name,
     footprintCount,
     stayDurationSeconds,

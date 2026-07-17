@@ -1306,11 +1306,15 @@ def query_eligible_admin_region_metadata(
     return list(
         connection.execute(
             f"""
-            SELECT id, name, min_lng, min_lat, max_lng, max_lat
-            FROM admin_regions
-            WHERE level = ?
+            SELECT regions.id, regions.name,
+                   regions.min_lng, regions.min_lat,
+                   regions.max_lng, regions.max_lat,
+                   tree.parent_id
+            FROM admin_regions AS regions
+            LEFT JOIN admin_region_tree AS tree ON tree.child_id = regions.id
+            WHERE regions.level = ?
             {country_filter}
-            ORDER BY id
+            ORDER BY regions.id
             """,
             (depth,),
         ),
@@ -1473,6 +1477,7 @@ def format_precomputed_admin_region_metric(
 ) -> dict[str, object]:
     return {
         "regionId": str(row[0]),
+        "parentRegionId": None if row[6] is None else str(row[6]),
         "name": str(row[1]),
         "footprintCount": totals.footprint_count,
         "stayDurationSeconds": totals.stay_duration_seconds,

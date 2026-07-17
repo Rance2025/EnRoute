@@ -1,10 +1,16 @@
 import type { AdminRegionSummary } from '../layers/adminRegionSummaryDataSource'
 import type { AdminRegionDepth } from '../layers/adminRegionVectorTileSource'
+import type { TimeRangeSelection } from '../time/timeRange'
+import { AdminRegionTreemapCard } from './AdminRegionTreemapCard'
 import {
   buildAdminRegionRanking,
   type AdminRegionRankingMetric,
   type AdminRegionRankingRow,
 } from './adminRegionRanking'
+import {
+  buildAdminRegionTreemapModel,
+  resolveAdminRegionTreemapDataDepth,
+} from './adminRegionTreemap'
 
 type AdminRegionSummaryStatus = 'idle' | 'loading' | 'ready' | 'error'
 
@@ -15,10 +21,14 @@ type AdminRegionContextPanelProps = {
   thumbnailBasePath: string
   status: AdminRegionSummaryStatus
   selectedRegionId?: string | null
+  nextSummary: AdminRegionSummary | null
+  nextStatus: AdminRegionSummaryStatus
+  timeRange: TimeRangeSelection
   onDepthChange: (depth: AdminRegionDepth) => void
   onMetricChange: (metric: AdminRegionRankingMetric) => void
   onRegionSelect: (ranking: AdminRegionRankingRow) => void
   onRetry: () => void
+  onTreemapRetry: (depth: AdminRegionDepth) => void
 }
 
 const DEPTH_OPTIONS: Array<{ value: AdminRegionDepth, label: string }> = [
@@ -57,10 +67,14 @@ export function AdminRegionContextPanel({
   thumbnailBasePath,
   status,
   selectedRegionId = null,
+  nextSummary,
+  nextStatus,
+  timeRange,
   onDepthChange,
   onMetricChange,
   onRegionSelect,
   onRetry,
+  onTreemapRetry,
 }: AdminRegionContextPanelProps) {
   const unit = DEPTH_UNITS[depth]
   const visitedCount = summary?.visitedCount
@@ -71,6 +85,20 @@ export function AdminRegionContextPanel({
   const rankingTitle = `${unit}足迹排行`
   const thumbnailLabel = `${unit}足迹缩略图`
   const rankings = buildAdminRegionRanking(summary?.regionMetrics ?? [], metric)
+  const selectedRegion = summary?.regionMetrics.find(
+    (region) => region.regionId === selectedRegionId,
+  ) ?? null
+  const treemapDataDepth = resolveAdminRegionTreemapDataDepth(depth, selectedRegion)
+  const treemapStatus = treemapDataDepth === depth ? status : nextStatus
+  const treemapModel = treemapStatus === 'ready' && summary
+    ? buildAdminRegionTreemapModel({
+        depth,
+        currentSummary: summary,
+        nextSummary,
+        selectedRegion,
+        metric,
+      })
+    : null
 
   return (
     <div className="admin-region-context-panel">
@@ -145,6 +173,15 @@ export function AdminRegionContextPanel({
           </ol>
         ) : null}
       </section>
+
+      <AdminRegionTreemapCard
+        model={treemapModel}
+        status={treemapStatus}
+        metric={metric}
+        start={timeRange.start}
+        end={timeRange.end}
+        onRetry={() => onTreemapRetry(treemapDataDepth)}
+      />
     </div>
   )
 }

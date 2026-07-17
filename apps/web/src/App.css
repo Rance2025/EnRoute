@@ -1908,6 +1908,11 @@
   overflow: visible;
 }
 
+.right-context-panel__stack--admin-region {
+  grid-template-rows: minmax(0, 1fr);
+  align-content: stretch;
+}
+
 .right-context-panel__glass {
   min-width: 0;
   padding: 16px;
@@ -2319,7 +2324,9 @@
 
 .admin-region-context-panel {
   display: grid;
+  grid-template-rows: auto auto minmax(160px, 1fr);
   gap: 14px;
+  height: 100%;
   min-width: 0;
   min-height: 0;
 }
@@ -2683,6 +2690,183 @@
   letter-spacing: 0;
   text-align: right;
   white-space: nowrap;
+}
+
+.admin-region-treemap-card {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  min-width: 0;
+  min-height: 160px;
+  padding: 18px;
+  overflow: hidden;
+  border-radius: 20px;
+}
+
+.admin-region-treemap-card__head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.admin-region-treemap-card__title {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.admin-region-treemap-card h2 {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: #17231f;
+  font-size: 17px;
+  font-weight: 820;
+  letter-spacing: 0;
+  line-height: 1.08;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-region-treemap-card__range {
+  align-self: end;
+  max-width: 112px;
+  overflow: hidden;
+  color: rgba(23, 35, 31, 0.46);
+  font-family: "Bahnschrift", "Arial Narrow", "Roboto Condensed", "Helvetica Neue", sans-serif;
+  font-size: 9px;
+  font-weight: 650;
+  line-height: 1.2;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-region-treemap-card__body {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: rgba(23, 35, 31, 0.045);
+}
+
+.admin-region-treemap-card__tiles {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.admin-region-treemap-card__tile {
+  box-sizing: border-box;
+  display: grid;
+  align-content: start;
+  gap: 3px;
+  min-width: 0;
+  min-height: 0;
+  padding: 7px 8px;
+  overflow: hidden;
+  border-radius: 0;
+  opacity: 0.96;
+  transition: opacity 120ms ease;
+}
+
+.admin-region-treemap-card__tile:hover,
+.admin-region-treemap-card__tile.is-selected {
+  opacity: 1;
+}
+
+.admin-region-treemap-card__tile.is-selected {
+  box-shadow: inset 0 0 0 2px rgba(18, 63, 53, 0.48);
+}
+
+.admin-region-treemap-card__tile strong,
+.admin-region-treemap-card__tile span {
+  min-width: 0;
+  overflow: hidden;
+  letter-spacing: 0;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-region-treemap-card__tile strong {
+  font-size: 11px;
+  font-weight: 820;
+}
+
+.admin-region-treemap-card__tile span {
+  font-family: "Bahnschrift", "Arial Narrow", "Roboto Condensed", "Helvetica Neue", sans-serif;
+  font-size: 9px;
+  font-weight: 650;
+}
+
+.admin-region-treemap-card__message {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 7px;
+  margin: 0;
+  padding: 14px;
+  color: rgba(23, 35, 31, 0.54);
+  font-size: 12px;
+  font-weight: 720;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.admin-region-treemap-card__message button {
+  padding: 0;
+  border: 0;
+  color: #0f6a5c;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.admin-region-treemap-card__message button:hover {
+  color: #123f35;
+}
+
+.admin-region-treemap-card__message button:focus-visible {
+  outline: 2px solid #2c8572;
+  outline-offset: 2px;
+}
+
+.admin-region-treemap-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  color: rgba(23, 35, 31, 0.42);
+  font-size: 9px;
+  font-weight: 680;
+  line-height: 1.2;
+}
+
+.admin-region-treemap-card__footer span,
+.admin-region-treemap-card__footer strong {
+  min-width: 0;
+  overflow: hidden;
+  letter-spacing: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-region-treemap-card__footer strong {
+  color: rgba(18, 63, 53, 0.7);
+  font-weight: 760;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-region-treemap-card__tile {
+    transition: none;
+  }
 }
 
 .footprint-style-popover {

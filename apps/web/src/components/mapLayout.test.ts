@@ -284,7 +284,7 @@ describe('map chrome layout', () => {
     expect(rightPanelRule).toContain('box-shadow: none')
     expect(rightPanelRule).toContain('backdrop-filter: none')
     expect(rightPanelRule).toContain('pointer-events: auto')
-    expect(appSource).toContain('className="right-context-panel__stack"')
+    expect(appSource).toContain('right-context-panel__stack')
     expect(appSource).toContain('glass-panel glass-panel--solid glass-panel--card right-context-panel__glass right-context-panel__summary')
     expect(appSource).toContain('glass-panel glass-panel--solid glass-panel--card right-context-panel__glass right-context-panel__legend')
     expect(rightPanelRule).not.toContain('overflow: hidden')
@@ -2178,6 +2178,24 @@ describe('map chrome layout', () => {
     expect(cardFocusScrollbarThumbRule).toContain(
       'background: rgba(23, 62, 53, 0.18)',
     )
+  })
+
+  it('lets the administrative region treemap fill the remaining right-panel height', () => {
+    expect(appSource).toContain(
+      "right-context-panel__stack${isRegionMode ? ' right-context-panel__stack--admin-region' : ''}",
+    )
+    expect(cssRule('.right-context-panel__stack--admin-region')).toContain(
+      'grid-template-rows: minmax(0, 1fr)',
+    )
+    expect(cssRule('.right-context-panel__stack--admin-region')).toContain(
+      'align-content: stretch',
+    )
+    expect(cssRule('.admin-region-context-panel')).toContain('height: 100%')
+    expect(cssRule('.admin-region-context-panel')).toContain(
+      'grid-template-rows: auto auto minmax(160px, 1fr)',
+    )
+    expect(cssRule('.admin-region-treemap-card')).toContain('min-height: 160px')
+    expect(cssRule('.admin-region-treemap-card__body')).toContain('min-height: 0')
   })
 
   it('covers antialias seams only on visited administrative region paths', () => {

@@ -22,6 +22,7 @@ function createPayload() {
     regionMetrics: [
       {
         regionId: '310100',
+        parentRegionId: '310000',
         name: 'Shanghai',
         footprintCount: 4,
         stayDurationSeconds: 3_600,
@@ -35,6 +36,7 @@ function createPayload() {
       },
       {
         regionId: '330100',
+        parentRegionId: '330000',
         name: 'Hangzhou',
         footprintCount: 0,
         stayDurationSeconds: 1_800,
@@ -138,6 +140,20 @@ describe('loadAdminRegionSummary', () => {
       regionMetrics: [{
         ...createPayload().regionMetrics[0],
         stayDurationSeconds: undefined,
+      }],
+    })],
+    ['a missing parent region id', () => ({
+      ...createPayload(),
+      regionMetrics: [{
+        ...createPayload().regionMetrics[0],
+        parentRegionId: undefined,
+      }],
+    })],
+    ['a numeric parent region id', () => ({
+      ...createPayload(),
+      regionMetrics: [{
+        ...createPayload().regionMetrics[0],
+        parentRegionId: 310000,
       }],
     })],
     ['a missing travel distance', () => ({
