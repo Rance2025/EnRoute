@@ -2,6 +2,34 @@
 
 本仓库是 `在途 EnRoute` 的前后端本地原型工程：前端应用使用 Vite + React + TypeScript 接入高德地图 JS API；后端服务使用 Python + FastAPI + SQLite 承载足迹数据导入、视口查询、抽稀和统计。当前阶段优先做好位置分页面的数据承载和地图体验。
 
+## 协作流程：工单 → 独立 worktree → PR → 清理
+
+- 一切需求与修复（新功能、UI 调整、bug 修复、文档与共享文件维护）必须先在 GitHub Issues 提工单，写清目标、范围、验收标准；无工单不开工。
+- 实现一律在独立 worktree + 短期分支进行，不在 main 工作树上直接改（`AGENTS.md`/`.gitignore` 等共享文件的小幅维护除外）。
+- 命名一律以工单编号为基准，保证 `#N 工单 ↔ 分支 ↔ worktree ↔ 提交/PR/合并信息` 任意一处可跳回工单：
+  - 分支名 = `<范围>/<工单号>-<英文slug>`；范围取 `web`/`api`/`docs`/`scripts`/`cross`，slug 为 2~4 个英文小写短横线词，如 `docs/1-agents-workflow`。
+  - worktree 目录 = 分支名的 `/` 换 `-`，落在仓库外兄弟目录 `../worktrees/EnRoute/` 下，如 `../worktrees/EnRoute/docs-1-agents-workflow`；一工单一 worktree。
+  - 提交信息 = `<类型>(#<工单号>): <中文描述>`（类型沿用「提交规范」的前缀族）。
+  - PR 标题与提交同构：`<类型>(#<工单号>): <标题>`；PR 描述带 `closes #N`。
+  - 合并提交信息 = `merge(#<工单号>): <标题>（PR #<PR号>）`；经 API/工具合并时必须显式指定标题与信息，不接受平台默认合并信息。
+- 短期分支对齐基线：能直接合就不对齐；确需对齐一律 `git rebase origin/main` 解冲突后 `git push --force-with-lease`；禁止往短期工单分支 merge 基线分支；main 已推送历史绝不改写。
+- 合并由主代理按验收（审 diff + 跑测试通过）自主执行，不逐次确认；仅发版（release/tag）仍需逐次询问用户。
+- 合并后清理：删除对应 worktree（先扫描并断开 junction/symlink 再 remove，禁止裸删）与短期分支（本地 `git branch -d` + 远端删除），不留残渣。
+
+## 主代理调度制
+
+- 主代理只做调度与验收：需求拆解、提工单、派发子代理、审查 diff、跑测试验收、向用户汇报；不在自己上下文直接改实现代码（`AGENTS.md`/`.gitignore` 等共享文件维护除外）。
+- 所有实际修改派给子代理，一般一个子代理对应一个工单；子代理严格走「协作流程」（独立 worktree、工单号命名、提交格式）。
+- 任务卡必填：目标 worktree 绝对路径、工单号、基线分支、验收标准（含须跑通的测试命令）、禁改面（禁改面固定含一条：不得在 worktree 内创建 junction/symlink）。
+- 验收权归主代理：子代理自报"完成"不视为交付；主代理须亲自审查 diff + 跑通测试（至少 `npm test`、`npm run lint`、`npm run build`）后才向用户报完成。多个子代理并行时，各工单 worktree 物理隔离，主代理负责合并节奏与冲突上报（冲突由用户裁决）。
+
+## 多 worktree 工作制
+
+- 布局 = 兄弟目录集中式：主工作树固定为 main 日常 + `../worktrees/EnRoute/<分支目录>` 每个短期分支一个工作树；不在仓库内部目录开 worktree（避免污染扫描与提交面）。
+- 提交前零假设：任何提交前先 `git branch --show-current` 确认所在工作树与分支，不用"我刚才切过"作依据。
+- worktree 内严禁创建 junction/symlink（硬条款）；`external/`、`data/`、`output/` 等未跟踪本地资产只存在于主工作树，跨 worktree 使用一律指绝对路径，不得用链接代替。
+- 清理先查链接，不裸删：任何 `git worktree remove` 或目录删除动作前，必须先检查目录内是否存在 reparse point（junction/symlink），确认无链接或已断链后才允许删除。
+
 ## 产品设想与阶段目标
 
 `在途 EnRoute` 的长期目标不是只做一个类似足迹点显示的网站，而是逐步成为一个完整记录并展现个人全部人生数据的软件/网站。当前可优先结构化处理的数据来自用户现实中正在使用的三个外部 App。下面这些 App 名称只用于说明已有数据来源和后续能力参考对象，不是本项目的产品命名、模块命名或页面命名：
@@ -137,25 +165,20 @@ npm run build
 - `test`: 测试补充或调整
 - `refactor`: 不改变外部行为的结构调整
 
-不要使用括号作用域，例如使用 `feat: 接入高德地图底座`，不要写 `feat(map): ...`。
+不要使用括号作用域，例如使用 `feat: 接入高德地图底座`，不要写 `feat(map): ...`。括号仅用于引用工单号：`<类型>(#N): <中文摘要>`（见「协作流程」）。
 
-Merge commit 也使用中文格式，例如：
+Merge commit 使用 `merge(#<工单号>): <标题>（PR #<PR号>）` 格式，例如：
 
 ```text
-merge: 合并地图底座初始化
+merge(#1): 确立工单 worktree PR 协作流程（PR #2）
 ```
 
 ## 远程操作约束
 
-默认只做本地修改、本地提交和本地验证。未经用户明确要求，不执行任何远程写操作，包括：
-
-- `git push`
-- 创建或更新远程分支
-- 创建或更新 PR
-- force push
-- 修改远程 issue、评论或标签
-
-只读查询可以按任务需要执行；涉及凭据时不要输出 token、key 或其他敏感信息。
+- 例行 `git pull` / `git push`（main 及短期工单分支）以及工单/PR 的创建、合并，由主代理按「协作流程」自主执行，无需逐次确认。
+- 仍需逐次确认的高危远程操作：建仓/删仓、改写已推送历史（main 的 force-push / rebase）、发版 tag、修改他人 issue/评论或标签。
+- 推送前必须完成离线检查：`git status --short --branch`、核对 `.gitignore`、选择性暂存（不直接 `git add .`）、`git diff --cached --check`、凭据与大文件扫描。
+- 凭据只经 Git Credential Manager 使用，远程 API 取用时经 `git credential fill` 单进程获取；不得在聊天、命令行参数、URL 或文件中输出/保存 token、key 等敏感信息。
 
 ## Agent 重新进入清单
 
